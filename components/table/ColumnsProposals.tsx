@@ -1,45 +1,46 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, Row } from "@tanstack/react-table";
 
 import { ProposerCell } from "@components/container/ProposerCell";
+import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
+import { VoteDistributionBarCompact } from "@components/proposal/stages/VoteDistributionBarCompact";
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import { DataTableRowActions } from "@components/table/RowActions";
-import { Badge } from "@components/ui/Badge";
-import { DescriptionCell } from "@components/ui/DescriptionCell";
+import { ClickableDescriptionCell } from "@components/ui/DescriptionCell";
+import { GovernorBadge } from "@components/ui/GovernorBadge";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
+import { LifecycleCell } from "@components/ui/LifecycleCell";
+import { StatusBadgeGlass } from "@components/ui/StatusBadgeGlass";
+import { VoteDisplay } from "@components/ui/VoteDisplay";
 
-import { proposalSchema } from "@config/schema";
-import { states } from "@data/table/data";
-import { cn } from "@lib/utils";
+import { ParsedProposal, ProposalStateName } from "@/types/proposal";
 
-import { DotIcon } from "lucide-react";
-
-export const columns: ColumnDef<typeof proposalSchema>[] = [
+export const columns: ColumnDef<ParsedProposal>[] = [
   {
     accessorKey: "id",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Proposal ID" />
+      <DataTableColumnHeader column={column} title="ID" />
     ),
-    cell: ({ row }: { row: Record<string, any> }) => {
-      const id = row.getValue("id");
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const id = row.getValue("id") as string;
 
       return id.length < 6 ? (
-        <span>{id}</span>
+        <span className="text-xs">{id}</span>
       ) : (
         <HoverCard>
-          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105">
+          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs">
             {`${id.substring(0, 5)}...${id.substring(id.length - 2)}`}
           </HoverCardTrigger>
           <HoverCardContent className="w-full">{id}</HoverCardContent>
         </HoverCard>
       );
     },
-
+    size: 70,
     enableHiding: false,
   },
   {
@@ -48,81 +49,105 @@ export const columns: ColumnDef<typeof proposalSchema>[] = [
       <DataTableColumnHeader column={column} title="Proposer" />
     ),
     cell: ({ row }) => (
-      <div className="flex space-x-2 min-w-[250px]">
+      <div className="flex space-x-2">
         <ProposerCell proposer={row.getValue("proposer")} />
       </div>
     ),
+    size: 120,
   },
   {
     accessorKey: "description",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Proposal" />
     ),
-    cell: ({ row }) => {
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
       return (
-        <div className="flex space-x-2 max-w-[225px] lg:max-w-[400px] truncate">
-          <DescriptionCell mdxContent={row.getValue("description")} />
+        <div className="min-w-[300px] lg:min-w-[400px] xl:min-w-[500px]">
+          <ClickableDescriptionCell proposal={row.original} />
         </div>
       );
     },
+    size: 500,
   },
   {
-    accessorKey: "blockRange",
+    accessorKey: "governorName",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Block Range" />
+      <DataTableColumnHeader column={column} title="Governor" />
     ),
-    cell: ({ row }) => {
-      return (
-        <div className="flex space-x-2">
-          <span className="max-w-[250px] truncate font-mono">
-            {/*// @ts-ignore: startBlock and endBlock are always present */}
-            {"[" + row.original.startBlock + ", " + row.original.endBlock + "]"}
-          </span>
-        </div>
-      );
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const { governorName } = row.original;
+      if (!governorName) return null;
+      return <GovernorBadge governorName={governorName} />;
     },
+    size: 90,
   },
-
   {
     accessorKey: "state",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="State" />
     ),
-    cell: ({ row }) => {
-      // @ts-ignore: networkId is always present
-      const networkId = row.original.networkId;
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const state = row.getValue("state") as ProposalStateName;
+      if (!state) return null;
 
-      let stateValue;
-      /*       if (networkId === "10") {
-        stateValue = optimismStates.find(
-          (state) => state.value === row.getValue("state")
-        );
-        if (!stateValue) return null;
-      } else { */
-      stateValue = states.find(
-        (state) => state.value === row.getValue("state")
-      );
-      if (!stateValue) return null;
-      /* } */
+      return <StatusBadgeGlass state={state} />;
+    },
+    filterFn: (row, id, value: string[]) => {
+      const rowState = (row.getValue(id) as string)?.toLowerCase();
+      return value.some((v) => v.toLowerCase() === rowState);
+    },
+    size: 90,
+  },
+  {
+    accessorKey: "lifecycle",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      return <LifecycleCell proposal={row.original} />;
+    },
+    size: 100,
+  },
+  {
+    accessorKey: "votes",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Votes" />
+    ),
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const votes = row.original.votes;
+
+      // Calculate votes toward quorum (only For + Abstain count, not Against)
+      const votesTowardQuorum =
+        votes?.forVotes && votes?.abstainVotes
+          ? (BigInt(votes.forVotes) + BigInt(votes.abstainVotes)).toString()
+          : "0";
 
       return (
-        <Badge
-          className={cn(
-            "text-xs font-bold inline-flex items-center pr-5 -py-1 hover:bg-current/10 transition-colors duration-200 ease-in-out",
-            stateValue.bgColor
+        <div className="flex items-center gap-3">
+          <HoverCard>
+            <HoverCardTrigger className="cursor-pointer">
+              <VoteDistributionBarCompact votes={votes} />
+            </HoverCardTrigger>
+            <HoverCardContent className="w-auto glass rounded-xl">
+              <VoteDisplay votes={votes} />
+            </HoverCardContent>
+          </HoverCard>
+          {votes?.quorum && (
+            <div className="hidden xl:block">
+              <QuorumIndicator
+                current={votesTowardQuorum}
+                required={votes.quorum}
+              />
+            </div>
           )}
-        >
-          <DotIcon className="mr-1" style={{ strokeWidth: "3" }} />
-          {stateValue.label}
-        </Badge>
+        </div>
       );
     },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id));
-    },
+    size: 180,
   },
   {
     id: "vote",
     cell: ({ row }) => <DataTableRowActions row={row} />,
+    size: 100,
   },
 ];

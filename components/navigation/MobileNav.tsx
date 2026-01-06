@@ -1,11 +1,20 @@
+"use client";
+
 import Link from "next/link";
+import { useSelectedLayoutSegment } from "next/navigation";
 import * as React from "react";
 
 import { siteConfig } from "@config/site";
-import { useLockBody } from "@hooks/use-lock-body";
 import { cn } from "@lib/utils";
 
 import { Icons } from "@/components/Icons";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/Sheet";
 
 import { MainNavItem } from "@types";
 
@@ -15,35 +24,57 @@ interface MobileNavProps {
 }
 
 export function MobileNav({ items, children }: MobileNavProps) {
-  useLockBody();
+  const segment = useSelectedLayoutSegment();
+  const [open, setOpen] = React.useState(false);
 
   return (
-    <div
-      className={cn(
-        "fixed inset-0 top-16 z-50 grid h-[calc(100vh-4rem)] grid-flow-row auto-rows-max overflow-auto p-6 pb-32 shadow-md animate-in slide-in-from-bottom-80 md:hidden"
-      )}
-    >
-      <div className="relative z-20 grid gap-6 rounded-md bg-popover p-4 text-popover-foreground shadow-md">
-        <Link href="/" className="flex items-center space-x-2">
-          <Icons.logo />
-          <span className="font-bold">{siteConfig.name}</span>
-        </Link>
-        <nav className="grid grid-flow-row auto-rows-max text-sm">
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          className="flex items-center space-x-2 md:hidden"
+          aria-label="Toggle menu"
+        >
+          {open ? <Icons.close /> : <Icons.logo />}
+        </button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-[280px] sm:w-[320px] glass">
+        <SheetHeader className="pb-6">
+          <SheetTitle asChild>
+            <Link
+              href="/"
+              className="flex items-center space-x-2"
+              onClick={() => setOpen(false)}
+            >
+              <Icons.logo />
+              <span className="font-bold text-lg">{siteConfig.name}</span>
+            </Link>
+          </SheetTitle>
+        </SheetHeader>
+
+        <nav className="flex flex-col gap-1 glass-subtle rounded-xl p-3">
           {items.map((item, index) => (
             <Link
               key={index}
               href={item.disabled ? "#" : item.href}
+              onClick={() => !item.disabled && setOpen(false)}
               className={cn(
-                "flex w-full items-center rounded-md p-2 text-sm font-medium hover:underline",
-                item.disabled && "cursor-not-allowed opacity-60"
+                "flex items-center px-3 py-3 rounded-lg text-base font-medium transition-all duration-200",
+                "hover:bg-primary/20 dark:hover:bg-primary/25",
+                item.href.startsWith(`/${segment}`)
+                  ? "text-foreground bg-primary/20 dark:bg-primary/25"
+                  : "text-foreground/70",
+                item.disabled && "cursor-not-allowed opacity-50"
               )}
             >
               {item.title}
             </Link>
           ))}
         </nav>
-        {children}
-      </div>
-    </div>
+
+        {children && (
+          <div className="mt-6 pt-6 border-t border-white/10">{children}</div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

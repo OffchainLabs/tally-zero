@@ -24,17 +24,22 @@ export function DataTableViewOptions<TData>({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="glass"
           size="sm"
-          className="ml-auto hidden h-12 lg:flex"
+          className="ml-auto hidden h-12 lg:flex glass-subtle hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200"
         >
           <MixerHorizontalIcon className="mr-2 h-4 w-4" />
           View
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[150px]">
-        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+      <DropdownMenuContent
+        align="end"
+        className="w-[150px] glass-subtle rounded-lg"
+      >
+        <DropdownMenuLabel className="text-foreground/80">
+          Toggle columns
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-white/20 dark:bg-white/10" />
         {table
           .getAllColumns()
           .filter(
@@ -45,7 +50,7 @@ export function DataTableViewOptions<TData>({
             return (
               <DropdownMenuCheckboxItem
                 key={column.id}
-                className="capitalize"
+                className="capitalize hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200"
                 checked={column.getIsVisible()}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >

@@ -1,11 +1,44 @@
 import { Icons } from "@components/Icons";
 import SectionHeader from "@components/ui/SectionHeader";
 
+const features = [
+  {
+    icon: Icons.component,
+    title: "Decentralized Voting",
+    description: "Secure, transparent voting on blockchain proposals.",
+  },
+  {
+    icon: Icons.wallet,
+    title: "Wallet Integration",
+    description: "Easy connection with digital wallets for authentication.",
+  },
+  {
+    icon: Icons.wifi,
+    title: "IPFS Deployment",
+    description: "Hosted on IPFS for enhanced decentralization.",
+  },
+  {
+    icon: Icons.liststart,
+    title: "Proposal Browsing and Voting",
+    description: "Browse and vote on proposals effortlessly.",
+  },
+  {
+    icon: Icons.blend,
+    title: "Cross-Chain Support",
+    description: "Works across multiple blockchains for broad accessibility.",
+  },
+  {
+    icon: Icons.packageopen,
+    title: "Open Source",
+    description: "Community-driven development and improvement.",
+  },
+];
+
 export default function Features() {
   return (
     <section
       id="features"
-      className="container space-y-6 py-8 md:py-12 lg:py-24"
+      className="container space-y-8 py-8 md:py-12 lg:py-24"
     >
       <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
         <SectionHeader
@@ -14,78 +47,28 @@ export default function Features() {
           description="Tally Zero is a decentralized governance platform that offers a range of features to enable secure, transparent, and decentralized voting on blockchain proposals."
         />
       </div>
-      <div className="mx-auto grid justify-center gap-4 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.component className="h-12 w-12" />
-            <div className="space-y-2">
-              <h3 className="font-bold">Decentralized Voting</h3>
-              <p className="text-sm text-muted-foreground">
-                Secure, transparent voting on blockchain proposals.
-              </p>
+      <div className="mx-auto grid justify-center gap-6 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">
+        {features.map((feature) => {
+          const Icon = feature.icon;
+          return (
+            <div
+              key={feature.title}
+              className="floating-card glow-border group relative overflow-hidden p-6"
+            >
+              <div className="flex h-[180px] flex-col justify-between">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl glass-subtle bg-violet-500/20 dark:bg-violet-500/25 transition-colors duration-300 group-hover:bg-violet-500/30">
+                  <Icon className="h-8 w-8 text-primary transition-transform duration-300 group-hover:scale-110" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-bold tracking-tight">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {feature.description}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.wallet className="h-12 w-12" />
-
-            <div className="space-y-2">
-              <h3 className="font-bold">Wallet Integration</h3>
-              <p className="text-sm">
-                Easy connection with digital wallets for authentication.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.wifi className="h-12 w-12" />
-
-            <div className="space-y-2">
-              <h3 className="font-bold">IPFS Deployment</h3>
-              <p className="text-sm text-muted-foreground">
-                Hosted on IPFS for enhanced decentralization.{" "}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.liststart className="h-12 w-12" />
-
-            <div className="space-y-2">
-              <h3 className="font-bold">Proposal Browsing and Voting</h3>
-              <p className="text-sm text-muted-foreground">
-                Browse and vote on proposals effortlessly.{" "}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.blend className="h-12 w-12" />
-
-            <div className="space-y-2">
-              <h3 className="font-bold">Cross-Chain Support</h3>
-              <p className="text-sm text-muted-foreground">
-                Works across multiple blockchains for broad accessibility.{" "}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-lg border bg-background p-2">
-          <div className="flex h-[180px] flex-col justify-between rounded-md p-6">
-            <Icons.packageopen className="h-12 w-12" />
-
-            <div className="space-y-2">
-              <h3 className="font-bold">Open Source</h3>
-              <p className="text-sm text-muted-foreground">
-                Community-driven development and improvement.{" "}
-              </p>
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
       <div className="mx-auto text-center md:max-w-[58rem]">
         <p className="leading-normal text-muted-foreground sm:text-lg sm:leading-7">

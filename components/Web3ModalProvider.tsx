@@ -1,35 +1,27 @@
 "use client";
 
-import {
-  EthereumClient,
-  w3mConnectors,
-  w3mProvider,
-} from "@web3modal/ethereum";
-import { Web3Modal } from "@web3modal/react";
-import { WagmiConfig, configureChains, createClient } from "wagmi";
-import { env } from "../env";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
+import { Suspense, type ReactNode } from "react";
 
-import { chains } from "@config/chains";
+// Setup queryClient
+const queryClient = new QueryClient();
 
-export function Web3ModalProvider({ children }: { children: React.ReactNode }) {
-  const projectId = env.NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID;
-  if (projectId === undefined) {
-    throw new Error("NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID is undefined");
+// Dynamically import the actual provider component to avoid SSR issues
+const Web3ModalProviderInner = dynamic(
+  () => import("./Web3ModalProviderInner").then((mod) => mod.default),
+  {
+    ssr: false,
+    loading: () => null,
   }
+);
 
-  const { provider } = configureChains(chains, [w3mProvider({ projectId })]);
-  const wagmiClient = createClient({
-    autoConnect: true,
-    connectors: w3mConnectors({ projectId, chains }),
-    provider,
-  });
-
-  const ethereumClient = new EthereumClient(wagmiClient, chains);
-
+export function Web3ModalProvider({ children }: { children: ReactNode }) {
   return (
-    <>
-      <WagmiConfig client={wagmiClient}>{children}</WagmiConfig>
-      <Web3Modal projectId={projectId} ethereumClient={ethereumClient} />
-    </>
+    <QueryClientProvider client={queryClient}>
+      <Suspense fallback={children}>
+        <Web3ModalProviderInner>{children}</Web3ModalProviderInner>
+      </Suspense>
+    </QueryClientProvider>
   );
 }

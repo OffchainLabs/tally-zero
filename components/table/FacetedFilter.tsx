@@ -42,9 +42,18 @@ export function DataTableFacetedFilter<TData, TValue>({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-12 border-dashed">
-          <PlusCircledIcon className="mr-2 h-4 w-4" />
-          {title}
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "h-11 sm:h-12 min-w-[44px] px-2 sm:px-3 rounded-xl",
+            "glass-subtle",
+            "hover:bg-white/30 dark:hover:bg-white/10",
+            selectedValues.size > 0 && "border-primary/50"
+          )}
+        >
+          <PlusCircledIcon className="sm:mr-2 h-4 w-4" />
+          <span className="hidden sm:inline">{title}</span>
           {selectedValues?.size > 0 && (
             <>
               <Separator orientation="vertical" className="mx-2 h-4" />
@@ -81,7 +90,7 @@ export function DataTableFacetedFilter<TData, TValue>({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0" align="start">
-        <Command>
+        <Command className="!border-0 !bg-transparent !shadow-none !backdrop-blur-none">
           <CommandInput placeholder={title} />
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>

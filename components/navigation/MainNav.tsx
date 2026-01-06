@@ -19,7 +19,6 @@ interface MainNavProps {
 
 export function MainNav({ items, children }: MainNavProps) {
   const segment = useSelectedLayoutSegment();
-  const [showMobileMenu, setShowMobileMenu] = React.useState<boolean>(false);
 
   return (
     <div className="flex gap-6 md:gap-10">
@@ -30,15 +29,16 @@ export function MainNav({ items, children }: MainNavProps) {
         </span>
       </Link>
       {items?.length ? (
-        <nav className="hidden gap-6 md:flex">
+        <nav className="hidden gap-1 md:flex glass-subtle rounded-xl p-1">
           {items?.map((item, index) => (
             <Link
               key={index}
               href={item.disabled ? "#" : item.href}
               className={cn(
-                "flex items-center text-lg font-medium transition-colors hover:text-foreground/80 sm:text-sm",
+                "flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+                "hover:bg-primary/20 dark:hover:bg-primary/25 hover:text-foreground",
                 item.href.startsWith(`/${segment}`)
-                  ? "text-foreground"
+                  ? "text-foreground bg-primary/20 dark:bg-primary/25"
                   : "text-foreground/60",
                 item.disabled && "cursor-not-allowed opacity-80"
               )}
@@ -48,15 +48,7 @@ export function MainNav({ items, children }: MainNavProps) {
           ))}
         </nav>
       ) : null}
-      <button
-        className="flex items-center space-x-2 md:hidden"
-        onClick={() => setShowMobileMenu(!showMobileMenu)}
-      >
-        {showMobileMenu ? <Icons.close /> : <Icons.logo />}
-      </button>
-      {showMobileMenu && items && (
-        <MobileNav items={items}>{children}</MobileNav>
-      )}
+      {items && <MobileNav items={items}>{children}</MobileNav>}
     </div>
   );
 }

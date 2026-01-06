@@ -1,0 +1,131 @@
+"use client";
+
+import { ColumnDef, Row, Table } from "@tanstack/react-table";
+import { BigNumber } from "ethers";
+
+import { DataTableColumnHeader } from "@components/table/ColumnHeader";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@components/ui/HoverCard";
+
+import { getDelegateLabel } from "@/lib/delegate-cache";
+import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
+import { DelegateInfo } from "@/types/delegate";
+import { ExternalLinkIcon } from "lucide-react";
+
+declare module "@tanstack/react-table" {
+  // TData is required for module augmentation but not used in this interface
+  // biome-ignore lint: required for type augmentation
+  interface TableMeta<TData> {
+    totalVotingPower?: string;
+  }
+}
+
+export const columns: ColumnDef<DelegateInfo>[] = [
+  {
+    id: "rank",
+    header: "Rank",
+    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+      return <span className="font-medium">{row.index + 1}</span>;
+    },
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "address",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Address" />
+    ),
+    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+      const address = row.getValue("address") as string;
+      const shortened = shortenAddress(address);
+      const label = getDelegateLabel(address);
+
+      return (
+        <HoverCard>
+          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105">
+            {label || shortened}
+          </HoverCardTrigger>
+          <HoverCardContent className="w-full">
+            <div className="space-y-2">
+              {label && <p className="text-sm font-semibold">{label}</p>}
+              <p className="text-sm font-mono break-all">{address}</p>
+              <a
+                href={getAddressExplorerUrl(address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                View on Arbiscan
+                <ExternalLinkIcon className="h-3 w-3" />
+              </a>
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      );
+    },
+  },
+  {
+    accessorKey: "votingPower",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Voting Power" />
+    ),
+    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+      const votingPower = row.getValue("votingPower") as string;
+      const formatted = formatVotingPower(votingPower);
+
+      return <span className="font-medium">{formatted} ARB</span>;
+    },
+    sortingFn: (rowA, rowB, columnId) => {
+      const a = rowA.getValue(columnId) as string;
+      const b = rowB.getValue(columnId) as string;
+
+      try {
+        const aBN = BigNumber.from(a);
+        const bBN = BigNumber.from(b);
+
+        if (aBN.gt(bBN)) return 1;
+        if (aBN.lt(bBN)) return -1;
+        return 0;
+      } catch {
+        return a.localeCompare(b);
+      }
+    },
+  },
+  {
+    id: "percentage",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="% of Total" />
+    ),
+    cell: ({
+      row,
+      table,
+    }: {
+      row: Row<DelegateInfo>;
+      table: Table<DelegateInfo>;
+    }) => {
+      const votingPower = row.getValue("votingPower") as string;
+      const totalVotingPower = table.options.meta?.totalVotingPower;
+
+      if (!totalVotingPower || totalVotingPower === "0") {
+        return <span className="text-muted-foreground">-</span>;
+      }
+
+      try {
+        const delegatePower = BigNumber.from(votingPower);
+        const totalPower = BigNumber.from(totalVotingPower);
+        const percentage =
+          (parseFloat(delegatePower.toString()) /
+            parseFloat(totalPower.toString())) *
+          100;
+
+        return <span className="font-medium">{percentage.toFixed(2)}%</span>;
+      } catch {
+        return <span className="text-muted-foreground">-</span>;
+      }
+    },
+  },
+];

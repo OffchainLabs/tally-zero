@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Code,
   ComponentIcon,
   CreditCard,
   File,
@@ -25,10 +26,12 @@ import {
   RotateCw,
   Search,
   Settings,
+  Shield,
   SunMedium,
   Trash,
   Triangle,
   User,
+  Users,
   WalletIcon,
   WifiIcon,
   X,
@@ -111,7 +114,6 @@ function LogoIcon({ className }: { className?: string } = { className: "" }) {
       className={className}
       width={30}
       height={30}
-      layout="fixed"
     />
   );
 }
@@ -171,4 +173,7 @@ export const Icons = {
   packageopen: PackageOpenIcon,
   triangle: Triangle,
   refresh: RotateCw,
+  code: Code,
+  users: Users,
+  shield: Shield,
 };

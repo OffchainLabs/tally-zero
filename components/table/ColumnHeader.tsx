@@ -38,7 +38,7 @@ export function DataTableColumnHeader<TData, TValue>({
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
+            className="-ml-3 h-8 hover:bg-white/20 dark:hover:bg-white/10 data-[state=open]:bg-white/20 dark:data-[state=open]:bg-white/10 transition-colors"
           >
             <span>{title}</span>
             {column.getIsSorted() === "desc" ? (
@@ -50,17 +50,26 @@ export function DataTableColumnHeader<TData, TValue>({
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
+        <DropdownMenuContent align="start" className="glass-subtle rounded-lg">
+          <DropdownMenuItem
+            onClick={() => column.toggleSorting(false)}
+            className="hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
+          >
             <ArrowUpIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
             Asc
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+          <DropdownMenuItem
+            onClick={() => column.toggleSorting(true)}
+            className="hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
+          >
             <ArrowDownIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
             Desc
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
+          <DropdownMenuSeparator className="bg-white/20 dark:bg-white/10" />
+          <DropdownMenuItem
+            onClick={() => column.toggleVisibility(false)}
+            className="hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
+          >
             <EyeNoneIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
             Hide
           </DropdownMenuItem>

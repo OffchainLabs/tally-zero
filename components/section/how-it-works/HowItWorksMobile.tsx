@@ -3,25 +3,62 @@ import Image from "next/image";
 
 import Step from "@components/section/how-it-works/Step";
 
-export default function HowItWorksMobile(steps: StepType[]) {
+function MobileStepConnector() {
   return (
-    <div className="-mx-4 mt-20 flex flex-col gap-y-10 overflow-hidden px-4 sm:-mx-6 sm:px-6 lg:hidden">
-      {Object.values(steps).map((step, index) => (
+    <div className="flex justify-center py-6">
+      <div className="flex flex-col items-center gap-1">
+        <div className="h-4 w-0.5 bg-gradient-to-b from-violet-400 to-violet-500" />
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 shadow-lg shadow-violet-500/30">
+          <svg
+            className="h-3 w-3 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
+          </svg>
+        </div>
+        <div className="h-4 w-0.5 bg-gradient-to-b from-violet-500 to-violet-400" />
+      </div>
+    </div>
+  );
+}
+
+export default function HowItWorksMobile(steps: StepType[]) {
+  const stepsArray = Object.values(steps);
+
+  return (
+    <div className="-mx-4 mt-16 flex flex-col overflow-hidden px-4 sm:-mx-6 sm:px-6 lg:hidden">
+      {stepsArray.map((step, index) => (
         <div key={step.name}>
-          <Step step={step} className="mx-auto max-w-2xl" isActive />
-          <div className="relative mt-10 pb-10">
-            <div className="absolute rounded-lg -inset-x-4 bottom-0 top-8 bg-violet-200 dark:bg-violet-950/30 sm:-inset-x-6" />
-            <div className="relative mx-auto w-[52.75rem] overflow-hidden rounded-xl bg-white shadow-lg shadow-slate-900/5 ring-1 ring-slate-500/10">
+          <Step
+            step={step}
+            stepNumber={index + 1}
+            className="mx-auto max-w-2xl"
+            isActive
+          />
+
+          {/* Image container with glass styling */}
+          <div className="glass relative mx-auto mt-8 max-w-2xl overflow-hidden rounded-2xl p-4">
+            <div className="overflow-hidden rounded-xl glass-subtle bg-violet-500/20 dark:bg-violet-500/25 shadow-lg shadow-slate-900/5 ring-1 ring-violet-500/20 dark:ring-violet-500/25">
               <Image
                 className="w-full"
                 src={step.image}
-                alt="How it works image"
+                alt={`Step ${index + 1}: ${step.name}`}
                 width={600}
                 height={400}
-                sizes="52.75rem"
+                sizes="(max-width: 768px) 100vw, 672px"
               />
             </div>
           </div>
+
+          {/* Connector between steps */}
+          {index < stepsArray.length - 1 && <MobileStepConnector />}
         </div>
       ))}
     </div>
