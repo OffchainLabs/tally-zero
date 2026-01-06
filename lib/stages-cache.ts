@@ -85,9 +85,10 @@ export function getCompletionStatus(
     return lastStage.status === "COMPLETED" ? "completed" : "incomplete";
   }
 
-  // Check if the expected final stage exists and is COMPLETED
+  // Check if the expected final stage exists and is COMPLETED or SKIPPED
+  // SKIPPED means the stage doesn't apply (e.g., no retryable for Core proposals)
   const finalStage = stages.find((s) => s.type === expectedFinalStage);
-  if (finalStage?.status === "COMPLETED") {
+  if (finalStage?.status === "COMPLETED" || finalStage?.status === "SKIPPED") {
     return "completed";
   }
 

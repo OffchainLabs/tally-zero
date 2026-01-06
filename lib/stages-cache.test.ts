@@ -16,7 +16,7 @@ const TREASURY_GOVERNOR_ADDRESS = GOVERNORS.treasury.address.toLowerCase();
 
 const createStage = (
   type: StageType,
-  status: "NOT_STARTED" | "PENDING" | "COMPLETED" | "FAILED"
+  status: "NOT_STARTED" | "PENDING" | "COMPLETED" | "FAILED" | "SKIPPED"
 ): ProposalStage => ({
   type,
   status,
@@ -126,6 +126,21 @@ describe("stages-cache", () => {
           createStage("L2_TIMELOCK", "COMPLETED"),
         ];
         expect(hasReachedFinalStage(stages, CORE_GOVERNOR_ADDRESS)).toBe(false);
+      });
+
+      it("returns true for Core proposal without retryable when RETRYABLE_EXECUTED is SKIPPED", () => {
+        // Core proposals without retryables have RETRYABLE_EXECUTED marked as SKIPPED
+        // SKIPPED means the stage doesn't apply and we should consider it complete
+        const stages: ProposalStage[] = [
+          createStage("PROPOSAL_CREATED", "COMPLETED"),
+          createStage("VOTING_ACTIVE", "COMPLETED"),
+          createStage("PROPOSAL_QUEUED", "COMPLETED"),
+          createStage("L2_TIMELOCK", "COMPLETED"),
+          createStage("L2_TO_L1_MESSAGE", "COMPLETED"),
+          createStage("L1_TIMELOCK", "COMPLETED"),
+          createStage("RETRYABLE_EXECUTED", "SKIPPED"),
+        ];
+        expect(hasReachedFinalStage(stages, CORE_GOVERNOR_ADDRESS)).toBe(true);
       });
     });
 
