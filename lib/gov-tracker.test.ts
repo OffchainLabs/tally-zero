@@ -3,18 +3,17 @@
  * Verifies that gov-tracker functions work correctly in our environment
  */
 
-import { ethers } from "ethers";
-import { describe, expect, it } from "vitest";
 import {
   decodeRetryableTicket,
   formatDecodedValue,
-  getAddressExplorerUrl,
   getAddressLabel,
-  getChainLabel,
   isLikelyCalldata,
   isRetryableTicketMagic,
   lookupLocalSignature,
 } from "@gzeoneth/gov-tracker";
+import { ethers } from "ethers";
+import { describe, expect, it } from "vitest";
+import { getAddressExplorerUrl } from "./explorer-utils";
 
 const RETRYABLE_TICKET_MAGIC = "0xa723c008e76e379c55599d2e4d93879beafda79c";
 const ARB1_INBOX = "0x4dbd4fc535ac27206064b68ffcf827b0a60bab3f";
@@ -41,20 +40,6 @@ describe("gov-tracker integration", () => {
       expect(getAddressExplorerUrl(address, "ethereum")).toBe(
         `https://etherscan.io/address/${address}`
       );
-    });
-  });
-
-  describe("getChainLabel", () => {
-    it("returns Arb1 for arb1", () => {
-      expect(getChainLabel("arb1")).toBe("Arb1");
-    });
-
-    it("returns Nova for nova", () => {
-      expect(getChainLabel("nova")).toBe("Nova");
-    });
-
-    it("returns L1 for ethereum", () => {
-      expect(getChainLabel("ethereum")).toBe("L1");
     });
   });
 
@@ -286,9 +271,10 @@ describe("gov-tracker integration", () => {
     });
 
     it("returns null for invalid data", () => {
-      expect(decodeRetryableTicket("0x")).toBeNull();
-      expect(decodeRetryableTicket("invalid")).toBeNull();
-      expect(decodeRetryableTicket("0x1234")).toBeNull();
+      // In v0.1.1, decodeRetryableTicket throws on invalid data instead of returning null
+      expect(() => decodeRetryableTicket("0x")).toThrow();
+      expect(() => decodeRetryableTicket("invalid")).toThrow();
+      expect(() => decodeRetryableTicket("0x1234")).toThrow();
     });
 
     it("handles large uint256 values", () => {

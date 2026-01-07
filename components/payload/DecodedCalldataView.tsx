@@ -1,19 +1,15 @@
 "use client";
 
+import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { Badge } from "@components/ui/Badge";
+import { CopyableText } from "@components/ui/CopyableText";
+import { SimulationButton } from "@components/ui/SimulationButton";
 import type {
   ChainContext,
   DecodedCalldata,
   DecodedParameter,
 } from "@gzeoneth/gov-tracker";
-import {
-  getAddressExplorerUrl,
-  getAddressLabel,
-  getChainLabel,
-  NETWORK_IDS,
-} from "@gzeoneth/gov-tracker";
-import { Badge } from "@components/ui/Badge";
-import { CopyableText } from "@components/ui/CopyableText";
-import { SimulationButton } from "@components/ui/SimulationButton";
+import { getAddressLabel, NETWORK_IDS } from "@gzeoneth/gov-tracker";
 import {
   simulateCall,
   simulateRetryableTicket,
@@ -25,6 +21,38 @@ import { cn } from "@lib/utils";
 function truncateValue(value: string, maxLength = 50): string {
   if (value.length <= maxLength) return value;
   return truncateMiddle(value, 24, 20);
+}
+
+/**
+ * Get chain label for display
+ */
+function getChainLabel(chainContext: ChainContext): string {
+  switch (chainContext) {
+    case "arb1":
+      return "Arb1";
+    case "nova":
+      return "Nova";
+    case "ethereum":
+      return "L1";
+  }
+}
+
+/**
+ * Extract function name from signature
+ * e.g., "execute(address,uint256)" -> "execute"
+ */
+function getFunctionName(decoded: DecodedCalldata): string {
+  if (decoded.isRetryable) {
+    return decoded.targetChain
+      ? `Retryable Ticket to ${decoded.targetChain}`
+      : "Retryable Ticket";
+  }
+  if (!decoded.signature) {
+    return "Unknown";
+  }
+  // Extract function name before opening parenthesis
+  const match = decoded.signature.match(/^([^(]+)/);
+  return match?.[1] || decoded.signature;
 }
 
 export interface ParameterViewProps {
@@ -45,7 +73,7 @@ export function ParameterView({
 }: ParameterViewProps) {
   // Check if this is a bytes[] with decoded nested array
   const hasNestedArray = param.nestedArray && param.nestedArray.length > 0;
-  const hasNestedSingle = param.nested && param.nested.functionName;
+  const hasNestedSingle = param.nested && param.nested.signature != null;
 
   // Compute UI metadata for addresses using gov-tracker
   const isAddress = param.type === "address";
@@ -131,7 +159,8 @@ export function ParameterView({
             isDecoding={false}
             chainContext={param.nested!.chainContext || chainContext}
           />
-          {param.nested!.functionName?.match(/^schedule(Batch)?$/) &&
+          {!param.nested!.isRetryable &&
+            param.nested!.signature?.match(/^schedule(Batch)?\(/) &&
             (() => {
               const targetParam = siblingParams?.find(
                 (p) => p.type === "address"
@@ -158,106 +187,109 @@ export function ParameterView({
       {/* Nested bytes[] array - each element is a decoded call */}
       {hasNestedArray && (
         <div className="ml-2 sm:ml-4 space-y-2 sm:space-y-3 mt-2">
-          {param.nestedArray!.map((nestedCall, nestedIdx) => (
-            <div
-              key={nestedIdx}
-              className={cn(
-                "pl-2 sm:pl-3 border-l-2 glass-subtle rounded-lg p-2 sm:p-3 transition-all duration-200 hover:shadow-sm",
-                nestedCall.functionName?.startsWith("Retryable Ticket")
-                  ? "border-l-amber-500/50"
-                  : "border-l-violet-500/50"
-              )}
-            >
-              <span
+          {param.nestedArray!.map((nestedCall, nestedIdx) => {
+            const isRetryableTicket = nestedCall.isRetryable;
+            return (
+              <div
+                key={nestedIdx}
                 className={cn(
-                  "text-[10px] font-medium block mb-2 uppercase tracking-wide",
-                  nestedCall.functionName?.startsWith("Retryable Ticket")
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-violet-600 dark:text-violet-400"
+                  "pl-2 sm:pl-3 border-l-2 glass-subtle rounded-lg p-2 sm:p-3 transition-all duration-200 hover:shadow-sm",
+                  isRetryableTicket
+                    ? "border-l-amber-500/50"
+                    : "border-l-violet-500/50"
                 )}
               >
-                Batch action [{nestedIdx}]
-              </span>
-              {nestedCall.functionName ? (
-                <>
-                  <DecodedCalldataView
-                    decoded={nestedCall}
-                    isDecoding={false}
-                    chainContext={nestedCall.chainContext || chainContext}
-                  />
-                  {nestedCall.functionName?.startsWith("Retryable Ticket") &&
-                    nestedCall.parameters &&
-                    (() => {
-                      const l2TargetParam = nestedCall.parameters.find(
-                        (p) => p.name === "l2Target"
-                      );
-                      const l2CalldataParam = nestedCall.parameters.find(
-                        (p) => p.name === "l2Calldata"
-                      );
-                      const l2ValueParam = nestedCall.parameters.find(
-                        (p) => p.name === "l2Value"
-                      );
+                <span
+                  className={cn(
+                    "text-[10px] font-medium block mb-2 uppercase tracking-wide",
+                    isRetryableTicket
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-violet-600 dark:text-violet-400"
+                  )}
+                >
+                  Batch action [{nestedIdx}]
+                </span>
+                {nestedCall.signature != null || isRetryableTicket ? (
+                  <>
+                    <DecodedCalldataView
+                      decoded={nestedCall}
+                      isDecoding={false}
+                      chainContext={nestedCall.chainContext || chainContext}
+                    />
+                    {isRetryableTicket &&
+                      nestedCall.parameters &&
+                      (() => {
+                        const l2TargetParam = nestedCall.parameters.find(
+                          (p) => p.name === "l2Target"
+                        );
+                        const l2CalldataParam = nestedCall.parameters.find(
+                          (p) => p.name === "l2Calldata"
+                        );
+                        const l2ValueParam = nestedCall.parameters.find(
+                          (p) => p.name === "l2Value"
+                        );
 
-                      if (l2TargetParam && l2CalldataParam) {
+                        if (l2TargetParam && l2CalldataParam) {
+                          return (
+                            <div className="mt-2">
+                              <SimulationButton
+                                type="retryable"
+                                onSimulate={() =>
+                                  simulateRetryableTicket({
+                                    l2Target: l2TargetParam.value,
+                                    l2Calldata: l2CalldataParam.value,
+                                    l2Value: l2ValueParam?.value?.split(" ")[0],
+                                    chain: nestedCall.targetChain || "unknown",
+                                  })
+                                }
+                              />
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    {!isRetryableTicket &&
+                      (() => {
+                        const addressArrayParam = siblingParams?.find(
+                          (p) => p.type === "address[]"
+                        );
+                        if (!addressArrayParam) return null;
+                        // Use rawValue which contains the original address array
+                        const addresses = addressArrayParam.rawValue as
+                          | string[]
+                          | undefined;
+                        const batchTarget = addresses?.[nestedIdx];
+                        if (!batchTarget || !nestedCall.raw) return null;
                         return (
                           <div className="mt-2">
                             <SimulationButton
-                              type="retryable"
+                              type="call"
                               onSimulate={() =>
-                                simulateRetryableTicket({
-                                  l2Target: l2TargetParam.value,
-                                  l2Calldata: l2CalldataParam.value,
-                                  l2Value: l2ValueParam?.value?.split(" ")[0],
-                                  chain: nestedCall.targetChain || "unknown",
+                                simulateCall({
+                                  target: batchTarget,
+                                  calldata: nestedCall.raw,
+                                  chain: "L1",
                                 })
                               }
                             />
                           </div>
                         );
-                      }
-                      return null;
-                    })()}
-                  {!nestedCall.functionName?.startsWith("Retryable Ticket") &&
-                    (() => {
-                      const addressArrayParam = siblingParams?.find(
-                        (p) => p.type === "address[]"
-                      );
-                      if (!addressArrayParam) return null;
-                      // Use rawValue which contains the original address array
-                      const addresses = addressArrayParam.rawValue as
-                        | string[]
-                        | undefined;
-                      const batchTarget = addresses?.[nestedIdx];
-                      if (!batchTarget || !nestedCall.raw) return null;
-                      return (
-                        <div className="mt-2">
-                          <SimulationButton
-                            type="call"
-                            onSimulate={() =>
-                              simulateCall({
-                                target: batchTarget,
-                                calldata: nestedCall.raw,
-                                chain: "L1",
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    })()}
-                </>
-              ) : (
-                <CopyableText
-                  value={nestedCall.raw}
-                  displayText={
-                    nestedCall.raw.length > 80
-                      ? truncateValue(nestedCall.raw, 80)
-                      : undefined
-                  }
-                  className="text-[10px] text-muted-foreground"
-                />
-              )}
-            </div>
-          ))}
+                      })()}
+                  </>
+                ) : (
+                  <CopyableText
+                    value={nestedCall.raw}
+                    displayText={
+                      nestedCall.raw.length > 80
+                        ? truncateValue(nestedCall.raw, 80)
+                        : undefined
+                    }
+                    className="text-[10px] text-muted-foreground"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -302,7 +334,7 @@ export function DecodedCalldataView({
           variant="secondary"
           className="font-mono text-xs px-2.5 py-1 bg-primary/10 text-primary border-0"
         >
-          {decoded.functionName}()
+          {getFunctionName(decoded)}()
         </Badge>
         <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted/50">
           {decoded.decodingSource === "local" ? "local" : "4byte"}
