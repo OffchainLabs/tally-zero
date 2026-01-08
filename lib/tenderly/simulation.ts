@@ -20,11 +20,11 @@ import type {
  */
 function getNetworkIdForChain(chain: ChainType): string {
   switch (chain) {
-    case "L1":
+    case "ethereum":
       return CHAIN_IDS.ethereum;
-    case "Arb1":
+    case "arb1":
       return CHAIN_IDS.arb1;
-    case "Nova":
+    case "nova":
       return CHAIN_IDS.nova;
     default:
       return CHAIN_IDS.arb1;
@@ -35,7 +35,7 @@ function getNetworkIdForChain(chain: ChainType): string {
  * Get the appropriate sender address for simulation on a chain
  */
 function getSenderForChain(chain: ChainType): string {
-  if (chain === "L1") {
+  if (chain === "ethereum") {
     return L1_TIMELOCK.address;
   }
   return getL1TimelockAlias();

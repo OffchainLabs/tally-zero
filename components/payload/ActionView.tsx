@@ -138,7 +138,7 @@ export function ActionView({
                 simulateCall({
                   target,
                   calldata: effectiveCalldata,
-                  chain: "Arb1",
+                  chain: "arb1",
                   from: isTreasuryGovernor(governorAddress)
                     ? L2_TREASURY_TIMELOCK.address
                     : undefined,

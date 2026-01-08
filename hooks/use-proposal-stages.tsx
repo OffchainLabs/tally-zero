@@ -266,10 +266,8 @@ export function useProposalStages({
             proposalId,
             governorAddress,
             forVotes: forVotesRaw,
-            againstVotes:
-              (votingStage?.data?.againstVotesRaw as string) || "0",
-            abstainVotes:
-              (votingStage?.data?.abstainVotesRaw as string) || "0",
+            againstVotes: (votingStage?.data?.againstVotesRaw as string) || "0",
+            abstainVotes: (votingStage?.data?.abstainVotesRaw as string) || "0",
           });
         }
       } catch (err) {
@@ -552,7 +550,7 @@ export interface StageMetadataWithType {
   type: StageType;
   title: string;
   description: string;
-  chain: "L1" | "L2" | "NOVA" | "CROSS_CHAIN";
+  chain: "ethereum" | "arb1" | "nova" | "unknown" | "CROSS_CHAIN";
   estimatedDays: number;
   requiresAction: boolean;
 }

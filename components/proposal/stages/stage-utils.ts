@@ -6,27 +6,20 @@ import {
 } from "@/lib/date-utils";
 import { getTxExplorerUrl, type ChainId } from "@/lib/explorer-utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
-import type { ChainType } from "@gzeoneth/gov-tracker";
+import type { Chain } from "@gzeoneth/gov-tracker";
 
 /**
  * Get the explorer URL for a transaction based on chain
- * Supports gov-tracker's ChainType which includes NOVA
+ * Supports gov-tracker's Chain type ("ethereum", "arb1", "nova")
  */
 export function getStageTxExplorerUrl(
   hash: string,
-  chain: ChainType,
-  targetChain?: "Arb1" | "Nova"
+  chain: Chain,
+  targetChain?: Chain
 ): string {
-  let chainId: ChainId;
-  if (chain === "L1") {
-    chainId = "ethereum";
-  } else if (chain === "NOVA") {
-    chainId = "nova";
-  } else {
-    // L2 - check targetChain for Nova retryables
-    chainId = targetChain === "Nova" ? "nova" : "arb1";
-  }
-  return getTxExplorerUrl(hash, chainId);
+  // For cross-chain transactions (retryables), use targetChain if provided
+  const effectiveChain = targetChain || chain;
+  return getTxExplorerUrl(hash, effectiveChain as ChainId);
 }
 
 /**

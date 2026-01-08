@@ -20,7 +20,8 @@ const createStage = (
 ): ProposalStage => ({
   type,
   status,
-  chain: "L2",
+  chain: "arb1",
+  chainId: 42161,
   data: {},
   transactions: [],
 });

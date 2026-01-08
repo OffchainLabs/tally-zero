@@ -80,5 +80,5 @@ export interface StorageEncodingResponse {
   stateOverrides: Record<string, { value: Record<string, string> }>;
 }
 
-/** Chain type identifier for simulation targeting */
-export type ChainType = "L1" | "Arb1" | "Nova" | "unknown";
+/** Chain type identifier for simulation targeting (aligned with gov-tracker) */
+export type ChainType = "ethereum" | "arb1" | "nova" | "unknown";

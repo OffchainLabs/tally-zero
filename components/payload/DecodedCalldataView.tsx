@@ -4,12 +4,12 @@ import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { Badge } from "@components/ui/Badge";
 import { CopyableText } from "@components/ui/CopyableText";
 import { SimulationButton } from "@components/ui/SimulationButton";
-import type {
-  ChainContext,
-  DecodedCalldata,
-  DecodedParameter,
+import {
+  getAddressLabel,
+  type Chain,
+  type DecodedCalldata,
+  type DecodedParameter,
 } from "@gzeoneth/gov-tracker";
-import { getAddressLabel, NETWORK_IDS } from "@gzeoneth/gov-tracker";
 import {
   simulateCall,
   simulateRetryableTicket,
@@ -17,6 +17,9 @@ import {
 } from "@lib/tenderly";
 import { truncateMiddle } from "@lib/text-utils";
 import { cn } from "@lib/utils";
+
+// Chain types for UI display - derived from gov-tracker's Chain type
+type KnownChain = Exclude<Chain, "unknown">;
 
 function truncateValue(value: string, maxLength = 50): string {
   if (value.length <= maxLength) return value;
@@ -26,7 +29,7 @@ function truncateValue(value: string, maxLength = 50): string {
 /**
  * Get chain label for display
  */
-function getChainLabel(chainContext: ChainContext): string {
+function getChainLabel(chainContext: KnownChain): string | undefined {
   switch (chainContext) {
     case "arb1":
       return "Arb1";
@@ -34,6 +37,8 @@ function getChainLabel(chainContext: ChainContext): string {
       return "Nova";
     case "ethereum":
       return "L1";
+    default:
+      return undefined;
   }
 }
 
@@ -59,7 +64,7 @@ export interface ParameterViewProps {
   param: DecodedParameter;
   index: number;
   siblingParams?: DecodedParameter[];
-  chainContext?: ChainContext;
+  chainContext?: KnownChain;
 }
 
 /**
@@ -157,30 +162,41 @@ export function ParameterView({
           <DecodedCalldataView
             decoded={param.nested!}
             isDecoding={false}
-            chainContext={param.nested!.chainContext || chainContext}
+            chainContext={
+              param.nested!.targetChain &&
+              param.nested!.targetChain !== "unknown"
+                ? param.nested!.targetChain
+                : chainContext
+            }
           />
-          {!param.nested!.isRetryable &&
-            param.nested!.signature?.match(/^schedule(Batch)?\(/) &&
-            (() => {
-              const targetParam = siblingParams?.find(
-                (p) => p.type === "address"
-              );
-              if (!targetParam || !param.value) return null;
-              return (
-                <div className="mt-2">
-                  <SimulationButton
-                    type="timelock"
-                    onSimulate={() =>
-                      simulateTimelockBatch({
-                        timelockAddress: targetParam.value,
-                        calldata: param.value,
-                        networkId: NETWORK_IDS[chainContext],
-                      })
-                    }
-                  />
-                </div>
-              );
-            })()}
+          {(() => {
+            const nested = param.nested!;
+            const nestedTargetChain = nested.targetChain;
+            if (nested.isRetryable) return null;
+            if (!nested.signature?.match(/^schedule(Batch)?\(/)) return null;
+            const targetParam = siblingParams?.find(
+              (p) => p.type === "address"
+            );
+            if (!targetParam || !param.value) return null;
+            const nestedChain =
+              nestedTargetChain && nestedTargetChain !== "unknown"
+                ? nestedTargetChain
+                : chainContext;
+            return (
+              <div className="mt-2">
+                <SimulationButton
+                  type="timelock"
+                  onSimulate={() =>
+                    simulateTimelockBatch({
+                      timelockAddress: targetParam.rawValue as string,
+                      calldata: param.rawValue as string,
+                      chain: nestedChain,
+                    })
+                  }
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -214,7 +230,12 @@ export function ParameterView({
                     <DecodedCalldataView
                       decoded={nestedCall}
                       isDecoding={false}
-                      chainContext={nestedCall.chainContext || chainContext}
+                      chainContext={
+                        nestedCall.targetChain &&
+                        nestedCall.targetChain !== "unknown"
+                          ? nestedCall.targetChain
+                          : chainContext
+                      }
                     />
                     {isRetryableTicket &&
                       nestedCall.parameters &&
@@ -268,7 +289,7 @@ export function ParameterView({
                                 simulateCall({
                                   target: batchTarget,
                                   calldata: nestedCall.raw,
-                                  chain: "L1",
+                                  chain: "ethereum",
                                 })
                               }
                             />
@@ -299,7 +320,7 @@ export function ParameterView({
 export interface DecodedCalldataViewProps {
   decoded: DecodedCalldata | null;
   isDecoding: boolean;
-  chainContext?: ChainContext;
+  chainContext?: KnownChain;
 }
 
 /**
@@ -311,8 +332,11 @@ export function DecodedCalldataView({
   chainContext: explicitChainContext,
 }: DecodedCalldataViewProps) {
   // Use explicit chain context, or from decoded data, or default to arb1
-  const chainContext: ChainContext =
-    explicitChainContext || decoded?.chainContext || "arb1";
+  const chainContext: KnownChain =
+    explicitChainContext ||
+    (decoded?.targetChain && decoded.targetChain !== "unknown"
+      ? decoded.targetChain
+      : "arb1");
   if (isDecoding) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 rounded-lg bg-muted/20">

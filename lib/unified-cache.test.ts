@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CACHE_VERSION, STORAGE_KEYS } from "@/config/storage-keys";
-import { MS_PER_HOUR, MS_PER_SECOND } from "@/lib/date-utils";
 import type {
   TimelockOperationInfo,
   TimelockTrackingResult,
 } from "@/hooks/use-timelock-operation";
+import { MS_PER_HOUR, MS_PER_SECOND } from "@/lib/date-utils";
 import type { ProposalStage, TimelockLink } from "@/types/proposal-stage";
 import {
   clearCachedTimelockResult,
@@ -25,7 +25,14 @@ function createMockStage(
   type: ProposalStage["type"],
   status: ProposalStage["status"]
 ): ProposalStage {
-  return { type, status, chain: "L2", data: {}, transactions: [] };
+  return {
+    type,
+    status,
+    chain: "arb1",
+    chainId: 42161,
+    data: {},
+    transactions: [],
+  };
 }
 
 // Helper to create minimal mock operation info

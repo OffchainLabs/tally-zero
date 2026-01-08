@@ -11,25 +11,22 @@
 
 // Re-export types from @gzeoneth/gov-tracker for consistency
 export type {
+  Chain,
+  ChainId,
   ChunkingConfig,
-  StageStatus,
-  StageType,
-  ChainType,
-  TrackedStage as ProposalStage,
-  StageTransaction,
-  StageTiming,
-  TrackedStageData as StageData,
-  TimelockLink,
-  TrackingResult,
-  TrackingCheckpoint,
-  TrackerOptions,
+  L2Chain,
   OnProgressCallback,
+  TrackedStage as ProposalStage,
+  TrackedStageData as StageData,
+  StageStatus,
+  StageTiming,
+  StageTransaction,
+  StageType,
+  TimelockLink,
+  TrackerOptions,
+  TrackingCheckpoint,
+  TrackingResult,
 } from "@gzeoneth/gov-tracker";
-
-/**
- * Target chain for retryable tickets
- */
-export type TargetChainType = "Arb1" | "Nova";
 
 /**
  * Complete proposal tracking result

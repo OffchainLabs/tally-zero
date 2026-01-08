@@ -2,16 +2,12 @@
  * Timelock-specific simulation utilities
  */
 
-import {
-  L1_TIMELOCK,
-  L2_CORE_TIMELOCK,
-  L2_TREASURY_TIMELOCK,
-} from "@config/arbitrum-governance";
 import { encodeAbiParameters, keccak256 } from "viem";
 
 import { CHAIN_IDS, FUNCTION_SELECTORS } from "./constants";
 import { getSimulationLink, getTenderlySettings } from "./settings";
 import type {
+  ChainType,
   SimulationWithLink,
   StorageEncodingResponse,
   TenderlySimulationRequest,
@@ -57,18 +53,19 @@ async function encodeStorageOverrides(
 
   const endpoint = `https://api.tenderly.co/api/v1/account/${org}/project/${project}/contracts/encode-states`;
 
+  const requestBody = {
+    networkID: networkId,
+    stateOverrides: {
+      [contractAddress]: { value: storageObj },
+    },
+  };
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Access-Key": accessToken,
     },
-    body: JSON.stringify({
-      networkID: networkId,
-      stateOverrides: {
-        [contractAddress]: { value: storageObj },
-      },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -79,33 +76,26 @@ async function encodeStorageOverrides(
   }
 
   const data = (await response.json()) as StorageEncodingResponse;
-  return data.stateOverrides[contractAddress.toLowerCase()].value;
+  const override = data.stateOverrides[contractAddress.toLowerCase()];
+  if (!override) {
+    throw new Error(
+      `Storage encoding response missing contract ${contractAddress}. Keys: ${Object.keys(data.stateOverrides || {}).join(", ")}`
+    );
+  }
+  return override.value;
 }
 
-/**
- * Get the network ID and from address for a timelock
- */
-function getTimelockConfig(timelockAddress: string): {
-  networkId: string;
-  fromAddress: string;
-} {
-  const addr = timelockAddress.toLowerCase();
-
-  if (addr === L1_TIMELOCK.address.toLowerCase()) {
-    return { networkId: CHAIN_IDS.ethereum, fromAddress: L1_TIMELOCK.address };
+function getNetworkId(chain: ChainType): string {
+  switch (chain) {
+    case "ethereum":
+      return CHAIN_IDS.ethereum;
+    case "arb1":
+      return CHAIN_IDS.arb1;
+    case "nova":
+      return CHAIN_IDS.nova;
+    default:
+      return CHAIN_IDS.ethereum;
   }
-  if (addr === L2_CORE_TIMELOCK.address.toLowerCase()) {
-    return { networkId: CHAIN_IDS.arb1, fromAddress: L2_CORE_TIMELOCK.address };
-  }
-  if (addr === L2_TREASURY_TIMELOCK.address.toLowerCase()) {
-    return {
-      networkId: CHAIN_IDS.arb1,
-      fromAddress: L2_TREASURY_TIMELOCK.address,
-    };
-  }
-
-  // Default to L1 for unknown timelocks
-  return { networkId: CHAIN_IDS.ethereum, fromAddress: timelockAddress };
 }
 
 /**
@@ -166,7 +156,7 @@ function decodeScheduleBatchCalldata(calldata: string): {
 export async function simulateTimelockBatch(params: {
   timelockAddress: string;
   calldata: string;
-  networkId?: string;
+  chain: ChainType;
 }): Promise<SimulationWithLink> {
   const { org, project, accessToken } = getTenderlySettings();
 
@@ -200,9 +190,8 @@ export async function simulateTimelockBatch(params: {
     [`_timestamps[${operationId}]`]: simTimestamp.toString(),
   };
 
-  const timelockConfig = getTimelockConfig(params.timelockAddress);
-  const networkId = params.networkId || timelockConfig.networkId;
-  const fromAddress = timelockConfig.fromAddress;
+  const networkId = getNetworkId(params.chain);
+  const fromAddress = params.timelockAddress;
 
   const encodedStorage = await encodeStorageOverrides(
     networkId,

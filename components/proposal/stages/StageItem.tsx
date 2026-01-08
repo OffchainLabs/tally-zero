@@ -183,14 +183,20 @@ const StageHeader = memo(function StageHeader({
       <span
         className={cn(
           "text-xs px-2 py-0.5 rounded-full font-medium",
-          metadata?.chain === "L1"
+          metadata?.chain === "ethereum"
             ? "bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-300"
-            : metadata?.chain === "L2"
+            : metadata?.chain === "arb1"
               ? "bg-purple-500/20 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300"
               : "bg-orange-500/20 dark:bg-orange-500/25 text-orange-700 dark:text-orange-300"
         )}
       >
-        {metadata?.chain}
+        {metadata?.chain === "ethereum"
+          ? "L1"
+          : metadata?.chain === "arb1"
+            ? "Arb1"
+            : metadata?.chain === "nova"
+              ? "Nova"
+              : metadata?.chain}
       </span>
       {isRefreshing && (
         <span className="text-xs text-blue-500 animate-pulse">

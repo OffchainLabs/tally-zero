@@ -14,29 +14,24 @@ describe("getStageTxExplorerUrl", () => {
   const testHash =
     "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 
-  it("returns Etherscan URL for L1 chain", () => {
-    const url = getStageTxExplorerUrl(testHash, "L1");
+  it("returns Etherscan URL for ethereum chain", () => {
+    const url = getStageTxExplorerUrl(testHash, "ethereum");
     expect(url).toBe(`https://etherscan.io/tx/${testHash}`);
   });
 
-  it("returns Arbiscan URL for L2 chain without target", () => {
-    const url = getStageTxExplorerUrl(testHash, "L2");
+  it("returns Arbiscan URL for arb1 chain", () => {
+    const url = getStageTxExplorerUrl(testHash, "arb1");
     expect(url).toBe(`https://arbiscan.io/tx/${testHash}`);
   });
 
-  it("returns Arbiscan URL for L2 chain with Arb1 target", () => {
-    const url = getStageTxExplorerUrl(testHash, "L2", "Arb1");
-    expect(url).toBe(`https://arbiscan.io/tx/${testHash}`);
-  });
-
-  it("returns Nova Arbiscan URL for L2 chain with Nova target", () => {
-    const url = getStageTxExplorerUrl(testHash, "L2", "Nova");
+  it("returns Nova Arbiscan URL for nova chain", () => {
+    const url = getStageTxExplorerUrl(testHash, "nova");
     expect(url).toBe(`https://nova.arbiscan.io/tx/${testHash}`);
   });
 
-  it("ignores target chain for L1", () => {
-    const url = getStageTxExplorerUrl(testHash, "L1", "Nova");
-    expect(url).toBe(`https://etherscan.io/tx/${testHash}`);
+  it("uses targetChain when provided", () => {
+    const url = getStageTxExplorerUrl(testHash, "ethereum", "nova");
+    expect(url).toBe(`https://nova.arbiscan.io/tx/${testHash}`);
   });
 });
 

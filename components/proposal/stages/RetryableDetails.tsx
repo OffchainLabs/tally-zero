@@ -2,14 +2,18 @@
 
 import { memo } from "react";
 
+import type { Chain } from "@gzeoneth/gov-tracker";
 import { ExternalLinkIcon } from "@radix-ui/react-icons";
 
 import { getStageTxExplorerUrl } from "./stage-utils";
 
+// L2 chain types - derived from gov-tracker's Chain type
+type L2Chain = Exclude<Chain, "ethereum" | "unknown">;
+
 export interface RetryableCreationDetailsProps {
   details: Array<{
     index: number;
-    targetChain: "Arb1" | "Nova";
+    targetChain: L2Chain;
     l2TxHash: string | null;
   }>;
 }
@@ -32,14 +36,10 @@ export const RetryableCreationDetails = memo(function RetryableCreationDetails({
             className="flex items-center gap-2"
           >
             <span className="text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
-              {detail.targetChain}
+              {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
             </span>
             <a
-              href={getStageTxExplorerUrl(
-                detail.l2TxHash!,
-                "L2",
-                detail.targetChain
-              )}
+              href={getStageTxExplorerUrl(detail.l2TxHash!, detail.targetChain)}
               target="_blank"
               rel="noopener noreferrer"
               className="font-mono text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
@@ -57,7 +57,7 @@ export const RetryableCreationDetails = memo(function RetryableCreationDetails({
 export interface RetryableRedemptionDetailsProps {
   details: Array<{
     index: number;
-    targetChain: "Arb1" | "Nova";
+    targetChain: L2Chain;
     status: string;
     l2TxHash: string | null;
   }>;
@@ -80,13 +80,12 @@ export const RetryableRedemptionDetails = memo(
             className="flex items-center gap-2"
           >
             <span className="text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
-              {detail.targetChain}
+              {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
             </span>
             {detail.l2TxHash ? (
               <a
                 href={getStageTxExplorerUrl(
                   detail.l2TxHash,
-                  "L2",
                   detail.targetChain
                 )}
                 target="_blank"
