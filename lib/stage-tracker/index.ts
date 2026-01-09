@@ -40,8 +40,8 @@ export function createProposalTracker(
     cache?: CacheAdapter;
   }
 ) {
-  const l2Provider = new ethers.providers.JsonRpcProvider(l2RpcUrl);
-  const l1Provider = new ethers.providers.JsonRpcProvider(l1RpcUrl);
+  const l2Provider = new ethers.providers.StaticJsonRpcProvider(l2RpcUrl);
+  const l1Provider = new ethers.providers.StaticJsonRpcProvider(l1RpcUrl);
 
   const {
     chunkingConfig: userChunkingConfig,

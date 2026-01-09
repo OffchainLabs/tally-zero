@@ -136,7 +136,7 @@ export function useTimelockOperation({
     setResult(null);
 
     try {
-      const l2Provider = new ethers.providers.JsonRpcProvider(
+      const l2Provider = new ethers.providers.StaticJsonRpcProvider(
         effectiveL2RpcUrl
       );
 

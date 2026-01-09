@@ -8,18 +8,22 @@ import {
 } from "./rpc-utils";
 
 // Mock ethers to avoid real network calls
-vi.mock("ethers", () => ({
-  ethers: {
-    providers: {
-      JsonRpcProvider: vi.fn().mockImplementation((url: string) => ({
-        ready: Promise.resolve(),
-        getBlockNumber: vi.fn().mockResolvedValue(12345),
-        getNetwork: vi.fn().mockResolvedValue({ chainId: 42161 }),
-        _url: url,
-      })),
+vi.mock("ethers", () => {
+  const mockProviderFactory = (url: string) => ({
+    ready: Promise.resolve(),
+    getBlockNumber: vi.fn().mockResolvedValue(12345),
+    getNetwork: vi.fn().mockResolvedValue({ chainId: 42161 }),
+    _url: url,
+  });
+  return {
+    ethers: {
+      providers: {
+        JsonRpcProvider: vi.fn().mockImplementation(mockProviderFactory),
+        StaticJsonRpcProvider: vi.fn().mockImplementation(mockProviderFactory),
+      },
     },
-  },
-}));
+  };
+});
 
 describe("rpc-utils", () => {
   describe("DEFAULT_MAX_BLOCK_RANGE", () => {

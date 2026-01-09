@@ -151,7 +151,7 @@ export async function checkRpcHealth(
   }
 
   try {
-    const provider = new ethers.providers.JsonRpcProvider(url);
+    const provider = new ethers.providers.StaticJsonRpcProvider(url);
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(

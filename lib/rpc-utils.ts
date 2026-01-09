@@ -16,7 +16,7 @@ const MAX_PROVIDER_CACHE_SIZE = 10;
 
 /** Cache for RPC providers, keyed by URL with last used timestamp */
 interface CachedProvider {
-  provider: ethers.providers.JsonRpcProvider;
+  provider: ethers.providers.StaticJsonRpcProvider;
   lastUsed: number;
 }
 const providerCache = new Map<string, CachedProvider>();
@@ -53,7 +53,7 @@ function evictLruProviders(): void {
  */
 export async function createRpcProvider(
   rpcUrl: string
-): Promise<ethers.providers.JsonRpcProvider> {
+): Promise<ethers.providers.StaticJsonRpcProvider> {
   // Return cached provider if available and still connected
   const cached = providerCache.get(rpcUrl);
   if (cached) {
@@ -71,7 +71,7 @@ export async function createRpcProvider(
   }
 
   // Create new provider
-  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+  const provider = new ethers.providers.StaticJsonRpcProvider(rpcUrl);
   await provider.ready;
   await provider.getBlockNumber(); // Verify connection works
 

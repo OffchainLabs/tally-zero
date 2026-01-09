@@ -306,7 +306,7 @@ async function main() {
 
   // Connect to provider
   console.log("Connecting to Arbitrum...");
-  const provider = new ethers.providers.JsonRpcProvider(ARBITRUM_RPC_URL);
+  const provider = new ethers.providers.StaticJsonRpcProvider(ARBITRUM_RPC_URL);
   await provider.ready;
   const currentBlock = await provider.getBlockNumber();
   console.log(`Current block: ${currentBlock.toLocaleString()}`);
