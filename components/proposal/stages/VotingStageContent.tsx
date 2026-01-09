@@ -11,11 +11,20 @@ import {
   type EstimatedTimeRange,
 } from "@/lib/date-utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
+import type { VotingActiveData } from "@gzeoneth/gov-tracker";
 import { CalendarIcon } from "@radix-ui/react-icons";
 
 import { QuorumProgressBar } from "./QuorumProgressBar";
 import { createStageCalendarUrl, type VotingTimeRange } from "./stage-utils";
 import { VoteDistributionBar } from "./VoteDistributionBar";
+
+function getVotingData(
+  stage: ProposalStage | undefined
+): VotingActiveData | null {
+  if (!stage?.data) return null;
+  if (stage.type === "VOTING_ACTIVE") return stage.data;
+  return null;
+}
 
 export interface VotingStageContentProps {
   stage?: ProposalStage;
@@ -41,6 +50,8 @@ export const VotingStageContent = memo(function VotingStageContent({
   proposalId,
   governorAddress,
 }: VotingStageContentProps) {
+  const votingData = getVotingData(stage);
+
   return (
     <div className="mt-3 space-y-3">
       {votingTimeRange && (
@@ -51,7 +62,7 @@ export const VotingStageContent = memo(function VotingStageContent({
             </span>
             <span className="text-foreground">
               {formatDateShort(votingTimeRange.votingStartDate)} →{" "}
-              {stage?.data?.extensionPossible === false
+              {votingData?.extensionPossible === false
                 ? formatDateShort(votingTimeRange.votingEndMaxDate)
                 : formatDateRange(
                     votingTimeRange.votingEndMinDate,
@@ -60,7 +71,7 @@ export const VotingStageContent = memo(function VotingStageContent({
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {Boolean(stage?.data?.quorumReached) && (
+            {Boolean(votingData?.quorumReached) && (
               <Badge
                 variant="secondary"
                 className="bg-green-500/20 dark:bg-green-500/25 text-green-700 dark:text-green-400 border border-green-500/30 text-xs py-0 px-2"
@@ -68,7 +79,7 @@ export const VotingStageContent = memo(function VotingStageContent({
                 Quorum Reached
               </Badge>
             )}
-            {Boolean(stage?.data?.wasExtended) && (
+            {Boolean(votingData?.wasExtended) && (
               <Badge
                 variant="secondary"
                 className="bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-400 border border-blue-500/30 text-xs py-0 px-2"
@@ -77,8 +88,8 @@ export const VotingStageContent = memo(function VotingStageContent({
               </Badge>
             )}
             {Boolean(
-              stage?.data?.extensionPossible !== false &&
-                !stage?.data?.wasExtended
+              votingData?.extensionPossible !== false &&
+                !votingData?.wasExtended
             ) && (
               <Badge
                 variant="outline"
@@ -96,19 +107,19 @@ export const VotingStageContent = memo(function VotingStageContent({
         governorAddress={governorAddress}
       />
 
-      {Boolean(stage?.data?.quorum) && (
+      {Boolean(votingData?.quorum) && (
         <QuorumProgressBar
-          current={String(stage?.data?.forVotes ?? "0")}
-          required={String(stage?.data?.quorum)}
-          reached={Boolean(stage?.data?.quorumReached)}
+          current={String(votingData?.forVotes ?? "0")}
+          required={String(votingData?.quorum)}
+          reached={Boolean(votingData?.quorumReached)}
         />
       )}
 
-      {Boolean(stage?.data?.forVotes) && (
+      {Boolean(votingData?.forVotes) && (
         <VoteDistributionBar
-          forVotes={String(stage?.data?.forVotes)}
-          againstVotes={String(stage?.data?.againstVotes ?? "0")}
-          abstainVotes={String(stage?.data?.abstainVotes ?? "0")}
+          forVotes={String(votingData?.forVotes)}
+          againstVotes={String(votingData?.againstVotes ?? "0")}
+          abstainVotes={String(votingData?.abstainVotes ?? "0")}
         />
       )}
 

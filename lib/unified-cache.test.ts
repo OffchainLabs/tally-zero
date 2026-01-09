@@ -32,7 +32,7 @@ function createMockStage(
     chainId: 42161,
     data: {},
     transactions: [],
-  };
+  } as ProposalStage;
 }
 
 // Helper to create minimal mock operation info

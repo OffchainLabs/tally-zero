@@ -17,7 +17,6 @@ export type {
   L2Chain,
   OnProgressCallback,
   TrackedStage as ProposalStage,
-  TrackedStageData as StageData,
   StageStatus,
   StageTiming,
   StageTransaction,

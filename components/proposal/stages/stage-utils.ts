@@ -6,7 +6,7 @@ import {
 } from "@/lib/date-utils";
 import { getTxExplorerUrl, type ChainId } from "@/lib/explorer-utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
-import type { Chain } from "@gzeoneth/gov-tracker";
+import type { Chain, VotingActiveData } from "@gzeoneth/gov-tracker";
 
 /**
  * Get the explorer URL for a transaction based on chain
@@ -109,11 +109,15 @@ export function calculateEstimatedCompletionTimes(
   const votingStage = stageMap.get("VOTING_ACTIVE");
   let blockBasedTiming: BlockBasedTiming | null = null;
 
+  // Type-narrow voting data for type-safe access
+  const votingData: VotingActiveData | null =
+    votingStage?.type === "VOTING_ACTIVE" ? votingStage.data : null;
+
   // Check if extension is still possible and if it was extended
-  const extensionPossible = votingStage?.data?.extensionPossible !== false;
-  const wasExtended = Boolean(votingStage?.data?.wasExtended);
-  const extendedDeadline = votingStage?.data?.extendedDeadline
-    ? Number(votingStage.data.extendedDeadline)
+  const extensionPossible = votingData?.extensionPossible !== false;
+  const wasExtended = Boolean(votingData?.wasExtended);
+  const extendedDeadline = votingData?.extendedDeadline
+    ? Number(votingData.extendedDeadline)
     : null;
 
   if (

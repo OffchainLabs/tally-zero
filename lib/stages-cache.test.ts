@@ -17,14 +17,15 @@ const TREASURY_GOVERNOR_ADDRESS = GOVERNORS.treasury.address.toLowerCase();
 const createStage = (
   type: StageType,
   status: "NOT_STARTED" | "PENDING" | "COMPLETED" | "FAILED" | "SKIPPED"
-): ProposalStage => ({
-  type,
-  status,
-  chain: "arb1",
-  chainId: 42161,
-  data: {},
-  transactions: [],
-});
+): ProposalStage =>
+  ({
+    type,
+    status,
+    chain: "arb1",
+    chainId: 42161,
+    data: {},
+    transactions: [],
+  }) as ProposalStage;
 
 describe("stages-cache", () => {
   describe("getCacheKey", () => {

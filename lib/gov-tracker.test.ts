@@ -172,11 +172,11 @@ describe("gov-tracker integration", () => {
       expect(formatDecodedValue([], "address[]")).toBe("[]");
     });
 
-    it("truncates long bytes", () => {
-      const longBytes = "0x" + "a".repeat(100); // 100 'a' characters
+    it("preserves long bytes (no truncation)", () => {
+      const longBytes = "0x" + "a".repeat(200); // 200 'a' characters
       const result = formatDecodedValue(longBytes, "bytes");
-      expect(result.length).toBeLessThan(longBytes.length);
-      expect(result).toContain("...");
+      // As of gov-tracker 0.2.0-1, formatDecodedValue no longer truncates bytes
+      expect(result).toBe(longBytes);
     });
 
     it("does not truncate short bytes", () => {
