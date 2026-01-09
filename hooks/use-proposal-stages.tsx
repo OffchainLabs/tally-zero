@@ -365,7 +365,7 @@ export function useProposalStages({
 
       // Clear gov-tracker checkpoint so it re-tracks with fresh cache
       const cache = getCacheAdapter();
-      clearProposalCheckpoint(cache, governorAddress, proposalId);
+      clearProposalCheckpoint(cache, creationTxHash);
 
       // Abort any existing tracking
       trackerManager.abortTracking(proposalId, governorAddress);
@@ -396,7 +396,7 @@ export function useProposalStages({
         startTracking()
       );
     },
-    [proposalId, governorAddress, startTracking]
+    [proposalId, governorAddress, creationTxHash, startTracking]
   );
 
   // Mount/unmount effect

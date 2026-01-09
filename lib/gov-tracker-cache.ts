@@ -15,12 +15,21 @@ import { debug, isBrowser } from "./debug";
 
 /**
  * Build gov-tracker cache key for a proposal
+ * @deprecated Use buildTxHashCacheKey instead - gov-tracker uses tx hash as primary key
  */
 export function buildProposalCacheKey(
   governorAddress: string,
   proposalId: string
 ): string {
   return `proposal:${governorAddress.toLowerCase()}:${proposalId}`;
+}
+
+/**
+ * Build gov-tracker cache key from transaction hash
+ * This matches gov-tracker's internal txHashCacheKey() format
+ */
+export function buildTxHashCacheKey(txHash: string): string {
+  return `tx:${txHash.toLowerCase()}`;
 }
 
 /**
@@ -157,7 +166,8 @@ export async function seedCheckpointFromStages(
 ): Promise<void> {
   if (stages.length === 0) return;
 
-  const key = buildProposalCacheKey(governorAddress, proposalId);
+  // Use tx hash as key - this matches gov-tracker's internal txHashCacheKey() format
+  const key = buildTxHashCacheKey(creationTxHash);
 
   // Build checkpoint from existing stages
   const lastStage = stages[stages.length - 1];
@@ -195,16 +205,16 @@ export async function seedCheckpointFromStages(
 }
 
 /**
- * Clear gov-tracker checkpoint for a proposal
+ * Clear gov-tracker checkpoint for a proposal by tx hash
  *
  * Called when TallyZero's cache is cleared to keep caches in sync.
+ * Uses tx hash as key to match gov-tracker's internal format.
  */
 export async function clearProposalCheckpoint(
   cache: CacheAdapter,
-  governorAddress: string,
-  proposalId: string
+  creationTxHash: string
 ): Promise<void> {
-  const key = buildProposalCacheKey(governorAddress, proposalId);
+  const key = buildTxHashCacheKey(creationTxHash);
   await cache.delete(key);
 }
 
