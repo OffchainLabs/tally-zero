@@ -6,9 +6,9 @@ import { CopyableText } from "@components/ui/CopyableText";
 import { SimulationButton } from "@components/ui/SimulationButton";
 import {
   getAddressLabel,
-  type Chain,
   type DecodedCalldata,
   type DecodedParameter,
+  type KnownChain,
 } from "@gzeoneth/gov-tracker";
 import {
   simulateCall,
@@ -18,28 +18,13 @@ import {
 import { truncateMiddle } from "@lib/text-utils";
 import { cn } from "@lib/utils";
 
-// Chain types for UI display - derived from gov-tracker's Chain type
-type KnownChain = Exclude<Chain, "unknown">;
-
-function truncateValue(value: string, maxLength = 50): string {
-  if (value.length <= maxLength) return value;
-  return truncateMiddle(value, 24, 20);
-}
-
-/**
- * Get chain label for display
- */
-function getChainLabel(chainContext: KnownChain): string | undefined {
-  switch (chainContext) {
-    case "arb1":
-      return "Arb1";
-    case "nova":
-      return "Nova";
-    case "ethereum":
-      return "L1";
-    default:
-      return undefined;
-  }
+function getChainLabel(chain: KnownChain): string {
+  const labels: Record<KnownChain, string> = {
+    ethereum: "L1",
+    arb1: "Arb1",
+    nova: "Nova",
+  };
+  return labels[chain];
 }
 
 /**
@@ -82,29 +67,24 @@ export function ParameterView({
 
   // Compute UI metadata for addresses using gov-tracker
   const isAddress = param.type === "address";
+  const rawValueStr = param.rawValue as string;
   const link = isAddress
-    ? getAddressExplorerUrl(param.value, chainContext)
+    ? getAddressExplorerUrl(rawValueStr, chainContext)
     : undefined;
   const addressLabel = isAddress
-    ? getAddressLabel(param.value, chainContext)
+    ? getAddressLabel(rawValueStr, chainContext)
     : undefined;
   const chainLabel = isAddress ? getChainLabel(chainContext) : undefined;
 
-  // Render the value - either as a link or plain text
+  // Render the value - displayValue is already truncated by gov-tracker
   const renderValue = () => {
-    const isTruncatable =
-      param.isNested && !hasNestedArray && param.value.length > 50;
-    const displayValue =
-      param.isNested && !hasNestedArray
-        ? truncateValue(param.value)
-        : hasNestedArray
-          ? `[${param.nestedArray!.length} calls]`
-          : param.value;
+    const displayText = hasNestedArray
+      ? `[${param.nestedArray!.length} calls]`
+      : param.displayValue;
 
     if (link && isAddress) {
-      // Show label as primary text if available, address as title
-      const linkText = addressLabel || displayValue;
-      const titleText = addressLabel ? displayValue : undefined;
+      const linkText = addressLabel || displayText;
+      const titleText = addressLabel ? displayText : undefined;
 
       return (
         <span className="inline-flex items-center gap-1 flex-wrap">
@@ -129,18 +109,18 @@ export function ParameterView({
       );
     }
 
-    // Use CopyableText for truncated values to allow copying the original
-    if (isTruncatable) {
+    // Use CopyableText for nested calldata to allow copying the full value
+    if (param.isNested && !hasNestedArray) {
       return (
         <CopyableText
-          value={param.value}
-          displayText={displayValue}
+          value={rawValueStr}
+          displayText={displayText}
           className="text-xs"
         />
       );
     }
 
-    return <span className="font-mono break-all">{displayValue}</span>;
+    return <span className="font-mono break-all">{displayText}</span>;
   };
 
   return (
@@ -177,7 +157,7 @@ export function ParameterView({
             const targetParam = siblingParams?.find(
               (p) => p.type === "address"
             );
-            if (!targetParam || !param.value) return null;
+            if (!targetParam || !param.rawValue) return null;
             const nestedChain =
               nestedTargetChain && nestedTargetChain !== "unknown"
                 ? nestedTargetChain
@@ -257,9 +237,12 @@ export function ParameterView({
                                 type="retryable"
                                 onSimulate={() =>
                                   simulateRetryableTicket({
-                                    l2Target: l2TargetParam.value,
-                                    l2Calldata: l2CalldataParam.value,
-                                    l2Value: l2ValueParam?.value?.split(" ")[0],
+                                    l2Target: l2TargetParam.rawValue as string,
+                                    l2Calldata:
+                                      l2CalldataParam.rawValue as string,
+                                    l2Value: String(
+                                      l2ValueParam?.rawValue ?? "0"
+                                    ),
                                     chain: nestedCall.targetChain || "unknown",
                                   })
                                 }
@@ -302,7 +285,7 @@ export function ParameterView({
                     value={nestedCall.raw}
                     displayText={
                       nestedCall.raw.length > 80
-                        ? truncateValue(nestedCall.raw, 80)
+                        ? truncateMiddle(nestedCall.raw, 40, 36)
                         : undefined
                     }
                     className="text-[10px] text-muted-foreground"

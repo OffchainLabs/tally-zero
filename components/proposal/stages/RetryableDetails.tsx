@@ -2,13 +2,10 @@
 
 import { memo } from "react";
 
-import type { Chain } from "@gzeoneth/gov-tracker";
+import type { L2Chain } from "@gzeoneth/gov-tracker";
 import { ExternalLinkIcon } from "@radix-ui/react-icons";
 
 import { getStageTxExplorerUrl } from "./stage-utils";
-
-// L2 chain types - derived from gov-tracker's Chain type
-type L2Chain = Exclude<Chain, "ethereum" | "unknown">;
 
 export interface RetryableCreationDetailsProps {
   details: Array<{

@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@arbitrum/sdk": "^4",
-    "@gzeoneth/gov-tracker": "0.2.0-1",
+    "@gzeoneth/gov-tracker": "0.2.0-2",
     "@headlessui/react": "^1.7.18",
     "@hookform/resolvers": "^3.3.4",
     "@next/bundle-analyzer": "^14.2.3",
