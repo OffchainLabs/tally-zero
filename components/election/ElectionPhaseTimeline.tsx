@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  ELECTION_TIMING,
   getTxUrl,
+  type ElectionStatus,
   type StageType,
   type TrackedStage,
 } from "@gzeoneth/gov-tracker";
 import {
+  Calendar,
   CheckCircle2,
   Circle,
   Clock,
@@ -16,13 +19,14 @@ import {
 import { Button } from "@/components/ui/Button";
 import { useDeepLink } from "@/context/DeepLinkContext";
 
-import { PHASE_METADATA } from "@/config/security-council";
+import { formatDuration, PHASE_METADATA } from "@/config/security-council";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase } from "@/types/election";
 
 interface ElectionPhaseTimelineProps {
   currentPhase: ElectionPhase;
   stages?: TrackedStage[];
+  status?: ElectionStatus | null;
   className?: string;
 }
 
@@ -100,18 +104,79 @@ function getL2TimelockTxHash(stages?: TrackedStage[]): string | null {
   return l2TimelockStage.transactions[0].hash;
 }
 
+interface PhaseEta {
+  startTimestamp: number;
+  endTimestamp: number;
+}
+
+function calculatePhaseEtas(
+  nextElectionTimestamp: number
+): Record<ElectionPhase, PhaseEta | null> {
+  const nomineeStart = nextElectionTimestamp;
+  const nomineeEnd =
+    nomineeStart + ELECTION_TIMING.NOMINEE_SELECTION_DAYS * 86400;
+  const vettingEnd = nomineeEnd + ELECTION_TIMING.VETTING_PERIOD_DAYS * 86400;
+  const memberEnd = vettingEnd + ELECTION_TIMING.MEMBER_ELECTION_DAYS * 86400;
+
+  return {
+    NOT_STARTED: null,
+    NOMINEE_SELECTION: {
+      startTimestamp: nomineeStart,
+      endTimestamp: nomineeEnd,
+    },
+    VETTING_PERIOD: { startTimestamp: nomineeEnd, endTimestamp: vettingEnd },
+    MEMBER_ELECTION: { startTimestamp: vettingEnd, endTimestamp: memberEnd },
+    PENDING_EXECUTION: { startTimestamp: memberEnd, endTimestamp: 0 },
+    COMPLETED: null,
+  };
+}
+
+function formatEtaDate(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getTimeUntil(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = timestamp - now;
+  if (diff <= 0) return "now";
+  return formatDuration(diff);
+}
+
 export function ElectionPhaseTimeline({
   currentPhase,
   stages,
+  status,
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
   const { openTimelock } = useDeepLink();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages);
 
+  const phaseEtas =
+    status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
+      ? calculatePhaseEtas(status.nextElectionTimestamp)
+      : null;
+
   return (
     <div className={cn("space-y-4", className)}>
       <h3 className="text-lg font-semibold">Election Timeline</h3>
+
+      {currentPhase === "NOT_STARTED" && status?.nextElectionTimestamp && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-blue-500">
+          <Calendar className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <span className="font-medium">Next Election</span>
+            <p className="text-sm text-blue-400">
+              Starts {formatEtaDate(status.nextElectionTimestamp)} (
+              {getTimeUntil(status.nextElectionTimestamp)})
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         {TIMELINE_PHASES.map((phase, index) => {
@@ -119,6 +184,7 @@ export function ElectionPhaseTimeline({
           const isCompleted = index < currentIndex;
           const isActive = index === currentIndex;
           const isFuture = index > currentIndex;
+          const eta = phaseEtas?.[phase];
 
           return (
             <div key={phase} className="flex items-start gap-4 pb-8 last:pb-0">
@@ -155,6 +221,14 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
+                {eta && isFuture && (
+                  <p className="mt-1 text-xs text-muted-foreground/70">
+                    ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
+                    {eta.endTimestamp > 0
+                      ? formatEtaDate(eta.endTimestamp)
+                      : "completion"}
+                  </p>
+                )}
                 <PhaseTransactionLinks phase={phase} stages={stages} />
               </div>
             </div>

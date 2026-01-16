@@ -69,6 +69,7 @@ export function ElectionContainer(): React.ReactElement {
         <ElectionPhaseTimeline
           currentPhase={currentPhase}
           stages={selectedElection?.stages}
+          status={status}
         />
 
         <NomineeList
