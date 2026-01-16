@@ -202,13 +202,16 @@ export async function loadCachedProposal(
     currentState,
   };
 
-  debug.cache(
-    "loaded checkpoint for %s: %d stages, complete=%s, expired=%s",
-    creationTxHash.slice(0, 10),
-    stages.length,
-    isComplete,
-    isExpired
-  );
+  // Only log if expired or incomplete (actionable cases)
+  if (isExpired || !isComplete) {
+    debug.cache(
+      "loaded checkpoint for %s: %d stages, complete=%s, expired=%s",
+      creationTxHash.slice(0, 10),
+      stages.length,
+      isComplete,
+      isExpired
+    );
+  }
 
   return {
     result,
