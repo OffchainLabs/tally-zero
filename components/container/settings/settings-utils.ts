@@ -7,6 +7,16 @@ export const ALL_STORAGE_KEYS = Object.values(STORAGE_KEYS).filter(
 );
 
 /**
+ * Check if a key is a cache key (stages or checkpoint)
+ */
+function isCacheKey(key: string): boolean {
+  return (
+    key.startsWith(STORAGE_KEYS.STAGES_CACHE_PREFIX) ||
+    key.startsWith(STORAGE_KEYS.CHECKPOINT_CACHE_PREFIX)
+  );
+}
+
+/**
  * Get cache stats from localStorage
  */
 export function getCacheStats(): { count: number; size: string } {
@@ -14,7 +24,7 @@ export function getCacheStats(): { count: number; size: string } {
   let size = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith(STORAGE_KEYS.STAGES_CACHE_PREFIX)) {
+    if (key && isCacheKey(key)) {
       count++;
       const value = localStorage.getItem(key);
       if (value) size += value.length;
@@ -39,13 +49,13 @@ export function getTotalStorageUsage(): string {
 }
 
 /**
- * Clear all cached proposal stages from localStorage
+ * Clear all cached proposal stages and checkpoints from localStorage
  */
 export function clearCache(): number {
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith(STORAGE_KEYS.STAGES_CACHE_PREFIX)) {
+    if (key && isCacheKey(key)) {
       keysToRemove.push(key);
     }
   }

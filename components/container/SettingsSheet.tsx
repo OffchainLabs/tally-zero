@@ -2,7 +2,7 @@
 
 import { Settings } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -103,6 +103,9 @@ export function SettingsSheet() {
   const [tenderlyAccessTokenInput, setTenderlyAccessTokenInput] =
     useState(tenderlyAccessToken);
 
+  // Counter to trigger cache stats refresh
+  const [cacheRefreshKey, setCacheRefreshKey] = useState(0);
+
   // Sync local state when sheet opens
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -177,6 +180,7 @@ export function SettingsSheet() {
   // Action handlers
   const handleClearCache = useCallback(() => {
     const count = clearCache();
+    setCacheRefreshKey((k) => k + 1);
     alert(`Cleared ${count} cached items`);
   }, []);
 
@@ -243,8 +247,10 @@ export function SettingsSheet() {
     input.click();
   }, []);
 
-  const cacheStats = getCacheStats();
-  const totalStorage = getTotalStorageUsage();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cacheStats = useMemo(() => getCacheStats(), [cacheRefreshKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const totalStorage = useMemo(() => getTotalStorageUsage(), [cacheRefreshKey]);
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
