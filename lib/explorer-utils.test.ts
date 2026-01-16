@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   getAddressExplorerUrl,
-  getExplorerBaseUrl,
   getExplorerName,
   getTxExplorerUrl,
 } from "./explorer-utils";
@@ -11,20 +10,6 @@ describe("explorer-utils", () => {
   const sampleAddress = "0x912CE59144191C1204E64559FE8253a0e49E6548";
   const sampleTxHash =
     "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-
-  describe("getExplorerBaseUrl", () => {
-    it("returns Etherscan URL for ethereum", () => {
-      expect(getExplorerBaseUrl("ethereum")).toBe("https://etherscan.io");
-    });
-
-    it("returns Arbiscan URL for arb1", () => {
-      expect(getExplorerBaseUrl("arb1")).toBe("https://arbiscan.io");
-    });
-
-    it("returns Nova Explorer URL for nova", () => {
-      expect(getExplorerBaseUrl("nova")).toBe("https://nova.arbiscan.io");
-    });
-  });
 
   describe("getAddressExplorerUrl", () => {
     it("returns Arbiscan address URL by default", () => {

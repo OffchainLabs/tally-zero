@@ -255,13 +255,6 @@ export async function checkRpcHealth(
 }
 
 /**
- * Clear the health check cache (useful for manual refresh)
- */
-export function clearHealthCache(): void {
-  healthCache.clear();
-}
-
-/**
  * Test if the RPC supports log searches with the given chunk size
  *
  * @param provider - The ethers JSON-RPC provider

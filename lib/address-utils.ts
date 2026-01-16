@@ -16,18 +16,6 @@ export function addressesEqual(
 }
 
 /**
- * Check if an address matches any address in a list (case-insensitive)
- */
-export function addressInList(
-  address: string | undefined | null,
-  list: readonly string[]
-): boolean {
-  if (!address) return false;
-  const normalized = address.toLowerCase();
-  return list.some((addr) => addr.toLowerCase() === normalized);
-}
-
-/**
  * Find an item in an array by comparing its address property (case-insensitive)
  */
 export function findByAddress<T extends { address: string }>(

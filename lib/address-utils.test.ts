@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   addressesEqual,
-  addressInList,
   ETH_ADDRESS_REGEX,
   findByAddress,
   isValidAddress,
@@ -59,44 +58,6 @@ describe("address-utils", () => {
     it("returns false for empty strings", () => {
       expect(addressesEqual("", checksumAddress)).toBe(false);
       expect(addressesEqual(checksumAddress, "")).toBe(false);
-    });
-  });
-
-  describe("addressInList", () => {
-    const addressList = [
-      "0x912CE59144191C1204E64559FE8253a0e49E6548",
-      "0x1234567890123456789012345678901234567890",
-      "0xABCDEF1234567890123456789012345678901234",
-    ] as const;
-
-    it("returns true when address is in list (exact case)", () => {
-      expect(addressInList(checksumAddress, addressList)).toBe(true);
-    });
-
-    it("returns true when address is in list (different case)", () => {
-      expect(addressInList(lowercaseAddress, addressList)).toBe(true);
-      expect(addressInList(mixedCaseAddress, addressList)).toBe(true);
-    });
-
-    it("returns false when address is not in list", () => {
-      const notInList = "0x0000000000000000000000000000000000000001";
-      expect(addressInList(notInList, addressList)).toBe(false);
-    });
-
-    it("returns false for null address", () => {
-      expect(addressInList(null, addressList)).toBe(false);
-    });
-
-    it("returns false for undefined address", () => {
-      expect(addressInList(undefined, addressList)).toBe(false);
-    });
-
-    it("returns false for empty string", () => {
-      expect(addressInList("", addressList)).toBe(false);
-    });
-
-    it("returns false for empty list", () => {
-      expect(addressInList(checksumAddress, [])).toBe(false);
     });
   });
 

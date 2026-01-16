@@ -58,23 +58,5 @@ export const STATUS_BADGE_COLORS = {
   muted: "bg-muted text-muted-foreground",
 } as const;
 
-// Status indicator text colors (without background)
-export const STATUS_TEXT_COLORS = {
-  success: "text-green-600 dark:text-green-400",
-  warning: "text-yellow-600 dark:text-yellow-400",
-  error: "text-red-600 dark:text-red-400",
-  info: "text-blue-600 dark:text-blue-400",
-  muted: "text-muted-foreground",
-} as const;
-
-// Status icon colors
-export const STATUS_ICON_COLORS = {
-  success: "text-green-500",
-  warning: "text-yellow-500",
-  error: "text-red-500",
-  info: "text-blue-500",
-  muted: "text-muted-foreground",
-} as const;
-
 export type VoteType = keyof typeof VOTE_COLORS;
 export type StatusType = keyof typeof STATUS_BADGE_COLORS;

@@ -68,55 +68,6 @@ export function shortenAddress(address: string, chars: number = 4): string {
 }
 
 /**
- * Format a number with K/M/B suffixes for compact display
- *
- * @param value - Number to format (already in display units, not wei)
- * @param options - Formatting options
- * @param options.decimals - Number of decimal places (default: 2)
- * @param options.trimTrailingZeros - Whether to remove trailing zeros (default: true)
- * @returns Formatted string with appropriate suffix
- *
- * @example
- * formatCompactNumber(1234) // "1.23K"
- * formatCompactNumber(1500000) // "1.5M"
- * formatCompactNumber(1500000000) // "1.5B"
- * formatCompactNumber(500) // "500"
- */
-export function formatCompactNumber(
-  value: number | string,
-  options: { decimals?: number; trimTrailingZeros?: boolean } = {}
-): string {
-  const { decimals = 2, trimTrailingZeros = true } = options;
-
-  const num = typeof value === "string" ? parseFloat(value) : value;
-
-  if (isNaN(num)) return "0";
-  if (num === 0) return "0";
-
-  const billion = 1_000_000_000;
-  const million = 1_000_000;
-  const thousand = 1_000;
-
-  let result: string;
-
-  if (Math.abs(num) >= billion) {
-    result = (num / billion).toFixed(decimals) + "B";
-  } else if (Math.abs(num) >= million) {
-    result = (num / million).toFixed(decimals) + "M";
-  } else if (Math.abs(num) >= thousand) {
-    result = (num / thousand).toFixed(decimals) + "K";
-  } else {
-    return num.toLocaleString(undefined, { maximumFractionDigits: decimals });
-  }
-
-  if (trimTrailingZeros) {
-    result = result.replace(/\.?0+([KMB])$/, "$1");
-  }
-
-  return result;
-}
-
-/**
  * Format cache age from a timestamp to human-readable format
  *
  * @param generatedAt - Date string or Date object of when cache was generated

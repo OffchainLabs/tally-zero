@@ -7,8 +7,6 @@ import { describe, expect, it } from "vitest";
 import {
   QUORUM_COLORS,
   STATUS_BADGE_COLORS,
-  STATUS_ICON_COLORS,
-  STATUS_TEXT_COLORS,
   VOTE_COLORS,
 } from "./badge-colors";
 
@@ -102,36 +100,6 @@ describe("badge-colors", () => {
 
     it("muted uses muted colors", () => {
       expect(STATUS_BADGE_COLORS.muted).toContain("muted");
-    });
-  });
-
-  describe("STATUS_TEXT_COLORS", () => {
-    it("has matching status types as badge colors", () => {
-      const badgeKeys = Object.keys(STATUS_BADGE_COLORS);
-      const textKeys = Object.keys(STATUS_TEXT_COLORS);
-
-      expect(textKeys).toEqual(badgeKeys);
-    });
-
-    it("all colors contain text- prefix", () => {
-      for (const color of Object.values(STATUS_TEXT_COLORS)) {
-        expect(color).toContain("text-");
-      }
-    });
-  });
-
-  describe("STATUS_ICON_COLORS", () => {
-    it("has matching status types as badge colors", () => {
-      const badgeKeys = Object.keys(STATUS_BADGE_COLORS);
-      const iconKeys = Object.keys(STATUS_ICON_COLORS);
-
-      expect(iconKeys).toEqual(badgeKeys);
-    });
-
-    it("all colors contain text- prefix", () => {
-      for (const color of Object.values(STATUS_ICON_COLORS)) {
-        expect(color).toContain("text-");
-      }
     });
   });
 

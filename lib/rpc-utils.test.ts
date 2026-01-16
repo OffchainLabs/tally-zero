@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_MAX_BLOCK_RANGE,
   batchQueryWithRateLimit,
-  clearProviderCache,
   createRpcProvider,
   queryWithRetry,
 } from "./rpc-utils";
@@ -26,17 +24,7 @@ vi.mock("ethers", () => {
 });
 
 describe("rpc-utils", () => {
-  describe("DEFAULT_MAX_BLOCK_RANGE", () => {
-    it("is 10M", () => {
-      expect(DEFAULT_MAX_BLOCK_RANGE).toBe(10_000_000);
-    });
-  });
-
   describe("createRpcProvider", () => {
-    beforeEach(() => {
-      clearProviderCache();
-    });
-
     it("creates a new provider for a URL", async () => {
       const provider = await createRpcProvider("https://rpc.example.com");
       expect(provider).toBeDefined();
@@ -52,30 +40,6 @@ describe("rpc-utils", () => {
       const provider1 = await createRpcProvider("https://rpc1.example.com");
       const provider2 = await createRpcProvider("https://rpc2.example.com");
       expect(provider1).not.toBe(provider2);
-    });
-  });
-
-  describe("clearProviderCache", () => {
-    beforeEach(() => {
-      clearProviderCache();
-    });
-
-    it("clears a specific provider from cache", async () => {
-      const url = "https://rpc.example.com";
-      const provider1 = await createRpcProvider(url);
-      clearProviderCache(url);
-      const provider2 = await createRpcProvider(url);
-      expect(provider1).not.toBe(provider2);
-    });
-
-    it("clears all providers when no URL provided", async () => {
-      const provider1 = await createRpcProvider("https://rpc1.example.com");
-      const provider2 = await createRpcProvider("https://rpc2.example.com");
-      clearProviderCache();
-      const provider3 = await createRpcProvider("https://rpc1.example.com");
-      const provider4 = await createRpcProvider("https://rpc2.example.com");
-      expect(provider1).not.toBe(provider3);
-      expect(provider2).not.toBe(provider4);
     });
   });
 

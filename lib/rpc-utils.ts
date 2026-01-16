@@ -8,9 +8,6 @@ import { delay } from "@/lib/delay-utils";
 import { toError } from "@/lib/error-utils";
 import { ethers } from "ethers";
 
-/** Default maximum block range for RPC queries */
-export const DEFAULT_MAX_BLOCK_RANGE = 10_000_000;
-
 /** Maximum number of cached providers before cleanup */
 const MAX_PROVIDER_CACHE_SIZE = 10;
 
@@ -81,19 +78,6 @@ export async function createRpcProvider(
   // Cache for reuse with timestamp
   providerCache.set(rpcUrl, { provider, lastUsed: Date.now() });
   return provider;
-}
-
-/**
- * Clears providers from the cache.
- * Useful when switching RPCs or handling connection errors.
- * @param rpcUrl - Optional URL to clear. If omitted, clears entire cache.
- */
-export function clearProviderCache(rpcUrl?: string): void {
-  if (rpcUrl) {
-    providerCache.delete(rpcUrl);
-  } else {
-    providerCache.clear();
-  }
 }
 
 /** Configuration options for query retry behavior */

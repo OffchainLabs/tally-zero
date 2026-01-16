@@ -4,7 +4,6 @@ import { MS_PER_DAY, MS_PER_HOUR } from "@/lib/date-utils";
 
 import {
   formatCacheAge,
-  formatCompactNumber,
   formatVotingPower,
   shortenAddress,
 } from "./format-utils";
@@ -143,71 +142,6 @@ describe("format-utils", () => {
         Date.now() - MS_PER_DAY - 3 * MS_PER_HOUR
       );
       expect(formatCacheAge(oneDayThreeHoursAgo)).toBe("1d 3h");
-    });
-  });
-
-  describe("formatCompactNumber", () => {
-    it("returns 0 for zero", () => {
-      expect(formatCompactNumber(0)).toBe("0");
-    });
-
-    it("returns 0 for NaN", () => {
-      expect(formatCompactNumber(NaN)).toBe("0");
-      expect(formatCompactNumber("not-a-number")).toBe("0");
-    });
-
-    it("formats small numbers without suffix", () => {
-      expect(formatCompactNumber(500)).toBe("500");
-      expect(formatCompactNumber(123.45)).toBe("123.45");
-    });
-
-    it("formats thousands with K suffix", () => {
-      expect(formatCompactNumber(1000)).toBe("1K");
-      expect(formatCompactNumber(1234)).toBe("1.23K");
-      expect(formatCompactNumber(5000)).toBe("5K");
-      expect(formatCompactNumber(999999)).toBe("1000K");
-    });
-
-    it("formats millions with M suffix", () => {
-      expect(formatCompactNumber(1000000)).toBe("1M");
-      expect(formatCompactNumber(1500000)).toBe("1.5M");
-      expect(formatCompactNumber(12345678)).toBe("12.35M");
-    });
-
-    it("formats billions with B suffix", () => {
-      expect(formatCompactNumber(1000000000)).toBe("1B");
-      expect(formatCompactNumber(1500000000)).toBe("1.5B");
-      expect(formatCompactNumber(2500000000)).toBe("2.5B");
-    });
-
-    it("trims trailing zeros by default", () => {
-      expect(formatCompactNumber(2000000)).toBe("2M");
-      expect(formatCompactNumber(1500000)).toBe("1.5M");
-      expect(formatCompactNumber(1230000)).toBe("1.23M");
-    });
-
-    it("preserves trailing zeros when option is false", () => {
-      expect(formatCompactNumber(2000000, { trimTrailingZeros: false })).toBe(
-        "2.00M"
-      );
-      expect(formatCompactNumber(1500000, { trimTrailingZeros: false })).toBe(
-        "1.50M"
-      );
-    });
-
-    it("respects custom decimal places", () => {
-      expect(formatCompactNumber(1234567, { decimals: 1 })).toBe("1.2M");
-      expect(formatCompactNumber(1234567, { decimals: 3 })).toBe("1.235M");
-    });
-
-    it("handles string input", () => {
-      expect(formatCompactNumber("1500000")).toBe("1.5M");
-      expect(formatCompactNumber("1234")).toBe("1.23K");
-    });
-
-    it("handles negative numbers", () => {
-      expect(formatCompactNumber(-1500000)).toBe("-1.5M");
-      expect(formatCompactNumber(-1234)).toBe("-1.23K");
     });
   });
 });

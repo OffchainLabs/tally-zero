@@ -12,15 +12,6 @@ const EXPLORER_BASE_URLS: Record<ChainId, string> = {
 };
 
 /**
- * Get block explorer base URL for a chain
- * @param chain - The chain identifier
- * @returns The base URL for the chain's block explorer
- */
-export function getExplorerBaseUrl(chain: ChainId): string {
-  return EXPLORER_BASE_URLS[chain];
-}
-
-/**
  * Get block explorer URL for an address
  * @param address - The Ethereum address
  * @param chain - The chain identifier (defaults to arb1)
