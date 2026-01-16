@@ -15,6 +15,7 @@ import { addressesEqual } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
 import { getDelegateCacheStats, loadDelegateCache } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
+import { decodeResult, encodeCall, multicall } from "@/lib/multicall";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import type {
   DelegateCache,
@@ -175,32 +176,34 @@ export function useDelegateSearch({
 
       try {
         const provider = await createRpcProvider(rpcUrl);
+        const tokenInterface = new ethers.utils.Interface(ERC20Votes_ABI);
 
-        const contract = new ethers.Contract(
-          ARB_TOKEN.address,
-          ERC20Votes_ABI,
-          provider
-        );
+        const calls = toRefresh.map((address) => ({
+          target: ARB_TOKEN.address,
+          allowFailure: true,
+          callData: encodeCall(tokenInterface, "getCurrentVotes", [address]),
+        }));
 
-        const refreshPromises = toRefresh.map(async (address) => {
-          try {
-            const votes = await contract.getCurrentVotes(address);
-            refreshedAddresses.current.add(address.toLowerCase());
-            return { address, votingPower: votes.toString() };
-          } catch (err) {
-            debug.delegates(
-              "failed to refresh voting power for %s: %O",
-              address,
-              err
+        const results = await multicall(provider, calls);
+
+        const successfulResults: { address: string; votingPower: string }[] =
+          [];
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          const address = toRefresh[i];
+
+          if (result.success) {
+            const votes = decodeResult<ethers.BigNumber>(
+              tokenInterface,
+              "getCurrentVotes",
+              result.returnData
             );
-            return null;
+            refreshedAddresses.current.add(address.toLowerCase());
+            successfulResults.push({ address, votingPower: votes.toString() });
+          } else {
+            debug.delegates("failed to refresh voting power for %s", address);
           }
-        });
-
-        const results = await Promise.all(refreshPromises);
-        const successfulResults = results.filter(
-          (r): r is { address: string; votingPower: string } => r !== null
-        );
+        }
 
         if (successfulResults.length > 0 && cache) {
           const updatedDelegates = cache.delegates.map((d) => {

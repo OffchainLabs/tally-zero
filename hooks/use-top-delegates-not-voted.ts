@@ -18,6 +18,7 @@ import {
   loadDelegateCache,
 } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
+import { decodeResult, encodeCall, multicall } from "@/lib/multicall";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import type { DelegateInfo } from "@/types/delegate";
 import OzGovernor_ABI from "@data/OzGovernor_ABI.json";
@@ -99,12 +100,7 @@ export function useTopDelegatesNotVoted({
       }
 
       const provider = await createRpcProvider(effectiveRpcUrl);
-
-      const governor = new ethers.Contract(
-        governorAddress,
-        OzGovernor_ABI,
-        provider
-      );
+      const governorInterface = new ethers.utils.Interface(OzGovernor_ABI);
 
       const notVoted: DelegateNotVoted[] = [];
       let offset = 0;
@@ -112,20 +108,34 @@ export function useTopDelegatesNotVoted({
       while (notVoted.length < limit && offset < allDelegates.length) {
         const batch = allDelegates.slice(offset, offset + BATCH_SIZE);
 
-        const hasVotedResults = await Promise.all(
-          batch.map(async (delegate) => {
-            const voted = await governor.hasVoted(proposalId, delegate.address);
-            return { delegate, voted };
-          })
-        );
+        const calls = batch.map((delegate) => ({
+          target: governorAddress,
+          allowFailure: true,
+          callData: encodeCall(governorInterface, "hasVoted", [
+            proposalId,
+            delegate.address,
+          ]),
+        }));
 
-        for (const result of hasVotedResults) {
-          if (!result.voted && notVoted.length < limit) {
-            notVoted.push({
-              address: result.delegate.address,
-              label: getDelegateLabel(result.delegate.address),
-              votingPower: result.delegate.votingPower,
-            });
+        const results = await multicall(provider, calls);
+
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          const delegate = batch[i];
+
+          if (result.success) {
+            const voted = decodeResult<boolean>(
+              governorInterface,
+              "hasVoted",
+              result.returnData
+            );
+            if (!voted && notVoted.length < limit) {
+              notVoted.push({
+                address: delegate.address,
+                label: getDelegateLabel(delegate.address),
+                votingPower: delegate.votingPower,
+              });
+            }
           }
         }
 
