@@ -7,12 +7,8 @@
 
 import { isValidTxHash } from "@/lib/address-utils";
 import { getErrorMessage } from "@/lib/error-utils";
+import { getCacheAdapter } from "@/lib/gov-tracker-cache";
 import { createProposalTracker } from "@/lib/stage-tracker";
-import { getStoredCacheTtlMs } from "@/lib/storage-utils";
-import {
-  loadCachedTimelockResult,
-  saveCachedTimelockResult,
-} from "@/lib/unified-cache";
 import type { ProposalStage } from "@/types/proposal-stage";
 import {
   findCallScheduledByTxHash,
@@ -185,25 +181,8 @@ export function useTimelockOperation({
 
   // Track selected operation using gov-tracker
   const trackOperation = useCallback(
-    async (forceRefresh: boolean = false) => {
+    async (_forceRefresh: boolean = false) => {
       if (!selectedOperation || !enabled || !rpcHydrated) return;
-
-      // Check cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const { result: cachedResult, isExpired } = loadCachedTimelockResult(
-          selectedOperation.txHash,
-          selectedOperation.operationId,
-          getStoredCacheTtlMs()
-        );
-
-        if (cachedResult && !isExpired) {
-          setResult(cachedResult);
-          setStages(cachedResult.stages);
-          setIsLoading(false);
-          setIsTracking(false);
-          return;
-        }
-      }
 
       // Abort any existing tracking
       if (abortControllerRef.current) {
@@ -220,7 +199,11 @@ export function useTimelockOperation({
       setResult(null);
 
       try {
-        // Create tracker using gov-tracker package
+        // Get cache adapter for checkpoint persistence
+        const cache = getCacheAdapter();
+
+        // Create tracker using gov-tracker package with cache
+        // Gov-tracker handles checkpoint loading/saving automatically
         const tracker = createProposalTracker(
           effectiveL2RpcUrl || undefined,
           effectiveL1RpcUrl || undefined,
@@ -239,6 +222,7 @@ export function useTimelockOperation({
               l1ChunkSize,
               l2ChunkSize,
             },
+            cache,
           }
         );
 
@@ -271,13 +255,7 @@ export function useTimelockOperation({
         setStages(trackingResult.stages);
         setIsLoading(false);
         setIsTracking(false);
-
-        // Save to cache
-        saveCachedTimelockResult(
-          selectedOperation.txHash,
-          selectedOperation.operationId,
-          timelockResult
-        );
+        // Gov-tracker automatically saves checkpoints via the cache adapter
       } catch (err) {
         if (signal.aborted) return;
         if (!isMounted.current) return;

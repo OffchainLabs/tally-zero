@@ -405,9 +405,8 @@ function OperationHeader({
   );
 }
 
-// Timelock operation stage types (consolidated from gov-tracker)
+// Timelock operation stage types (direct timelock tracking, no proposal stages)
 const TIMELOCK_STAGE_TYPES: StageType[] = [
-  "PROPOSAL_QUEUED", // We reuse this for "CallScheduled"
   "L2_TIMELOCK",
   "L2_TO_L1_MESSAGE",
   "L1_TIMELOCK",
@@ -490,15 +489,18 @@ function StagesList({
     // Convert ProposalStage[] to TrackedStage[] for gov-tracker
     const trackedStages = stages as unknown as TrackedStage[];
 
-    for (let i = 0; i < relevantStageTypes.length; i++) {
-      const stageType = relevantStageTypes[i];
+    for (const stageType of relevantStageTypes) {
       const stage = stageMap.get(stageType);
 
       // Skip completed stages
       if (stage?.status === "COMPLETED") continue;
 
+      // Find the actual index in stages array (may differ from relevantStageTypes order)
+      const stageIndex = stages.findIndex((s) => s.type === stageType);
+      if (stageIndex < 0) continue;
+
       // Use gov-tracker's calculateExpectedEta for consistent ETA calculation
-      const eta = calculateExpectedEta(trackedStages, i);
+      const eta = calculateExpectedEta(trackedStages, stageIndex);
 
       if (eta) {
         const estimatedTime = new Date(eta * 1000);
