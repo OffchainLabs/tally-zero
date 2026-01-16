@@ -184,6 +184,20 @@ export function SettingsSheet() {
     alert(`Cleared ${count} cached items`);
   }, []);
 
+  const handleSkipBundledCacheToggle = useCallback(
+    (value: boolean) => {
+      setSkipBundledCache(value);
+      const count = clearCache();
+      setCacheRefreshKey((k) => k + 1);
+      if (count > 0) {
+        alert(
+          `Skip Bundled Cache ${value ? "enabled" : "disabled"}. Cleared ${count} cached items.`
+        );
+      }
+    },
+    [setSkipBundledCache]
+  );
+
   const handleClearAllSettings = useCallback(() => {
     if (
       !confirm(
@@ -326,7 +340,7 @@ export function SettingsSheet() {
                 ttlCustomInput={ttlCustomInput}
                 setTtlCustomInput={setTtlCustomInput}
                 skipBundledCache={skipBundledCache}
-                setSkipBundledCache={setSkipBundledCache}
+                setSkipBundledCache={handleSkipBundledCacheToggle}
                 tenderlyOrgInput={tenderlyOrgInput}
                 setTenderlyOrgInput={setTenderlyOrgInput}
                 tenderlyProjectInput={tenderlyProjectInput}
