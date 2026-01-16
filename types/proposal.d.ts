@@ -4,9 +4,20 @@
  * Defines types for raw and parsed proposals from Governor contracts.
  */
 
-import type { FinalizedState, PendingState } from "@/types/proposal-cache";
 import type { ProposalStage, TimelockLink } from "@/types/proposal-stage";
 import type { Address } from "@/types/search";
+
+/** Finalized proposal states (won't change) */
+export type FinalizedState =
+  | "Canceled"
+  | "Defeated"
+  | "Succeeded"
+  | "Queued"
+  | "Expired"
+  | "Executed";
+
+/** Pending proposal states (may change) */
+export type PendingState = "Pending" | "Active";
 
 /** All possible proposal state names */
 export type ProposalStateName = FinalizedState | PendingState;

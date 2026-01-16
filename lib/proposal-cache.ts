@@ -1,81 +1,10 @@
 /**
- * Proposal cache utilities
+ * Proposal utilities
  *
  * Provides utility functions for working with proposals.
- * Includes loading the pre-built proposal cache for faster startup.
  */
 
 import type { ParsedProposal } from "@/types/proposal";
-import type { ProposalCache } from "@/types/proposal-cache";
-
-// Static import of the proposal cache JSON
-// This is bundled at build time and available immediately
-import proposalCacheData from "@data/proposal-cache.json";
-
-/** Cache version - increment to invalidate old caches */
-export const CACHE_VERSION = 1;
-
-/** Cached proposal data */
-const cachedData: ProposalCache | null = (() => {
-  try {
-    const cache = proposalCacheData as ProposalCache;
-    if (cache.version !== CACHE_VERSION) {
-      console.warn(
-        `Proposal cache version mismatch: ${cache.version} !== ${CACHE_VERSION}`
-      );
-      return null;
-    }
-    return cache;
-  } catch (error) {
-    console.warn("Failed to load proposal cache:", error);
-    return null;
-  }
-})();
-
-/**
- * Load the pre-built proposal cache
- *
- * Returns the statically imported cache data.
- */
-export async function loadProposalCache(): Promise<ProposalCache | null> {
-  return cachedData;
-}
-
-/**
- * Get all proposals from cache
- *
- * Note: The cache contains all historical proposals. The startBlock in each
- * proposal refers to the voting start block, not the block where it was created.
- * Since the cache covers all proposals from the initial governance deployment,
- * we return all cached proposals regardless of the user's search range.
- *
- * @returns All cached proposals, or null if cache not available
- */
-export async function getCachedProposals(): Promise<ParsedProposal[] | null> {
-  if (!cachedData) {
-    return null;
-  }
-
-  return cachedData.proposals;
-}
-
-/**
- * Get the snapshot block from the cache
- *
- * @returns The snapshot block number, or null if cache not available
- */
-export async function getCacheSnapshotBlock(): Promise<number | null> {
-  return cachedData?.snapshotBlock ?? null;
-}
-
-/**
- * Get the start block from the cache
- *
- * @returns The cache start block, or null if cache not available
- */
-export async function getCacheStartBlock(): Promise<number | null> {
-  return cachedData?.startBlock ?? null;
-}
 
 /** Proposal states that don't need refresh */
 const FINALIZED_STATES = new Set([

@@ -5,10 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "cache:build": "tsx scripts/build-proposal-cache.ts",
-    "cache:build:dev": "tsx scripts/build-proposal-cache.ts --dev",
-    "cache:build:force": "tsx scripts/build-proposal-cache.ts --force",
-    "cache:update": "tsx scripts/build-proposal-cache.ts",
     "cache:build:delegates": "tsx scripts/build-delegate-cache.ts",
     "cache:build:delegates:dev": "tsx scripts/build-delegate-cache.ts --dev",
     "cache:build:delegates:force": "tsx scripts/build-delegate-cache.ts --force",
