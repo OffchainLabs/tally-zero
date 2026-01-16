@@ -9,9 +9,9 @@ import {
 import { initializeBundledCache } from "@/lib/bundled-cache-loader";
 import { getErrorMessage } from "@/lib/error-utils";
 import {
-  clearProposalCheckpoint,
   getCacheAdapter,
-  seedCheckpointFromStages,
+  loadCachedProposal,
+  trimCachedStages,
 } from "@/lib/gov-tracker-cache";
 import {
   emitVoteUpdate,
@@ -23,14 +23,7 @@ import {
   getAllStageMetadata,
   toProposalTrackingResult,
 } from "@/lib/stage-tracker";
-import { clearCachedStages, saveCachedStages } from "@/lib/stages-cache";
 import { getStoredCacheTtlMs } from "@/lib/storage-utils";
-import {
-  clearCachedTimelockResult,
-  loadUnifiedStages,
-  needsRefresh,
-  trimUnifiedCacheFromIndex,
-} from "@/lib/unified-cache";
 import type {
   ProposalStage,
   ProposalTrackingResult,
@@ -172,7 +165,7 @@ export function useProposalStages({
 
   // Start tracking function using gov-tracker
   const startTracking = useCallback(
-    async (startFromStage?: number, existingStages?: ProposalStage[]) => {
+    async (startFromStage?: number) => {
       if (!proposalId || !creationTxHash || !governorAddress) return;
 
       const abortController = new AbortController();
@@ -220,25 +213,8 @@ export function useProposalStages({
         // This eliminates the need for initial RPC discovery calls
         await initializeBundledCache(cache);
 
-        // Seed checkpoint from existing cached stages before tracking
-        // This enables gov-tracker to resume from where we left off
-        const cacheTtlMs = getStoredCacheTtlMs();
-        const unifiedResult = loadUnifiedStages(
-          proposalId,
-          governorAddress,
-          cacheTtlMs
-        );
-        if (unifiedResult.stages.length > 0) {
-          await seedCheckpointFromStages(
-            cache,
-            proposalId,
-            governorAddress,
-            creationTxHash,
-            unifiedResult.stages
-          );
-        }
-
         // Create tracker using gov-tracker package with cache for resume
+        // Gov-tracker handles checkpoint loading/saving automatically
         const tracker = createProposalTracker(
           effectiveL2RpcUrl || undefined,
           effectiveL1RpcUrl || undefined,
@@ -294,7 +270,7 @@ export function useProposalStages({
           isBackgroundRefreshing: false,
         });
 
-        saveCachedStages(proposalId, governorAddress, proposalResult);
+        // Gov-tracker automatically saves checkpoint to cache, no manual save needed
 
         // Emit vote update using raw values from gov-tracker
         const votingStage = proposalResult.stages.find(
@@ -344,54 +320,33 @@ export function useProposalStages({
 
   // Refetch from a specific stage
   const refetchFromStage = useCallback(
-    (stageIndex: number) => {
+    async (stageIndex: number) => {
       if (!proposalId || !governorAddress) return;
 
-      // Trim cache from the specified stage index
+      // Trim gov-tracker checkpoint from the specified stage index
       // This removes all stages including and after stageIndex
-      const trimmed = trimUnifiedCacheFromIndex(
-        proposalId,
-        governorAddress,
-        stageIndex
-      );
-
-      // If nothing was trimmed (no cache), clear everything as fallback
-      if (!trimmed) {
-        clearCachedStages(proposalId, governorAddress);
-        const session = trackerManager.getSession(proposalId, governorAddress);
-        const existingResult = session?.result;
-        if (existingResult?.timelockLink) {
-          clearCachedTimelockResult(
-            existingResult.timelockLink.txHash,
-            existingResult.timelockLink.operationId
-          );
-        }
-      }
-
-      // Clear gov-tracker checkpoint so it re-tracks with fresh cache
-      const cache = getCacheAdapter();
-      clearProposalCheckpoint(cache, creationTxHash);
+      await trimCachedStages(creationTxHash, stageIndex);
 
       // Abort any existing tracking
       trackerManager.abortTracking(proposalId, governorAddress);
 
-      // Load the trimmed cache to get the updated stages
+      // Load the trimmed checkpoint to get the updated stages
       const cacheTtlMs = getStoredCacheTtlMs();
-      const unifiedResult = loadUnifiedStages(
-        proposalId,
+      const cached = await loadCachedProposal(
+        creationTxHash,
         governorAddress,
         cacheTtlMs
       );
 
       // Update session with trimmed stages (keep what we have)
       trackerManager.updateSession(proposalId, governorAddress, {
-        stages: unifiedResult.stages,
+        stages: cached.result?.stages ?? [],
         currentStageIndex:
-          unifiedResult.stages.length > 0
-            ? unifiedResult.stages.length - 1
+          (cached.result?.stages.length ?? 0) > 0
+            ? (cached.result?.stages.length ?? 1) - 1
             : -1,
         status: "idle",
-        result: unifiedResult.proposalResult,
+        result: cached.result,
         error: null,
         queuePosition: null,
       });
@@ -482,42 +437,31 @@ export function useProposalStages({
     );
 
     // Check if we need to start tracking
-    const checkAndStartTracking = () => {
+    const checkAndStartTracking = async () => {
       // Already tracking or queued
       if (session.status === "loading" || session.status === "queued") {
         return;
       }
 
-      // Check for cached result using unified cache
+      // Check for cached result in gov-tracker cache
       const cacheTtlMs = getStoredCacheTtlMs();
-      const unifiedResult = loadUnifiedStages(
-        proposalId,
+      const cached = await loadCachedProposal(
+        creationTxHash,
         governorAddress,
         cacheTtlMs
       );
 
-      if (unifiedResult.stages.length > 0) {
-        // Construct a ProposalTrackingResult from unified cache
-        const cachedResult: ProposalTrackingResult = {
-          proposalId,
-          creationTxHash,
-          governorAddress,
-          stages: unifiedResult.stages,
-          timelockLink: unifiedResult.timelockLink,
-          currentState: unifiedResult.proposalResult?.currentState,
-          proposalType: unifiedResult.proposalResult?.proposalType,
-        };
-
+      if (cached.result && cached.result.stages.length > 0) {
         // Always load the cached data first
         trackerManager.updateSession(proposalId, governorAddress, {
-          stages: unifiedResult.stages,
-          currentStageIndex: unifiedResult.stages.length - 1,
-          result: cachedResult,
+          stages: cached.result.stages,
+          currentStageIndex: cached.result.stages.length - 1,
+          result: cached.result,
           status: "complete",
         });
 
-        // If any cache is expired and not all stages are completed, do a background refresh
-        if (needsRefresh(unifiedResult)) {
+        // If cache is expired and not complete, do a background refresh
+        if (cached.isExpired && !cached.isComplete) {
           triggerBackgroundRefresh();
         }
         return;
@@ -549,22 +493,22 @@ export function useProposalStages({
 
   // Periodic TTL check - continuously check for expiration while user is on page
   useEffect(() => {
-    if (!enabled || !proposalId || !governorAddress) return;
+    if (!enabled || !proposalId || !governorAddress || !creationTxHash) return;
 
-    const checkTtlExpiration = () => {
+    const checkTtlExpiration = async () => {
       const session = trackerManager.getSession(proposalId, governorAddress);
       if (!session || session.status !== "complete") return;
       if (session.isBackgroundRefreshing) return;
 
       const cacheTtlMs = getStoredCacheTtlMs();
-      const unifiedResult = loadUnifiedStages(
-        proposalId,
+      const cached = await loadCachedProposal(
+        creationTxHash,
         governorAddress,
         cacheTtlMs
       );
 
-      // Check if any cache needs refresh
-      if (needsRefresh(unifiedResult)) {
+      // Check if cache is expired and not complete
+      if (cached.isExpired && !cached.isComplete) {
         triggerBackgroundRefresh();
       }
     };
@@ -576,7 +520,13 @@ export function useProposalStages({
     );
 
     return () => clearInterval(interval);
-  }, [enabled, proposalId, governorAddress, triggerBackgroundRefresh]);
+  }, [
+    enabled,
+    proposalId,
+    governorAddress,
+    creationTxHash,
+    triggerBackgroundRefresh,
+  ]);
 
   return {
     stages,

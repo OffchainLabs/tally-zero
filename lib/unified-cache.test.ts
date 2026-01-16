@@ -6,16 +6,13 @@ import type {
   TimelockTrackingResult,
 } from "@/hooks/use-timelock-operation";
 import { MS_PER_HOUR, MS_PER_SECOND } from "@/lib/date-utils";
-import type { ProposalStage, TimelockLink } from "@/types/proposal-stage";
+import type { ProposalStage } from "@/types/proposal-stage";
 import {
   clearCachedTimelockResult,
   getTimelockCacheKey,
   hasTimelockCache,
   loadCachedTimelockResult,
-  loadUnifiedStages,
-  needsRefresh,
   saveCachedTimelockResult,
-  type UnifiedCacheResult,
 } from "./unified-cache";
 
 // Helper to create minimal mock stage
@@ -47,19 +44,6 @@ function createMockOperationInfo(): TimelockOperationInfo {
     delay: "0",
     blockNumber: 12345,
     timestamp: Date.now(),
-  };
-}
-
-// Helper to create mock timelock link
-function createMockTimelockLink(
-  txHash: string = "0xtx",
-  operationId: string = "0xop"
-): TimelockLink {
-  return {
-    txHash,
-    operationId,
-    timelockAddress: "0xtimelock",
-    queueBlockNumber: 12345,
   };
 }
 
@@ -99,7 +83,7 @@ vi.mock("./debug", () => ({
   },
 }));
 
-describe("unified-cache", () => {
+describe("unified-cache (timelock operations)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLocalStorage.clear();
@@ -257,131 +241,6 @@ describe("unified-cache", () => {
       mockStorage[key] = JSON.stringify(cached);
 
       expect(hasTimelockCache("0x123", "0x456")).toBe(false);
-    });
-  });
-
-  describe("needsRefresh", () => {
-    it("returns false when complete", () => {
-      const result: UnifiedCacheResult = {
-        stages: [],
-        proposalCacheExpired: true,
-        completionStatus: "completed",
-        isComplete: true,
-        proposalResult: null,
-      };
-
-      expect(needsRefresh(result)).toBe(false);
-    });
-
-    it("returns true when proposal cache expired and not complete", () => {
-      const result: UnifiedCacheResult = {
-        stages: [],
-        proposalCacheExpired: true,
-        completionStatus: "pending",
-        isComplete: false,
-        proposalResult: null,
-      };
-
-      expect(needsRefresh(result)).toBe(true);
-    });
-
-    it("returns false when not expired and not complete", () => {
-      const result: UnifiedCacheResult = {
-        stages: [],
-        proposalCacheExpired: false,
-        completionStatus: "incomplete",
-        isComplete: false,
-        proposalResult: null,
-      };
-
-      expect(needsRefresh(result)).toBe(false);
-    });
-  });
-
-  describe("loadUnifiedStages", () => {
-    it("returns empty result when no cache exists", () => {
-      const result = loadUnifiedStages("123", "0xgov");
-
-      expect(result.stages).toEqual([]);
-      expect(result.proposalCacheExpired).toBe(false);
-      expect(result.completionStatus).toBe("pending");
-      expect(result.isComplete).toBe(false);
-    });
-
-    it("returns proposal stages when no timelock link", () => {
-      const proposalKey = `${STORAGE_KEYS.STAGES_CACHE_PREFIX}0xgov-123`;
-      const proposalCache = {
-        version: CACHE_VERSION,
-        timestamp: Date.now(),
-        result: {
-          proposalId: "123",
-          creationTxHash: "0xcreate",
-          governorAddress: "0xgov",
-          stages: [
-            createMockStage("PROPOSAL_CREATED", "COMPLETED"),
-            createMockStage("VOTING_ACTIVE", "COMPLETED"),
-          ],
-        },
-      };
-      mockStorage[proposalKey] = JSON.stringify(proposalCache);
-
-      const result = loadUnifiedStages("123", "0xgov");
-
-      expect(result.stages).toHaveLength(2);
-      expect(result.proposalResult).toEqual(proposalCache.result);
-      expect(result.timelockLink).toBeUndefined();
-    });
-
-    it("returns all stages from proposal cache including timelock stages", () => {
-      const timelockLink = createMockTimelockLink("0xtx", "0xop");
-      const proposalKey = `${STORAGE_KEYS.STAGES_CACHE_PREFIX}0xgov-123`;
-      const proposalCache = {
-        version: CACHE_VERSION,
-        timestamp: Date.now(),
-        result: {
-          proposalId: "123",
-          creationTxHash: "0xcreate",
-          governorAddress: "0xgov",
-          stages: [
-            createMockStage("PROPOSAL_CREATED", "COMPLETED"),
-            createMockStage("VOTING_ACTIVE", "COMPLETED"),
-            createMockStage("PROPOSAL_QUEUED", "COMPLETED"),
-            createMockStage("L2_TIMELOCK", "COMPLETED"),
-            createMockStage("L2_TO_L1_MESSAGE", "PENDING"),
-          ],
-          timelockLink,
-        },
-      };
-      mockStorage[proposalKey] = JSON.stringify(proposalCache);
-
-      const result = loadUnifiedStages("123", "0xgov");
-
-      expect(result.stages).toHaveLength(5);
-      expect(result.stages[0].type).toBe("PROPOSAL_CREATED");
-      expect(result.stages[3].type).toBe("L2_TIMELOCK");
-      expect(result.stages[4].type).toBe("L2_TO_L1_MESSAGE");
-      expect(result.timelockLink).toEqual(timelockLink);
-      expect(result.proposalResult).toBeDefined();
-    });
-
-    it("handles wrong cache version", () => {
-      const proposalKey = `${STORAGE_KEYS.STAGES_CACHE_PREFIX}0xgov-123`;
-      const proposalCache = {
-        version: CACHE_VERSION - 1,
-        timestamp: Date.now(),
-        result: {
-          proposalId: "123",
-          creationTxHash: "0xcreate",
-          governorAddress: "0xgov",
-          stages: [createMockStage("PROPOSAL_CREATED", "COMPLETED")],
-        },
-      };
-      mockStorage[proposalKey] = JSON.stringify(proposalCache);
-
-      const result = loadUnifiedStages("123", "0xgov");
-
-      expect(result.stages).toEqual([]);
-      expect(result.proposalResult).toBeNull();
     });
   });
 });

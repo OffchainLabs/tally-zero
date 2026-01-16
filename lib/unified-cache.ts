@@ -1,36 +1,23 @@
 /**
- * Unified cache resolution for proposal lifecycle stages
+ * Timelock operation cache for direct timelock tracking feature
  *
- * All proposal stages are stored in a single cache entry.
- * Gov-tracker's trackByTxHash returns all stages in one result.
+ * Provides localStorage-based caching for timelock operations
+ * tracked via the TimelockOperationContent component.
  *
- * Separate timelock cache functions are provided for the
- * TimelockOperationContent feature (tracking timelock operations directly).
+ * Note: Proposal stage caching is handled by gov-tracker's
+ * LocalStorageCache via lib/gov-tracker-cache.ts.
  */
 
-import { getFinalStageForGovernor } from "@/config/governors";
 import {
   CACHE_VERSION,
   DEFAULT_CACHE_TTL_MS,
   STORAGE_KEYS,
 } from "@/config/storage-keys";
 import type { TimelockTrackingResult } from "@/hooks/use-timelock-operation";
-import type {
-  ProposalStage,
-  ProposalTrackingResult,
-  TimelockLink,
-} from "@/types/proposal-stage";
 import { debug, isBrowser } from "./debug";
-import {
-  getCacheKey,
-  getCompletionStatus,
-  trimCachedStagesFromIndex,
-  type CachedStagesResult,
-  type CompletionStatus,
-} from "./stages-cache";
 
 /**
- * Cached timelock operation result (for direct timelock tracking feature)
+ * Cached timelock operation result
  */
 export interface CachedTimelockResult {
   version: number;
@@ -39,25 +26,7 @@ export interface CachedTimelockResult {
 }
 
 /**
- * Result of unified cache loading
- */
-export interface UnifiedCacheResult {
-  /** All stages from the proposal cache */
-  stages: ProposalStage[];
-  /** Link to timelock operation (for cross-reference) */
-  timelockLink?: TimelockLink;
-  /** Whether proposal cache is expired */
-  proposalCacheExpired: boolean;
-  /** Completion status */
-  completionStatus: CompletionStatus;
-  /** Whether tracking is complete (no refresh needed) */
-  isComplete: boolean;
-  /** Original proposal tracking result */
-  proposalResult: ProposalTrackingResult | null;
-}
-
-/**
- * Get cache key for timelock operations (for direct timelock tracking feature)
+ * Get cache key for timelock operations
  */
 export function getTimelockCacheKey(
   txHash: string,
@@ -67,7 +36,7 @@ export function getTimelockCacheKey(
 }
 
 /**
- * Load cached timelock result from localStorage (for direct timelock tracking feature)
+ * Load cached timelock result from localStorage
  */
 export function loadCachedTimelockResult(
   txHash: string,
@@ -99,7 +68,7 @@ export function loadCachedTimelockResult(
 }
 
 /**
- * Save timelock result to localStorage cache (for direct timelock tracking feature)
+ * Save timelock result to localStorage cache
  */
 export function saveCachedTimelockResult(
   txHash: string,
@@ -139,120 +108,7 @@ export function clearCachedTimelockResult(
 }
 
 /**
- * Load unified stages from proposal cache
- *
- * All stages are stored together in the proposal cache.
- * Gov-tracker's trackByTxHash returns all stages in one result.
- *
- * @param proposalId - The proposal ID
- * @param governorAddress - The governor contract address
- * @param ttlMs - Cache TTL in milliseconds
- * @returns Cache result with all stages
- */
-export function loadUnifiedStages(
-  proposalId: string,
-  governorAddress: string,
-  ttlMs: number = DEFAULT_CACHE_TTL_MS
-): UnifiedCacheResult {
-  if (!isBrowser) {
-    return {
-      stages: [],
-      proposalCacheExpired: false,
-      completionStatus: "pending",
-      isComplete: false,
-      proposalResult: null,
-    };
-  }
-
-  const proposalCacheKey = getCacheKey(proposalId, governorAddress);
-  let proposalResult: ProposalTrackingResult | null = null;
-  let proposalCacheExpired = false;
-
-  try {
-    const cachedProposal = localStorage.getItem(proposalCacheKey);
-    if (cachedProposal) {
-      const parsed: CachedStagesResult = JSON.parse(cachedProposal);
-      if (parsed.version === CACHE_VERSION) {
-        proposalResult = parsed.result;
-        proposalCacheExpired = Date.now() - parsed.timestamp > ttlMs;
-      }
-    }
-  } catch (err) {
-    debug.cache("failed to load unified stages for %s: %O", proposalId, err);
-  }
-
-  if (!proposalResult) {
-    return {
-      stages: [],
-      proposalCacheExpired: false,
-      completionStatus: "pending",
-      isComplete: false,
-      proposalResult: null,
-    };
-  }
-
-  const completionStatus = getCompletionStatus(
-    proposalResult.stages,
-    governorAddress
-  );
-
-  return {
-    stages: proposalResult.stages,
-    timelockLink: proposalResult.timelockLink,
-    proposalCacheExpired,
-    completionStatus,
-    isComplete:
-      completionStatus === "completed" || completionStatus === "failed",
-    proposalResult,
-  };
-}
-
-/**
- * Check if unified cache needs refresh
- *
- * @param unifiedResult - Result from loadUnifiedStages
- * @returns true if cache is expired and not complete
- */
-export function needsRefresh(unifiedResult: UnifiedCacheResult): boolean {
-  if (unifiedResult.isComplete) {
-    return false;
-  }
-  return unifiedResult.proposalCacheExpired;
-}
-
-/**
- * Get the expected final stage for a governor
- * Re-exported for convenience
- */
-export { getFinalStageForGovernor };
-
-/**
- * Trim unified cache from a specific stage index
- *
- * Removes all stages including and after the specified index,
- * allowing the tracker to re-track from that point.
- *
- * @param proposalId - The proposal ID
- * @param governorAddress - The governor contract address
- * @param unifiedStageIndex - Index to trim from (inclusive)
- * @returns True if stages were trimmed
- */
-export function trimUnifiedCacheFromIndex(
-  proposalId: string,
-  governorAddress: string,
-  unifiedStageIndex: number
-): boolean {
-  if (!isBrowser) return false;
-
-  return trimCachedStagesFromIndex(
-    proposalId,
-    governorAddress,
-    unifiedStageIndex
-  );
-}
-
-/**
- * Check if timelock cache exists and is valid (for direct timelock tracking feature)
+ * Check if timelock cache exists and is valid
  */
 export function hasTimelockCache(txHash: string, operationId: string): boolean {
   if (!isBrowser) return false;
