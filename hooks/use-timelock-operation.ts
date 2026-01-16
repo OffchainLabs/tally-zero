@@ -147,8 +147,29 @@ export function useTimelockOperation({
         return;
       }
 
-      // Convert to TimelockOperationInfo format
-      // Note: CallScheduledData doesn't have timestamp, we'll use 0 as placeholder
+      // Get unique block numbers to fetch timestamps
+      const blockNumbers = [
+        ...new Set(discoveredOps.map((op) => op.blockNumber).filter(Boolean)),
+      ];
+
+      // Fetch block timestamps in parallel
+      const blockTimestamps = new Map<number, number>();
+      await Promise.all(
+        blockNumbers.map(async (blockNum) => {
+          try {
+            const block = await l2Provider.getBlock(blockNum);
+            if (block?.timestamp) {
+              blockTimestamps.set(blockNum, block.timestamp);
+            }
+          } catch {
+            // Ignore block fetch errors, timestamp will be 0
+          }
+        })
+      );
+
+      if (!isMounted.current) return;
+
+      // Convert to TimelockOperationInfo format with timestamps
       const ops: TimelockOperationInfo[] = discoveredOps.map(
         (op: CallScheduledData) => ({
           operationId: op.operationId,
@@ -159,7 +180,7 @@ export function useTimelockOperation({
           delay: op.delay?.toString() || "0",
           txHash: op.txHash || txHash,
           blockNumber: op.blockNumber || 0,
-          timestamp: 0, // CallScheduledData doesn't have timestamp
+          timestamp: blockTimestamps.get(op.blockNumber) || 0,
           timelockAddress: op.timelockAddress || "",
         })
       );

@@ -396,10 +396,12 @@ function OperationHeader({
           <span className="text-muted-foreground">Delay:</span>
           <p>{formatDelay(parseInt(operation.delay))}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground">Scheduled At:</span>
-          <p>{new Date(operation.timestamp * 1000).toLocaleString()}</p>
-        </div>
+        {operation.timestamp > 0 && (
+          <div>
+            <span className="text-muted-foreground">Scheduled At:</span>
+            <p>{new Date(operation.timestamp * 1000).toLocaleString()}</p>
+          </div>
+        )}
       </div>
     </div>
   );

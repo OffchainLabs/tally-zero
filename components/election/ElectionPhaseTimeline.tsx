@@ -40,10 +40,16 @@ const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
   COMPLETED: [],
 };
 
+interface PhaseTransaction {
+  hash: string;
+  chainId: number;
+  timestamp?: number;
+}
+
 function getTransactionsForPhase(
   phase: ElectionPhase,
   stages?: TrackedStage[]
-): { hash: string; chainId: number }[] {
+): PhaseTransaction[] {
   if (!stages) return [];
   const stageTypes = PHASE_TO_STAGE_TYPES[phase];
   if (!stageTypes.length) return [];
@@ -54,16 +60,20 @@ function getTransactionsForPhase(
     const l2TimelockStage = stages.find((s) => s.type === "L2_TIMELOCK");
     if (l2TimelockStage?.transactions?.length) {
       const tx = l2TimelockStage.transactions[0];
-      return [{ hash: tx.hash, chainId: tx.chainId }];
+      return [{ hash: tx.hash, chainId: tx.chainId, timestamp: tx.timestamp }];
     }
     return [];
   }
 
-  const transactions: { hash: string; chainId: number }[] = [];
+  const transactions: PhaseTransaction[] = [];
   for (const stage of stages) {
     if (stageTypes.includes(stage.type)) {
       for (const tx of stage.transactions) {
-        transactions.push({ hash: tx.hash, chainId: tx.chainId });
+        transactions.push({
+          hash: tx.hash,
+          chainId: tx.chainId,
+          timestamp: tx.timestamp,
+        });
       }
     }
   }
@@ -182,6 +192,15 @@ export function ElectionPhaseTimeline({
   );
 }
 
+function formatTxDate(timestamp?: number): string | null {
+  if (!timestamp) return null;
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function PhaseTransactionLinks({
   phase,
   stages,
@@ -205,6 +224,11 @@ function PhaseTransactionLinks({
           <span className="font-mono">
             {tx.hash.slice(0, 6)}...{tx.hash.slice(-4)}
           </span>
+          {tx.timestamp && (
+            <span className="text-muted-foreground/70">
+              {formatTxDate(tx.timestamp)}
+            </span>
+          )}
           <ExternalLink className="h-3 w-3" />
         </a>
       ))}
