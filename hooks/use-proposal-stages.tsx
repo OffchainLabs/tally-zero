@@ -500,6 +500,12 @@ export function useProposalStages({
       if (!session || session.status !== "complete") return;
       if (session.isBackgroundRefreshing) return;
 
+      // Skip cache check if we already know tracking is complete from the session
+      // Complete proposals never need refresh, so no need to reload from cache
+      if (session.result?.isComplete) {
+        return;
+      }
+
       const cacheTtlMs = getStoredCacheTtlMs();
       const cached = await loadCachedProposal(
         creationTxHash,
