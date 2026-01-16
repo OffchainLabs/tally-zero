@@ -2,6 +2,7 @@
 
 import { AlertCircle } from "lucide-react";
 
+import { DeepLinkHandler } from "@/components/container/DeepLinkHandler";
 import { useElectionStatus } from "@/hooks/use-election-status";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import type { ElectionPhase } from "@/types/election";
@@ -34,13 +35,16 @@ export function ElectionContainer(): React.ReactElement {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertCircle className="h-5 w-5" />
-          <span className="font-medium">Failed to load election status</span>
+      <>
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <span className="font-medium">Failed to load election status</span>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
-      </div>
+        <DeepLinkHandler proposals={[]} />
+      </>
     );
   }
 
@@ -74,6 +78,8 @@ export function ElectionContainer(): React.ReactElement {
           phase={currentPhase}
         />
       </div>
+
+      <DeepLinkHandler proposals={[]} />
     </div>
   );
 }

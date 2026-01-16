@@ -48,6 +48,17 @@ function getTransactionsForPhase(
   const stageTypes = PHASE_TO_STAGE_TYPES[phase];
   if (!stageTypes.length) return [];
 
+  // For PENDING_EXECUTION, only show the final execution transaction (L2_TIMELOCK)
+  // Security Council elections execute on L2, so we only need the L2 timelock execution
+  if (phase === "PENDING_EXECUTION") {
+    const l2TimelockStage = stages.find((s) => s.type === "L2_TIMELOCK");
+    if (l2TimelockStage?.transactions?.length) {
+      const tx = l2TimelockStage.transactions[0];
+      return [{ hash: tx.hash, chainId: tx.chainId }];
+    }
+    return [];
+  }
+
   const transactions: { hash: string; chainId: number }[] = [];
   for (const stage of stages) {
     if (stageTypes.includes(stage.type)) {
