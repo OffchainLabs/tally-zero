@@ -7,13 +7,13 @@
 import { useEffect, useState } from "react";
 
 import {
+  extractProposalsFromBundledCache,
   getBundledCacheWatermark,
-  getBundledProposalSeeds,
 } from "@/lib/bundled-cache-loader";
 import { debug } from "@/lib/debug";
 import {
-  fetchProposalsFromSeeds,
   parseProposals,
+  refreshProposalStates,
   searchGovernor,
   type CacheHitInfo,
   type UseMultiGovernorSearchOptions,
@@ -86,43 +86,56 @@ export function useMultiGovernorSearch({
         setProgress(5);
         if (cancelled || abortController.signal.aborted) return;
 
-        // Load bundled cache seeds and watermark
-        const [seeds, watermark] = await Promise.all([
-          getBundledProposalSeeds(),
-          getBundledCacheWatermark(),
-        ]);
+        // Extract proposals directly from bundled cache (no RPC calls)
+        const [{ proposals: cachedProposals, activeProposalIds }, watermark] =
+          await Promise.all([
+            extractProposalsFromBundledCache(),
+            getBundledCacheWatermark(),
+          ]);
 
         setProgress(10);
         if (cancelled || abortController.signal.aborted) return;
 
-        const allProposals: ParsedProposal[] = [];
-        let cacheWatermarkBlock = 0;
-        let seededCount = 0;
+        const allProposals: ParsedProposal[] = [...cachedProposals];
+        const cachedCount = cachedProposals.length;
+        let cacheWatermarkBlock = watermark?.l2Block ?? 0;
 
-        // If we have seeds, fetch proposals from them
-        if (seeds.length > 0) {
-          debug.search("seeding %d proposals from bundled cache", seeds.length);
+        debug.search(
+          "extracted %d proposals from cache (%d active)",
+          cachedCount,
+          activeProposalIds.size
+        );
 
-          const seededProposals = await fetchProposalsFromSeeds(
-            provider,
-            seeds
+        // Refresh state/votes only for active proposals
+        if (activeProposalIds.size > 0) {
+          const activeProposals = allProposals.filter((p) =>
+            activeProposalIds.has(p.id)
           );
-          allProposals.push(...seededProposals);
-          seededCount = seededProposals.length;
-
           debug.search(
-            "loaded %d proposals from seeds",
-            seededProposals.length
+            "refreshing %d active proposals",
+            activeProposals.length
           );
+
+          const refreshed = await refreshProposalStates(
+            provider,
+            activeProposals
+          );
+
+          // Update the proposals with refreshed data
+          const refreshedMap = new Map(refreshed.map((p) => [p.id, p]));
+          for (let i = 0; i < allProposals.length; i++) {
+            const updated = refreshedMap.get(allProposals[i].id);
+            if (updated) {
+              allProposals[i] = updated;
+            }
+          }
         }
 
-        setProgress(40);
+        setProgress(30);
         if (cancelled || abortController.signal.aborted) return;
 
         // Determine the starting block for fresh RPC search
-        // Use watermark if available, otherwise use user's daysToSearch
         if (watermark) {
-          cacheWatermarkBlock = watermark.l2Block;
           debug.search(
             "bundled cache watermark at L2 block %d",
             cacheWatermarkBlock
@@ -133,6 +146,8 @@ export function useMultiGovernorSearch({
         const rpcStartBlock = watermark
           ? Math.max(cacheWatermarkBlock + 1, userStartBlock)
           : userStartBlock;
+
+        let freshCount = 0;
 
         // Skip RPC search if watermark covers our search range
         if (rpcStartBlock < currentBlock) {
@@ -160,17 +175,18 @@ export function useMultiGovernorSearch({
             completedQueries++;
             if (!cancelled) {
               const searchProgress =
-                40 + (completedQueries / totalGovernors) * 40;
+                30 + (completedQueries / totalGovernors) * 50;
               setProgress(searchProgress);
             }
 
             if (rawProposals.length > 0) {
               const parsed = await parseProposals(provider, rawProposals);
-              // Deduplicate: only add proposals not already in seeded set
+              // Deduplicate: only add proposals not already in cached set
               const existingIds = new Set(allProposals.map((p) => p.id));
               for (const p of parsed) {
                 if (!existingIds.has(p.id)) {
                   allProposals.push(p);
+                  freshCount++;
                 }
               }
             }
@@ -188,15 +204,15 @@ export function useMultiGovernorSearch({
         // Sort: active first, then by startBlock descending
         setProposals(sortProposals(allProposals));
         setCacheInfo({
-          loaded: seededCount > 0,
+          loaded: cachedCount > 0,
           snapshotBlock: cacheWatermarkBlock,
           cacheStartBlock: 0,
-          cachedCount: seededCount,
-          freshCount: allProposals.length - seededCount,
-          cacheUsed: seededCount > 0,
+          cachedCount,
+          freshCount,
+          cacheUsed: cachedCount > 0,
           rangeInfo:
-            seededCount > 0
-              ? `Seeded: ${seededCount} + RPC: ${rpcStartBlock} → ${currentBlock}`
+            cachedCount > 0
+              ? `Cache: ${cachedCount} + RPC: ${rpcStartBlock} → ${currentBlock}`
               : `RPC: ${rpcStartBlock} → ${currentBlock}`,
         });
         setProgress(100);

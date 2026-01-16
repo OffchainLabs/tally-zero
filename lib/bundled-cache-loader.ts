@@ -6,6 +6,12 @@ import {
   BUNDLED_CACHE_RETRY_DELAY_MS,
   STORAGE_KEYS,
 } from "@/config/storage-keys";
+import { findByAddress } from "@/lib/address-utils";
+import type { ParsedProposal, ProposalStateName } from "@/types/proposal";
+import {
+  ARBITRUM_CHAIN_ID,
+  ARBITRUM_GOVERNORS,
+} from "@config/arbitrum-governance";
 
 import { debug } from "./debug";
 import { getStoredValue } from "./storage-utils";
@@ -108,13 +114,6 @@ export function resetBundledCacheFlag(): void {
   bundledCacheData = null;
 }
 
-/** Proposal seed data from bundled cache */
-export interface ProposalSeed {
-  proposalId: string;
-  governorAddress: string;
-  creationTxHash: string;
-}
-
 /** Bundled cache watermark with L2 block */
 export interface BundledCacheWatermark {
   l2Block: number;
@@ -154,43 +153,139 @@ export async function getBundledCacheWatermark(): Promise<BundledCacheWatermark 
   }
 }
 
+/** Stage data from bundled cache checkpoint */
+interface BundledStageData {
+  type: string;
+  status: string;
+  transactions?: Array<{ hash: string; blockNumber: number }>;
+  data?: Record<string, unknown>;
+}
+
+/** Checkpoint structure from bundled cache */
+interface BundledCheckpoint {
+  input?: {
+    type?: string;
+    proposalId?: string;
+    governorAddress?: string;
+    creationTxHash?: string;
+  };
+  lastProcessedStage?: string;
+  cachedData?: {
+    completedStages?: BundledStageData[];
+  };
+}
+
+/** Map gov-tracker stage to proposal state */
+function stageToState(
+  lastStage: string | undefined,
+  votingStatus: string | undefined
+): ProposalStateName {
+  if (!lastStage) return "Pending";
+
+  // Check voting outcome first
+  if (lastStage === "VOTING_ACTIVE") {
+    if (votingStatus === "FAILED") return "Defeated";
+    if (votingStatus === "COMPLETED") return "Succeeded";
+    return "Active";
+  }
+
+  // Pre-voting
+  if (lastStage === "PROPOSAL_CREATED") return "Pending";
+
+  // Post-voting stages indicate queued or executed
+  const postVotingStages = [
+    "L2_TIMELOCK_QUEUED",
+    "L2_TIMELOCK_EXECUTED",
+    "L2_TO_L1_MESSAGE",
+    "L1_TIMELOCK_QUEUED",
+    "L1_TIMELOCK_EXECUTED",
+    "RETRYABLE_CREATED",
+  ];
+  if (postVotingStages.includes(lastStage)) return "Queued";
+
+  // Final execution
+  if (lastStage === "RETRYABLE_EXECUTED") return "Executed";
+
+  return "Pending";
+}
+
 /**
- * Get proposal seeds from bundled cache
- * These are proposal IDs that can be fetched directly instead of scanning blocks
+ * Extract full proposal data directly from bundled cache
+ * Returns ParsedProposal objects without any RPC calls
  */
-export async function getBundledProposalSeeds(): Promise<ProposalSeed[]> {
+export async function extractProposalsFromBundledCache(): Promise<{
+  proposals: ParsedProposal[];
+  activeProposalIds: Set<string>;
+}> {
+  const proposals: ParsedProposal[] = [];
+  const activeProposalIds = new Set<string>();
+
   try {
     const cache = await loadBundledCache();
-    const seeds: ProposalSeed[] = [];
 
     for (const [key, value] of Object.entries(cache)) {
       if (!key.startsWith("tx:")) continue;
 
-      const checkpoint = value as {
-        input?: {
-          type?: string;
-          proposalId?: string;
-          governorAddress?: string;
-          creationTxHash?: string;
-        };
-      };
+      const checkpoint = value as BundledCheckpoint;
+      if (checkpoint.input?.type !== "governor") continue;
 
-      if (
-        checkpoint.input?.type === "governor" &&
-        checkpoint.input.proposalId &&
-        checkpoint.input.governorAddress
-      ) {
-        seeds.push({
-          proposalId: checkpoint.input.proposalId,
-          governorAddress: checkpoint.input.governorAddress,
-          creationTxHash: checkpoint.input.creationTxHash ?? key.slice(3),
-        });
+      const { proposalId, governorAddress, creationTxHash } = checkpoint.input;
+      if (!proposalId || !governorAddress) continue;
+
+      const stages = checkpoint.cachedData?.completedStages ?? [];
+      const createdStage = stages.find((s) => s.type === "PROPOSAL_CREATED");
+      const votingStage = stages.find((s) => s.type === "VOTING_ACTIVE");
+
+      if (!createdStage?.data) continue;
+
+      const data = createdStage.data;
+      const voteData = votingStage?.data;
+
+      const state = stageToState(
+        checkpoint.lastProcessedStage,
+        votingStage?.status
+      );
+
+      // Track active proposals that need refresh
+      if (state === "Pending" || state === "Active") {
+        activeProposalIds.add(proposalId);
       }
+
+      const governor = findByAddress(ARBITRUM_GOVERNORS, governorAddress);
+
+      proposals.push({
+        id: proposalId,
+        contractAddress: governorAddress as `0x${string}`,
+        proposer: (data.proposer as string) ?? "",
+        targets: (data.targets as string[]) ?? [],
+        values: (data.values as string[]) ?? [],
+        signatures: (data.signatures as string[]) ?? [],
+        calldatas: (data.calldatas as string[]) ?? [],
+        startBlock: String(data.startBlock ?? "0"),
+        endBlock: String(data.endBlock ?? "0"),
+        description: (data.description as string) ?? "",
+        networkId: String(ARBITRUM_CHAIN_ID),
+        state,
+        governorName: governor?.name ?? "Unknown",
+        creationTxHash: creationTxHash ?? key.slice(3),
+        votes: voteData
+          ? {
+              forVotes: (voteData.forVotesRaw as string) ?? "0",
+              againstVotes: (voteData.againstVotesRaw as string) ?? "0",
+              abstainVotes: (voteData.abstainVotesRaw as string) ?? "0",
+              quorum: (voteData.quorumRaw as string) ?? undefined,
+            }
+          : undefined,
+      });
     }
 
-    debug.cache("found %d proposal seeds in bundled cache", seeds.length);
-    return seeds;
+    debug.cache(
+      "extracted %d proposals from bundled cache (%d active)",
+      proposals.length,
+      activeProposalIds.size
+    );
+    return { proposals, activeProposalIds };
   } catch {
-    return [];
+    return { proposals: [], activeProposalIds: new Set() };
   }
 }
