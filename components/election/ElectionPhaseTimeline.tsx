@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import {
   ELECTION_TIMING,
   getTxUrl,
@@ -7,6 +9,7 @@ import {
   type StageType,
   type TrackedStage,
 } from "@gzeoneth/gov-tracker";
+import { ethers } from "ethers";
 import {
   Calendar,
   CheckCircle2,
@@ -17,7 +20,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { useDeepLink } from "@/context/DeepLinkContext";
+import { useRpcSettings } from "@/hooks/use-rpc-settings";
 
 import { formatDuration, PHASE_METADATA } from "@/config/security-council";
 import { cn } from "@/lib/utils";
@@ -93,6 +98,69 @@ const TIMELINE_PHASES: ElectionPhase[] = [
   "PENDING_EXECUTION",
 ];
 
+function useFetchMissingTimestamps(
+  stages: TrackedStage[] | undefined,
+  l2RpcUrl: string
+): Map<string, number> {
+  const [timestamps, setTimestamps] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (!stages) return;
+
+    const txsWithoutTimestamp: Array<{ hash: string; blockNumber: number }> =
+      [];
+
+    for (const stage of stages) {
+      for (const tx of stage.transactions) {
+        if (!tx.timestamp && tx.blockNumber && !timestamps.has(tx.hash)) {
+          txsWithoutTimestamp.push({
+            hash: tx.hash,
+            blockNumber: tx.blockNumber,
+          });
+        }
+      }
+    }
+
+    if (txsWithoutTimestamp.length === 0) return;
+
+    const fetchTimestamps = async () => {
+      try {
+        const provider = new ethers.providers.StaticJsonRpcProvider(l2RpcUrl);
+        const newTimestamps = new Map(timestamps);
+
+        const uniqueBlocks = [
+          ...new Set(txsWithoutTimestamp.map((t) => t.blockNumber)),
+        ];
+        const blocks = await Promise.all(
+          uniqueBlocks.map((bn) => provider.getBlock(bn).catch(() => null))
+        );
+
+        const blockTimestamps = new Map<number, number>();
+        for (const block of blocks) {
+          if (block) {
+            blockTimestamps.set(block.number, block.timestamp);
+          }
+        }
+
+        for (const tx of txsWithoutTimestamp) {
+          const timestamp = blockTimestamps.get(tx.blockNumber);
+          if (timestamp) {
+            newTimestamps.set(tx.hash, timestamp);
+          }
+        }
+
+        setTimestamps(newTimestamps);
+      } catch (err) {
+        // Silent fail - timestamps are optional enhancement
+      }
+    };
+
+    fetchTimestamps();
+  }, [stages, l2RpcUrl, timestamps]);
+
+  return timestamps;
+}
+
 function getPhaseIndex(phase: ElectionPhase): number {
   if (phase === "NOT_STARTED") return -1;
   if (phase === "COMPLETED") return TIMELINE_PHASES.length;
@@ -161,8 +229,12 @@ export function ElectionPhaseTimeline({
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
   const { openTimelock } = useDeepLink();
+  const { l2Rpc } = useRpcSettings();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages);
+
+  const l2RpcUrl = l2Rpc || ARBITRUM_RPC_URL;
+  const fetchedTimestamps = useFetchMissingTimestamps(stages, l2RpcUrl);
 
   const phaseEtas =
     status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
@@ -237,7 +309,11 @@ export function ElectionPhaseTimeline({
                       : "completion"}
                   </p>
                 )}
-                <PhaseTransactionLinks phase={phase} stages={stages} />
+                <PhaseTransactionLinks
+                  phase={phase}
+                  stages={stages}
+                  fetchedTimestamps={fetchedTimestamps}
+                />
               </div>
             </div>
           );
@@ -286,34 +362,40 @@ function formatTxDate(timestamp?: number): string | null {
 function PhaseTransactionLinks({
   phase,
   stages,
+  fetchedTimestamps,
 }: {
   phase: ElectionPhase;
   stages?: TrackedStage[];
+  fetchedTimestamps?: Map<string, number>;
 }): React.ReactElement | null {
   const transactions = getTransactionsForPhase(phase, stages);
   if (transactions.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-wrap gap-2">
-      {transactions.map((tx) => (
-        <a
-          key={tx.hash}
-          href={getTxUrl(tx.chainId, tx.hash)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <span className="font-mono">
-            {tx.hash.slice(0, 6)}...{tx.hash.slice(-4)}
-          </span>
-          {tx.timestamp && (
-            <span className="text-muted-foreground/70">
-              {formatTxDate(tx.timestamp)}
+      {transactions.map((tx) => {
+        const timestamp = tx.timestamp ?? fetchedTimestamps?.get(tx.hash);
+
+        return (
+          <a
+            key={tx.hash}
+            href={getTxUrl(tx.chainId, tx.hash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <span className="font-mono">
+              {tx.hash.slice(0, 6)}...{tx.hash.slice(-4)}
             </span>
-          )}
-          <ExternalLink className="h-3 w-3" />
-        </a>
-      ))}
+            {timestamp && (
+              <span className="text-muted-foreground/70">
+                {formatTxDate(timestamp)}
+              </span>
+            )}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        );
+      })}
     </div>
   );
 }

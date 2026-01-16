@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { CheckCircle2, User, Users, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
 
 import type { ProposalStageTracker } from "@gzeoneth/gov-tracker";
 
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { getDelegateLabel } from "@/lib/delegate-cache";
+import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase } from "@/types/election";
@@ -35,6 +37,18 @@ interface NomineeListProps {
   memberDetails: MemberDetails;
   isLoading: boolean;
   phase: ElectionPhase;
+  electionIndex?: number;
+}
+
+function getTallyProfileUrl(
+  electionIndex: number,
+  address: string,
+  round: 1 | 2
+): string {
+  if (round === 1) {
+    return `https://www.tally.xyz/gov/arbitrum/council/security-council/election/${electionIndex}/round-1/candidate/${address}`;
+  }
+  return `https://www.tally.xyz/gov/arbitrum/council/security-council/election/${electionIndex}/round-2/nominee/${address}`;
 }
 
 export function NomineeList({
@@ -42,6 +56,7 @@ export function NomineeList({
   memberDetails,
   isLoading,
   phase,
+  electionIndex,
 }: NomineeListProps): React.ReactElement | null {
   const hasMemberResults =
     memberDetails &&
@@ -49,9 +64,13 @@ export function NomineeList({
       phase === "PENDING_EXECUTION" ||
       phase === "COMPLETED");
 
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    hasMemberResults ? "results" : "nominees"
-  );
+  const [viewMode, setViewMode] = useState<ViewMode>("nominees");
+
+  useEffect(() => {
+    if (hasMemberResults) {
+      setViewMode("results");
+    }
+  }, [hasMemberResults]);
 
   if (isLoading && !nomineeDetails) {
     return <NomineeListSkeleton />;
@@ -101,9 +120,15 @@ export function NomineeList({
 
       <CardContent>
         {showResults && memberDetails ? (
-          <MemberElectionResults details={memberDetails} />
+          <MemberElectionResults
+            details={memberDetails}
+            electionIndex={electionIndex}
+          />
         ) : (
-          <NomineeElectionList details={nomineeDetails} />
+          <NomineeElectionList
+            details={nomineeDetails}
+            electionIndex={electionIndex}
+          />
         )}
       </CardContent>
     </Card>
@@ -112,8 +137,10 @@ export function NomineeList({
 
 function NomineeElectionList({
   details,
+  electionIndex,
 }: {
   details: NomineeElectionDetails;
+  electionIndex?: number;
 }): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
@@ -135,6 +162,8 @@ function NomineeElectionList({
                 key={nominee.address}
                 address={nominee.address}
                 votes={formatVotingPower(nominee.votesReceived.toString())}
+                electionIndex={electionIndex}
+                round={1}
                 isCompliant
               />
             ))}
@@ -153,6 +182,8 @@ function NomineeElectionList({
                 key={nominee.address}
                 address={nominee.address}
                 votes={formatVotingPower(nominee.votesReceived.toString())}
+                electionIndex={electionIndex}
+                round={1}
                 isExcluded
               />
             ))}
@@ -171,8 +202,10 @@ function NomineeElectionList({
 
 function MemberElectionResults({
   details,
+  electionIndex,
 }: {
   details: MemberElectionDetails;
+  electionIndex?: number;
 }): React.ReactElement {
   return (
     <div className="space-y-4">
@@ -184,43 +217,82 @@ function MemberElectionResults({
       </div>
 
       <div className="space-y-2">
-        {details.nominees.map((nominee, index: number) => (
-          <div
-            key={nominee.address}
-            className={cn(
-              "flex items-center justify-between rounded-lg border p-3",
-              nominee.isWinner
-                ? "border-green-500/30 bg-green-500/10"
-                : "border-border/50 bg-muted/30"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <span
-                className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shrink-0",
-                  nominee.isWinner
-                    ? "bg-green-500 text-white"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {index + 1}
-              </span>
-              <span className="font-mono text-xs break-all">
-                {nominee.address}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {formatVotingPower(nominee.weightReceived.toString())} ARB
-              </span>
-              {nominee.isWinner && (
-                <Badge variant="default" className="bg-green-500">
-                  Winner
-                </Badge>
+        {details.nominees.map((nominee, index: number) => {
+          const label = getDelegateLabel(nominee.address);
+          const explorerUrl = getAddressExplorerUrl(nominee.address);
+          const tallyUrl =
+            electionIndex !== undefined
+              ? getTallyProfileUrl(electionIndex, nominee.address, 2)
+              : null;
+
+          return (
+            <div
+              key={nominee.address}
+              className={cn(
+                "flex items-center justify-between rounded-lg border p-3",
+                nominee.isWinner
+                  ? "border-green-500/30 bg-green-500/10"
+                  : "border-border/50 bg-muted/30"
               )}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shrink-0",
+                    nominee.isWinner
+                      ? "bg-green-500 text-white"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {index + 1}
+                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  {label ? (
+                    <span className="text-sm font-medium truncate">
+                      {label}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs break-all">
+                      {nominee.address}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {tallyUrl && (
+                      <a
+                        href={tallyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                        title="View on Tally"
+                      >
+                        <User className="h-3 w-3" />
+                      </a>
+                    )}
+                    <a
+                      href={explorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                      title="View on Arbiscan"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                <span className="text-sm text-muted-foreground">
+                  {formatVotingPower(nominee.weightReceived.toString())} ARB
+                </span>
+                {nominee.isWinner && (
+                  <Badge variant="default" className="bg-green-500">
+                    Winner
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -229,14 +301,25 @@ function MemberElectionResults({
 function NomineeRow({
   address,
   votes,
+  electionIndex,
+  round,
   isCompliant,
   isExcluded,
 }: {
   address: string;
   votes: string;
+  electionIndex?: number;
+  round?: 1 | 2;
   isCompliant?: boolean;
   isExcluded?: boolean;
 }): React.ReactElement {
+  const label = getDelegateLabel(address);
+  const explorerUrl = getAddressExplorerUrl(address);
+  const tallyUrl =
+    electionIndex !== undefined && round !== undefined
+      ? getTallyProfileUrl(electionIndex, address, round)
+      : null;
+
   return (
     <div
       className={cn(
@@ -250,9 +333,39 @@ function NomineeRow({
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
         )}
         {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
-        <span className="font-mono text-xs break-all">{address}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          {label ? (
+            <span className="text-sm font-medium truncate">{label}</span>
+          ) : (
+            <span className="font-mono text-xs break-all">{address}</span>
+          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {tallyUrl && (
+              <a
+                href={tallyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary transition-colors"
+                title="View on Tally"
+              >
+                <User className="h-3 w-3" />
+              </a>
+            )}
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors"
+              title="View on Arbiscan"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </div>
       </div>
-      <span className="text-sm text-muted-foreground">{votes} ARB</span>
+      <span className="text-sm text-muted-foreground shrink-0 ml-2">
+        {votes} ARB
+      </span>
     </div>
   );
 }

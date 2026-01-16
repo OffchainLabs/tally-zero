@@ -77,6 +77,7 @@ export function ElectionContainer(): React.ReactElement {
           memberDetails={memberDetails}
           isLoading={isLoading}
           phase={currentPhase}
+          electionIndex={selectedElection?.electionIndex}
         />
       </div>
 
