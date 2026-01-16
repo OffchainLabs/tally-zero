@@ -11,6 +11,7 @@ import {
   trackElectionProposal,
   type ElectionProposalStatus,
   type ElectionStatus,
+  type ChunkingConfig as GovTrackerChunkingConfig,
   type ProposalStageTracker,
 } from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
@@ -109,6 +110,8 @@ export interface UseElectionStatusOptions {
   enabled?: boolean;
   l2RpcUrl?: string;
   l1RpcUrl?: string;
+  l1ChunkSize?: number;
+  l2ChunkSize?: number;
   refreshInterval?: number;
   selectedElectionIndex?: number | null;
 }
@@ -132,13 +135,33 @@ interface TrackerWithProviders {
   l1Provider: ethers.providers.StaticJsonRpcProvider;
 }
 
+interface ChunkSizes {
+  l1ChunkSize?: number;
+  l2ChunkSize?: number;
+}
+
 let cachedTracker: TrackerWithProviders | null = null;
 let cachedRpcUrls: { l2: string; l1: string } | null = null;
+let cachedChunkSizes: ChunkSizes | null = null;
 let bundledCacheInitialized = false;
+
+function buildChunkingConfig(
+  chunkSizes?: ChunkSizes
+): GovTrackerChunkingConfig | undefined {
+  if (!chunkSizes?.l1ChunkSize && !chunkSizes?.l2ChunkSize) {
+    return undefined;
+  }
+  return {
+    l1ChunkSize: chunkSizes.l1ChunkSize ?? 10000,
+    l2ChunkSize: chunkSizes.l2ChunkSize ?? 10000000,
+    delayBetweenChunks: 100,
+  };
+}
 
 async function getTrackerWithProviders(
   l2RpcUrl: string,
-  l1RpcUrl: string
+  l1RpcUrl: string,
+  chunkSizes?: ChunkSizes
 ): Promise<TrackerWithProviders> {
   const cache = getCacheAdapter();
 
@@ -147,23 +170,32 @@ async function getTrackerWithProviders(
     bundledCacheInitialized = true;
   }
 
+  // Check if we need to recreate the tracker (RPC or chunk config changed)
+  const chunkConfigChanged =
+    chunkSizes?.l1ChunkSize !== cachedChunkSizes?.l1ChunkSize ||
+    chunkSizes?.l2ChunkSize !== cachedChunkSizes?.l2ChunkSize;
+
   if (
     !cachedTracker ||
     !cachedRpcUrls ||
     cachedRpcUrls.l2 !== l2RpcUrl ||
-    cachedRpcUrls.l1 !== l1RpcUrl
+    cachedRpcUrls.l1 !== l1RpcUrl ||
+    chunkConfigChanged
   ) {
     const l2Provider = new ethers.providers.StaticJsonRpcProvider(l2RpcUrl);
     const l1Provider = new ethers.providers.StaticJsonRpcProvider(l1RpcUrl);
 
+    const chunkingConfig = buildChunkingConfig(chunkSizes);
     const tracker = createTracker({
       l2Provider,
       l1Provider,
       cache,
+      chunkingConfig,
     });
 
     cachedTracker = { tracker, l2Provider, l1Provider };
     cachedRpcUrls = { l2: l2RpcUrl, l1: l1RpcUrl };
+    cachedChunkSizes = chunkSizes ?? null;
   }
 
   return cachedTracker;
@@ -173,6 +205,8 @@ export function useElectionStatus({
   enabled = true,
   l2RpcUrl,
   l1RpcUrl,
+  l1ChunkSize,
+  l2ChunkSize,
   refreshInterval = 60000,
   selectedElectionIndex: initialSelectedIndex = null,
 }: UseElectionStatusOptions = {}): UseElectionStatusResult {
@@ -197,6 +231,8 @@ export function useElectionStatus({
 
   const l2Url = l2RpcUrl || ARBITRUM_RPC_URL;
   const l1Url = l1RpcUrl || ETHEREUM_RPC_URL;
+  const chunkSizes: ChunkSizes | undefined =
+    l1ChunkSize || l2ChunkSize ? { l1ChunkSize, l2ChunkSize } : undefined;
 
   const activeElections = useMemo(
     () => allElections.filter((e) => e.phase !== "COMPLETED"),
@@ -226,7 +262,8 @@ export function useElectionStatus({
     try {
       const { tracker, l2Provider, l1Provider } = await getTrackerWithProviders(
         l2Url,
-        l1Url
+        l1Url,
+        chunkSizes
       );
 
       debug.app("Fetching SC election status...");
@@ -341,7 +378,7 @@ export function useElectionStatus({
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, l2Url, l1Url]);
+  }, [enabled, l2Url, l1Url, chunkSizes]);
 
   const refresh = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1);
@@ -375,7 +412,11 @@ export function useElectionStatus({
 
     const fetchDetails = async () => {
       try {
-        const { l2Provider } = await getTrackerWithProviders(l2Url, l1Url);
+        const { l2Provider } = await getTrackerWithProviders(
+          l2Url,
+          l1Url,
+          chunkSizes
+        );
 
         debug.app("Fetching details for election %d", electionIndex);
 
@@ -416,7 +457,7 @@ export function useElectionStatus({
     };
 
     fetchDetails();
-  }, [selectedElection, enabled, l2Url, l1Url, nomineeDetailsMap]);
+  }, [selectedElection, enabled, l2Url, l1Url, chunkSizes, nomineeDetailsMap]);
 
   return {
     status,

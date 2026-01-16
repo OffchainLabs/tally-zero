@@ -12,7 +12,7 @@ import { ElectionStatusCard } from "./ElectionStatusCard";
 import { NomineeList } from "./NomineeList";
 
 export function ElectionContainer(): React.ReactElement {
-  const { l2Rpc, l1Rpc } = useRpcSettings();
+  const { l2Rpc, l1Rpc, l1ChunkSize, l2ChunkSize } = useRpcSettings();
 
   const {
     status,
@@ -28,6 +28,8 @@ export function ElectionContainer(): React.ReactElement {
     enabled: true,
     l2RpcUrl: l2Rpc || undefined,
     l1RpcUrl: l1Rpc || undefined,
+    l1ChunkSize,
+    l2ChunkSize,
     refreshInterval: 60000,
   });
 
