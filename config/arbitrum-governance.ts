@@ -15,7 +15,7 @@ export const ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc";
 export const ARBITRUM_NOVA_RPC_URL = "https://nova.arbitrum.io/rpc";
 
 /** Default Ethereum Mainnet RPC URL */
-export const ETHEREUM_RPC_URL = "https://eth.llamarpc.com/";
+export const ETHEREUM_RPC_URL = "https://eth.drpc.org";
 
 /**
  * Core Governor Contract (Constitutional Proposals)
@@ -109,7 +109,7 @@ export const DEFAULT_FORM_VALUES = {
 
 /**
  * Default chunking configuration for event searches
- * Optimized for default public RPCs (arb1.arbitrum.io, eth.llamarpc.com)
+ * Optimized for default public RPCs (arb1.arbitrum.io, eth.drpc.org)
  */
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
   l2ChunkSize: DEFAULT_FORM_VALUES.blockRange,
@@ -149,37 +149,6 @@ export const ProposalState = {
 /** Type for proposal state numeric values */
 export type ProposalStateValue =
   (typeof ProposalState)[keyof typeof ProposalState];
-
-/**
- * Check if a proposal state indicates the proposal is still pending/voting
- * @param state - The proposal state number
- * @returns True if state is Pending or Active
- */
-export function isPendingOrActiveState(state: number): boolean {
-  return state === ProposalState.PENDING || state === ProposalState.ACTIVE;
-}
-
-/**
- * Check if a proposal state indicates failure (canceled, defeated, or expired)
- * @param state - The proposal state number
- * @returns True if state is Canceled, Defeated, or Expired
- */
-export function isFailedState(state: number): boolean {
-  return (
-    state === ProposalState.CANCELED ||
-    state === ProposalState.DEFEATED ||
-    state === ProposalState.EXPIRED
-  );
-}
-
-/**
- * Check if a proposal state indicates success (succeeded or beyond)
- * @param state - The proposal state number
- * @returns True if state is Succeeded, Queued, or Executed
- */
-export function isSuccessState(state: number): boolean {
-  return state >= ProposalState.SUCCEEDED && !isFailedState(state);
-}
 
 /**
  * Get configuration for a specific governor type
