@@ -124,8 +124,17 @@ export interface BundledCacheWatermark {
 /**
  * Get the L2 block watermark from bundled cache
  * This indicates the block up to which proposals are cached
+ * Returns null if bundled cache is disabled
  */
 export async function getBundledCacheWatermark(): Promise<BundledCacheWatermark | null> {
+  const skipBundledCache = getStoredValue<boolean>(
+    STORAGE_KEYS.SKIP_BUNDLED_CACHE,
+    false
+  );
+  if (skipBundledCache) {
+    return null;
+  }
+
   try {
     const cache = await loadBundledCache();
     const watermarks = cache["discovery:watermarks"] as {
@@ -212,6 +221,7 @@ function stageToState(
 /**
  * Extract full proposal data directly from bundled cache
  * Returns ParsedProposal objects without any RPC calls
+ * Respects the skipBundledCache setting
  */
 export async function extractProposalsFromBundledCache(): Promise<{
   proposals: ParsedProposal[];
@@ -219,6 +229,15 @@ export async function extractProposalsFromBundledCache(): Promise<{
 }> {
   const proposals: ParsedProposal[] = [];
   const activeProposalIds = new Set<string>();
+
+  const skipBundledCache = getStoredValue<boolean>(
+    STORAGE_KEYS.SKIP_BUNDLED_CACHE,
+    false
+  );
+  if (skipBundledCache) {
+    debug.cache("skipping bundled cache extraction (disabled via settings)");
+    return { proposals, activeProposalIds };
+  }
 
   try {
     const cache = await loadBundledCache();
