@@ -28,7 +28,7 @@ export const STORAGE_KEYS = {
   NERD_MODE: "tally-zero-nerd-mode",
   DEBUG_LOGGING: "tally-zero-debug-logging",
   CACHE_TTL: "tally-zero-cache-ttl",
-  SKIP_PRELOAD_CACHE: "tally-zero-skip-preload-cache",
+  SKIP_BUNDLED_CACHE: "tally-zero-skip-bundled-cache",
   SKIP_DELEGATE_CACHE: "tally-zero-skip-delegate-cache",
   DELEGATE_MIN_POWER: "tally-zero-delegate-min-power",
   TENDERLY_ORG: "tally-zero-tenderly-org",
@@ -44,7 +44,7 @@ export const DEFAULT_TENDERLY_ORG = "ORG";
 export const DEFAULT_TENDERLY_PROJECT = "PROJECT";
 
 /** Current cache schema version for migration detection */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 
 /** Default cache time-to-live in milliseconds */
 export const DEFAULT_CACHE_TTL_MS = MS_PER_HOUR;
@@ -70,3 +70,8 @@ export const CACHE_TTL_OPTIONS = [
   { label: "6 hours", value: 6 * SECONDS_PER_HOUR },
   { label: "24 hours", value: SECONDS_PER_DAY },
 ] as const;
+
+/** Bundled cache initialization settings */
+export const BUNDLED_CACHE_BATCH_SIZE = 50;
+export const BUNDLED_CACHE_MAX_RETRIES = 3;
+export const BUNDLED_CACHE_RETRY_DELAY_MS = 100;

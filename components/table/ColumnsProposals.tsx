@@ -30,13 +30,15 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       const id = row.getValue("id") as string;
 
       return id.length < 6 ? (
-        <span className="text-xs">{id}</span>
+        <span className="text-xs text-foreground/90 font-mono">{id}</span>
       ) : (
         <HoverCard>
-          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs">
+          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs text-foreground/90 font-mono">
             {`${id.substring(0, 5)}...${id.substring(id.length - 2)}`}
           </HoverCardTrigger>
-          <HoverCardContent className="w-full">{id}</HoverCardContent>
+          <HoverCardContent className="w-full font-mono text-xs">
+            {id}
+          </HoverCardContent>
         </HoverCard>
       );
     },

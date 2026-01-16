@@ -13,7 +13,11 @@ export const DescriptionCell = memo(function DescriptionCell({
 }) {
   const plainText = truncateText(stripMarkdownAndHtml(mdxContent));
 
-  return <span className="block truncate font-medium">{plainText}</span>;
+  return (
+    <span className="block truncate font-medium text-foreground">
+      {plainText}
+    </span>
+  );
 });
 
 /**
@@ -38,7 +42,7 @@ export function ClickableDescriptionCell({
   return (
     <button
       onClick={handleClick}
-      className="block w-full truncate font-medium text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+      className="block w-full truncate font-medium text-foreground text-left hover:text-primary hover:underline transition-colors cursor-pointer"
       title="Click to view full description"
     >
       {plainText}

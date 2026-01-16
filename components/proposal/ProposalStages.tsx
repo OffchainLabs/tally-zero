@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 
+import { isElectionProposal } from "@gzeoneth/gov-tracker";
+
 import { Button } from "@/components/ui/Button";
 import { isTreasuryGovernor } from "@/config/governors";
 import {
@@ -69,9 +71,25 @@ export default function ProposalStages({
   }, [stages]);
 
   const isDefeated = result?.currentState?.toLowerCase() === "defeated";
+  const isElection = result?.proposalType
+    ? isElectionProposal(result.proposalType)
+    : false;
 
   const relevantStageTypes = useMemo(() => {
+    // Election stage types to filter out for non-election proposals
+    const electionStageTypes: StageType[] = [
+      "CREATE_ELECTION",
+      "NOMINEE_ELECTION",
+      "NOMINEE_VETTING",
+      "MEMBER_ELECTION",
+    ];
+
     return allStageTypes.filter((meta) => {
+      // Filter out election stages for non-election proposals
+      if (!isElection && electionStageTypes.includes(meta.type)) {
+        return false;
+      }
+
       if (isDefeated) {
         const votingIdx = allStageTypes.findIndex(
           (s) => s.type === "VOTING_ACTIVE"
@@ -88,7 +106,7 @@ export default function ProposalStages({
       }
       return true;
     });
-  }, [allStageTypes, isDefeated, isTreasuryProposal]);
+  }, [allStageTypes, isDefeated, isTreasuryProposal, isElection]);
 
   const { estimatedTimes, votingTimeRange } = calculateEstimatedCompletionTimes(
     relevantStageTypes,

@@ -27,10 +27,6 @@ export default function Search() {
     STORAGE_KEYS.BLOCK_RANGE,
     DEFAULT_FORM_VALUES.blockRange
   );
-  const [storedSkipCache] = useLocalStorage<boolean>(
-    STORAGE_KEYS.SKIP_PRELOAD_CACHE,
-    false
-  );
 
   const { l1Rpc, l2Rpc, isHydrated: rpcSettingsHydrated } = useRpcSettings();
 
@@ -40,8 +36,6 @@ export default function Search() {
     DEFAULT_FORM_VALUES.daysToSearch;
   const rpcFromUrl = searchParams.get("rpc") || "";
   const customRpc = rpcFromUrl || l2Rpc;
-  const skipCacheFromUrl = searchParams.get("skipCache") === "true";
-  const skipCache = skipCacheFromUrl || storedSkipCache;
 
   const customRpcUrls = useMemo(
     () => ({
@@ -60,7 +54,6 @@ export default function Search() {
       enabled: autoStarted && rpcHealthy === true,
       customRpcUrl: customRpc || undefined,
       blockRange: storedBlockRange,
-      skipCache,
     });
 
   const progressMessage = useMemo(() => {

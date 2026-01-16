@@ -76,7 +76,7 @@ let cacheValidated = false;
  */
 export async function loadDelegateCache(): Promise<DelegateCache | null> {
   if (getSkipDelegateCacheSetting()) {
-    debug.delegates("skipping preload cache (setting enabled)");
+    debug.delegates("skipping delegate cache (setting enabled)");
     return null;
   }
 

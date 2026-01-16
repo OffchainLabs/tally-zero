@@ -25,9 +25,9 @@ interface AdvancedTabProps {
   setTtlInput: (value: number) => void;
   ttlCustomInput: string;
   setTtlCustomInput: (value: string) => void;
-  // Skip preload cache
-  skipPreloadCache: boolean;
-  setSkipPreloadCache: (value: boolean) => void;
+  // Skip bundled cache
+  skipBundledCache: boolean;
+  setSkipBundledCache: (value: boolean) => void;
   // Tenderly settings
   tenderlyOrgInput: string;
   setTenderlyOrgInput: (value: string) => void;
@@ -57,8 +57,8 @@ export function AdvancedTab({
   setTtlInput,
   ttlCustomInput,
   setTtlCustomInput,
-  skipPreloadCache,
-  setSkipPreloadCache,
+  skipBundledCache,
+  setSkipBundledCache,
   tenderlyOrgInput,
   setTenderlyOrgInput,
   tenderlyProjectInput,
@@ -122,12 +122,12 @@ export function AdvancedTab({
         </p>
       </div>
 
-      {/* Skip Preload Cache */}
+      {/* Skip Bundled Cache */}
       <SettingsToggle
-        label="Skip Preload Cache"
-        description="Bypass bundled proposal cache and fetch fresh data"
-        enabled={skipPreloadCache}
-        onToggle={() => setSkipPreloadCache(!skipPreloadCache)}
+        label="Skip Bundled Cache"
+        description="Bypass bundled stage checkpoints and discover fresh data via RPC"
+        enabled={skipBundledCache}
+        onToggle={() => setSkipBundledCache(!skipBundledCache)}
       />
 
       {/* Tenderly Configuration */}

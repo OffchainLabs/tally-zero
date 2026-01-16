@@ -82,12 +82,12 @@ describe("text-utils", () => {
       expect(truncateText(text, 5)).toBe("12345");
     });
 
-    it("uses default maxLength of 100", () => {
+    it("uses default maxLength of 150", () => {
       const shortText = "Short";
       expect(truncateText(shortText)).toBe("Short");
 
-      const longText = "a".repeat(150);
-      expect(truncateText(longText)).toBe("a".repeat(100) + "...");
+      const longText = "a".repeat(200);
+      expect(truncateText(longText)).toBe("a".repeat(150) + "...");
     });
 
     it("handles empty string", () => {

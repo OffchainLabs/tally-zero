@@ -13,10 +13,10 @@ export function stripMarkdownAndHtml(text: string): string {
 /**
  * Truncates text to a maximum length with ellipsis
  * @param text - The text to truncate
- * @param maxLength - Maximum length before truncation (default: 100)
+ * @param maxLength - Maximum length before truncation (default: 150)
  * @returns Original text or truncated text with "..." appended
  */
-export function truncateText(text: string, maxLength = 100): string {
+export function truncateText(text: string, maxLength = 150): string {
   return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
 }
 

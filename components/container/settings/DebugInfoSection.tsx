@@ -23,7 +23,6 @@ export function DebugInfoSection({ storedSettings }: DebugInfoSectionProps) {
     l1BlockRange,
     daysToSearch,
     cacheTtl,
-    skipPreloadCache,
     tenderlyOrg,
     tenderlyProject,
   } = storedSettings;
@@ -61,10 +60,6 @@ export function DebugInfoSection({ storedSettings }: DebugInfoSectionProps) {
           <span>
             {cacheTtl}s ({Math.floor(cacheTtl / 60)}m)
           </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Skip Preload:</span>
-          <span>{skipPreloadCache ? "Yes" : "No"}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Tenderly Org:</span>

@@ -68,9 +68,9 @@ describe("storage-keys config", () => {
       expect(STORAGE_KEYS.CACHE_TTL).toBe("tally-zero-cache-ttl");
     });
 
-    it("has SKIP_PRELOAD_CACHE key", () => {
-      expect(STORAGE_KEYS.SKIP_PRELOAD_CACHE).toBe(
-        "tally-zero-skip-preload-cache"
+    it("has SKIP_BUNDLED_CACHE key", () => {
+      expect(STORAGE_KEYS.SKIP_BUNDLED_CACHE).toBe(
+        "tally-zero-skip-bundled-cache"
       );
     });
 
