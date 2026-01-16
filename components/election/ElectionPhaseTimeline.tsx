@@ -5,7 +5,16 @@ import {
   type StageType,
   type TrackedStage,
 } from "@gzeoneth/gov-tracker";
-import { CheckCircle2, Circle, Clock, ExternalLink } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  Clock,
+  ExternalLink,
+  ListTree,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { useDeepLink } from "@/context/DeepLinkContext";
 
 import { PHASE_METADATA } from "@/config/security-council";
 import { cn } from "@/lib/utils";
@@ -22,7 +31,12 @@ const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
   NOMINEE_SELECTION: ["CREATE_ELECTION", "NOMINEE_ELECTION"],
   VETTING_PERIOD: ["NOMINEE_VETTING"],
   MEMBER_ELECTION: ["MEMBER_ELECTION"],
-  PENDING_EXECUTION: [],
+  PENDING_EXECUTION: [
+    "L2_TIMELOCK",
+    "L2_TO_L1_MESSAGE",
+    "L1_TIMELOCK",
+    "RETRYABLE_EXECUTED",
+  ],
   COMPLETED: [],
 };
 
@@ -58,12 +72,21 @@ function getPhaseIndex(phase: ElectionPhase): number {
   return TIMELINE_PHASES.indexOf(phase);
 }
 
+function getL2TimelockTxHash(stages?: TrackedStage[]): string | null {
+  if (!stages) return null;
+  const l2TimelockStage = stages.find((s) => s.type === "L2_TIMELOCK");
+  if (!l2TimelockStage?.transactions?.length) return null;
+  return l2TimelockStage.transactions[0].hash;
+}
+
 export function ElectionPhaseTimeline({
   currentPhase,
   stages,
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
+  const { openTimelock } = useDeepLink();
   const currentIndex = getPhaseIndex(currentPhase);
+  const timelockTxHash = getL2TimelockTxHash(stages);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -119,9 +142,22 @@ export function ElectionPhaseTimeline({
       </div>
 
       {currentPhase === "COMPLETED" && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-green-500">
-          <CheckCircle2 className="h-5 w-5" />
-          <span className="font-medium">Election Completed</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-green-500">
+            <CheckCircle2 className="h-5 w-5" />
+            <span className="font-medium">Election Completed</span>
+          </div>
+          {timelockTxHash && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => openTimelock(timelockTxHash)}
+            >
+              <ListTree className="h-4 w-4 mr-2" />
+              View Execution Details
+            </Button>
+          )}
         </div>
       )}
 
