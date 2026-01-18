@@ -10,7 +10,6 @@ import {
   getNomineeElectionDetails,
   serializeMemberDetails,
   serializeNomineeDetails,
-  trackElectionProposal,
   type ElectionProposalStatus,
   type ElectionStatus,
   type ChunkingConfig as GovTrackerChunkingConfig,
@@ -277,15 +276,11 @@ export function useElectionStatus({
       setIsLoading(true);
 
       try {
-        const { l2Provider, l1Provider } = await getTracker();
+        const { tracker } = await getTracker();
 
         debug.app("On-demand tracking election %d", indexToTrack);
 
-        const result = await trackElectionProposal(
-          indexToTrack,
-          l2Provider,
-          l1Provider
-        );
+        const result = await tracker.trackElection(indexToTrack);
 
         // Verify this is still the selected index (avoid stale updates)
         if (selectedIndexRef.current !== indexToTrack) {
@@ -297,17 +292,6 @@ export function useElectionStatus({
         }
 
         if (result) {
-          const nominee = await getNomineeElectionDetails(
-            indexToTrack,
-            l2Provider
-          );
-          const member =
-            result.phase === "MEMBER_ELECTION" ||
-            result.phase === "PENDING_EXECUTION" ||
-            result.phase === "COMPLETED"
-              ? await getMemberElectionDetails(indexToTrack, l2Provider)
-              : null;
-
           setAllElections((prev) => {
             // Check if already added (race condition guard)
             if (prev.some((e) => e.electionIndex === indexToTrack)) {
@@ -318,24 +302,27 @@ export function useElectionStatus({
             return updated;
           });
 
-          if (nominee) {
+          // Load details from checkpoint (gov-tracker caches them for COMPLETED elections)
+          const checkpoint = await tracker.getElectionCheckpoint(indexToTrack);
+          if (checkpoint?.nomineeDetails) {
             setNomineeDetailsMap((prev) => ({
               ...prev,
-              [indexToTrack]: serializeNomineeDetails(nominee),
+              [indexToTrack]: checkpoint.nomineeDetails,
             }));
           }
-
-          if (member) {
+          if (checkpoint?.memberDetails) {
             setMemberDetailsMap((prev) => ({
               ...prev,
-              [indexToTrack]: serializeMemberDetails(member),
+              [indexToTrack]: checkpoint.memberDetails,
             }));
           }
 
           debug.app(
-            "Successfully tracked election %d: %s",
+            "Successfully tracked election %d: %s (details cached: nominee=%s, member=%s)",
             indexToTrack,
-            result.phase
+            result.phase,
+            !!checkpoint?.nomineeDetails,
+            !!checkpoint?.memberDetails
           );
         }
       } catch (err) {
@@ -357,6 +344,7 @@ export function useElectionStatus({
   }, [enabled, selectedIndex, allElections, getTracker]);
 
   // Fetch details only for the selected election (lazy loading)
+  // First checks checkpoint cache, then falls back to RPC if needed
   useEffect(() => {
     if (!selectedElection || !enabled) return;
 
@@ -368,10 +356,31 @@ export function useElectionStatus({
 
     const fetchDetails = async () => {
       try {
-        const { l2Provider } = await getTracker();
+        const { tracker, l2Provider } = await getTracker();
 
         debug.app("Fetching details for election %d", electionIndex);
 
+        // Check checkpoint first (gov-tracker caches details for COMPLETED elections)
+        const checkpoint = await tracker.getElectionCheckpoint(electionIndex);
+        if (checkpoint?.nomineeDetails) {
+          debug.app(
+            "Election %d nominee details loaded from cache",
+            electionIndex
+          );
+          setNomineeDetailsMap((prev) => ({
+            ...prev,
+            [electionIndex]: checkpoint.nomineeDetails,
+          }));
+          if (checkpoint.memberDetails) {
+            setMemberDetailsMap((prev) => ({
+              ...prev,
+              [electionIndex]: checkpoint.memberDetails,
+            }));
+          }
+          return;
+        }
+
+        // Fall back to RPC for non-cached details
         const nominee = await getNomineeElectionDetails(
           electionIndex,
           l2Provider
