@@ -4,6 +4,7 @@ import {
   BUNDLED_CACHE_BATCH_SIZE,
   BUNDLED_CACHE_MAX_RETRIES,
   BUNDLED_CACHE_RETRY_DELAY_MS,
+  CACHE_VERSION,
   STORAGE_KEYS,
 } from "@/config/storage-keys";
 import { findByAddress } from "@/lib/address-utils";
@@ -14,7 +15,7 @@ import {
 } from "@config/arbitrum-governance";
 
 import { debug } from "./debug";
-import { getStoredValue } from "./storage-utils";
+import { getStoredValue, setStoredValue } from "./storage-utils";
 
 let bundledCacheInitialized = false;
 let bundledCacheData: Record<string, unknown> | null = null;
@@ -63,11 +64,25 @@ export async function initializeBundledCache(
 
   try {
     const bundledCache = await loadBundledCache();
-
     const entries = Object.entries(bundledCache);
-    const existingKeys = new Set(await cache.keys());
 
-    // Filter to only entries that don't already exist in cache
+    // Check cache version for mass invalidation
+    const storedVersion = getStoredValue<number>(
+      STORAGE_KEYS.LAST_CACHE_VERSION,
+      0
+    );
+    const versionMismatch = storedVersion !== CACHE_VERSION;
+
+    if (versionMismatch) {
+      debug.cache(
+        "cache version mismatch (stored: %d, current: %d), clearing stale data",
+        storedVersion,
+        CACHE_VERSION
+      );
+      await cache.clear();
+    }
+
+    const existingKeys = new Set(await cache.keys());
     const newEntries = entries.filter(([key]) => !existingKeys.has(key));
 
     if (newEntries.length === 0) {
@@ -75,12 +90,15 @@ export async function initializeBundledCache(
         "cache already has all %d bundled checkpoints",
         entries.length
       );
+      if (versionMismatch) {
+        setStoredValue(STORAGE_KEYS.LAST_CACHE_VERSION, CACHE_VERSION);
+      }
       bundledCacheInitialized = true;
       return;
     }
 
     debug.cache(
-      "merging %d new bundled checkpoints (existing: %d)",
+      "loading %d bundled checkpoints (existing: %d)",
       newEntries.length,
       existingKeys.size
     );
@@ -94,8 +112,9 @@ export async function initializeBundledCache(
       );
     }
 
+    setStoredValue(STORAGE_KEYS.LAST_CACHE_VERSION, CACHE_VERSION);
     debug.cache(
-      "merged %d bundled checkpoints (total: %d)",
+      "loaded %d bundled checkpoints (total: %d)",
       newEntries.length,
       existingKeys.size + newEntries.length
     );
