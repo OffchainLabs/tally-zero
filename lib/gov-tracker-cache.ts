@@ -5,14 +5,14 @@
  * for caching TrackingCheckpoints in localStorage.
  */
 
-import { getFinalStageForGovernor } from "@/config/governors";
 import { DEFAULT_CACHE_TTL_MS, STORAGE_KEYS } from "@/config/storage-keys";
 import type { ProposalTrackingResult } from "@/types/proposal-stage";
 import {
-  extractTimelockLink,
-  getStageData,
+  extractTimelockLinkFromStages,
+  getVotingDataFromStages,
   isCheckpointComplete,
   LocalStorageCache,
+  trimFromStage,
   txHashCacheKey,
   type CacheAdapter,
   type GovernorTrackingInput,
@@ -135,12 +135,12 @@ export interface CachedProposalResult {
  * the checkpoint to a ProposalTrackingResult for UI display.
  *
  * @param creationTxHash - The creation transaction hash
- * @param governorAddress - The governor address (for completion check)
+ * @param governorAddress - The governor address (unused, kept for API compatibility)
  * @param ttlMs - Cache TTL in milliseconds
  */
 export async function loadCachedProposal(
   creationTxHash: string,
-  governorAddress: string,
+  _governorAddress: string,
   ttlMs: number = DEFAULT_CACHE_TTL_MS
 ): Promise<CachedProposalResult> {
   const cache = getCacheAdapter();
@@ -172,26 +172,16 @@ export async function loadCachedProposal(
     };
   }
 
-  // Check completion - use gov-tracker's helper and verify final stage
-  const finalStage = getFinalStageForGovernor(governorAddress);
-  const lastStage = stages[stages.length - 1];
-  const isComplete =
-    isCheckpointComplete(checkpoint) ||
-    (lastStage?.type === finalStage &&
-      (lastStage.status === "COMPLETED" || lastStage.status === "FAILED"));
+  // Use gov-tracker's isCheckpointComplete - it handles all terminal states
+  const isComplete = isCheckpointComplete(checkpoint);
 
   // Check TTL expiration
   const cachedAt = checkpoint.metadata?.lastTrackedAt ?? checkpoint.createdAt;
   const isExpired = !isComplete && Date.now() - cachedAt > ttlMs;
 
-  // Derive timelockLink from stages (same as gov-tracker does)
-  const timelockLink = extractTimelockLink(stages);
-
-  // Extract currentState from VOTING_ACTIVE stage data using type guard
-  const votingStage = stages.find((s) => s.type === "VOTING_ACTIVE");
-  const votingData = votingStage
-    ? getStageData(votingStage, "VOTING_ACTIVE")
-    : null;
+  // Use gov-tracker utilities for extracting data
+  const timelockLink = extractTimelockLinkFromStages(stages);
+  const votingData = getVotingDataFromStages(stages);
   const currentState = votingData?.proposalState;
 
   // Convert checkpoint to ProposalTrackingResult
@@ -224,7 +214,7 @@ export async function loadCachedProposal(
 /**
  * Trim cached stages from a specific index
  *
- * Removes stages at and after the specified index to allow re-tracking.
+ * Uses gov-tracker's trimFromStage utility for safe checkpoint manipulation.
  *
  * @param creationTxHash - The creation transaction hash
  * @param stageIndex - Index to trim from (inclusive)
@@ -246,30 +236,16 @@ export async function trimCachedStages(
     return false;
   }
 
-  // Trim stages
-  const trimmedStages = stages.slice(0, stageIndex);
-  const lastStage = trimmedStages[trimmedStages.length - 1];
+  // Use gov-tracker's trimFromStage utility
+  const trimmedCheckpoint = trimFromStage(checkpoint, stageIndex);
 
-  const updatedCheckpoint: TrackingCheckpoint = {
-    ...checkpoint,
-    lastProcessedStage: lastStage?.type ?? "PROPOSAL_CREATED",
-    cachedData: {
-      ...checkpoint.cachedData,
-      completedStages: trimmedStages,
-    },
-    metadata: {
-      errorCount: checkpoint.metadata?.errorCount ?? 0,
-      lastTrackedAt: Date.now(),
-    },
-  };
-
-  await cache.set(key, updatedCheckpoint);
+  await cache.set(key, trimmedCheckpoint);
   debug.cache(
     "trimmed checkpoint for %s from index %d (%d → %d stages)",
     creationTxHash.slice(0, 10),
     stageIndex,
     stages.length,
-    trimmedStages.length
+    trimmedCheckpoint.cachedData?.completedStages?.length ?? 0
   );
 
   return true;

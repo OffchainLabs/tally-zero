@@ -19,6 +19,7 @@ import type {
   ProposalTrackingResult,
 } from "@/types/proposal-stage";
 import {
+  getVotingDataFromStages,
   type StageType,
   type TrackedStage,
   type TrackingProgress,
@@ -126,7 +127,7 @@ export function useProposalStages({
         const onProgress = (
           stage: TrackedStage,
           index: number,
-          isComplete: boolean
+          _isComplete: boolean
         ) => {
           if (abortController.signal.aborted) return;
 
@@ -211,20 +212,15 @@ export function useProposalStages({
 
         // Gov-tracker automatically saves checkpoint to cache, no manual save needed
 
-        // Emit vote update using raw values from gov-tracker
-        const votingStage = proposalResult.stages.find(
-          (s) => s.type === "VOTING_ACTIVE"
-        );
-        const forVotesRaw = votingStage?.data?.forVotesRaw as
-          | string
-          | undefined;
-        if (forVotesRaw) {
+        // Emit vote update using gov-tracker's utility
+        const voteData = getVotingDataFromStages(proposalResult.stages);
+        if (voteData?.forVotesRaw) {
           emitVoteUpdate({
             proposalId,
             governorAddress,
-            forVotes: forVotesRaw,
-            againstVotes: (votingStage?.data?.againstVotesRaw as string) || "0",
-            abstainVotes: (votingStage?.data?.abstainVotesRaw as string) || "0",
+            forVotes: voteData.forVotesRaw,
+            againstVotes: voteData.againstVotesRaw ?? "0",
+            abstainVotes: voteData.abstainVotesRaw ?? "0",
           });
         }
       } catch (err) {

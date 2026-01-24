@@ -54,16 +54,13 @@ export interface TimelockOpWithStatus extends DiscoveredTimelockOp {
 }
 
 const PHASE_TO_STATUS: Record<LifecyclePhase, LifecycleStatus> = {
-  proposal_created: "Created",
   voting: "Voting",
   queued: "Queued",
-  l2_timelock_pending: "L2 Pending",
-  l2_timelock_executed: "L2 Executed",
-  l2_to_l1_pending: "L2→L1",
-  l1_timelock_pending: "L1 Pending",
-  l1_timelock_executed: "L1 Executed",
-  retryables_pending: "Finalizing",
-  completed: "Completed",
+  l2_delay: "L2 Pending",
+  bridging: "L2→L1",
+  l1_delay: "L1 Pending",
+  finalizing: "Finalizing",
+  executed: "Completed",
   failed: "Failed",
   unknown: "Unknown",
 };

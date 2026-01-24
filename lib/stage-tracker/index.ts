@@ -2,16 +2,14 @@
  * Stage tracker utilities for TallyZero
  *
  * Thin convenience layer over @gzeoneth/gov-tracker for creating trackers
- * with RPC URLs and adding UI-specific metadata to tracking results.
+ * with default config and adding UI-specific metadata to tracking results.
  */
 
 import {
   createTracker as createGovTracker,
-  getStageMetadata,
+  getAllStageMetadata as govGetAllStageMetadata,
   type CacheAdapter,
   type ChunkingConfig,
-  type StageMetadata,
-  type StageType,
   type TrackerOptions,
   type TrackingResult,
 } from "@gzeoneth/gov-tracker";
@@ -21,14 +19,16 @@ import {
   DEFAULT_CHUNKING_CONFIG,
   ETHEREUM_RPC_URL,
 } from "@/config/arbitrum-governance";
-import { getOrCreateProvider } from "@/lib/rpc-utils";
 import type { ProposalTrackingResult } from "@/types/proposal-stage";
+
+// Re-export getAllStageMetadata from gov-tracker
+export const getAllStageMetadata = govGetAllStageMetadata;
 
 /**
  * Create a proposal stage tracker with RPC URLs
  *
- * Helper that creates ethers providers from RPC URLs and configures gov-tracker.
- * Use this when you have RPC URLs and need to create a tracker.
+ * Helper that configures gov-tracker with default chunking config.
+ * Gov-tracker now accepts RPC URLs directly.
  *
  * @param l2RpcUrl - Arbitrum One RPC URL (defaults to ARBITRUM_RPC_URL)
  * @param l1RpcUrl - Ethereum mainnet RPC URL (defaults to ETHEREUM_RPC_URL)
@@ -43,9 +43,6 @@ export function createProposalTracker(
     cache?: CacheAdapter;
   }
 ) {
-  const l2Provider = getOrCreateProvider(l2RpcUrl);
-  const l1Provider = getOrCreateProvider(l1RpcUrl);
-
   const {
     chunkingConfig: userChunkingConfig,
     cache,
@@ -58,8 +55,8 @@ export function createProposalTracker(
   };
 
   return createGovTracker({
-    l2Provider,
-    l1Provider,
+    l2Provider: l2RpcUrl,
+    l1Provider: l1RpcUrl,
     chunkingConfig,
     cache,
     ...restOptions,
@@ -94,40 +91,4 @@ export function toProposalTrackingResult(
     isComplete: result.isComplete,
     proposalType: result.proposalType,
   };
-}
-
-const ALL_STAGE_TYPES: StageType[] = [
-  "PROPOSAL_CREATED",
-  "VOTING_ACTIVE",
-  "PROPOSAL_QUEUED",
-  "L2_TIMELOCK",
-  "L2_TO_L1_MESSAGE",
-  "L1_TIMELOCK",
-  "RETRYABLE_EXECUTED",
-  "CREATE_ELECTION",
-  "NOMINEE_ELECTION",
-  "NOMINEE_VETTING",
-  "MEMBER_ELECTION",
-];
-
-let cachedStageMetadata: Record<StageType, StageMetadata> | null = null;
-
-/**
- * Get metadata for all stage types (memoized)
- *
- * Builds a record mapping each StageType to its StageMetadata
- * by calling gov-tracker's getStageMetadata for each type.
- * Result is cached after first call.
- *
- * @returns Record of StageType to StageMetadata
- */
-export function getAllStageMetadata(): Record<StageType, StageMetadata> {
-  if (cachedStageMetadata) return cachedStageMetadata;
-
-  const result: Partial<Record<StageType, StageMetadata>> = {};
-  for (const type of ALL_STAGE_TYPES) {
-    result[type] = getStageMetadata(type);
-  }
-  cachedStageMetadata = result as Record<StageType, StageMetadata>;
-  return cachedStageMetadata;
 }

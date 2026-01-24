@@ -1,10 +1,16 @@
 import {
-  extractOperationId,
-  extractTimelockLink,
+  getStageData,
+  getVotingDataFromStages,
+  extractOperationIds as govExtractOperationIds,
+  extractProposals as govExtractProposals,
+  extractTimelockOps as govExtractTimelockOps,
+  getWatermarksFromCache as govGetWatermarksFromCache,
+  type BundledCache,
   type CacheAdapter,
   type DiscoveryWatermarks,
   type LoadedWatermarks,
   type TrackedStage,
+  type TrackingCheckpoint,
 } from "@gzeoneth/gov-tracker";
 
 import {
@@ -15,7 +21,6 @@ import {
   STORAGE_KEYS,
 } from "@/config/storage-keys";
 import { findByAddress } from "@/lib/address-utils";
-import { buildLookupMap } from "@/lib/collection-utils";
 import type { ParsedProposal, ProposalStateName } from "@/types/proposal";
 import {
   ARBITRUM_CHAIN_ID,
@@ -27,7 +32,7 @@ import { getStoredValue, setStoredValue } from "./storage-utils";
 
 let bundledCacheInitialized = false;
 let bundledCacheInitPromise: Promise<void> | null = null;
-let bundledCacheData: Record<string, unknown> | null = null;
+let bundledCacheData: BundledCache | null = null;
 
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -46,11 +51,11 @@ async function withRetry<T>(
   throw new Error("Unreachable");
 }
 
-async function loadBundledCache(): Promise<Record<string, unknown>> {
+async function loadBundledCache(): Promise<BundledCache> {
   if (bundledCacheData) return bundledCacheData;
 
   const imported = await import("@gzeoneth/gov-tracker/bundled-cache.json");
-  bundledCacheData = imported.default as Record<string, unknown>;
+  bundledCacheData = imported.default as BundledCache;
   return bundledCacheData;
 }
 
@@ -61,12 +66,10 @@ export async function initializeBundledCache(
     return;
   }
 
-  // Return existing promise to prevent concurrent initialization
   if (bundledCacheInitPromise) {
     return bundledCacheInitPromise;
   }
 
-  // Reset promise on rejection to allow retry on next call
   bundledCacheInitPromise = doInitializeBundledCache(cache).catch((err) => {
     bundledCacheInitPromise = null;
     throw err;
@@ -89,7 +92,6 @@ async function doInitializeBundledCache(cache: CacheAdapter): Promise<void> {
     const bundledCache = await loadBundledCache();
     const entries = Object.entries(bundledCache);
 
-    // Check cache version for mass invalidation
     const storedVersion = getStoredValue<number>(
       STORAGE_KEYS.LAST_CACHE_VERSION,
       0
@@ -159,7 +161,7 @@ export function resetBundledCacheFlag(): void {
 
 /**
  * Get discovery watermarks from bundled cache
- * Returns null if bundled cache is disabled or watermarks unavailable
+ * Uses gov-tracker's getWatermarksFromCache utility and wraps for compatibility
  */
 export async function getBundledCacheWatermarks(): Promise<LoadedWatermarks | null> {
   const skipBundledCache = getStoredValue<boolean>(
@@ -172,115 +174,69 @@ export async function getBundledCacheWatermarks(): Promise<LoadedWatermarks | nu
 
   try {
     const cache = await loadBundledCache();
-    const checkpoint = cache["discovery:watermarks"] as {
-      cachedData?: {
-        discoveryWatermarks?: DiscoveryWatermarks;
-        watermarkHashes?: Record<string, string>;
-      };
-    };
+    const watermarks: DiscoveryWatermarks | null =
+      govGetWatermarksFromCache(cache);
 
-    if (!checkpoint?.cachedData?.discoveryWatermarks) {
+    if (!watermarks) {
       return null;
     }
 
+    // Wrap raw watermarks in LoadedWatermarks format for compatibility
+    // gov-tracker's getWatermarksFromCache returns DiscoveryWatermarks directly,
+    // but TallyZero expects LoadedWatermarks { watermarks, hashes }
+    const checkpoint = cache["discovery:watermarks"] as
+      | TrackingCheckpoint
+      | undefined;
     return {
-      watermarks: checkpoint.cachedData.discoveryWatermarks,
-      hashes: checkpoint.cachedData.watermarkHashes ?? {},
+      watermarks,
+      hashes: checkpoint?.cachedData?.watermarkHashes ?? {},
     };
   } catch {
     return null;
   }
 }
 
-/** Stage data from bundled cache checkpoint */
-interface BundledStageData {
-  type: string;
-  status: string;
-  transactions?: Array<{ hash: string; blockNumber: number }>;
-  data?: Record<string, unknown> & {
-    proposalState?: string;
-  };
-}
-
-/** Checkpoint structure from bundled cache */
-interface BundledCheckpoint {
-  input?: {
-    type?: string;
-    proposalId?: string;
-    governorAddress?: string;
-    creationTxHash?: string;
-  };
-  lastProcessedStage?: string;
-  cachedData?: {
-    completedStages?: BundledStageData[];
-  };
-}
-
-/** Valid proposal state names (lowercase) */
-const VALID_STATES = new Set([
-  "pending",
-  "active",
-  "canceled",
-  "defeated",
-  "succeeded",
-  "queued",
-  "expired",
-  "executed",
-]);
-
 /**
- * Extract proposal state from gov-tracker stage data.
- * Gov-tracker 0.3.0+ provides proposalState directly in stage data.
+ * Map proposal state from gov-tracker format to TallyZero format
  */
-function extractProposalState(
-  stages: BundledStageData[],
-  lastStage: string | undefined
+function mapProposalState(
+  state: string | number | undefined
 ): ProposalStateName {
-  if (!lastStage) return "Pending";
+  if (state === undefined || state === null) return "Pending";
 
-  // Find the stage that should have proposalState
-  // For PROPOSAL_QUEUED, check the queued stage; for VOTING_ACTIVE, check voting stage
-  const relevantStage = stages.find((s) => s.type === lastStage);
-  const proposalState = relevantStage?.data?.proposalState;
-
-  if (proposalState) {
-    const normalized = proposalState.toLowerCase() as ProposalStateName;
-    if (VALID_STATES.has(normalized)) {
-      return normalized;
-    }
+  // Handle numeric state values (OpenZeppelin Governor state enum)
+  if (typeof state === "number") {
+    const stateMap: Record<number, ProposalStateName> = {
+      0: "Pending",
+      1: "Active",
+      2: "Canceled",
+      3: "Defeated",
+      4: "Succeeded",
+      5: "Queued",
+      6: "Expired",
+      7: "Executed",
+    };
+    return stateMap[state] ?? "Pending";
   }
 
-  // Fallback: infer state from stage type and status
-  if (lastStage === "VOTING_ACTIVE") {
-    const votingStatus = relevantStage?.status;
-    if (votingStatus === "FAILED") return "Defeated";
-    if (votingStatus === "COMPLETED") return "Succeeded";
-    return "Active";
-  }
-
-  if (lastStage === "PROPOSAL_CREATED") return "Pending";
-
-  // Post-voting stages indicate queued or executed
-  const postVotingStages = [
-    "PROPOSAL_QUEUED",
-    "L2_TIMELOCK_QUEUED",
-    "L2_TIMELOCK_EXECUTED",
-    "L2_TO_L1_MESSAGE",
-    "L1_TIMELOCK_QUEUED",
-    "L1_TIMELOCK_EXECUTED",
-    "RETRYABLE_CREATED",
+  const normalized = state.toLowerCase();
+  const validStates: ProposalStateName[] = [
+    "Pending",
+    "Active",
+    "Canceled",
+    "Defeated",
+    "Succeeded",
+    "Queued",
+    "Expired",
+    "Executed",
   ];
-  if (postVotingStages.includes(lastStage)) return "Queued";
-
-  if (lastStage === "RETRYABLE_EXECUTED") return "Executed";
-
-  return "Pending";
+  const match = validStates.find((s) => s.toLowerCase() === normalized);
+  return match ?? "Pending";
 }
 
 /**
- * Extract full proposal data directly from bundled cache
- * Returns ParsedProposal objects without any RPC calls
- * Respects the skipBundledCache setting
+ * Extract full proposal data from bundled cache
+ * Uses gov-tracker's extractProposals utility and maps to TallyZero's ParsedProposal format
  */
 export async function extractProposalsFromBundledCache(): Promise<{
   proposals: ParsedProposal[];
@@ -300,57 +256,53 @@ export async function extractProposalsFromBundledCache(): Promise<{
 
   try {
     const cache = await loadBundledCache();
+    const extracted = govExtractProposals(cache);
 
-    for (const [key, value] of Object.entries(cache)) {
-      if (!key.startsWith("tx:")) continue;
+    for (const proposal of extracted) {
+      const governor = findByAddress(
+        ARBITRUM_GOVERNORS,
+        proposal.governorAddress
+      );
 
-      const checkpoint = value as BundledCheckpoint;
-      if (checkpoint.input?.type !== "governor") continue;
+      // Extract state from currentState field or infer from stages
+      const state = mapProposalState(proposal.currentState);
 
-      const { proposalId, governorAddress, creationTxHash } = checkpoint.input;
-      if (!proposalId || !governorAddress) continue;
-
-      const stages = checkpoint.cachedData?.completedStages ?? [];
-      // Build a Map for O(1) lookups instead of repeated O(n) find() calls
-      const stageMap = buildLookupMap(stages, (s) => s.type);
-      const createdStage = stageMap.get("PROPOSAL_CREATED");
-      const votingStage = stageMap.get("VOTING_ACTIVE");
-
-      if (!createdStage?.data) continue;
-
-      const data = createdStage.data;
-      const voteData = votingStage?.data;
-
-      const state = extractProposalState(stages, checkpoint.lastProcessedStage);
-
-      // Track active proposals that need refresh
       if (state === "Pending" || state === "Active") {
-        activeProposalIds.add(proposalId);
+        activeProposalIds.add(proposal.proposalId);
       }
 
-      const governor = findByAddress(ARBITRUM_GOVERNORS, governorAddress);
+      // Get proposal creation data from PROPOSAL_CREATED stage
+      const createdStage = proposal.stages.find(
+        (s) => s.type === "PROPOSAL_CREATED"
+      );
+      const createdData = createdStage
+        ? getStageData(createdStage, "PROPOSAL_CREATED")
+        : null;
+
+      // Get vote data from VOTING_ACTIVE stage
+      const voteData = getVotingDataFromStages(proposal.stages);
 
       proposals.push({
-        id: proposalId,
-        contractAddress: governorAddress as `0x${string}`,
-        proposer: (data.proposer as string) ?? "",
-        targets: (data.targets as string[]) ?? [],
-        values: (data.values as string[]) ?? [],
-        signatures: (data.signatures as string[]) ?? [],
-        calldatas: (data.calldatas as string[]) ?? [],
-        startBlock: String(data.startBlock ?? "0"),
-        endBlock: String(data.endBlock ?? "0"),
-        description: (data.description as string) ?? "",
+        id: proposal.proposalId,
+        contractAddress: proposal.governorAddress as `0x${string}`,
+        proposer: createdData?.proposer ?? "",
+        targets: createdData?.targets ?? [],
+        values: createdData?.values ?? [],
+        signatures: createdData?.signatures ?? [],
+        calldatas: createdData?.calldatas ?? [],
+        startBlock: createdData?.startBlock ?? "0",
+        endBlock: createdData?.endBlock ?? "0",
+        description: createdData?.description ?? "",
         networkId: String(ARBITRUM_CHAIN_ID),
         state,
         governorName: governor?.name ?? "Unknown",
-        creationTxHash: creationTxHash ?? key.slice(3),
+        creationTxHash: proposal.creationTxHash ?? "",
         votes: voteData
           ? {
-              forVotes: (voteData.forVotesRaw as string) ?? "0",
-              againstVotes: (voteData.againstVotesRaw as string) ?? "0",
-              abstainVotes: (voteData.abstainVotesRaw as string) ?? "0",
-              quorum: (voteData.quorumRaw as string) ?? undefined,
+              forVotes: voteData.forVotesRaw ?? "0",
+              againstVotes: voteData.againstVotesRaw ?? "0",
+              abstainVotes: voteData.abstainVotesRaw ?? "0",
+              quorum: voteData.quorumRaw ?? undefined,
             }
           : undefined,
       });
@@ -369,35 +321,27 @@ export async function extractProposalsFromBundledCache(): Promise<{
 
 /**
  * Extract operation IDs from governor proposals in bundled cache
- * Returns a Set of operation IDs (lowercase) that are linked to governor proposals
+ * Uses gov-tracker's extractOperationIds and converts Map to Set
  */
 export async function extractOperationIdsFromBundledCache(): Promise<
   Set<string>
 > {
-  const operationIds = new Set<string>();
-
   const skipBundledCache = getStoredValue<boolean>(
     STORAGE_KEYS.SKIP_BUNDLED_CACHE,
     false
   );
   if (skipBundledCache) {
-    return operationIds;
+    return new Set();
   }
 
   try {
     const cache = await loadBundledCache();
+    const opIdMap = govExtractOperationIds(cache);
 
-    for (const [key, value] of Object.entries(cache)) {
-      if (!key.startsWith("tx:")) continue;
-
-      const checkpoint = value as BundledCheckpoint;
-      if (checkpoint.input?.type !== "governor") continue;
-
-      const stages = checkpoint.cachedData?.completedStages ?? [];
-      const opId = extractOperationId(stages as unknown as TrackedStage[]);
-      if (opId) {
-        operationIds.add(opId.toLowerCase());
-      }
+    // Convert Map<proposalId, operationId> to Set<operationId>
+    const operationIds = new Set<string>();
+    for (const opId of opIdMap.values()) {
+      operationIds.add(opId.toLowerCase());
     }
 
     debug.cache(
@@ -421,44 +365,37 @@ export interface BundledTimelockOp {
 
 /**
  * Extract timelock operations from bundled cache
- * Returns timelock operations that were tracked as part of governor proposals
+ * Uses gov-tracker's extractTimelockOps utility
  */
 export async function extractTimelockOpsFromBundledCache(): Promise<
   BundledTimelockOp[]
 > {
-  const ops: BundledTimelockOp[] = [];
-
   const skipBundledCache = getStoredValue<boolean>(
     STORAGE_KEYS.SKIP_BUNDLED_CACHE,
     false
   );
   if (skipBundledCache) {
-    return ops;
+    return [];
   }
 
   try {
     const cache = await loadBundledCache();
+    const extracted = govExtractTimelockOps(cache);
 
-    for (const [key, value] of Object.entries(cache)) {
-      if (!key.startsWith("tx:")) continue;
+    const ops: BundledTimelockOp[] = extracted.map((op) => {
+      // Get queue block from the first transaction in the first stage
+      const firstStage = op.stages[0];
+      const firstTx = firstStage?.transactions?.[0];
+      const queueBlock = firstTx?.blockNumber ?? 0;
 
-      const checkpoint = value as BundledCheckpoint;
-      if (checkpoint.input?.type !== "governor") continue;
-
-      const stages = (checkpoint.cachedData?.completedStages ??
-        []) as unknown as TrackedStage[];
-      const link = extractTimelockLink(stages);
-
-      if (link) {
-        ops.push({
-          operationId: link.operationId.toLowerCase(),
-          timelockAddress: link.timelockAddress,
-          scheduledTxHash: link.txHash,
-          queueBlock: link.queueBlockNumber,
-          stages,
-        });
-      }
-    }
+      return {
+        operationId: op.operationId.toLowerCase(),
+        timelockAddress: op.timelockAddress,
+        scheduledTxHash: op.scheduledTxHash,
+        queueBlock,
+        stages: op.stages,
+      };
+    });
 
     debug.cache(
       "extracted %d timelock operations from bundled cache",
