@@ -26,37 +26,6 @@ export function getStageTxExplorerUrl(
   return getTxExplorerUrl(hash, effectiveChain as ChainId);
 }
 
-/**
- * Parse estimated duration string to min/max days
- */
-export function parseEstimatedDurationRange(duration?: string): {
-  min: number;
-  max: number;
-} {
-  if (!duration) return { min: 0, max: 0 };
-
-  // Remove ~ prefix if present
-  const cleaned = duration.replace(/^~/, "").trim();
-
-  // Check for range (e.g., "14-16 days")
-  const rangeMatch = cleaned.match(/(\d+)-(\d+)\s*days?/i);
-  if (rangeMatch) {
-    return {
-      min: parseInt(rangeMatch[1], 10),
-      max: parseInt(rangeMatch[2], 10),
-    };
-  }
-
-  // Check for single value (e.g., "3 days")
-  const singleMatch = cleaned.match(/(\d+)\s*days?/i);
-  if (singleMatch) {
-    const days = parseInt(singleMatch[1], 10);
-    return { min: days, max: days };
-  }
-
-  return { min: 0, max: 0 };
-}
-
 export const VOTING_EXTENSION_DAYS = 2;
 
 export interface BlockBasedTiming {
@@ -78,7 +47,7 @@ export interface EstimatedTimesResult {
 
 interface StageMetaWithDuration {
   type: StageType;
-  estimatedDuration?: string;
+  estimatedDays?: number;
 }
 
 interface ReferencePoint {
@@ -221,9 +190,9 @@ export function calculateEstimatedCompletionTimes(
         maxDate: votingResult.range.votingEndMaxDate,
       });
     } else {
-      const durationRange = parseEstimatedDurationRange(meta.estimatedDuration);
-      cumulativeMinMs += durationRange.min * MS_PER_DAY;
-      cumulativeMaxMs += durationRange.max * MS_PER_DAY;
+      const durationDays = meta.estimatedDays ?? 0;
+      cumulativeMinMs += durationDays * MS_PER_DAY;
+      cumulativeMaxMs += durationDays * MS_PER_DAY;
 
       if (meta.type === "VOTING_ACTIVE" && extensionPossible) {
         cumulativeMaxMs += VOTING_EXTENSION_DAYS * MS_PER_DAY;

@@ -4,9 +4,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { MS_PER_DAY } from "@/lib/date-utils";
+import type { ProposalStage, StageType } from "@/types/proposal-stage";
 import {
+  calculateEstimatedCompletionTimes,
   getStageTxExplorerUrl,
-  parseEstimatedDurationRange,
   VOTING_EXTENSION_DAYS,
 } from "./stage-utils";
 
@@ -35,71 +37,167 @@ describe("getStageTxExplorerUrl", () => {
   });
 });
 
-describe("parseEstimatedDurationRange", () => {
-  describe("range format", () => {
-    it("parses range with days (e.g., '14-16 days')", () => {
-      const result = parseEstimatedDurationRange("14-16 days");
-      expect(result).toEqual({ min: 14, max: 16 });
-    });
-
-    it("parses range with day singular (e.g., '1-2 day')", () => {
-      const result = parseEstimatedDurationRange("1-2 day");
-      expect(result).toEqual({ min: 1, max: 2 });
-    });
-
-    it("parses range with ~ prefix", () => {
-      const result = parseEstimatedDurationRange("~7-10 days");
-      expect(result).toEqual({ min: 7, max: 10 });
-    });
-
-    it("parses range with leading/trailing whitespace", () => {
-      const result = parseEstimatedDurationRange("  3-5 days  ");
-      expect(result).toEqual({ min: 3, max: 5 });
-    });
-  });
-
-  describe("single value format", () => {
-    it("parses single day value (e.g., '3 days')", () => {
-      const result = parseEstimatedDurationRange("3 days");
-      expect(result).toEqual({ min: 3, max: 3 });
-    });
-
-    it("parses single day value (e.g., '1 day')", () => {
-      const result = parseEstimatedDurationRange("1 day");
-      expect(result).toEqual({ min: 1, max: 1 });
-    });
-
-    it("parses single value with ~ prefix", () => {
-      const result = parseEstimatedDurationRange("~8 days");
-      expect(result).toEqual({ min: 8, max: 8 });
-    });
-  });
-
-  describe("edge cases", () => {
-    it("returns zeros for undefined input", () => {
-      const result = parseEstimatedDurationRange(undefined);
-      expect(result).toEqual({ min: 0, max: 0 });
-    });
-
-    it("returns zeros for empty string", () => {
-      const result = parseEstimatedDurationRange("");
-      expect(result).toEqual({ min: 0, max: 0 });
-    });
-
-    it("returns zeros for invalid format", () => {
-      const result = parseEstimatedDurationRange("soon");
-      expect(result).toEqual({ min: 0, max: 0 });
-    });
-
-    it("returns zeros for hours (not supported)", () => {
-      const result = parseEstimatedDurationRange("24 hours");
-      expect(result).toEqual({ min: 0, max: 0 });
-    });
-  });
-});
-
 describe("VOTING_EXTENSION_DAYS constant", () => {
   it("is 2 days (Arbitrum voting extension period)", () => {
     expect(VOTING_EXTENSION_DAYS).toBe(2);
+  });
+});
+
+describe("calculateEstimatedCompletionTimes", () => {
+  const stageTypes = [
+    { type: "PROPOSAL_CREATED" as StageType, estimatedDays: 0 },
+    { type: "VOTING_ACTIVE" as StageType, estimatedDays: 16 },
+    { type: "PROPOSAL_QUEUED" as StageType, estimatedDays: 0 },
+    { type: "L2_TIMELOCK" as StageType, estimatedDays: 8 },
+    { type: "L2_TO_L1_MESSAGE" as StageType, estimatedDays: 6.4 },
+    { type: "L1_TIMELOCK" as StageType, estimatedDays: 3 },
+    { type: "RETRYABLE_EXECUTED" as StageType, estimatedDays: 0 },
+  ];
+
+  it("produces different estimated times for stages with different durations", () => {
+    // #given
+    const stageMap = new Map<StageType, ProposalStage>();
+
+    // #when
+    const { estimatedTimes } = calculateEstimatedCompletionTimes(
+      stageTypes,
+      stageMap
+    );
+
+    // #then — stages with nonzero duration should have progressively later dates
+    const votingTime = estimatedTimes.get("VOTING_ACTIVE")!;
+    const l2TimelockTime = estimatedTimes.get("L2_TIMELOCK")!;
+    const l2ToL1Time = estimatedTimes.get("L2_TO_L1_MESSAGE")!;
+    const l1TimelockTime = estimatedTimes.get("L1_TIMELOCK")!;
+
+    expect(votingTime.minDate.getTime()).toBeLessThan(
+      l2TimelockTime.minDate.getTime()
+    );
+    expect(l2TimelockTime.minDate.getTime()).toBeLessThan(
+      l2ToL1Time.minDate.getTime()
+    );
+    expect(l2ToL1Time.minDate.getTime()).toBeLessThan(
+      l1TimelockTime.minDate.getTime()
+    );
+  });
+
+  it("adds correct cumulative duration in days", () => {
+    // #given
+    const stageMap = new Map<StageType, ProposalStage>();
+
+    // #when
+    const { estimatedTimes } = calculateEstimatedCompletionTimes(
+      stageTypes,
+      stageMap
+    );
+
+    // #then — voting ends at +16 days, L2 timelock at +24 days
+    const votingMin = estimatedTimes.get("VOTING_ACTIVE")!.minDate.getTime();
+    const l2TimelockMin = estimatedTimes.get("L2_TIMELOCK")!.minDate.getTime();
+
+    const daysBetween = (l2TimelockMin - votingMin) / MS_PER_DAY;
+    expect(daysBetween).toBe(8);
+  });
+
+  it("adds voting extension buffer to maxDate", () => {
+    // #given — no block data, no voting stage data → extensionPossible defaults true
+    const stageMap = new Map<StageType, ProposalStage>();
+
+    // #when
+    const { estimatedTimes } = calculateEstimatedCompletionTimes(
+      stageTypes,
+      stageMap
+    );
+
+    // #then — voting maxDate should be 2 days after minDate (extension buffer)
+    const votingTime = estimatedTimes.get("VOTING_ACTIVE")!;
+    const extensionMs = VOTING_EXTENSION_DAYS * MS_PER_DAY;
+    expect(votingTime.maxDate.getTime() - votingTime.minDate.getTime()).toBe(
+      extensionMs
+    );
+  });
+
+  it("skips completed stages in cumulative calculation", () => {
+    // #given
+    const now = Math.floor(Date.now() / 1000);
+    const stageMap = new Map<StageType, ProposalStage>();
+    stageMap.set("PROPOSAL_CREATED", {
+      type: "PROPOSAL_CREATED",
+      status: "COMPLETED",
+      chain: "arb1",
+      chainId: 42161,
+      transactions: [
+        {
+          hash: "0x1",
+          blockNumber: 1,
+          timestamp: now - 86400,
+          chain: "arb1",
+          chainId: 42161,
+        },
+      ],
+      data: {} as ProposalStage["data"],
+    } as ProposalStage);
+    stageMap.set("VOTING_ACTIVE", {
+      type: "VOTING_ACTIVE",
+      status: "COMPLETED",
+      chain: "arb1",
+      chainId: 42161,
+      transactions: [
+        {
+          hash: "0x2",
+          blockNumber: 2,
+          timestamp: now,
+          chain: "arb1",
+          chainId: 42161,
+        },
+      ],
+      data: {} as ProposalStage["data"],
+    } as ProposalStage);
+
+    // #when
+    const { estimatedTimes } = calculateEstimatedCompletionTimes(
+      stageTypes,
+      stageMap
+    );
+
+    // #then — completed stages should not have estimated times
+    expect(estimatedTimes.has("PROPOSAL_CREATED")).toBe(false);
+    expect(estimatedTimes.has("VOTING_ACTIVE")).toBe(false);
+
+    // pending stages should still have estimates
+    expect(estimatedTimes.has("L2_TIMELOCK")).toBe(true);
+  });
+
+  it("uses last completed stage timestamp as reference point", () => {
+    // #given
+    const referenceTimestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
+    const stageMap = new Map<StageType, ProposalStage>();
+    stageMap.set("PROPOSAL_CREATED", {
+      type: "PROPOSAL_CREATED",
+      status: "COMPLETED",
+      chain: "arb1",
+      chainId: 42161,
+      transactions: [
+        {
+          hash: "0x1",
+          blockNumber: 1,
+          timestamp: referenceTimestamp,
+          chain: "arb1",
+          chainId: 42161,
+        },
+      ],
+      data: {} as ProposalStage["data"],
+    } as ProposalStage);
+
+    // #when
+    const { estimatedTimes } = calculateEstimatedCompletionTimes(
+      stageTypes,
+      stageMap
+    );
+
+    // #then — voting estimate should be based on the reference timestamp + 16 days
+    const votingTime = estimatedTimes.get("VOTING_ACTIVE")!;
+    const expectedMinMs = referenceTimestamp * 1000 + 16 * MS_PER_DAY;
+    expect(votingTime.minDate.getTime()).toBe(expectedMinMs);
   });
 });
