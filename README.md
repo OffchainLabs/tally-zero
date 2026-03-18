@@ -1,62 +1,63 @@
-![hero](/public/og.png)
-
 <p align="center">
-	<h1 align="center"><b>TallyZero</b></h1>
+	<h1 align="center"><b>TallyZero for Arbitrum DAO</b></h1>
 <p align="center">
-    Decentralized Voting Made Simple
+    Decentralized Governance Tracking for Arbitrum DAO
     <br />
     <br />
-    <a href="https://tally-zero-preview.vercel.app/">Website</a>
+    <a href="https://github.com/withtally/tally-zero">Upstream</a>
     ·
     <a href="https://github.com/withtally/tally-zero/issues">Issues</a>
   </p>
 </p>
 
-# What is TallyZero
+# What is this
 
-> A robust, open-source platform for onchain voting, Tally Zero ensures accessibility and transparency, leveraging React and IPFS for true decentralization.
+A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for **Arbitrum DAO** governance. It uses the [`@gzeoneth/gov-tracker`](https://github.com/gzeoneth/gov-tracker) SDK to track the full proposal lifecycle across L1 and L2, from voting through timelock execution and retryable ticket redemption.
 
-# App Architecture
+## Key Features
 
-- Yarn
-- React
-- TypeScript
-- Nextjs
-- TailwindCSS
+- **Dual-governor support** — Core Governor (constitutional, 4.5% quorum) and Treasury Governor (funding, 3% quorum)
+- **Full lifecycle tracking** — Tracks proposals through all stages: voting → L2 timelock → L1 challenge period → L1 timelock → retryable tickets → final execution
+- **Security Council election support** — View and participate in Security Council member elections
+- **Zero backend** — All data fetched directly from the blockchain via RPC; no centralized API dependency
+- **Bundled cache** — Ships with pre-built tracking checkpoints for instant resume without RPC calls
+- **Delegate insights** — Pre-indexed delegate cache with voting power rankings
 
-### Hosting
+## Tech Stack
 
-- Fleek (IPFS Hosting, deployment, build)
-- Github (Codebase, issues, PRs, actions)
+- Next.js 14 (App Router, static export)
+- TypeScript / React
+- Ethers.js v5
+- Wagmi v2 + Reown AppKit (wallet connection)
+- @arbitrum/sdk (L1↔L2 message tracking)
+- @gzeoneth/gov-tracker (proposal lifecycle + delegate indexing)
+- TanStack Table + React Query
+- Radix UI + Shadcn + Tailwind CSS
 
-### Services
+## Getting Started
 
-- Github Actions (CI/CD)
-- Web3Modal (Wallet connection)
-- Ethers (Fetching proposals)
+```bash
+# Install dependencies
+yarn
 
-## Star History
+# Create .env.local with your WalletConnect project ID
+echo 'NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID=<your-id>' > .env.local
 
-[![Star History Chart](https://api.star-history.com/svg?repos=withtally/tally-zero&type=Date)](https://star-history.com/#withtally/tally-zero&Date)
+# Start dev server
+yarn dev
+```
 
-# Essential Guidelines
+Get a project ID from [WalletConnect Cloud](https://cloud.walletconnect.com/).
 
-For hosting options other than the ones provided, such as [IPFS Deployment](https://ipfs.thirdwebcdn.com/ipfs/QmfGUuMzLqHyAybnUsPG6aMwQ241V6Q69AmPxCWsVsTDcD) or [Vercel Deployment](https://tally-zero-preview.vercel.app/), we suggest visiting [Web3Modal](https://cloud.walletconnect.com/sign-in) to establish a new project. Subsequently, create a `.env` or `.env.local` file, or input it as an environment variable in your hosting provider. Ensure the naming convention is `NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID`.
+## Commands
 
-The project's pages are located in the `/app` directory, with components organized as follows:
+```bash
+yarn dev        # Development server (port 3000)
+yarn build      # Production build (static export)
+yarn lint       # ESLint with auto-fix
+yarn test       # Lint + typecheck + Vitest
+```
 
-- `container`: Components related to the interface
-- `form`: All forms are housed here
-- `navigation`: Components associated with the layout
-- `section`: Components for the marketing page
-- `table`: Self explanatory
-- `ui`: Components from [Shadcn UI](https://ui.shadcn.com/)
+## License
 
-The `/config` folder is crucial for maintenance purposes:
-
-- `chains.ts`: Contains all chains for Web3Modal connection
-- `data.ts`: Lists the chains supported by Tally Zero (refer to the image). You can add as many as required.
-
-![Supported Chains](/public/readme/chain.png)
-
-Lastly, the `/data` folder contains the ABI for TallyZero.
+See upstream [TallyZero](https://github.com/withtally/tally-zero) repository.
