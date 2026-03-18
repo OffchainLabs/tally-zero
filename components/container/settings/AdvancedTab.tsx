@@ -14,6 +14,8 @@ import { BackupRestoreSection } from "./BackupRestoreSection";
 import { CacheManagementSection } from "./CacheManagementSection";
 import { DebugInfoSection } from "./DebugInfoSection";
 import { DebugLoggingToggle } from "./DebugLoggingToggle";
+import { ElectionContractOverrides } from "./ElectionContractOverrides";
+import { ElectionPhaseOverride } from "./ElectionPhaseOverride";
 import { formatTtl } from "./settings-utils";
 import { SettingsToggle } from "./SettingsToggle";
 import { TenderlyConfigSection } from "./TenderlyConfigSection";
@@ -216,6 +218,16 @@ export function AdvancedTab({
                 status in real-time.
               </p>
               <DelegateLookup />
+            </div>
+
+            {/* Election Phase Override */}
+            <div className="space-y-2 pt-3 border-t border-border/50">
+              <ElectionPhaseOverride />
+            </div>
+
+            {/* Election Contract Overrides */}
+            <div className="space-y-2 pt-3 border-t border-border/50">
+              <ElectionContractOverrides />
             </div>
 
             {/* Timelock Operation Tracker */}

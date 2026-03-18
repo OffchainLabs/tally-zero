@@ -3,7 +3,8 @@
  * Provides state lookup and conversion for OpenZeppelin Governor states
  */
 
-import { ProposalState } from "@/config/initial-state";
+import { PROPOSAL_STATE_MAP } from "@gzeoneth/gov-tracker";
+
 import { states } from "@/data/table/data";
 import type { ProposalStateName } from "@/types/proposal";
 
@@ -38,6 +39,6 @@ export function findStateByValue(
  * @returns The lowercase state name (e.g., "pending", "active", "executed")
  */
 export function getStateName(stateNumber: number): ProposalStateName {
-  const stateName = ProposalState[stateNumber];
+  const stateName = PROPOSAL_STATE_MAP[stateNumber];
   return (stateName?.toLowerCase() ?? "pending") as ProposalStateName;
 }

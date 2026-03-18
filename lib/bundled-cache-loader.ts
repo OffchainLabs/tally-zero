@@ -5,6 +5,7 @@ import {
   extractProposals as govExtractProposals,
   extractTimelockOps as govExtractTimelockOps,
   getWatermarksFromCache as govGetWatermarksFromCache,
+  PROPOSAL_STATE_MAP,
   type BundledCache,
   type CacheAdapter,
   type DiscoveryWatermarks,
@@ -204,19 +205,8 @@ function mapProposalState(
 ): ProposalStateName {
   if (state === undefined || state === null) return "Pending";
 
-  // Handle numeric state values (OpenZeppelin Governor state enum)
   if (typeof state === "number") {
-    const stateMap: Record<number, ProposalStateName> = {
-      0: "Pending",
-      1: "Active",
-      2: "Canceled",
-      3: "Defeated",
-      4: "Succeeded",
-      5: "Queued",
-      6: "Expired",
-      7: "Executed",
-    };
-    return stateMap[state] ?? "Pending";
+    return (PROPOSAL_STATE_MAP[state] ?? "Pending") as ProposalStateName;
   }
 
   const normalized = state.toLowerCase();

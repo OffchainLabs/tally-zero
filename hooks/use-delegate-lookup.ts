@@ -8,19 +8,14 @@
 import { ethers } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
-import { ARB_TOKEN } from "@/config/arbitrum-governance";
+import { ADDRESSES, ERC20_VOTES_ABI } from "@gzeoneth/gov-tracker";
+
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
 import { getDelegateLabel, getDelegateRankInfo } from "@/lib/delegate-cache";
 import { getErrorMessage } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
-
-/** Minimal ABI for ERC20Votes with OpenZeppelin standard methods */
-const ERC20_VOTES_ABI = [
-  "function getVotes(address account) view returns (uint256)",
-  "function delegates(address account) view returns (address)",
-];
 
 /** Result from delegate lookup containing voting and delegation info */
 export interface DelegateLookupResult {
@@ -93,7 +88,7 @@ export function useDelegateLookup({
       const provider = await createRpcProvider(l2Rpc);
 
       const contract = new ethers.Contract(
-        ARB_TOKEN.address,
+        ADDRESSES.ARB_TOKEN,
         ERC20_VOTES_ABI,
         provider
       );

@@ -1,7 +1,11 @@
 "use client";
 
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { arbitrum, type AppKitNetwork } from "@reown/appkit/networks";
+import {
+  arbitrum,
+  arbitrumSepolia,
+  type AppKitNetwork,
+} from "@reown/appkit/networks";
 import { createAppKit } from "@reown/appkit/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { http } from "viem";
@@ -17,8 +21,10 @@ if (!projectId) {
   throw new Error("NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID is not defined");
 }
 
-// Define networks - only Arbitrum One
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [arbitrum];
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
+  arbitrum,
+  arbitrumSepolia,
+];
 
 // Metadata for your app
 const metadata = {
@@ -32,9 +38,12 @@ const metadata = {
 // Using Arbitrum's public RPC with batch support
 const customTransports = {
   [arbitrum.id]: http(ARBITRUM_RPC_URL, {
-    batch: {
-      wait: 50, // Wait 50ms to batch requests together
-    },
+    batch: { wait: 50 },
+    retryCount: 2,
+    retryDelay: 1000,
+  }),
+  [arbitrumSepolia.id]: http("https://sepolia-rollup.arbitrum.io/rpc", {
+    batch: { wait: 50 },
     retryCount: 2,
     retryDelay: 1000,
   }),

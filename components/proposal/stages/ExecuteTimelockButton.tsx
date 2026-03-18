@@ -2,17 +2,21 @@
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import TimelockABI from "@/data/ArbitrumTimelock_ABI.json";
 import type { TimelockOperationInfo } from "@/hooks/use-timelock-operation";
+import {
+  hashOperation,
+  prepareTimelockExecuteCalldata,
+  validateSalt,
+} from "@gzeoneth/gov-tracker";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { useEffect, useState } from "react";
+import { BigNumber } from "ethers";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
-  useReadContract,
-  useSimulateContract,
+  useEstimateGas,
+  useSendTransaction,
   useWaitForTransactionReceipt,
-  useWriteContract,
 } from "wagmi";
 
 const ZERO_BYTES32 =
@@ -29,135 +33,85 @@ export function ExecuteTimelockButton({
 }: ExecuteTimelockButtonProps) {
   const { isConnected } = useAccount();
   const [customSalt, setCustomSalt] = useState("");
-  const [validatedSalt, setValidatedSalt] = useState<string | null>(null);
-  const [saltValidationError, setSaltValidationError] = useState<string | null>(
-    null
+
+  const baseParams = useMemo(
+    () => ({
+      target: operation.target,
+      value: BigNumber.from(operation.value),
+      data: operation.data,
+      predecessor: operation.predecessor,
+    }),
+    [operation.target, operation.value, operation.data, operation.predecessor]
   );
 
-  // First, compute the operation ID using bytes32(0) as salt
-  const { data: computedIdWithZeroSalt, isLoading: isComputingZeroSalt } =
-    useReadContract({
-      address: operation.timelockAddress as `0x${string}`,
-      abi: TimelockABI,
-      functionName: "hashOperation",
-      args: [
-        operation.target as `0x${string}`,
-        BigInt(operation.value),
-        operation.data as `0x${string}`,
-        operation.predecessor as `0x${string}`,
-        ZERO_BYTES32 as `0x${string}`,
-      ],
-    });
+  const zeroSaltMatches = useMemo(
+    () =>
+      validateSalt(operation.operationId, {
+        ...baseParams,
+        salt: ZERO_BYTES32,
+      }),
+    [operation.operationId, baseParams]
+  );
 
-  // Compute operation ID with custom salt when user provides one
-  const { data: computedIdWithCustomSalt, isLoading: isComputingCustomSalt } =
-    useReadContract({
-      address: operation.timelockAddress as `0x${string}`,
-      abi: TimelockABI,
-      functionName: "hashOperation",
-      args: [
-        operation.target as `0x${string}`,
-        BigInt(operation.value),
-        operation.data as `0x${string}`,
-        operation.predecessor as `0x${string}`,
-        customSalt as `0x${string}`,
-      ],
-      query: {
-        enabled:
-          customSalt.length === 66 &&
-          customSalt.startsWith("0x") &&
-          /^0x[0-9a-fA-F]{64}$/.test(customSalt),
-      },
-    });
+  const needsCustomSalt = !zeroSaltMatches;
 
-  // Check if zero salt matches the expected operation ID
-  const zeroSaltMatches =
-    computedIdWithZeroSalt &&
-    (computedIdWithZeroSalt as string).toLowerCase() ===
-      operation.operationId.toLowerCase();
+  const { validatedSalt, saltValidationError } = useMemo(() => {
+    if (!needsCustomSalt || !customSalt) {
+      return { validatedSalt: null, saltValidationError: null };
+    }
+    if (!/^0x[0-9a-fA-F]{64}$/.test(customSalt)) {
+      return {
+        validatedSalt: null,
+        saltValidationError:
+          "Salt must be a valid bytes32 (0x followed by 64 hex characters)",
+      };
+    }
+    if (
+      validateSalt(operation.operationId, { ...baseParams, salt: customSalt })
+    ) {
+      return { validatedSalt: customSalt, saltValidationError: null };
+    }
+    const computedId = hashOperation({ ...baseParams, salt: customSalt });
+    return {
+      validatedSalt: null,
+      saltValidationError: `Salt produces operation ID ${computedId.slice(0, 18)}... which doesn't match expected ${operation.operationId.slice(0, 18)}...`,
+    };
+  }, [needsCustomSalt, customSalt, operation.operationId, baseParams]);
 
-  // Determine which salt to use for execution
   const effectiveSalt =
     validatedSalt ?? (zeroSaltMatches ? ZERO_BYTES32 : null);
-  const needsCustomSalt =
-    !isComputingZeroSalt && computedIdWithZeroSalt && !zeroSaltMatches;
 
-  // Validate custom salt when it changes
-  useEffect(() => {
-    if (!needsCustomSalt) {
-      setSaltValidationError(null);
-      return;
-    }
-
-    if (!customSalt) {
-      setValidatedSalt(null);
-      setSaltValidationError(null);
-      return;
-    }
-
-    if (!/^0x[0-9a-fA-F]{64}$/.test(customSalt)) {
-      setSaltValidationError(
-        "Salt must be a valid bytes32 (0x followed by 64 hex characters)"
-      );
-      setValidatedSalt(null);
-      return;
-    }
-
-    if (isComputingCustomSalt) {
-      setSaltValidationError(null);
-      setValidatedSalt(null);
-      return;
-    }
-
-    if (computedIdWithCustomSalt) {
-      const matches =
-        (computedIdWithCustomSalt as string).toLowerCase() ===
-        operation.operationId.toLowerCase();
-      if (matches) {
-        setValidatedSalt(customSalt);
-        setSaltValidationError(null);
-      } else {
-        setValidatedSalt(null);
-        setSaltValidationError(
-          `Salt produces operation ID ${(computedIdWithCustomSalt as string).slice(0, 18)}... which doesn't match expected ${operation.operationId.slice(0, 18)}...`
-        );
-      }
-    }
+  const prepared = useMemo(() => {
+    if (!effectiveSalt) return undefined;
+    return prepareTimelockExecuteCalldata(
+      operation.timelockAddress,
+      { ...baseParams, salt: effectiveSalt },
+      operation.operationId
+    );
   }, [
-    customSalt,
-    computedIdWithCustomSalt,
-    isComputingCustomSalt,
+    effectiveSalt,
+    operation.timelockAddress,
     operation.operationId,
-    needsCustomSalt,
+    baseParams,
   ]);
 
   const {
-    data: simulateData,
-    error: simulateError,
-    isLoading: isSimulating,
-  } = useSimulateContract({
-    address: operation.timelockAddress as `0x${string}`,
-    abi: TimelockABI,
-    functionName: "execute",
-    args: [
-      operation.target as `0x${string}`,
-      BigInt(operation.value),
-      operation.data as `0x${string}`,
-      operation.predecessor as `0x${string}`,
-      effectiveSalt as `0x${string}`,
-    ],
-    value: BigInt(operation.value),
-    query: {
-      enabled: isConnected && effectiveSalt !== null,
-    },
+    error: estimateError,
+    isError: isEstimateError,
+    isLoading: isEstimating,
+  } = useEstimateGas({
+    to: prepared?.to,
+    data: prepared?.data,
+    value: BigInt(prepared?.value ?? "0"),
+    query: { enabled: !!prepared && isConnected },
   });
 
   const {
     data: txHash,
-    isPending: isWriting,
-    writeContract,
-    error: writeError,
-  } = useWriteContract();
+    isPending: isSending,
+    sendTransaction,
+    error: sendError,
+  } = useSendTransaction();
 
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({
@@ -172,15 +126,18 @@ export function ExecuteTimelockButton({
   }, [isConfirmed, txHash, onSuccess]);
 
   useEffect(() => {
-    if (writeError) {
-      toast.error(`Transaction failed: ${writeError.message}`);
+    if (sendError) {
+      toast.error(`Transaction failed: ${sendError.message}`);
     }
-  }, [writeError]);
+  }, [sendError]);
 
   const handleExecute = () => {
-    if (simulateData?.request) {
-      writeContract(simulateData.request);
-    }
+    if (!prepared || isEstimateError) return;
+    sendTransaction({
+      to: prepared.to,
+      data: prepared.data,
+      value: BigInt(prepared.value),
+    });
   };
 
   if (!isConnected) {
@@ -191,16 +148,6 @@ export function ExecuteTimelockButton({
     );
   }
 
-  if (isComputingZeroSalt) {
-    return (
-      <Button size="sm" disabled>
-        <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
-        Validating...
-      </Button>
-    );
-  }
-
-  // Need custom salt - show input form
   if (needsCustomSalt && !validatedSalt) {
     return (
       <div className="space-y-2">
@@ -219,11 +166,6 @@ export function ExecuteTimelockButton({
             {saltValidationError && (
               <div className="text-xs text-red-500">{saltValidationError}</div>
             )}
-            {isComputingCustomSalt && (
-              <div className="text-xs text-muted-foreground">
-                Validating salt...
-              </div>
-            )}
           </div>
         </div>
         <div className="text-xs text-muted-foreground">
@@ -233,7 +175,7 @@ export function ExecuteTimelockButton({
     );
   }
 
-  if (isSimulating) {
+  if (isEstimating) {
     return (
       <Button size="sm" disabled>
         <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
@@ -242,8 +184,8 @@ export function ExecuteTimelockButton({
     );
   }
 
-  if (simulateError) {
-    const errorMsg = simulateError.message.toLowerCase();
+  if (isEstimateError && estimateError) {
+    const errorMsg = estimateError.message.toLowerCase();
     if (
       errorMsg.includes("not ready") ||
       errorMsg.includes("operation is not ready")
@@ -265,13 +207,13 @@ export function ExecuteTimelockButton({
       );
     }
     return (
-      <div className="text-xs text-red-500" title={simulateError.message}>
+      <div className="text-xs text-red-500" title={estimateError.message}>
         Cannot execute (simulation failed)
       </div>
     );
   }
 
-  if (isWriting || isConfirming) {
+  if (isSending || isConfirming) {
     return (
       <Button size="sm" disabled>
         <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
@@ -289,7 +231,11 @@ export function ExecuteTimelockButton({
   }
 
   return (
-    <Button size="sm" onClick={handleExecute} disabled={!simulateData?.request}>
+    <Button
+      size="sm"
+      onClick={handleExecute}
+      disabled={!prepared || isEstimateError}
+    >
       Execute Operation
     </Button>
   );

@@ -5,6 +5,7 @@
 
 import { addressesEqual, findByAddress } from "@/lib/address-utils";
 import type { StageType } from "@/types/proposal-stage";
+import { ADDRESSES } from "@gzeoneth/gov-tracker";
 
 /** Governor type identifier */
 export type GovernorType = "core" | "treasury";
@@ -36,26 +37,26 @@ export interface GovernorConfig {
 }
 
 const CORE_GOVERNOR_CONFIG: GovernorConfig = {
-  address: "0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9",
+  address: ADDRESSES.CONSTITUTIONAL_GOVERNOR,
   type: "core",
   name: "Core Governor",
   description: "Constitutional and non-emergency proposals",
   quorum: "4.5%",
-  l2TimelockAddress: "0x34d45e99f7D8c45ed05B5cA72D54bbD1fb3F98f0",
+  l2TimelockAddress: ADDRESSES.L2_CONSTITUTIONAL_TIMELOCK,
   l2TimelockDelay: "8 days",
-  l1TimelockAddress: "0xE6841D92B0C345144506576eC13ECf5103aC7f49",
+  l1TimelockAddress: ADDRESSES.L1_TIMELOCK,
   l1TimelockDelay: "3 days",
   hasL1Timelock: true,
   finalStage: "RETRYABLE_EXECUTED",
 };
 
 const TREASURY_GOVERNOR_CONFIG: GovernorConfig = {
-  address: "0x789fC99093B09aD01C34DC7251D0C89ce743e5a4",
+  address: ADDRESSES.NON_CONSTITUTIONAL_GOVERNOR,
   type: "treasury",
   name: "Treasury Governor",
   description: "Treasury and funding proposals",
   quorum: "3%",
-  l2TimelockAddress: "0xbFc1FECa8B09A5c5D3EFfE7429eBE24b9c09EF58",
+  l2TimelockAddress: ADDRESSES.L2_NON_CONSTITUTIONAL_TIMELOCK,
   l2TimelockDelay: "3 days",
   l1TimelockAddress: null,
   l1TimelockDelay: null,

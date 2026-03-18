@@ -1,54 +1,28 @@
 "use client";
 
-/**
- * Hook for finding top delegates who haven't voted on a proposal
- * Useful for highlighting key stakeholders who could still influence the vote
- */
-
-import { ethers } from "ethers";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  queryDelegatesNotVoted,
+  type DelegateCache,
+} from "@gzeoneth/gov-tracker";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import {
-  getDelegateLabel,
-  getTopDelegates,
-  loadDelegateCache,
-} from "@/lib/delegate-cache";
+import { getDelegateLabel, loadDelegateCache } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
-import { decodeResult, encodeCall, multicall } from "@/lib/multicall";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import type { DelegateInfo } from "@/types/delegate";
-import OzGovernor_ABI from "@data/OzGovernor_ABI.json";
 
-/** Delegate who hasn't voted on a proposal */
 export interface DelegateNotVoted {
-  /** Delegate's address */
   address: string;
-  /** Optional label from known delegates list */
   label: string | undefined;
-  /** Delegate's voting power in wei */
   votingPower: string;
 }
 
-/** Number of delegates to check per RPC batch */
-const BATCH_SIZE = 20;
-
-/** Maximum number of top delegates to scan */
-const MAX_DELEGATES_TO_CHECK = 100;
-
-/** Default number of non-voting delegates to return */
-const DEFAULT_LIMIT = 5;
-
-/**
- * Hook for finding top delegates who haven't voted on a specific proposal
- * @param options - Proposal ID, governor address, limit, and optional RPC URL
- * @returns List of non-voting delegates, loading state, and error
- */
 export function useTopDelegatesNotVoted({
   proposalId,
   governorAddress,
-  limit = DEFAULT_LIMIT,
+  limit = 5,
   customRpcUrl,
 }: {
   proposalId: string;
@@ -77,68 +51,29 @@ export function useTopDelegatesNotVoted({
     setError(null);
 
     try {
-      const cache = await loadDelegateCache();
+      const cache: DelegateCache | null = await loadDelegateCache();
       if (!cache) {
         setIsLoading(false);
         return;
       }
 
-      const allDelegates: DelegateInfo[] = getTopDelegates(
-        cache,
-        MAX_DELEGATES_TO_CHECK
-      );
-      if (allDelegates.length === 0) {
-        setIsLoading(false);
-        return;
-      }
-
       const provider = await createRpcProvider(l2Rpc);
-      const governorInterface = new ethers.utils.Interface(OzGovernor_ABI);
 
-      const notVoted: DelegateNotVoted[] = [];
-      let offset = 0;
+      const sdkResults = await queryDelegatesNotVoted(
+        provider,
+        proposalId,
+        governorAddress,
+        { cache, limit }
+      );
 
-      while (notVoted.length < limit && offset < allDelegates.length) {
-        const batch = allDelegates.slice(offset, offset + BATCH_SIZE);
-
-        const calls = batch.map((delegate) => ({
-          target: governorAddress,
-          allowFailure: true,
-          callData: encodeCall(governorInterface, "hasVoted", [
-            proposalId,
-            delegate.address,
-          ]),
-        }));
-
-        const results = await multicall(provider, calls);
-
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          const delegate = batch[i];
-
-          if (result.success) {
-            const voted = decodeResult<boolean>(
-              governorInterface,
-              "hasVoted",
-              result.returnData
-            );
-            if (!voted) {
-              notVoted.push({
-                address: delegate.address,
-                label: getDelegateLabel(delegate.address),
-                votingPower: delegate.votingPower,
-              });
-              // Early exit once we have enough delegates
-              if (notVoted.length >= limit) break;
-            }
-          }
-        }
-
-        offset += BATCH_SIZE;
-      }
+      const notVoted: DelegateNotVoted[] = sdkResults.map((d) => ({
+        address: d.address,
+        label: getDelegateLabel(d.address),
+        votingPower: d.votingPower,
+      }));
 
       setDelegatesNotVoted(notVoted);
-      setAllTopDelegatesVoted(notVoted.length === 0 && offset >= BATCH_SIZE);
+      setAllTopDelegatesVoted(notVoted.length === 0);
     } catch (err) {
       debug.delegates("top delegates not voted error: %O", err);
       setError(toError(err));
@@ -150,10 +85,8 @@ export function useTopDelegatesNotVoted({
   useEffect(() => {
     if (!isHydrated) return;
 
-    // Create a unique key for this proposal
     const proposalKey = `${proposalId}:${governorAddress}`;
 
-    // Only refetch if this is a new proposal
     if (lastFetchedProposalRef.current !== proposalKey) {
       lastFetchedProposalRef.current = proposalKey;
       fetchDelegatesNotVoted();

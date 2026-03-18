@@ -3,6 +3,8 @@
  * Provides runtime validation for user inputs and proposal data
  */
 
+import { VOTE_SUPPORT } from "@gzeoneth/gov-tracker";
+
 import { ETH_ADDRESS_REGEX } from "@/lib/address-utils";
 import { isValidRpcUrl } from "@lib/utils";
 import * as z from "zod";
@@ -48,9 +50,11 @@ export const formSchema = z.object({
   autoRun: z.boolean().optional().default(false),
 });
 
+const VALID_VOTE_VALUES = Object.values(VOTE_SUPPORT).map(String);
+
 /** Schema for vote submission form */
 export const voteSchema = z.object({
-  vote: z.string().refine((data) => ["0", "1", "2"].includes(data), {
+  vote: z.string().refine((data) => VALID_VOTE_VALUES.includes(data), {
     message: "Please select a valid vote option",
   }),
 });

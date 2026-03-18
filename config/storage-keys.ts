@@ -34,6 +34,8 @@ export const STORAGE_KEYS = {
   TENDERLY_PROJECT: "tally-zero-tenderly-project",
   TENDERLY_ACCESS_TOKEN: "tally-zero-tenderly-access-token",
   LAST_CACHE_VERSION: "tally-zero-last-cache-version",
+  ELECTION_PHASE_OVERRIDE: "tally-zero-election-phase-override",
+  ELECTION_CONTRACT_OVERRIDES: "tally-zero-election-contract-overrides",
 } as const;
 
 /** Default Tenderly organization placeholder */

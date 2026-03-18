@@ -5,6 +5,7 @@
  */
 
 import type { ChunkingConfig } from "@/types/proposal-stage";
+import { ADDRESSES } from "@gzeoneth/gov-tracker";
 
 export const ARBITRUM_CHAIN_ID = 42161;
 
@@ -22,7 +23,7 @@ export const ETHEREUM_RPC_URL = "https://eth.drpc.org";
  * 4.5% quorum, ~42-44 day lifecycle
  */
 const CORE_GOVERNOR = {
-  address: "0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9",
+  address: ADDRESSES.CONSTITUTIONAL_GOVERNOR,
   name: "Core Governor",
   description: "Constitutional and non-emergency proposals",
   quorum: "4.5%",
@@ -33,7 +34,7 @@ const CORE_GOVERNOR = {
  * 3% quorum, ~24-27 day lifecycle (no L1 round-trip)
  */
 const TREASURY_GOVERNOR = {
-  address: "0x789fC99093B09aD01C34DC7251D0C89ce743e5a4",
+  address: ADDRESSES.NON_CONSTITUTIONAL_GOVERNOR,
   name: "Treasury Governor",
   description: "Treasury and funding proposals",
   quorum: "3%",
@@ -44,7 +45,7 @@ const TREASURY_GOVERNOR = {
  * 3-day delay for Treasury Governor funding proposals
  */
 export const L2_TREASURY_TIMELOCK = {
-  address: "0xbFc1FECa8B09A5c5D3EFfE7429eBE24b9c09EF58",
+  address: ADDRESSES.L2_NON_CONSTITUTIONAL_TIMELOCK,
   name: "L2 Treasury Timelock",
   delay: "3 days",
 } as const;
@@ -54,7 +55,7 @@ export const L2_TREASURY_TIMELOCK = {
  * 3-day delay, only used for Core Governor proposals
  */
 export const L1_TIMELOCK = {
-  address: "0xE6841D92B0C345144506576eC13ECf5103aC7f49",
+  address: ADDRESSES.L1_TIMELOCK,
   name: "L1 Timelock",
   delay: "3 days",
 } as const;
@@ -63,7 +64,7 @@ export const L1_TIMELOCK = {
  * ARB Token Contract
  */
 export const ARB_TOKEN = {
-  address: "0x912CE59144191C1204E64559FE8253a0e49E6548",
+  address: ADDRESSES.ARB_TOKEN,
   name: "ARB Token",
 } as const;
 

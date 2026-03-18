@@ -2,7 +2,13 @@
 
 import { STORAGE_KEYS } from "@config/storage-keys";
 import { useLocalStorage } from "@hooks/use-local-storage";
-import { createContext, useCallback, useContext, useMemo } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+} from "react";
 
 interface NerdModeContextValue {
   nerdMode: boolean;
@@ -28,6 +34,12 @@ export function NerdModeProvider({ children }: { children: React.ReactNode }) {
   const toggleNerdMode = useCallback(() => {
     setNerdModeStorage(!nerdMode);
   }, [nerdMode, setNerdModeStorage]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#nerd") {
+      setNerdModeStorage(true);
+    }
+  }, [setNerdModeStorage]);
 
   const value = useMemo(
     () => ({

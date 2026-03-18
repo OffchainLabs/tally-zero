@@ -1,29 +1,23 @@
 "use client";
 
-/**
- * Hook for searching and filtering delegates from the cache
- * Provides delegate list with filtering, pagination, and live refresh
- */
-
-import { ethers } from "ethers";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ARB_TOKEN } from "@/config/arbitrum-governance";
+import {
+  filterDelegatesByAddress,
+  filterDelegatesByMinPower,
+  queryDelegateVotingPowers,
+  type DelegateCache,
+  type DelegateInfo,
+} from "@gzeoneth/gov-tracker";
+
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { compareBigIntDesc } from "@/lib/collection-utils";
 import { debug } from "@/lib/debug";
 import { getDelegateCacheStats, loadDelegateCache } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
-import { decodeResult, encodeCall, multicall } from "@/lib/multicall";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import type {
-  DelegateCache,
-  DelegateCacheStats,
-  DelegateInfo,
-} from "@/types/delegate";
-import ERC20Votes_ABI from "@data/ERC20Votes_ABI.json";
+import type { DelegateCacheStats } from "@/types/delegate";
 
-/** Options for configuring delegate search */
 export interface UseDelegateSearchOptions {
   enabled: boolean;
   customRpcUrl?: string;
@@ -31,36 +25,18 @@ export interface UseDelegateSearchOptions {
   addressFilter?: string;
 }
 
-/** Return type for useDelegateSearch hook */
 export interface UseDelegateSearchResult {
-  /** Filtered list of delegates */
   delegates: DelegateInfo[];
-  /** Total voting power of all delegates */
   totalVotingPower: string;
-  /** Total ARB token supply */
   totalSupply: string;
-  /** Error if loading failed */
   error: Error | null;
-  /** Whether initial load is in progress */
   isLoading: boolean;
-  /** Cache statistics */
   cacheStats?: DelegateCacheStats;
-  /** Block number of cache snapshot */
   snapshotBlock: number;
-  /** Function to refresh voting power for visible delegates */
   refreshVisibleDelegates: (addresses: string[]) => Promise<void>;
-  /** Whether visible delegates are being refreshed */
   isRefreshingVisible: boolean;
 }
 
-/**
- * Filter delegates by minimum voting power and/or address search term
- * Uses single pass filtering for better performance
- *
- * @param delegates - Array of delegates to filter
- * @param options - Filter options
- * @returns Filtered delegate array
- */
 export function filterDelegates(
   delegates: DelegateInfo[],
   options: {
@@ -68,30 +44,17 @@ export function filterDelegates(
     addressFilter?: string;
   }
 ): DelegateInfo[] {
-  const minPower = options.minVotingPower
-    ? BigInt(options.minVotingPower)
-    : null;
-  const searchTerm = options.addressFilter?.toLowerCase().trim() || null;
-
-  // No filters applied
-  if (!minPower && !searchTerm) {
-    return delegates;
+  let result = delegates;
+  if (options.minVotingPower) {
+    result = filterDelegatesByMinPower(result, options.minVotingPower);
   }
-
-  // Single pass filter combining both conditions
-  return delegates.filter((d) => {
-    if (minPower && BigInt(d.votingPower) < minPower) return false;
-    if (searchTerm && !d.address.toLowerCase().includes(searchTerm))
-      return false;
-    return true;
-  });
+  const trimmedAddress = options.addressFilter?.trim();
+  if (trimmedAddress) {
+    result = filterDelegatesByAddress(result, trimmedAddress);
+  }
+  return result;
 }
 
-/**
- * Hook for searching delegates with filtering and live updates
- * @param options - Search options including filters and RPC URL
- * @returns Delegate list, statistics, and refresh functions
- */
 export function useDelegateSearch({
   enabled,
   customRpcUrl,
@@ -112,7 +75,6 @@ export function useDelegateSearch({
 
   const refreshedAddresses = useRef<Set<string>>(new Set());
 
-  // Load cache on mount - filters are applied in a separate effect
   useEffect(() => {
     let cancelled = false;
 
@@ -149,7 +111,6 @@ export function useDelegateSearch({
     };
   }, []);
 
-  // Apply filters when they change
   useEffect(() => {
     if (cache) {
       const filtered = filterDelegates(cache.delegates, {
@@ -174,43 +135,18 @@ export function useDelegateSearch({
 
       try {
         const provider = await createRpcProvider(l2Rpc);
-        const tokenInterface = new ethers.utils.Interface(ERC20Votes_ABI);
+        const powerMap = await queryDelegateVotingPowers(provider, toRefresh);
 
-        const calls = toRefresh.map((address) => ({
-          target: ARB_TOKEN.address,
-          allowFailure: true,
-          callData: encodeCall(tokenInterface, "getCurrentVotes", [address]),
-        }));
-
-        const results = await multicall(provider, calls);
-
-        const successfulResults: { address: string; votingPower: string }[] =
-          [];
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          const address = toRefresh[i];
-
-          if (result.success) {
-            const votes = decodeResult<ethers.BigNumber>(
-              tokenInterface,
-              "getCurrentVotes",
-              result.returnData
-            );
-            refreshedAddresses.current.add(address.toLowerCase());
-            successfulResults.push({ address, votingPower: votes.toString() });
-          } else {
-            debug.delegates("failed to refresh voting power for %s", address);
+        for (const addr of toRefresh) {
+          if (powerMap.has(addr.toLowerCase())) {
+            refreshedAddresses.current.add(addr.toLowerCase());
           }
         }
 
-        if (successfulResults.length > 0 && cache) {
-          // Build a Map for O(1) lookups instead of O(n) find() in loop
-          const refreshedMap = new Map(
-            successfulResults.map((r) => [r.address.toLowerCase(), r])
-          );
+        if (powerMap.size > 0 && cache) {
           const updatedDelegates = cache.delegates.map((d) => {
-            const refreshed = refreshedMap.get(d.address.toLowerCase());
-            return refreshed ? { ...d, votingPower: refreshed.votingPower } : d;
+            const newPower = powerMap.get(d.address.toLowerCase());
+            return newPower ? { ...d, votingPower: newPower } : d;
           });
 
           updatedDelegates.sort((a, b) =>

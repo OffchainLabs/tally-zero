@@ -18,15 +18,3 @@ export const initialState: State = {
   },
   proposals: [],
 };
-
-/** Proposal state enum matching OpenZeppelin Governor contract states */
-export enum ProposalState {
-  Pending,
-  Active,
-  Canceled,
-  Defeated,
-  Succeeded,
-  Queued,
-  Expired,
-  Executed,
-}

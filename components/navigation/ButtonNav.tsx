@@ -24,7 +24,7 @@ const LoadingSkeleton = ({ compact = false }: { compact?: boolean }) => (
 
 export function ButtonNav() {
   const pathname = usePathname();
-  const isExplore = pathname === "/explore";
+  const isAppPage = pathname !== "/";
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export function ButtonNav() {
 
   return (
     <nav className="flex-shrink-0">
-      {isExplore ? (
+      {isAppPage ? (
         <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle rounded-xl p-2">
           <SettingsSheet />
           {loading ? (

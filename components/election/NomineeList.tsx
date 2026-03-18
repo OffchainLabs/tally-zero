@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
 
 import type {
+  SerializableContender,
   SerializableMemberDetails,
   SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
@@ -80,6 +81,7 @@ export function NomineeList({
     return null;
   }
 
+  const showContenders = phase === "CONTENDER_SUBMISSION";
   const canToggle = hasMemberResults && nomineeDetails;
   const showResults = viewMode === "results" && hasMemberResults;
 
@@ -93,7 +95,11 @@ export function NomineeList({
             ) : (
               <User className="h-5 w-5" />
             )}
-            {showResults ? "Election Results" : "Nominees"}
+            {showContenders
+              ? "Registered Contenders"
+              : showResults
+                ? "Election Results"
+                : "Nominees"}
           </CardTitle>
           {canToggle && (
             <Tabs
@@ -112,14 +118,21 @@ export function NomineeList({
           )}
         </div>
         <CardDescription>
-          {showResults
-            ? `Top 6 nominees will be elected to the Security Council`
-            : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
+          {showContenders
+            ? `${nomineeDetails.contenders.length} contender${nomineeDetails.contenders.length !== 1 ? "s" : ""} registered`
+            : showResults
+              ? `Top 6 nominees will be elected to the Security Council`
+              : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
         </CardDescription>
       </CardHeader>
 
       <CardContent>
-        {showResults && memberDetails ? (
+        {showContenders ? (
+          <ContenderList
+            contenders={nomineeDetails.contenders}
+            electionIndex={electionIndex}
+          />
+        ) : showResults && memberDetails ? (
           <MemberElectionResults
             details={memberDetails}
             electionIndex={electionIndex}
@@ -366,6 +379,88 @@ function NomineeRow({
       <span className="text-sm text-muted-foreground shrink-0 ml-2">
         {votes} ARB
       </span>
+    </div>
+  );
+}
+
+function ContenderList({
+  contenders,
+  electionIndex,
+}: {
+  contenders: SerializableContender[];
+  electionIndex?: number;
+}): React.ReactElement {
+  if (contenders.length === 0) {
+    return (
+      <div className="text-center text-muted-foreground py-8">
+        No contenders registered yet
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {contenders.map((contender, index) => {
+        const label = getDelegateLabel(contender.address);
+        const explorerUrl = getAddressExplorerUrl(contender.address);
+        const tallyUrl =
+          electionIndex !== undefined
+            ? getTallyProfileUrl(electionIndex, contender.address, 1)
+            : null;
+
+        return (
+          <div
+            key={contender.address}
+            className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 p-3"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">
+                {index + 1}
+              </span>
+              <div className="flex items-center gap-2 min-w-0">
+                {label ? (
+                  <span className="text-sm font-medium truncate">{label}</span>
+                ) : (
+                  <span className="font-mono text-xs break-all">
+                    {contender.address}
+                  </span>
+                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {tallyUrl && (
+                    <a
+                      href={tallyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                      title="View on Tally"
+                    >
+                      <User className="h-3 w-3" />
+                    </a>
+                  )}
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                    title="View on Arbiscan"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+            <a
+              href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
+              title="Registration transaction"
+            >
+              Registered
+            </a>
+          </div>
+        );
+      })}
     </div>
   );
 }

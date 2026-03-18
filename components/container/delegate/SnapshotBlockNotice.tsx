@@ -21,7 +21,8 @@ export function SnapshotBlockNotice({
         <span className="font-medium text-foreground">
           {snapshotBlock.toLocaleString()}
         </span>
-        . New delegates since then may not appear.
+        . Only addresses with {"\u2265"}10 ARB delegated are included; total
+        count and voting power reflect this subset.
         {cacheAge && (
           <>
             {" "}

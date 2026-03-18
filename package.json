@@ -5,9 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "cache:build:delegates": "tsx scripts/build-delegate-cache.ts",
-    "cache:build:delegates:dev": "tsx scripts/build-delegate-cache.ts --dev",
-    "cache:build:delegates:force": "tsx scripts/build-delegate-cache.ts --force",
+    "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
+    "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
     "start": "npx serve@latest out",
     "lint": "next lint --fix",
     "test": "npm run lint && tsc && vitest run",
@@ -26,7 +25,7 @@
     ]
   },
   "dependencies": {
-    "@gzeoneth/gov-tracker": "0.4.0-alpha.addr-feedback.36ae67e",
+    "@gzeoneth/gov-tracker": "0.4.0-alpha.feat-delegate-indexing.a78c35a",
     "@headlessui/react": "^1.7.18",
     "@hookform/resolvers": "^3.3.4",
     "@next/bundle-analyzer": "^14.2.3",
@@ -75,6 +74,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/debug": "^4.1.12",
     "@types/node": "^20.3.1",
     "@types/react": "^18.2.12",

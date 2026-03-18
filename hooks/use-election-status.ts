@@ -5,7 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   checkElectionStatus,
   createTracker,
+  getAllElectionStatuses,
+  getContenders,
   getElectionCount,
+  getElectionStatus,
+  getMemberElectionDetails,
+  getNomineeElectionDetails,
+  serializeMemberDetails,
+  serializeNomineeDetails,
+  type ElectionConfig,
   type ElectionProposalStatus,
   type ElectionStatus,
   type ChunkingConfig as GovTrackerChunkingConfig,
@@ -46,6 +54,8 @@ export interface UseElectionStatusOptions {
   l2ChunkSize?: number;
   refreshInterval?: number;
   selectedElectionIndex?: number | null;
+  nomineeGovernorAddress?: string;
+  memberGovernorAddress?: string;
 }
 
 export interface UseElectionStatusResult {
@@ -55,6 +65,8 @@ export interface UseElectionStatusResult {
   selectedElection: ElectionProposalStatus | null;
   nomineeDetails: NomineeElectionDetails;
   memberDetails: MemberElectionDetails;
+  nomineeDetailsMap: Record<number, NomineeElectionDetails>;
+  memberDetailsMap: Record<number, MemberElectionDetails>;
   isLoading: boolean;
   error: Error | null;
   refresh: () => void;
@@ -69,7 +81,12 @@ export function useElectionStatus({
   l2ChunkSize,
   refreshInterval = 60000,
   selectedElectionIndex: initialSelectedIndex = null,
+  nomineeGovernorAddress,
+  memberGovernorAddress,
 }: UseElectionStatusOptions = {}): UseElectionStatusResult {
+  const hasAddressOverrides = !!(
+    nomineeGovernorAddress && memberGovernorAddress
+  );
   const [status, setStatus] = useState<ElectionStatus | null>(null);
   const [allElections, setAllElections] = useState<ElectionProposalStatus[]>(
     []
@@ -93,6 +110,7 @@ export function useElectionStatus({
   const initialLoadDoneRef = useRef(false);
   const selectedIndexRef = useRef(selectedIndex);
   const bundledCacheInitializedRef = useRef(false);
+  const fetchInFlightRef = useRef(false);
 
   // Keep selectedIndexRef in sync
   useEffect(() => {
@@ -158,57 +176,230 @@ export function useElectionStatus({
     ? memberDetailsMap[selectedElection.electionIndex] ?? null
     : null;
 
+  const electionConfig = useMemo<ElectionConfig | undefined>(() => {
+    if (!nomineeGovernorAddress || !memberGovernorAddress) return undefined;
+    return {
+      nomineeGovernorAddress: nomineeGovernorAddress as `0x${string}`,
+      memberGovernorAddress: memberGovernorAddress as `0x${string}`,
+      chainId: 42161,
+    };
+  }, [nomineeGovernorAddress, memberGovernorAddress]);
+
+  const fetchWithOverrides = useCallback(async () => {
+    if (!electionConfig) return;
+
+    const l2Provider = getOrCreateProvider(l2Url);
+    const l1Provider = getOrCreateProvider(l1Url);
+
+    debug.app("Fetching election data with address overrides...");
+
+    const elections = await getAllElectionStatuses(l2Provider, electionConfig);
+    debug.app("Fetched %d elections via override config", elections.length);
+
+    setAllElections(elections);
+
+    try {
+      const electionStatus = await checkElectionStatus(
+        l2Provider,
+        l1Provider,
+        electionConfig.nomineeGovernorAddress
+      );
+      setStatus(electionStatus);
+    } catch (err) {
+      debug.app(
+        "checkElectionStatus failed in override mode (non-fatal): %O",
+        err
+      );
+    }
+
+    const nDetails: Record<number, NomineeElectionDetails> = {};
+    const mDetails: Record<number, MemberElectionDetails> = {};
+
+    for (const election of elections) {
+      const i = election.electionIndex;
+      try {
+        const nd = await getNomineeElectionDetails(
+          i,
+          l2Provider,
+          electionConfig.nomineeGovernorAddress
+        );
+        if (nd) nDetails[i] = serializeNomineeDetails(nd);
+      } catch (err) {
+        debug.app("Failed to get nominee details for election %d: %O", i, err);
+      }
+      try {
+        const md = await getMemberElectionDetails(
+          i,
+          l2Provider,
+          electionConfig.memberGovernorAddress
+        );
+        if (md) mDetails[i] = serializeMemberDetails(md);
+      } catch (err) {
+        debug.app("Failed to get member details for election %d: %O", i, err);
+      }
+    }
+
+    setNomineeDetailsMap(nDetails);
+    setMemberDetailsMap(mDetails);
+    initialLoadDoneRef.current = true;
+  }, [l2Url, l1Url, electionConfig]);
+
+  const fetchDefault = useCallback(async () => {
+    const { tracker, l2Provider, l1Provider } = await getTracker();
+
+    debug.app("Fetching SC election status...");
+
+    const electionCount = await getElectionCount(l2Provider);
+    debug.app("Election count: %d", electionCount);
+
+    const cachedElections: ElectionProposalStatus[] = [];
+    const cachedNomineeDetails: Record<number, NomineeElectionDetails> = {};
+    const cachedMemberDetails: Record<number, MemberElectionDetails> = {};
+
+    const checkpointResults = await Promise.all(
+      Array.from({ length: electionCount }, (_, i) =>
+        tracker
+          .getElectionCheckpoint(i)
+          .then((checkpoint) => ({ index: i, checkpoint }))
+      )
+    );
+
+    for (const { index: i, checkpoint } of checkpointResults) {
+      if (checkpoint && checkpoint.status.phase !== "NOT_STARTED") {
+        debug.cache(
+          "Election %d loaded from cache: %s",
+          i,
+          checkpoint.status.phase
+        );
+        cachedElections.push(checkpoint.status);
+        if (checkpoint.nomineeDetails) {
+          cachedNomineeDetails[i] = checkpoint.nomineeDetails;
+        }
+        if (checkpoint.memberDetails) {
+          cachedMemberDetails[i] = checkpoint.memberDetails;
+        }
+      }
+    }
+
+    const cachedIndices = new Set(cachedElections.map((e) => e.electionIndex));
+    const uncachedIndices = Array.from(
+      { length: electionCount },
+      (_, i) => i
+    ).filter((i) => !cachedIndices.has(i));
+
+    const [liveResults] = await Promise.all([
+      Promise.all(
+        uncachedIndices.map(async (i) => {
+          try {
+            const liveStatus = await getElectionStatus(l2Provider, i);
+            debug.app("Election %d fetched live: %s", i, liveStatus.phase);
+
+            let nd: NomineeElectionDetails = null;
+            const raw = await getNomineeElectionDetails(i, l2Provider).catch(
+              () => null
+            );
+            if (raw) {
+              nd = serializeNomineeDetails(raw);
+            } else if (liveStatus.nomineeProposalId) {
+              const contenders = await getContenders(
+                liveStatus.nomineeProposalId,
+                l2Provider
+              ).catch(() => []);
+              if (contenders.length > 0) {
+                nd = {
+                  proposalId: liveStatus.nomineeProposalId,
+                  electionIndex: i,
+                  contenders: contenders.map((c) => ({
+                    address: c.address,
+                    registeredAtBlock: c.registeredAtBlock,
+                    registrationTxHash: c.registrationTxHash,
+                  })),
+                  nominees: [],
+                  compliantNominees: [],
+                  excludedNominees: [],
+                  quorumThreshold: "0",
+                  targetNomineeCount: liveStatus.targetNomineeCount,
+                };
+              }
+            }
+
+            let md: MemberElectionDetails = null;
+            try {
+              const raw = await getMemberElectionDetails(i, l2Provider);
+              if (raw) md = serializeMemberDetails(raw);
+            } catch (err) {
+              debug.app("Member details failed for election %d: %O", i, err);
+            }
+
+            return { index: i, status: liveStatus, nominee: nd, member: md };
+          } catch (err) {
+            debug.app("Election %d live fetch failed: %O", i, err);
+            return null;
+          }
+        })
+      ),
+      checkElectionStatus(l2Provider, l1Provider)
+        .then((electionStatus) => {
+          setStatus(electionStatus);
+          debug.app(
+            "Election status: count=%d, canCreate=%s",
+            electionStatus.electionCount,
+            electionStatus.canCreateElection
+          );
+        })
+        .catch((err) => {
+          debug.app("checkElectionStatus failed (non-fatal): %O", err);
+        }),
+    ]);
+
+    for (const result of liveResults) {
+      if (!result) continue;
+      cachedElections.push(result.status);
+      if (result.nominee) cachedNomineeDetails[result.index] = result.nominee;
+      if (result.member) cachedMemberDetails[result.index] = result.member;
+    }
+
+    cachedElections.sort((a, b) => a.electionIndex - b.electionIndex);
+
+    setAllElections(cachedElections);
+    setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
+    setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
+    initialLoadDoneRef.current = true;
+  }, [getTracker]);
+
   const fetchElectionData = useCallback(async () => {
     if (!enabled) return;
+    if (fetchInFlightRef.current) {
+      debug.app("Skipping duplicate election fetch (already in-flight)");
+      return;
+    }
 
+    fetchInFlightRef.current = true;
     setIsLoading(true);
     setError(null);
 
     try {
-      const { tracker, l2Provider, l1Provider } = await getTracker();
-
-      debug.app("Fetching SC election status (lightweight)...");
-
-      const electionCount = await getElectionCount(l2Provider);
-      debug.app("Election count: %d", electionCount);
-
-      const cachedElections: ElectionProposalStatus[] = [];
-      const cachedNomineeDetails: Record<number, NomineeElectionDetails> = {};
-      const cachedMemberDetails: Record<number, MemberElectionDetails> = {};
-
-      for (let i = 0; i < electionCount; i++) {
-        const checkpoint = await tracker.getElectionCheckpoint(i);
-        if (checkpoint) {
-          debug.cache("Election %d loaded from cache", i);
-          cachedElections.push(checkpoint.status);
-          if (checkpoint.nomineeDetails) {
-            cachedNomineeDetails[i] = checkpoint.nomineeDetails;
-          }
-          if (checkpoint.memberDetails) {
-            cachedMemberDetails[i] = checkpoint.memberDetails;
-          }
+      if (hasAddressOverrides) {
+        try {
+          await fetchWithOverrides();
+        } catch (overrideErr) {
+          debug.app(
+            "Override fetch failed, falling back to default: %O",
+            overrideErr
+          );
+          setNomineeDetailsMap({});
+          setMemberDetailsMap({});
+          await fetchDefault();
         }
+      } else {
+        await fetchDefault();
       }
-
-      setAllElections(cachedElections);
-      setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
-      setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
-
-      initialLoadDoneRef.current = true;
-
-      const electionStatus = await checkElectionStatus(l2Provider, l1Provider);
-      setStatus(electionStatus);
-
-      debug.app(
-        "Election status: count=%d, canCreate=%s, cached=%d",
-        electionStatus.electionCount,
-        electionStatus.canCreateElection,
-        cachedElections.length
-      );
     } catch (err) {
       debug.app("Election status error: %O", err);
       const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
+      if (!initialLoadDoneRef.current) {
+        setError(error);
+      }
 
       if (isCorsOrNetworkError(error) && !shownErrorToastRef.current) {
         shownErrorToastRef.current = true;
@@ -227,9 +418,10 @@ export function useElectionStatus({
         });
       }
     } finally {
+      fetchInFlightRef.current = false;
       setIsLoading(false);
     }
-  }, [enabled, getTracker]);
+  }, [enabled, hasAddressOverrides, fetchWithOverrides, fetchDefault]);
 
   const refresh = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1);
@@ -241,6 +433,9 @@ export function useElectionStatus({
 
   useEffect(() => {
     fetchElectionData();
+    return () => {
+      fetchInFlightRef.current = false;
+    };
   }, [fetchElectionData, refreshTrigger]);
 
   useEffect(() => {
@@ -346,6 +541,8 @@ export function useElectionStatus({
     selectedElection,
     nomineeDetails,
     memberDetails,
+    nomineeDetailsMap,
+    memberDetailsMap,
     isLoading,
     error,
     refresh,

@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: ["**/node_modules/**", "**/opensrc/**"],
+    exclude: ["**/node_modules/**", "**/opensrc/**", "**/e2e/**"],
   },
   resolve: {
     alias: {
