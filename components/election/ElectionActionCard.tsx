@@ -100,6 +100,7 @@ function getPhaseContent({
             proposalId={selectedElection.nomineeProposalId}
             contenders={nomineeDetails.contenders}
             quorumThreshold={nomineeDetails.quorumThreshold}
+            nominees={nomineeDetails.nominees}
             bypassSimulation={bypassSimulation}
           />
         ),

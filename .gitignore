@@ -42,6 +42,7 @@ opensrc/
 
 # Claude Code instructions (local only)
 CLAUDE.md
+/.claude/
 
 # Agent loop metadata
 .agent/summary.md

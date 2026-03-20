@@ -15,10 +15,10 @@ import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { env } from "../env";
 
 // Get project ID from environment
-const projectId = env.NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID;
+const projectId = env.NEXT_PUBLIC_REOWN_PROJECT_ID;
 
 if (!projectId) {
-  throw new Error("NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID is not defined");
+  throw new Error("NEXT_PUBLIC_REOWN_PROJECT_ID is not defined");
 }
 
 const networks: [AppKitNetwork, ...AppKitNetwork[]] = [

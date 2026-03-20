@@ -170,10 +170,10 @@ export function useElectionStatus({
   }, [allElections, activeElections, selectedIndex]);
 
   const nomineeDetails = selectedElection
-    ? nomineeDetailsMap[selectedElection.electionIndex] ?? null
+    ? (nomineeDetailsMap[selectedElection.electionIndex] ?? null)
     : null;
   const memberDetails = selectedElection
-    ? memberDetailsMap[selectedElection.electionIndex] ?? null
+    ? (memberDetailsMap[selectedElection.electionIndex] ?? null)
     : null;
 
   const electionConfig = useMemo<ElectionConfig | undefined>(() => {
@@ -281,7 +281,13 @@ export function useElectionStatus({
       }
     }
 
-    const cachedIndices = new Set(cachedElections.map((e) => e.electionIndex));
+    // Only treat COMPLETED elections as fully cached.
+    // Active elections need live-fetching to pick up new contenders/nominees.
+    const cachedIndices = new Set(
+      cachedElections
+        .filter((e) => e.phase === "COMPLETED")
+        .map((e) => e.electionIndex)
+    );
     const uncachedIndices = Array.from(
       { length: electionCount },
       (_, i) => i
@@ -354,7 +360,15 @@ export function useElectionStatus({
 
     for (const result of liveResults) {
       if (!result) continue;
-      cachedElections.push(result.status);
+      // Live results for active elections replace stale cached versions
+      const existingIdx = cachedElections.findIndex(
+        (e) => e.electionIndex === result.index
+      );
+      if (existingIdx !== -1) {
+        cachedElections[existingIdx] = result.status;
+      } else {
+        cachedElections.push(result.status);
+      }
       if (result.nominee) cachedNomineeDetails[result.index] = result.nominee;
       if (result.member) cachedMemberDetails[result.index] = result.member;
     }

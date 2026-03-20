@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   ELECTION_TIMING,
   getTxUrl,
+  nomineeElectionGovernorReadAbi,
   type ElectionStatus,
   type TrackedStage,
 } from "@gzeoneth/gov-tracker";
@@ -16,9 +17,11 @@ import {
   ExternalLink,
   ListTree,
 } from "lucide-react";
+import { useReadContract } from "wagmi";
 
 import { Button } from "@/components/ui/Button";
 import { useDeepLink } from "@/context/DeepLinkContext";
+import { useElectionContracts } from "@/hooks/use-election-contracts";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
 
@@ -34,6 +37,7 @@ interface ElectionPhaseTimelineProps {
   currentPhase: ElectionPhase;
   stages?: TrackedStage[];
   status?: ElectionStatus | null;
+  electionIndex?: number;
   className?: string;
 }
 
@@ -209,23 +213,51 @@ function getTimeUntil(timestamp: number): string {
   return formatDuration(diff);
 }
 
+function getElectionStartFromStages(stages?: TrackedStage[]): number | null {
+  if (!stages) return null;
+  const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
+  const tx = createStage?.transactions?.[0];
+  return tx?.timestamp ?? null;
+}
+
 export function ElectionPhaseTimeline({
   currentPhase,
   stages,
   status,
+  electionIndex,
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
   const { openTimelock } = useDeepLink();
   const { l2Rpc } = useRpcSettings();
+  const { nomineeGovernorAddress, chainId } = useElectionContracts();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages);
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
 
+  // Read the on-chain scheduled start timestamp for this election
+  const { data: onChainTimestamp } = useReadContract({
+    address: nomineeGovernorAddress,
+    abi: nomineeElectionGovernorReadAbi,
+    functionName: "electionToTimestamp",
+    args: electionIndex !== undefined ? [BigInt(electionIndex)] : undefined,
+    chainId,
+    query: {
+      enabled: electionIndex !== undefined,
+      staleTime: Infinity,
+    },
+  });
+
+  const resolvedStartTimestamp =
+    getElectionStartFromStages(stages) ??
+    (onChainTimestamp !== undefined ? Number(onChainTimestamp) : null);
+
   const phaseEtas =
     status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
       ? calculatePhaseEtas(status.nextElectionTimestamp)
-      : null;
+      : resolvedStartTimestamp
+        ? calculatePhaseEtas(resolvedStartTimestamp)
+        : null;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -287,12 +319,15 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
+                {eta && isActive && eta.endTimestamp > 0 && (
+                  <p className="mt-1 text-xs font-medium text-primary">
+                    Ends in {getTimeUntil(eta.endTimestamp)}
+                  </p>
+                )}
                 {eta && isFuture && (
                   <p className="mt-1 text-xs text-muted-foreground/70">
-                    ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
-                    {eta.endTimestamp > 0
-                      ? formatEtaDate(eta.endTimestamp)
-                      : "completion"}
+                    Starts in {getTimeUntil(eta.startTimestamp)} (
+                    {formatEtaDate(eta.startTimestamp)})
                   </p>
                 )}
                 <PhaseTransactionLinks

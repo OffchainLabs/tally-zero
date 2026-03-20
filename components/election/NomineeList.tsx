@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  User,
+  Users,
+  XCircle,
+} from "lucide-react";
 
 import type {
   SerializableContender,
   SerializableMemberDetails,
+  SerializableNominee,
   SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
 
@@ -21,6 +29,10 @@ import {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { getDelegateLabel } from "@/lib/delegate-cache";
+import {
+  countQualifiedNominees,
+  getContenderDescription,
+} from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -81,7 +93,8 @@ export function NomineeList({
     return null;
   }
 
-  const showContenders = phase === "CONTENDER_SUBMISSION";
+  const showContenders =
+    phase === "CONTENDER_SUBMISSION" || phase === "NOMINEE_SELECTION";
   const canToggle = hasMemberResults && nomineeDetails;
   const showResults = viewMode === "results" && hasMemberResults;
 
@@ -119,9 +132,16 @@ export function NomineeList({
         </div>
         <CardDescription>
           {showContenders
-            ? `${nomineeDetails.contenders.length} contender${nomineeDetails.contenders.length !== 1 ? "s" : ""} registered`
+            ? getContenderDescription(
+                nomineeDetails.contenders.length,
+                countQualifiedNominees(
+                  nomineeDetails.nominees,
+                  nomineeDetails.quorumThreshold
+                ),
+                phase
+              )
             : showResults
-              ? `Top 6 nominees will be elected to the Security Council`
+              ? "Top 6 nominees will be elected to the Security Council"
               : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
         </CardDescription>
       </CardHeader>
@@ -131,6 +151,8 @@ export function NomineeList({
           <ContenderList
             contenders={nomineeDetails.contenders}
             electionIndex={electionIndex}
+            nominees={nomineeDetails.nominees}
+            quorumThreshold={nomineeDetails.quorumThreshold}
           />
         ) : showResults && memberDetails ? (
           <MemberElectionResults
@@ -163,6 +185,27 @@ function NomineeElectionList({
       <div className="text-sm text-muted-foreground">
         Quorum threshold: {threshold} ARB
       </div>
+
+      {compliantNominees.length < details.targetNomineeCount && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+          <div className="flex items-start gap-2 text-yellow-500">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium">
+                {compliantNominees.length} of {details.targetNomineeCount}{" "}
+                nominees qualified
+              </p>
+              <p className="text-yellow-500/80 mt-1">
+                Per the ArbitrumDAO Constitution, if fewer than{" "}
+                {details.targetNomineeCount} contenders reach the quorum
+                threshold, current Security Council members whose seats are up
+                for election may be randomly selected as candidates to fill the
+                remaining seats.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {compliantNominees.length > 0 && (
         <div className="space-y-2">
@@ -383,12 +426,50 @@ function NomineeRow({
   );
 }
 
+function ContenderVoteTally({
+  contender,
+  nominees,
+  quorumThreshold,
+}: {
+  contender: SerializableContender;
+  nominees: SerializableNominee[];
+  quorumThreshold: string;
+}): React.ReactElement {
+  const nomineeData = nominees.find(
+    (n) => n.address.toLowerCase() === contender.address.toLowerCase()
+  );
+  const votes = nomineeData?.votesReceived ?? "0";
+  const qualified =
+    BigInt(votes) >= BigInt(quorumThreshold) &&
+    BigInt(quorumThreshold) > BigInt(0);
+
+  return (
+    <div className="flex items-center gap-2 shrink-0 ml-2">
+      <span className="text-xs text-muted-foreground">
+        {formatVotingPower(votes)} ARB
+      </span>
+      {qualified && (
+        <Badge
+          variant="secondary"
+          className="text-green-500 border-green-500/30 text-xs"
+        >
+          Nominee
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function ContenderList({
   contenders,
   electionIndex,
+  nominees,
+  quorumThreshold,
 }: {
   contenders: SerializableContender[];
   electionIndex?: number;
+  nominees?: SerializableNominee[];
+  quorumThreshold?: string;
 }): React.ReactElement {
   if (contenders.length === 0) {
     return (
@@ -449,15 +530,23 @@ function ContenderList({
                 </div>
               </div>
             </div>
-            <a
-              href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
-              title="Registration transaction"
-            >
-              Registered
-            </a>
+            {nominees && quorumThreshold ? (
+              <ContenderVoteTally
+                contender={contender}
+                nominees={nominees}
+                quorumThreshold={quorumThreshold}
+              />
+            ) : (
+              <a
+                href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
+                title="Registration transaction"
+              >
+                Registered
+              </a>
+            )}
           </div>
         );
       })}

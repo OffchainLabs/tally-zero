@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useEstimateGas, useSendTransaction } from "wagmi";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEstimateGas,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 
 import type { PreparedTransaction } from "@gzeoneth/gov-tracker";
 import { prepareNomineeElectionVote } from "@gzeoneth/gov-tracker";
@@ -17,7 +21,7 @@ import { Input } from "@/components/ui/Input";
 import { getDelegateLabel } from "@/lib/delegate-cache";
 import { getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-import { shortenAddress } from "@/lib/format-utils";
+import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
 type PrepareVoteFn = (
   proposalId: string,
@@ -101,13 +105,19 @@ export function ElectionVoteRow({
     sendTransaction,
   } = useSendTransaction();
 
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({ hash: txHash });
+
+  const onVoteSuccessRef = useRef(onVoteSuccess);
+  onVoteSuccessRef.current = onVoteSuccess;
+
   useEffect(() => {
-    if (txHash) {
-      toast(`Vote submitted for ${label || shortenAddress(targetAddress)}`);
+    if (isConfirmed) {
+      toast(`Vote confirmed for ${label || shortenAddress(targetAddress)}`);
       setAmount("");
-      onVoteSuccess();
+      onVoteSuccessRef.current();
     }
-  }, [txHash, label, targetAddress, onVoteSuccess]);
+  }, [isConfirmed, label, targetAddress]);
 
   const handleVote = useCallback(() => {
     if (!prepared) return;
@@ -148,20 +158,33 @@ export function ElectionVoteRow({
       </div>
 
       <div className="flex items-center gap-2">
-        <Input
-          type="number"
-          placeholder="Amount (ARB)"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          variant="glass"
-          className="h-8 text-sm flex-1"
-          min="0"
-          step="any"
-        />
-        {isWriting ? (
+        <div className="relative flex-1">
+          <Input
+            type="number"
+            placeholder="Amount (ARB)"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            variant="glass"
+            className="h-8 text-sm pr-12"
+            min="0"
+            step="any"
+          />
+          {availableVotes !== undefined && availableVotes > BigInt(0) && (
+            <button
+              type="button"
+              onClick={() =>
+                setAmount(ethersUtils.formatEther(availableVotes.toString()))
+              }
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary hover:text-primary/80 font-medium"
+            >
+              Max
+            </button>
+          )}
+        </div>
+        {isWriting || isConfirming ? (
           <Button size="sm" disabled className="shrink-0">
             <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
-            Voting
+            {isConfirming ? "Confirming" : "Voting"}
           </Button>
         ) : (
           <Button
@@ -178,6 +201,13 @@ export function ElectionVoteRow({
           </Button>
         )}
       </div>
+
+      {voteAmountWei !== undefined && !exceedsAvailable && (
+        <p className="text-xs text-muted-foreground">
+          Voting {formatVotingPower(voteAmountWei)} ARB for{" "}
+          {label || shortenAddress(targetAddress)}
+        </p>
+      )}
 
       {exceedsAvailable && (
         <p className="text-xs text-red-500">Exceeds available voting power</p>

@@ -212,6 +212,7 @@ export function ElectionContainer(): React.ReactElement {
           currentPhase={currentPhase}
           stages={selectedElection?.stages}
           status={status}
+          electionIndex={selectedElection?.electionIndex}
         />
 
         <NomineeList

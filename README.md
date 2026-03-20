@@ -40,8 +40,8 @@ A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for
 # Install dependencies
 yarn
 
-# Create .env.local with your WalletConnect project ID
-echo 'NEXT_PUBLIC_WEB3STORAGE_PROJECT_ID=<your-id>' > .env.local
+# Create .env.local with your Reown (WalletConnect) project ID
+echo 'NEXT_PUBLIC_REOWN_PROJECT_ID=<your-id>' > .env.local
 
 # Start dev server
 yarn dev
