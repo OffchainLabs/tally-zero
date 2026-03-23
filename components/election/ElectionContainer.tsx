@@ -221,8 +221,6 @@ export function ElectionContainer(): React.ReactElement {
           isLoading={isLoading}
           phase={currentPhase}
           electionIndex={selectedElection?.electionIndex}
-          proposalId={overrideElection?.nomineeProposalId ?? undefined}
-          bypassSimulation={hasOverride}
         />
       </div>
 

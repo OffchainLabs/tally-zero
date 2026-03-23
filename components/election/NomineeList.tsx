@@ -23,19 +23,10 @@ import {
 } from "@/lib/election-utils";
 import type { ElectionPhase } from "@/types/election";
 
-import dynamic from "next/dynamic";
-
 import { ContenderList } from "./ContenderList";
+import { ContenderVoteList } from "./ContenderVoteList";
 import { MemberElectionResults } from "./MemberElectionResults";
 import { NomineeElectionList } from "./NomineeElectionList";
-
-const ContenderVoteList = dynamic(
-  () =>
-    import("./ContenderVoteList").then((mod) => ({
-      default: mod.ContenderVoteList,
-    })),
-  { ssr: false }
-);
 
 type ViewMode = "nominees" | "results";
 
@@ -45,8 +36,6 @@ interface NomineeListProps {
   isLoading: boolean;
   phase: ElectionPhase;
   electionIndex?: number;
-  proposalId?: string;
-  bypassSimulation?: boolean;
 }
 
 export function NomineeList({
@@ -55,8 +44,6 @@ export function NomineeList({
   isLoading,
   phase,
   electionIndex,
-  proposalId,
-  bypassSimulation = false,
 }: NomineeListProps): React.ReactElement | null {
   const hasMemberResults =
     memberDetails &&
@@ -134,13 +121,11 @@ export function NomineeList({
       </CardHeader>
 
       <CardContent>
-        {phase === "NOMINEE_SELECTION" && proposalId ? (
+        {phase === "NOMINEE_SELECTION" ? (
           <ContenderVoteList
             contenders={nomineeDetails.contenders}
             nominees={nomineeDetails.nominees}
             quorumThreshold={nomineeDetails.quorumThreshold}
-            proposalId={proposalId}
-            bypassSimulation={bypassSimulation}
           />
         ) : showContenders ? (
           <ContenderList

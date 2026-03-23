@@ -2,14 +2,22 @@ import candidatesData from "@/data/election-5-candidates.json";
 import type { ElectionPhase } from "@/types/election";
 
 const candidateNames = new Map<string, string>();
+const candidateTitles = new Map<string, string>();
 for (const [addr, data] of Object.entries(
-  candidatesData as Record<string, { name: string }>
+  candidatesData as Record<string, { name: string; title?: string }>
 )) {
   candidateNames.set(addr.toLowerCase(), data.name);
+  if (data.title) {
+    candidateTitles.set(addr.toLowerCase(), data.title);
+  }
 }
 
 export function getCandidateName(address: string): string | undefined {
   return candidateNames.get(address.toLowerCase());
+}
+
+export function getCandidateTitle(address: string): string | undefined {
+  return candidateTitles.get(address.toLowerCase());
 }
 
 export function getCandidateProfileUrl(address: string): string | undefined {

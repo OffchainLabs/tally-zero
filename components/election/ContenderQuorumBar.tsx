@@ -25,11 +25,11 @@ export function ContenderQuorumBar({
           <span className="text-green-500 font-medium">Qualified</span>
         ) : (
           <>
-            <span className="text-muted-foreground shrink-0 w-1/5">
+            <span className="text-muted-foreground shrink-0 whitespace-pre min-w-[20%]">
               {formatVotingPower(votes)} / {formatVotingPower(quorumThreshold)}{" "}
               Votes
             </span>
-            <div className="h-1.5 bg-muted rounded-full w-full">
+            <div className="h-1.5 bg-muted rounded-full w-full shrink">
               <div
                 className={cn("h-1.5 rounded-full transition-all bg-primary")}
                 style={{ width: `${percent}%` }}

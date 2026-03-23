@@ -1,123 +1,66 @@
-"use client";
-
-import { useAccount } from "wagmi";
-
 import type {
   SerializableContender,
   SerializableNominee,
 } from "@gzeoneth/gov-tracker";
-import { nomineeElectionGovernorReadAbi } from "@gzeoneth/gov-tracker";
-import {
-  AlertCircle,
-  CheckCircle2,
-  ExternalLink,
-  Info,
-  Wallet,
-} from "lucide-react";
+import { ExternalLink, Info } from "lucide-react";
+import Link from "next/link";
 
-import { useElectionContracts } from "@/hooks/use-election-contracts";
-import { useElectionVotingPower } from "@/hooks/use-election-voting-power";
-import { getCandidateName, getCandidateProfileUrl } from "@/lib/election-utils";
-import { formatVotingPower } from "@/lib/format-utils";
+import { getDelegateLabel } from "@/lib/delegate-cache";
+import {
+  getCandidateName,
+  getCandidateProfileUrl,
+  getCandidateTitle,
+} from "@/lib/election-utils";
+import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
-import { ElectionVoteRow } from "./ElectionVoteRow";
-import { VotingPowerSummary } from "./VotingPowerSummary";
+
+function NomineeSelectionBanner({
+  quorumThreshold,
+}: {
+  quorumThreshold: string;
+}) {
+  return (
+    <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+      <div className="flex items-start gap-2 text-blue-500">
+        <Info className="h-4 w-4 mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="font-medium">Nominee Selection</p>
+          <p className="text-blue-500/80 mt-1">
+            Vote for contenders to endorse them as nominees. Each contender
+            needs at least {formatVotingPower(quorumThreshold)} ARB (0.2% of
+            votable tokens) to qualify for the compliance check.
+          </p>
+          <a
+            href="https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-2 text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <span>Read the election rules in the DAO Constitution</span>
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ContenderVoteListProps {
   contenders: SerializableContender[];
   nominees: SerializableNominee[];
   quorumThreshold: string;
-  proposalId: string;
-  bypassSimulation: boolean;
 }
 
 export function ContenderVoteList({
   contenders,
   nominees,
   quorumThreshold,
-  proposalId,
-  bypassSimulation,
 }: ContenderVoteListProps): React.ReactElement {
-  const { isConnected } = useAccount();
-  const { nomineeGovernorAddress, chainId } = useElectionContracts();
-
-  const { totalVotingPower, usedVotes, availableVotes, refetchUsedVotes } =
-    useElectionVotingPower({
-      proposalId,
-      governorAddress: nomineeGovernorAddress,
-      governorReadAbi: nomineeElectionGovernorReadAbi,
-    });
-
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
-        <div className="flex items-start gap-2 text-blue-500">
-          <Info className="h-4 w-4 mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-medium">Nominee Selection</p>
-            <p className="text-blue-500/80 mt-1">
-              Vote for contenders to endorse them as nominees. Each contender
-              needs at least {formatVotingPower(quorumThreshold)} ARB (0.2% of
-              votable tokens) to qualify for the compliance check.
-            </p>
-            <a
-              href="https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 mt-2 text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              <span>Read the election rules in the DAO Constitution</span>
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {!isConnected ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Wallet className="h-4 w-4" />
-          Connect your wallet to vote for contenders
-        </div>
-      ) : (
-        <>
-          <VotingPowerSummary
-            totalVotingPower={totalVotingPower}
-            usedVotes={usedVotes}
-            availableVotes={availableVotes}
-          />
-
-          {totalVotingPower !== undefined && totalVotingPower === BigInt(0) && (
-            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-              <div className="flex items-start gap-2 text-yellow-500">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium">No voting power</p>
-                  <p className="text-yellow-500/80 mt-1">
-                    Your wallet has no voting power for this election. Voting
-                    power is based on delegated ARB tokens at the proposal
-                    snapshot block.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {availableVotes !== undefined &&
-            availableVotes === BigInt(0) &&
-            usedVotes !== undefined &&
-            usedVotes > BigInt(0) && (
-              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
-                <div className="flex items-center gap-2 text-green-500">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span className="text-sm">
-                    You have used all your voting power for this round.
-                  </span>
-                </div>
-              </div>
-            )}
-        </>
-      )}
+      <NomineeSelectionBanner quorumThreshold={quorumThreshold} />
 
       <div className="text-sm text-muted-foreground">
         Quorum threshold: {formatVotingPower(quorumThreshold)} ARB per contender
@@ -128,32 +71,73 @@ export function ContenderVoteList({
           No contenders registered yet
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {contenders.map((contender) => {
+            const candidateName = getCandidateName(contender.address);
+            const candidateTitle = getCandidateTitle(contender.address);
+            const label = candidateName ?? getDelegateLabel(contender.address);
+            const profileUrl = getCandidateProfileUrl(contender.address);
+            const explorerUrl = getAddressExplorerUrl(contender.address);
             const nomineeData = nominees.find(
               (n) => n.address.toLowerCase() === contender.address.toLowerCase()
             );
             const votes = nomineeData?.votesReceived ?? "0";
 
             return (
-              <ElectionVoteRow
+              <div
                 key={contender.address}
-                proposalId={proposalId}
-                targetAddress={contender.address}
-                governorAddress={nomineeGovernorAddress}
-                chainId={chainId}
-                availableVotes={isConnected ? availableVotes : undefined}
-                onVoteSuccess={refetchUsedVotes}
-                bypassSimulation={bypassSimulation}
-                labelOverride={getCandidateName(contender.address)}
-                profileUrl={getCandidateProfileUrl(contender.address)}
-                infoSlot={
-                  <ContenderQuorumBar
-                    votes={votes}
-                    quorumThreshold={quorumThreshold}
-                  />
-                }
-              />
+                className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      {profileUrl ? (
+                        <Link
+                          href={profileUrl}
+                          className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
+                        >
+                          {label ?? contender.address}
+                        </Link>
+                      ) : label ? (
+                        <span className="text-sm font-medium truncate">
+                          {label}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs break-all">
+                          {shortenAddress(contender.address)}
+                        </span>
+                      )}
+                      {!profileUrl && (
+                        <a
+                          href={explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    {candidateTitle && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {candidateTitle}
+                      </p>
+                    )}
+                  </div>
+                  {profileUrl && (
+                    <Link
+                      href={profileUrl}
+                      className="text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0 ml-2"
+                    >
+                      Vote &rarr;
+                    </Link>
+                  )}
+                </div>
+                <ContenderQuorumBar
+                  votes={votes}
+                  quorumThreshold={quorumThreshold}
+                />
+              </div>
             );
           })}
         </div>

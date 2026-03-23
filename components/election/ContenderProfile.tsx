@@ -1,5 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 import {
   ExternalLink,
   Globe,
@@ -19,10 +21,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { shortenAddress } from "@/lib/format-utils";
 
 import candidatesData from "@/data/election-5-candidates.json";
+
+const ContenderVoteCard = dynamic(
+  () =>
+    import("./ContenderVoteCard").then((mod) => ({
+      default: mod.ContenderVoteCard,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <Card variant="glass">
+        <CardContent className="py-6">
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    ),
+  }
+);
 
 interface CandidateSkills {
   canVerifySigning: boolean;
@@ -269,84 +289,94 @@ export function ContenderProfile({
         </CardContent>
       </Card>
 
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle>Motivation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {textToElements(candidate.motivation)}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col lg:flex-row-reverse gap-5">
+        <div className="lg:min-w-[450px]">
+          <ContenderVoteCard address={address} />
+        </div>
+        <div className="flex space-y-6 flex-col">
+          <Card variant="glass">
+            <CardHeader>
+              <CardTitle>Motivation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {textToElements(candidate.motivation)}
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle>Experience</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {textToElements(candidate.experience)}
-          </div>
-        </CardContent>
-      </Card>
+          <Card variant="glass">
+            <CardHeader>
+              <CardTitle>Experience</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {textToElements(candidate.experience)}
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle>Skills</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <SkillBar label="Solidity" level={candidate.skills.solidity} />
-              <SkillBar label="Rust" level={candidate.skills.rust} />
-              <SkillBar label="Go" level={candidate.skills.golang} />
-              <SkillBar
-                label="JavaScript"
-                level={candidate.skills.javascript}
-              />
-            </div>
+          <Card variant="glass">
+            <CardHeader>
+              <CardTitle>Skills</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SkillBar
+                    label="Solidity"
+                    level={candidate.skills.solidity}
+                  />
+                  <SkillBar label="Rust" level={candidate.skills.rust} />
+                  <SkillBar label="Go" level={candidate.skills.golang} />
+                  <SkillBar
+                    label="JavaScript"
+                    level={candidate.skills.javascript}
+                  />
+                </div>
 
-            <div className="space-y-2 pt-2">
-              <h4 className="text-sm font-medium">Cybersecurity</h4>
+                <div className="space-y-2 pt-2">
+                  <h4 className="text-sm font-medium">Cybersecurity</h4>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {candidate.skills.cyberSecurity}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  {candidate.skills.canVerifySigning ? (
+                    <Badge
+                      variant="secondary"
+                      className="text-green-500 border-green-500/30 flex items-center gap-1"
+                    >
+                      <ShieldCheck className="h-3 w-3" />
+                      Can verify signing
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="secondary"
+                      className="text-red-500 border-red-500/30 flex items-center gap-1"
+                    >
+                      <ShieldX className="h-3 w-3" />
+                      Cannot verify signing
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card variant="glass">
+            <CardHeader>
+              <CardTitle>Projects</CardTitle>
+            </CardHeader>
+            <CardContent>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {candidate.skills.cyberSecurity}
+                {candidate.projects}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2">
-              {candidate.skills.canVerifySigning ? (
-                <Badge
-                  variant="secondary"
-                  className="text-green-500 border-green-500/30 flex items-center gap-1"
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  Can verify signing
-                </Badge>
-              ) : (
-                <Badge
-                  variant="secondary"
-                  className="text-red-500 border-red-500/30 flex items-center gap-1"
-                >
-                  <ShieldX className="h-3 w-3" />
-                  Cannot verify signing
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle>Projects</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {candidate.projects}
-          </p>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
