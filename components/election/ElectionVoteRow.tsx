@@ -7,14 +7,17 @@ import type { PreparedTransaction } from "@gzeoneth/gov-tracker";
 import { prepareNomineeElectionVote } from "@gzeoneth/gov-tracker";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { utils as ethersUtils } from "ethers";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { getDelegateLabel } from "@/lib/delegate-cache";
+import {
+  getCandidateDisplayName,
+  getCandidateProfile,
+} from "@/lib/candidate-profiles";
 import { getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { shortenAddress } from "@/lib/format-utils";
@@ -52,7 +55,8 @@ export function ElectionVoteRow({
   prepareVote = prepareNomineeElectionVote,
 }: ElectionVoteRowProps): React.ReactElement {
   const [amount, setAmount] = useState("");
-  const label = getDelegateLabel(targetAddress);
+  const profile = getCandidateProfile(targetAddress);
+  const label = getCandidateDisplayName(targetAddress);
   const explorerUrl = getAddressExplorerUrl(targetAddress);
 
   const voteAmountWei = useMemo(() => {
@@ -128,6 +132,18 @@ export function ElectionVoteRow({
     <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
+          {profile?.picture ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={profile.picture}
+              alt=""
+              className="h-6 w-6 rounded-full object-cover shrink-0 border border-border/50"
+            />
+          ) : (
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted shrink-0">
+              <User className="h-3 w-3 text-muted-foreground" />
+            </div>
+          )}
           {label ? (
             <span className="text-sm font-medium truncate">{label}</span>
           ) : (

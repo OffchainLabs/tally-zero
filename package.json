@@ -8,6 +8,7 @@
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
     "start": "npx serve@latest out",
+    "fetch:candidates": "tsx scripts/fetch-candidates.ts",
     "lint": "next lint --fix",
     "test": "npm run lint && tsc && vitest run",
     "prepare": "husky install"

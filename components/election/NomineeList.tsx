@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 
-import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  Globe,
+  MapPin,
+  Shield,
+  User,
+  Users,
+  XCircle,
+} from "lucide-react";
 
 import type {
   SerializableContender,
@@ -18,9 +27,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/HoverCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
-import { getDelegateLabel } from "@/lib/delegate-cache";
+import type { CandidateProfile } from "@/lib/candidate-profiles";
+import {
+  getCandidateDisplayName,
+  getCandidateProfile,
+} from "@/lib/candidate-profiles";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -51,6 +69,235 @@ function getTallyProfileUrl(
   }
   return `https://www.tally.xyz/gov/arbitrum/council/security-council/election/${electionIndex}/round-2/nominee/${address}`;
 }
+
+// ---------------------------------------------------------------------------
+// Shared: candidate identity display (avatar + name + links)
+// ---------------------------------------------------------------------------
+
+function CandidateIdentity({
+  address,
+  electionIndex,
+  round,
+  className,
+}: {
+  address: string;
+  electionIndex?: number;
+  round?: 1 | 2;
+  className?: string;
+}) {
+  const profile = getCandidateProfile(address);
+  const displayName = getCandidateDisplayName(address);
+  const explorerUrl = getAddressExplorerUrl(address);
+  const tallyUrl =
+    electionIndex !== undefined && round !== undefined
+      ? getTallyProfileUrl(electionIndex, address, round)
+      : null;
+
+  const trigger = (
+    <div className={cn("flex items-center gap-2 min-w-0", className)}>
+      {profile?.picture ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={profile.picture}
+          alt=""
+          className="h-7 w-7 rounded-full object-cover shrink-0 border border-border/50"
+        />
+      ) : (
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted shrink-0">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 min-w-0">
+        {displayName ? (
+          <span className="text-sm font-medium truncate">{displayName}</span>
+        ) : (
+          <span className="font-mono text-xs truncate">{address}</span>
+        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {tallyUrl && (
+            <a
+              href={tallyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors"
+              title="View on Tally"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Globe className="h-3 w-3" />
+            </a>
+          )}
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-primary transition-colors"
+            title="View on Arbiscan"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!profile || (!profile.motivation && !profile.qualifications)) {
+    return trigger;
+  }
+
+  return (
+    <HoverCard openDelay={300} closeDelay={100}>
+      <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
+      <CandidateHoverContent profile={profile} />
+    </HoverCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HoverCard content: shows profile details on hover
+// ---------------------------------------------------------------------------
+
+function CandidateHoverContent({ profile }: { profile: CandidateProfile }) {
+  return (
+    <HoverCardContent
+      className="w-80 max-h-[400px] overflow-y-auto"
+      side="right"
+      align="start"
+    >
+      <div className="space-y-3">
+        {/* Header */}
+        <div className="flex items-start gap-3">
+          {profile.picture ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={profile.picture}
+              alt=""
+              className="h-10 w-10 rounded-full object-cover shrink-0 border border-border/50"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted shrink-0">
+              <User className="h-5 w-5 text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">
+              {profile.name ?? profile.address}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              {profile.country && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <MapPin className="h-3 w-3" />
+                  {profile.country}
+                </span>
+              )}
+              {profile.entityType && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {profile.entityType.length > 20
+                    ? profile.entityType.split(/[:.]/)[0].trim()
+                    : profile.entityType}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Motivation */}
+        {profile.motivation && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Motivation
+            </p>
+            <p className="text-xs leading-relaxed line-clamp-4">
+              {profile.motivation}
+            </p>
+          </div>
+        )}
+
+        {/* Qualifications */}
+        {profile.qualifications && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Experience
+            </p>
+            <p className="text-xs leading-relaxed line-clamp-4">
+              {profile.qualifications}
+            </p>
+          </div>
+        )}
+
+        {/* Technical skills */}
+        {profile.technicalSkills && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Technical Skills
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <SkillBadge
+                label="Sol"
+                value={profile.technicalSkills.solidity}
+              />
+              <SkillBadge
+                label="JS"
+                value={profile.technicalSkills.javascript}
+              />
+              <SkillBadge label="Rust" value={profile.technicalSkills.rust} />
+              <SkillBadge label="Go" value={profile.technicalSkills.golang} />
+              {profile.technicalSkills.cybersecurityYears != null && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  <Shield className="h-2.5 w-2.5 mr-0.5" />
+                  {profile.technicalSkills.cybersecurityYears}yr
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Projects */}
+        {profile.projectsInvolved && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Projects
+            </p>
+            <p className="text-xs leading-relaxed line-clamp-2">
+              {profile.projectsInvolved}
+            </p>
+          </div>
+        )}
+
+        {/* View full profile link */}
+        <a
+          href={profile.tallyProfileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block text-xs text-primary hover:underline"
+        >
+          View full profile on Tally
+        </a>
+      </div>
+    </HoverCardContent>
+  );
+}
+
+function SkillBadge({ label, value }: { label: string; value: number | null }) {
+  if (value == null) return null;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-[10px] px-1.5 py-0",
+        value >= 8 && "border-green-500/50 text-green-400",
+        value >= 5 && value < 8 && "border-yellow-500/50 text-yellow-400",
+        value < 5 && "border-muted-foreground/50"
+      )}
+    >
+      {label}: {value}
+    </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main NomineeList
+// ---------------------------------------------------------------------------
 
 export function NomineeList({
   nomineeDetails,
@@ -148,6 +395,10 @@ export function NomineeList({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Nominee Election List
+// ---------------------------------------------------------------------------
+
 function NomineeElectionList({
   details,
   electionIndex,
@@ -213,6 +464,10 @@ function NomineeElectionList({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Member Election Results
+// ---------------------------------------------------------------------------
+
 function MemberElectionResults({
   details,
   electionIndex,
@@ -230,86 +485,53 @@ function MemberElectionResults({
       </div>
 
       <div className="space-y-2">
-        {details.nominees.map((nominee, index: number) => {
-          const label = getDelegateLabel(nominee.address);
-          const explorerUrl = getAddressExplorerUrl(nominee.address);
-          const tallyUrl =
-            electionIndex !== undefined
-              ? getTallyProfileUrl(electionIndex, nominee.address, 2)
-              : null;
-
-          return (
-            <div
-              key={nominee.address}
-              className={cn(
-                "flex items-center justify-between rounded-lg border p-3",
-                nominee.isWinner
-                  ? "border-green-500/30 bg-green-500/10"
-                  : "border-border/50 bg-muted/30"
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span
-                  className={cn(
-                    "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shrink-0",
-                    nominee.isWinner
-                      ? "bg-green-500 text-white"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {index + 1}
-                </span>
-                <div className="flex items-center gap-2 min-w-0">
-                  {label ? (
-                    <span className="text-sm font-medium truncate">
-                      {label}
-                    </span>
-                  ) : (
-                    <span className="font-mono text-xs break-all">
-                      {nominee.address}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {tallyUrl && (
-                      <a
-                        href={tallyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition-colors"
-                        title="View on Tally"
-                      >
-                        <User className="h-3 w-3" />
-                      </a>
-                    )}
-                    <a
-                      href={explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      title="View on Arbiscan"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 ml-2">
-                <span className="text-sm text-muted-foreground">
-                  {formatVotingPower(nominee.weightReceived.toString())} ARB
-                </span>
-                {nominee.isWinner && (
-                  <Badge variant="default" className="bg-green-500">
-                    Winner
-                  </Badge>
+        {details.nominees.map((nominee, index: number) => (
+          <div
+            key={nominee.address}
+            className={cn(
+              "flex items-center justify-between rounded-lg border p-3",
+              nominee.isWinner
+                ? "border-green-500/30 bg-green-500/10"
+                : "border-border/50 bg-muted/30"
+            )}
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shrink-0",
+                  nominee.isWinner
+                    ? "bg-green-500 text-white"
+                    : "bg-muted text-muted-foreground"
                 )}
-              </div>
+              >
+                {index + 1}
+              </span>
+              <CandidateIdentity
+                address={nominee.address}
+                electionIndex={electionIndex}
+                round={2}
+              />
             </div>
-          );
-        })}
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              <span className="text-sm text-muted-foreground">
+                {formatVotingPower(nominee.weightReceived.toString())} ARB
+              </span>
+              {nominee.isWinner && (
+                <Badge variant="default" className="bg-green-500">
+                  Winner
+                </Badge>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Nominee Row
+// ---------------------------------------------------------------------------
 
 function NomineeRow({
   address,
@@ -326,13 +548,6 @@ function NomineeRow({
   isCompliant?: boolean;
   isExcluded?: boolean;
 }): React.ReactElement {
-  const label = getDelegateLabel(address);
-  const explorerUrl = getAddressExplorerUrl(address);
-  const tallyUrl =
-    electionIndex !== undefined && round !== undefined
-      ? getTallyProfileUrl(electionIndex, address, round)
-      : null;
-
   return (
     <div
       className={cn(
@@ -346,35 +561,11 @@ function NomineeRow({
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
         )}
         {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
-        <div className="flex items-center gap-2 min-w-0">
-          {label ? (
-            <span className="text-sm font-medium truncate">{label}</span>
-          ) : (
-            <span className="font-mono text-xs break-all">{address}</span>
-          )}
-          <div className="flex items-center gap-1 shrink-0">
-            {tallyUrl && (
-              <a
-                href={tallyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary transition-colors"
-                title="View on Tally"
-              >
-                <User className="h-3 w-3" />
-              </a>
-            )}
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary transition-colors"
-              title="View on Arbiscan"
-            >
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        </div>
+        <CandidateIdentity
+          address={address}
+          electionIndex={electionIndex}
+          round={round}
+        />
       </div>
       <span className="text-sm text-muted-foreground shrink-0 ml-2">
         {votes} ARB
@@ -382,6 +573,10 @@ function NomineeRow({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Contender List
+// ---------------------------------------------------------------------------
 
 function ContenderList({
   contenders,
@@ -400,70 +595,39 @@ function ContenderList({
 
   return (
     <div className="space-y-2">
-      {contenders.map((contender, index) => {
-        const label = getDelegateLabel(contender.address);
-        const explorerUrl = getAddressExplorerUrl(contender.address);
-        const tallyUrl =
-          electionIndex !== undefined
-            ? getTallyProfileUrl(electionIndex, contender.address, 1)
-            : null;
-
-        return (
-          <div
-            key={contender.address}
-            className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 p-3"
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">
-                {index + 1}
-              </span>
-              <div className="flex items-center gap-2 min-w-0">
-                {label ? (
-                  <span className="text-sm font-medium truncate">{label}</span>
-                ) : (
-                  <span className="font-mono text-xs break-all">
-                    {contender.address}
-                  </span>
-                )}
-                <div className="flex items-center gap-1 shrink-0">
-                  {tallyUrl && (
-                    <a
-                      href={tallyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      title="View on Tally"
-                    >
-                      <User className="h-3 w-3" />
-                    </a>
-                  )}
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-primary transition-colors"
-                    title="View on Arbiscan"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-            <a
-              href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
-              title="Registration transaction"
-            >
-              Registered
-            </a>
+      {contenders.map((contender, index) => (
+        <div
+          key={contender.address}
+          className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 p-3"
+        >
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">
+              {index + 1}
+            </span>
+            <CandidateIdentity
+              address={contender.address}
+              electionIndex={electionIndex}
+              round={1}
+            />
           </div>
-        );
-      })}
+          <a
+            href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
+            title="Registration transaction"
+          >
+            Registered
+          </a>
+        </div>
+      ))}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Skeleton
+// ---------------------------------------------------------------------------
 
 function NomineeListSkeleton(): React.ReactElement {
   return (
@@ -474,7 +638,7 @@ function NomineeListSkeleton(): React.ReactElement {
       </CardHeader>
       <CardContent className="space-y-2">
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-12 w-full" />
+          <Skeleton key={i} className="h-14 w-full" />
         ))}
       </CardContent>
     </Card>
