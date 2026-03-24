@@ -167,15 +167,15 @@ interface PhaseEta {
 }
 
 function calculatePhaseEtas(
-  nextElectionTimestamp: number
+  electionStartTimestamp: number
 ): Record<ElectionPhase, PhaseEta | null> {
-  const contenderStart = nextElectionTimestamp;
+  const contenderStart = electionStartTimestamp;
   const contenderEnd =
     contenderStart + ELECTION_TIMING.CONTENDER_SUBMISSION_DAYS * 86400;
+  const vettingEnd = contenderEnd + ELECTION_TIMING.VETTING_PERIOD_DAYS * 86400;
   const nomineeEnd =
-    contenderEnd + ELECTION_TIMING.NOMINEE_SELECTION_DAYS * 86400;
-  const vettingEnd = nomineeEnd + ELECTION_TIMING.VETTING_PERIOD_DAYS * 86400;
-  const memberEnd = vettingEnd + ELECTION_TIMING.MEMBER_ELECTION_DAYS * 86400;
+    vettingEnd + ELECTION_TIMING.NOMINEE_SELECTION_DAYS * 86400;
+  const memberEnd = nomineeEnd + ELECTION_TIMING.MEMBER_ELECTION_DAYS * 86400;
 
   return {
     NOT_STARTED: null,
@@ -183,15 +183,32 @@ function calculatePhaseEtas(
       startTimestamp: contenderStart,
       endTimestamp: contenderEnd,
     },
+    VETTING_PERIOD: { startTimestamp: contenderEnd, endTimestamp: vettingEnd },
     NOMINEE_SELECTION: {
-      startTimestamp: contenderEnd,
+      startTimestamp: vettingEnd,
       endTimestamp: nomineeEnd,
     },
-    VETTING_PERIOD: { startTimestamp: nomineeEnd, endTimestamp: vettingEnd },
-    MEMBER_ELECTION: { startTimestamp: vettingEnd, endTimestamp: memberEnd },
+    MEMBER_ELECTION: { startTimestamp: nomineeEnd, endTimestamp: memberEnd },
     PENDING_EXECUTION: { startTimestamp: memberEnd, endTimestamp: 0 },
     COMPLETED: null,
   };
+}
+
+function getElectionStartTimestamp(
+  stages: TrackedStage[] | undefined,
+  status: ElectionStatus | null | undefined
+): number | null {
+  if (stages) {
+    const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
+    const tx = createStage?.transactions?.[0];
+    if (tx?.timestamp) return tx.timestamp;
+  }
+  if (status?.nextElectionTimestamp) {
+    return (
+      status.nextElectionTimestamp - ELECTION_TIMING.TOTAL_ELECTION_DAYS * 86400
+    );
+  }
+  return null;
 }
 
 function formatEtaDate(timestamp: number): string {
@@ -222,10 +239,11 @@ export function ElectionPhaseTimeline({
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
 
-  const phaseEtas =
-    status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
-      ? calculatePhaseEtas(status.nextElectionTimestamp)
-      : null;
+  const electionStart =
+    currentPhase === "NOT_STARTED"
+      ? status?.nextElectionTimestamp ?? null
+      : getElectionStartTimestamp(stages, status);
+  const phaseEtas = electionStart ? calculatePhaseEtas(electionStart) : null;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -287,12 +305,21 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
-                {eta && isFuture && (
+                {eta && (isActive || isFuture) && (
                   <p className="mt-1 text-xs text-muted-foreground/70">
-                    ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
-                    {eta.endTimestamp > 0
-                      ? formatEtaDate(eta.endTimestamp)
-                      : "completion"}
+                    {isActive ? (
+                      <>
+                        Ends {formatEtaDate(eta.endTimestamp)} (
+                        {getTimeUntil(eta.endTimestamp)})
+                      </>
+                    ) : (
+                      <>
+                        ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
+                        {eta.endTimestamp > 0
+                          ? formatEtaDate(eta.endTimestamp)
+                          : "completion"}
+                      </>
+                    )}
                   </p>
                 )}
                 <PhaseTransactionLinks
