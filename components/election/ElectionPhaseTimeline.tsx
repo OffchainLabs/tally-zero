@@ -79,8 +79,8 @@ function getTransactionsForPhase(
 
 const TIMELINE_PHASES: ElectionPhase[] = [
   "CONTENDER_SUBMISSION",
-  "NOMINEE_SELECTION",
   "VETTING_PERIOD",
+  "NOMINEE_SELECTION",
   "MEMBER_ELECTION",
   "PENDING_EXECUTION",
 ];

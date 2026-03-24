@@ -50,6 +50,7 @@ function getTallyProfileUrl(
 
 const CONTENDER_PHASES: ElectionPhase[] = [
   "CONTENDER_SUBMISSION",
+  "VETTING_PERIOD",
   "NOMINEE_SELECTION",
 ];
 
