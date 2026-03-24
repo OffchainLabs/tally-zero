@@ -68,8 +68,15 @@ export function ButtonNav() {
             </div>
           ) : (
             <>
-              <appkit-network-button />
-              <appkit-button />
+              <div className="hidden sm:block">
+                <appkit-network-button />
+              </div>
+              <div className="sm:hidden">
+                <appkit-button size="sm" balance="hide" />
+              </div>
+              <div className="hidden sm:block">
+                <appkit-button balance="show" />
+              </div>
             </>
           )}
         </div>

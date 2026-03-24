@@ -17,7 +17,6 @@ import { PHASE_METADATA } from "@/config/security-council";
 import type { ElectionPhase } from "@/types/election";
 
 import { ContenderSignupForm } from "./ContenderSignupForm";
-import { ContenderVoteForm } from "./ContenderVoteForm";
 import { NomineeVoteForm } from "./NomineeVoteForm";
 
 interface ElectionActionCardProps {
@@ -92,18 +91,8 @@ function getPhaseContent({
     }
 
     case "NOMINEE_SELECTION": {
-      if (!selectedElection.nomineeProposalId || !nomineeDetails) return null;
-      return {
-        title: "Vote for Contenders",
-        form: (
-          <ContenderVoteForm
-            proposalId={selectedElection.nomineeProposalId}
-            contenders={nomineeDetails.contenders}
-            quorumThreshold={nomineeDetails.quorumThreshold}
-            bypassSimulation={bypassSimulation}
-          />
-        ),
-      };
+      // Voting UI is now integrated into NomineeList
+      return null;
     }
 
     case "MEMBER_ELECTION": {

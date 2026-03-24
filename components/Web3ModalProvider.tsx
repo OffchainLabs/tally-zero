@@ -19,7 +19,7 @@ const TestWalletProvider = dynamic(
 function NormalProvider({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Suspense fallback={children}>
+      <Suspense fallback={null}>
         <Web3ModalProviderInner>{children}</Web3ModalProviderInner>
       </Suspense>
     </QueryClientProvider>

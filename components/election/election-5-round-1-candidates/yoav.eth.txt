@@ -1,0 +1,38 @@
+yoav.eth
+
+Security @ Ethereum
+
+0x4758...Bf09
+0x475816ca2a31D601B4e336f5c2418A67978aBf09
+
+Motivation to sign up
+I've been a security council member since it was formed, and an active security-minded delegate in Arbitrum governance. I care about the Ethereum ecosystem and about Arbitrum security. I would like to continue contributing to it, and I believe I'm capable of doing so.
+
+Relevant experience
+- Security engineer with decades of experience
+- Security researcher at the Ethereum Foundation
+- Found and reported vulnerabilities in multiple L2s
+- Member of the Arbitrum security council since it was formed
+- Participated in establishing the security procedures of this council and of other security councils
+- Verified every action taken by the council so far
+- Before Arbitrum launched I audited the repo and reported issues
+
+Self assessment matrix
+Are you able to independently verify what you're signing? (Yes/No)
+Yes
+What is your proficiency with Golang? (Scale on 0-10)
+5
+What is your proficiency with Solidity? (Scale on 0-10)
+10
+What is your proficiency with Rust? (Scale on 0-10)
+5
+What is your proficiency with Javascript? (Scale on 0-10)
+5
+Which projects (DAO or not) do you work with (please highlight any potential conflicts of interest)?
+Ethereum foundation, Arbitrum SC (currently a member), ZKsync SC, Scroll SC
+What is your experience with cyber security?
+Decades of experience, both offense and defense. Developed widely used security technologies.
+Which country are you based in?
+Israel
+Does this profile represent an individual or organization? If organization, which individual is representing the organization?
+individual

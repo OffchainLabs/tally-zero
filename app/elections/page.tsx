@@ -1,7 +1,14 @@
-import { Suspense } from "react";
+import dynamic from "next/dynamic";
 
-import { ElectionContainer } from "@/components/election";
 import { Skeleton } from "@/components/ui/Skeleton";
+
+const ElectionContainer = dynamic(
+  () =>
+    import("@/components/election").then((mod) => ({
+      default: mod.ElectionContainer,
+    })),
+  { ssr: false, loading: () => <ElectionSkeleton /> }
+);
 
 export const metadata = {
   title: "Security Council Elections | Arbitrum Governance",
@@ -36,9 +43,7 @@ export default function ElectionsPage() {
           </p>
         </div>
 
-        <Suspense fallback={<ElectionSkeleton />}>
-          <ElectionContainer />
-        </Suspense>
+        <ElectionContainer />
       </div>
     </div>
   );

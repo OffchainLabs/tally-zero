@@ -136,6 +136,7 @@ export const debug = {
   lifecycle: createWrappedLogger("tally:lifecycle"),
   calldata: createWrappedLogger("tally:calldata"),
   app: createWrappedLogger("tally:app"),
+  eas: createWrappedLogger("tally:eas"),
 } as const;
 
 // ============================================================================

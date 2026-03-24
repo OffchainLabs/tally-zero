@@ -1,0 +1,53 @@
+kemmio
+
+Cofounder/CTO - Hexens
+
+0xe119...df20
+0xe1197e2AB23Ee33c99EC91F17198D5264fC7df20
+
+Motivation to sign up
+Arbitrum is at an inflection point. The Stylus upgrade significantly expands the smart contract execution surface beyond Solidity into Rust and C++, introducing vulnerability classes that most existing council members and auditors have limited exposure to. My background in low-level systems security, VM internals, vulnerability research and reverse engineering is directly relevant to evaluating risks at this layer.
+
+Separately, having built Glider, a purpose-built tool for real-time smart contract vulnerability scanning that can accelerate blast radius assessment in an emergency scenario. This has already been demonstrated in production during the Thirdweb, Balancer and SOLC bug incidents.
+
+My approval on the Arbitrum Audit Program means this candidacy is part of a broader, longer-term commitment to the ecosystem.
+
+
+Relevant experience
+The Arbitrum Security Council's core function is emergency response. Due to the nature of our tools (and not only), I also have direct, hands-on experience in one of the biggest cases, like:
+Thirdweb hack: Cooperated with chains and used Glider to determine the blast radius and help identify all affected projects
+Balancer hack: scanned the whole integrated chains (using the same tools) to identify affected contracts and proactively notified projects before they were exploited within 15 minutes after the hack became public.
+Solidity bug case - again, Glider was used to search for affected projects, allowing us to proactively notify them before they were exploited (more in the section below).
+Relevant Credentials & Affiliations
+Member of the wider Security Alliance (SEAL) community.
+Member of the Polygon and Bitcoin security councils
+Hexens is an approved auditor on the Arbitrum Audit Program
+Competitive Security Background - I am a winner of over 20 international cybersecurity competitions (CTFs), both solo and as a member of the MSLC team.
+
+Self assessment matrix
+Are you able to independently verify what you're signing? (Yes/No)
+Yes
+What is your proficiency with Golang? (Scale on 0-10)
+8
+What is your proficiency with Solidity? (Scale on 0-10)
+10
+What is your proficiency with Rust? (Scale on 0-10)
+9
+What is your proficiency with Javascript? (Scale on 0-10)
+8
+Which projects (DAO or not) do you work with (please highlight any potential conflicts of interest)?
+Member of the wider Security Alliance (SEAL) community.
+Member of the Polygon and Bitcoin security councils.
+Hexens is an approved auditor on the Arbitrum Audit Program.
+I am not aware of any conflicts of interest that would impair my ability to act in the best interests of the Arbitrum DAO as a Security Council member. If any arise during my tenure, I will disclose them promptly and recuse myself where appropriate.
+What is your experience with cyber security?
+My primary areas of expertise are VM and low-level component security, EVM and blockchain internals, zero-knowledge proof auditing, reverse engineering, and vulnerability research.
+Highlights include:
+Discovered a Solidity compiler bug: TSTORE poison - publicly disclosed at hexens.io/research/solidity-compiler-bug-tstore-poison. This is the first reported maximal severity finding in Solidity since 2016.
+Built security and data research tools for smart contracts (we also run an Ethereum Foundation grant-funded contest for it), which have been used in live incident response scenarios
+Pioneered security reviews for novel technologies, defining the methodologies, such as zero-knowledge execution environment security, including the first-ever zkEVM and zkVM audits for Polygon and RISC0.
+
+Which country are you based in?
+Yerevan, Armenia (UTC+4).
+Does this profile represent an individual or organization? If organization, which individual is representing the organization?
+Individual

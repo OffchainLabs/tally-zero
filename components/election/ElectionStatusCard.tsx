@@ -134,12 +134,14 @@ function ActiveElectionStatus({
       <p className="text-sm text-muted-foreground">{phaseInfo.description}</p>
 
       <div className="grid gap-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Nominees</span>
-          <span className="font-medium">
-            {election.compliantNomineeCount} / {election.targetNomineeCount}
-          </span>
-        </div>
+        {phase !== "CONTENDER_SUBMISSION" && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Compliant Nominees</span>
+            <span className="font-medium">
+              {election.compliantNomineeCount} / {election.targetNomineeCount}
+            </span>
+          </div>
+        )}
 
         {election.isInVettingPeriod && election.vettingDeadline && (
           <div className="flex justify-between">

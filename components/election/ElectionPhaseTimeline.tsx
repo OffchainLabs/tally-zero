@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   ELECTION_TIMING,
   getTxUrl,
+  nomineeElectionGovernorReadAbi,
   type ElectionStatus,
   type TrackedStage,
 } from "@gzeoneth/gov-tracker";
@@ -16,9 +17,11 @@ import {
   ExternalLink,
   ListTree,
 } from "lucide-react";
+import { useReadContract } from "wagmi";
 
 import { Button } from "@/components/ui/Button";
 import { useDeepLink } from "@/context/DeepLinkContext";
+import { useElectionContracts } from "@/hooks/use-election-contracts";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
 
@@ -34,6 +37,7 @@ interface ElectionPhaseTimelineProps {
   currentPhase: ElectionPhase;
   stages?: TrackedStage[];
   status?: ElectionStatus | null;
+  electionIndex?: number;
   className?: string;
 }
 
@@ -194,23 +198,6 @@ function calculatePhaseEtas(
   };
 }
 
-function getElectionStartTimestamp(
-  stages: TrackedStage[] | undefined,
-  status: ElectionStatus | null | undefined
-): number | null {
-  if (stages) {
-    const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
-    const tx = createStage?.transactions?.[0];
-    if (tx?.timestamp) return tx.timestamp;
-  }
-  if (status?.nextElectionTimestamp) {
-    return (
-      status.nextElectionTimestamp - ELECTION_TIMING.TOTAL_ELECTION_DAYS * 86400
-    );
-  }
-  return null;
-}
-
 function formatEtaDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString(undefined, {
     month: "short",
@@ -226,24 +213,50 @@ function getTimeUntil(timestamp: number): string {
   return formatDuration(diff);
 }
 
+function getElectionStartFromStages(stages?: TrackedStage[]): number | null {
+  if (!stages) return null;
+  const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
+  const tx = createStage?.transactions?.[0];
+  return tx?.timestamp ?? null;
+}
+
 export function ElectionPhaseTimeline({
   currentPhase,
   stages,
   status,
+  electionIndex,
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
   const { openTimelock } = useDeepLink();
   const { l2Rpc } = useRpcSettings();
+  const { nomineeGovernorAddress, chainId } = useElectionContracts();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages);
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
 
-  const electionStart =
-    currentPhase === "NOT_STARTED"
-      ? status?.nextElectionTimestamp ?? null
-      : getElectionStartTimestamp(stages, status);
-  const phaseEtas = electionStart ? calculatePhaseEtas(electionStart) : null;
+  const { data: onChainTimestamp } = useReadContract({
+    address: nomineeGovernorAddress,
+    abi: nomineeElectionGovernorReadAbi,
+    functionName: "electionToTimestamp",
+    args: electionIndex !== undefined ? [BigInt(electionIndex)] : undefined,
+    chainId,
+    query: {
+      enabled: electionIndex !== undefined,
+      staleTime: Infinity,
+    },
+  });
+
+  const resolvedStartTimestamp =
+    getElectionStartFromStages(stages) ??
+    (onChainTimestamp !== undefined ? Number(onChainTimestamp) : null);
+
+  const phaseEtas =
+    status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
+      ? calculatePhaseEtas(status.nextElectionTimestamp)
+      : resolvedStartTimestamp
+        ? calculatePhaseEtas(resolvedStartTimestamp)
+        : null;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -305,21 +318,18 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
-                {eta && (isActive || isFuture) && (
+                {eta && isActive && eta.endTimestamp > 0 && (
+                  <p className="mt-1 text-xs font-medium text-primary">
+                    Ends {formatEtaDate(eta.endTimestamp)} (
+                    {getTimeUntil(eta.endTimestamp)})
+                  </p>
+                )}
+                {eta && isFuture && (
                   <p className="mt-1 text-xs text-muted-foreground/70">
-                    {isActive ? (
-                      <>
-                        Ends {formatEtaDate(eta.endTimestamp)} (
-                        {getTimeUntil(eta.endTimestamp)})
-                      </>
-                    ) : (
-                      <>
-                        ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
-                        {eta.endTimestamp > 0
-                          ? formatEtaDate(eta.endTimestamp)
-                          : "completion"}
-                      </>
-                    )}
+                    ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
+                    {eta.endTimestamp > 0
+                      ? formatEtaDate(eta.endTimestamp)
+                      : "completion"}
                   </p>
                 )}
                 <PhaseTransactionLinks

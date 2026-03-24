@@ -119,6 +119,7 @@ describe("debug", () => {
         "lifecycle",
         "calldata",
         "app",
+        "eas",
       ];
 
       for (const ns of expectedNamespaces) {
@@ -131,7 +132,7 @@ describe("debug", () => {
       const { debug } = await import("./debug");
 
       const namespaceCount = Object.keys(debug).length;
-      expect(namespaceCount).toBe(10);
+      expect(namespaceCount).toBe(11);
     });
   });
 });

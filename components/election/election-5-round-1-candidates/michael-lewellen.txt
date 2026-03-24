@@ -1,0 +1,41 @@
+Michael Lewellen
+
+Solutions Eng Head @ Turnkey
+
+0xBBD2...9392
+0xBBD2E01eFB88ce00F8f5b6B9a696966070089392
+
+Twitter
+https://twitter.com/LewellenMichael
+
+Motivation to sign up
+Security councils serve as the final line of defense for DAOs, necessitating a membership that is highly responsive, technically elite, and deeply governance-aware. My tenure on various councils and my work across the DAO security landscape has given me a front-row seat to the evolving threats facing decentralized protocols. I am acutely aware of the delicate challenge in balancing technical risk with governance capture incentives and the complex legal concerns that surround decentralized infrastructure. This specific awareness allows me to move beyond being just a signer to being a proactive contributor to the council's strategic voice.
+
+I am personally driven by the mission of proving that decentralized public good systems can be made secure through appropriate, expert stewardship. My experience makes me a unique candidate capable of bridging the gap between high-level governance and granular technical security. Having established working relationships with many of the current council members and candidates, I am positioned to be a highly collaborative participant who can maintain independent decision-making in high-stress situations. My focus is on ensuring transparent, security-first decision-making and collaborating with the broader DAO to fortify Arbitrum's infrastructure. I believe the Security Council and its members should have a more active, expert voice in specific areas of the DAO where technical and constitutional risks intersect.
+
+Relevant experience
+I have spent my career at the intersection of smart contract security, governance, and incident response, securing major DeFi protocols and DAOs. Currently, I serve as Head of Solutions Engineering at Turnkey, leading secure wallet infrastructure and private key management for major web3 protocols, dapps, and financial institutions. Previously, I was Head of Solutions Architecture at OpenZeppelin, where I designed security frameworks for DAOs and co-authored the Security Council Best Practices guide. I also served as Head of Solutions Engineering at Blockaid, leading security integrations for teams like Coinbase, MetaMask, and Uniswap.
+
+I have been a Security Advisor for the Compound Foundation for over three years, where I recently managed a $2M security RFP and serve on the Community Multi-sig. This role is directly relevant to Arbitrum, as Compound currently has approximately $900M TVL deployed on the network. I bring a battle-tested background to the council, having led or contributed to emergency responses for complex incidents, including the Compound TUSD Integration Issue, which had $80M at risk, the ThirdWeb address spoofing disclosure, and the Compound cETH price feed response.
+
+Over the past year, I have been an active contributor to Arbitrum as a Security Council Member and as a member of the Stylus Sprint Grants Committee through January 2026. I also provided direct feedback on the forums regarding the Security Council Election Process Improvements to help refine the process for future cohorts. My previous contributions to the ecosystem include leading OpenZeppelin's early ARDC work over a year ago. I am an active contributor to the Security Alliance Technical Council and have served on security councils for Story Protocol, Compound, and zkSync.
+
+Self assessment matrix
+Are you able to independently verify what you're signing? (Yes/No)
+Yes
+What is your proficiency with Golang? (Scale on 0-10)
+6
+What is your proficiency with Solidity? (Scale on 0-10)
+9
+What is your proficiency with Rust? (Scale on 0-10)
+6
+What is your proficiency with Javascript? (Scale on 0-10)
+7
+Which projects (DAO or not) do you work with (please highlight any potential conflicts of interest)?
+Turnkey (Solutions Eng Head), Compound (Advisor & Multi-sig Member), Story (Security Council Member)
+What is your experience with cyber security?
+Experienced with smart contract security, managing audits, developing security best practices, Leading incident response and served on multiple security councils. This includes leading secure wallet infrastructure and private key management integration at Turnkey. In past work, I've also spearhead onchain monitoring and wallet security integrations for major platforms like Coinbase, MetaMask, and Compound.
+Which country are you based in?
+USA
+Does this profile represent an individual or organization? If organization, which individual is representing the organization?
+Individual

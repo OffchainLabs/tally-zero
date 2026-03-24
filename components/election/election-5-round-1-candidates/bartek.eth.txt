@@ -1,0 +1,39 @@
+bartek.eth
+
+Founder @ L2BEAT
+
+0x0275...7Bae
+0x0275b3D54a5dDbf8205A75984796eFE8b7357Bae
+
+Twitter
+https://twitter.com/bkiepuszewski
+
+Motivation to sign up
+I am very excited to re-apply for the Arbitrum Security Council. L2BEAT had a representative on the SC from the first day this body has been constituted, and I feel like over the years we have been an instrumental, vocal, and very active member of both the SC and the larger DAO via our delegate platform.
+
+Relevant experience
+- Active member of Ethereum Ecosystem since 2016
+- Member of Arbitrum SC since it was formed
+- Reviewed virtually every single L2, very familiar with Arbitrum architecture and codebase
+- Before crypto journey decades of experience building software, mainly for financial industry
+- PhD in Theoretical Computer Science
+
+Self assessment matrix
+Are you able to independently verify what you're signing? (Yes/No)
+Yes
+What is your proficiency with Golang? (Scale on 0-10)
+5
+What is your proficiency with Solidity? (Scale on 0-10)
+9
+What is your proficiency with Rust? (Scale on 0-10)
+5
+What is your proficiency with Javascript? (Scale on 0-10)
+6
+Which projects (DAO or not) do you work with (please highlight any potential conflicts of interest)?
+L2BEAT, I am also a Guardian of ZkSync
+What is your experience with cyber security?
+Years of experience analysing smart contracts
+Which country are you based in?
+Poland
+Does this profile represent an individual or organization? If organization, which individual is representing the organization?
+Individual
