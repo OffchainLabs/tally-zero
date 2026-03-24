@@ -37,7 +37,7 @@ export function ElectionStatusCard({
   isLoading,
   onRefresh,
 }: ElectionStatusCardProps): React.ReactElement {
-  if (isLoading && !status) {
+  if (isLoading && (!status || !activeElection)) {
     return <ElectionStatusSkeleton />;
   }
 
