@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  User,
+  Users,
+  XCircle,
+} from "lucide-react";
 
 import type {
   SerializableContender,
@@ -85,6 +92,18 @@ export function NomineeList({
   const canToggle = hasMemberResults && nomineeDetails;
   const showResults = viewMode === "results" && hasMemberResults;
 
+  const nomineeCount = nomineeDetails.nominees.length;
+  const title = showContenders
+    ? "Registered Contenders"
+    : showResults
+      ? "Election Results"
+      : "Nominees";
+  const description = showContenders
+    ? `${nomineeDetails.contenders.length} contender${nomineeDetails.contenders.length !== 1 ? "s" : ""} registered`
+    : showResults
+      ? `Top 6 nominees will be elected to the Security Council`
+      : `${nomineeCount} nominee${nomineeCount !== 1 ? "s" : ""} endorsed`;
+
   return (
     <Card variant="glass">
       <CardHeader>
@@ -95,11 +114,7 @@ export function NomineeList({
             ) : (
               <User className="h-5 w-5" />
             )}
-            {showContenders
-              ? "Registered Contenders"
-              : showResults
-                ? "Election Results"
-                : "Nominees"}
+            {title}
           </CardTitle>
           {canToggle && (
             <Tabs
@@ -117,13 +132,7 @@ export function NomineeList({
             </Tabs>
           )}
         </div>
-        <CardDescription>
-          {showContenders
-            ? `${nomineeDetails.contenders.length} contender${nomineeDetails.contenders.length !== 1 ? "s" : ""} registered`
-            : showResults
-              ? `Top 6 nominees will be elected to the Security Council`
-              : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
-        </CardDescription>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -140,6 +149,7 @@ export function NomineeList({
         ) : (
           <NomineeElectionList
             details={nomineeDetails}
+            phase={phase}
             electionIndex={electionIndex}
           />
         )}
@@ -148,15 +158,34 @@ export function NomineeList({
   );
 }
 
+function getVettingStatus(
+  address: string,
+  details: NomineeElectionDetails
+): "compliant" | "excluded" | "pending" {
+  const lower = address.toLowerCase();
+  if (details.compliantNominees.some((n) => n.address.toLowerCase() === lower))
+    return "compliant";
+  if (details.excludedNominees.some((n) => n.address.toLowerCase() === lower))
+    return "excluded";
+  return "pending";
+}
+
 function NomineeElectionList({
   details,
+  phase,
   electionIndex,
 }: {
   details: NomineeElectionDetails;
+  phase: ElectionPhase;
   electionIndex?: number;
 }): React.ReactElement {
-  const { compliantNominees, excludedNominees, quorumThreshold } = details;
+  const { nominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
+  const showVettingStatus =
+    phase === "VETTING_PERIOD" ||
+    phase === "MEMBER_ELECTION" ||
+    phase === "PENDING_EXECUTION" ||
+    phase === "COMPLETED";
 
   return (
     <div className="space-y-4">
@@ -164,47 +193,27 @@ function NomineeElectionList({
         Quorum threshold: {threshold} ARB
       </div>
 
-      {compliantNominees.length > 0 && (
+      {nominees.length > 0 ? (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-green-500">
-            Compliant Nominees ({compliantNominees.length})
-          </h4>
-          <div className="space-y-2">
-            {compliantNominees.map((nominee) => (
+          {nominees.map((nominee) => {
+            const status = showVettingStatus
+              ? getVettingStatus(nominee.address, details)
+              : undefined;
+            return (
               <NomineeRow
                 key={nominee.address}
                 address={nominee.address}
                 votes={formatVotingPower(nominee.votesReceived.toString())}
                 electionIndex={electionIndex}
                 round={1}
-                isCompliant
+                isCompliant={status === "compliant"}
+                isExcluded={status === "excluded"}
+                isPendingVetting={status === "pending"}
               />
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
-
-      {excludedNominees.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-red-500">
-            Excluded Nominees ({excludedNominees.length})
-          </h4>
-          <div className="space-y-2">
-            {excludedNominees.map((nominee) => (
-              <NomineeRow
-                key={nominee.address}
-                address={nominee.address}
-                votes={formatVotingPower(nominee.votesReceived.toString())}
-                electionIndex={electionIndex}
-                round={1}
-                isExcluded
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {compliantNominees.length === 0 && excludedNominees.length === 0 && (
+      ) : (
         <div className="text-center text-muted-foreground py-8">
           No nominees yet
         </div>
@@ -318,6 +327,7 @@ function NomineeRow({
   round,
   isCompliant,
   isExcluded,
+  isPendingVetting,
 }: {
   address: string;
   votes: string;
@@ -325,6 +335,7 @@ function NomineeRow({
   round?: 1 | 2;
   isCompliant?: boolean;
   isExcluded?: boolean;
+  isPendingVetting?: boolean;
 }): React.ReactElement {
   const label = getDelegateLabel(address);
   const explorerUrl = getAddressExplorerUrl(address);
@@ -338,7 +349,8 @@ function NomineeRow({
       className={cn(
         "flex items-center justify-between rounded-lg border p-3",
         isCompliant && "border-green-500/30 bg-green-500/10",
-        isExcluded && "border-red-500/30 bg-red-500/10"
+        isExcluded && "border-red-500/30 bg-red-500/10",
+        isPendingVetting && "border-yellow-500/30 bg-yellow-500/10"
       )}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -346,6 +358,9 @@ function NomineeRow({
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
         )}
         {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+        {isPendingVetting && (
+          <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
+        )}
         <div className="flex items-center gap-2 min-w-0">
           {label ? (
             <span className="text-sm font-medium truncate">{label}</span>

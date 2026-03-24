@@ -11,6 +11,7 @@ import {
   getElectionStatus,
   getMemberElectionDetails,
   getNomineeElectionDetails,
+  getNomineesWithVotes,
   serializeMemberDetails,
   serializeNomineeDetails,
   type ElectionConfig,
@@ -301,11 +302,24 @@ export function useElectionStatus({
             if (raw) {
               nd = serializeNomineeDetails(raw);
             } else if (liveStatus.nomineeProposalId) {
-              const contenders = await getContenders(
-                liveStatus.nomineeProposalId,
-                l2Provider
-              ).catch(() => []);
-              if (contenders.length > 0) {
+              const [contenders, nominees] = await Promise.all([
+                getContenders(liveStatus.nomineeProposalId, l2Provider).catch(
+                  () => []
+                ),
+                getNomineesWithVotes(
+                  liveStatus.nomineeProposalId,
+                  l2Provider
+                ).catch(() => []),
+              ]);
+              if (contenders.length > 0 || nominees.length > 0) {
+                const serializedNominees = nominees.map((n) => ({
+                  address: n.address,
+                  votesReceived: n.votesReceived.toString(),
+                  isExcluded: n.isExcluded,
+                  nominatedAtBlock: n.nominatedAtBlock,
+                  excludedAtBlock: n.excludedAtBlock,
+                  exclusionTxHash: n.exclusionTxHash,
+                }));
                 nd = {
                   proposalId: liveStatus.nomineeProposalId,
                   electionIndex: i,
@@ -314,9 +328,13 @@ export function useElectionStatus({
                     registeredAtBlock: c.registeredAtBlock,
                     registrationTxHash: c.registrationTxHash,
                   })),
-                  nominees: [],
-                  compliantNominees: [],
-                  excludedNominees: [],
+                  nominees: serializedNominees,
+                  compliantNominees: serializedNominees.filter(
+                    (n) => !n.isExcluded
+                  ),
+                  excludedNominees: serializedNominees.filter(
+                    (n) => n.isExcluded
+                  ),
                   quorumThreshold: "0",
                   targetNomineeCount: liveStatus.targetNomineeCount,
                 };
