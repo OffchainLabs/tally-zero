@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import {
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  User,
-  Users,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, ExternalLink, User, Users, XCircle } from "lucide-react";
 
 import type {
   SerializableContender,
@@ -92,17 +85,20 @@ export function NomineeList({
   const canToggle = hasMemberResults && nomineeDetails;
   const showResults = viewMode === "results" && hasMemberResults;
 
-  const nomineeCount = nomineeDetails.nominees.length;
+  const nomineeCount = nomineeDetails.contenders.length;
+  const excludedCount = nomineeDetails.excludedNominees.length;
   const title = showContenders
     ? "Registered Contenders"
     : showResults
       ? "Election Results"
       : "Nominees";
   const description = showContenders
-    ? `${nomineeDetails.contenders.length} contender${nomineeDetails.contenders.length !== 1 ? "s" : ""} registered`
+    ? `${nomineeCount} contender${nomineeCount !== 1 ? "s" : ""} registered`
     : showResults
       ? `Top 6 nominees will be elected to the Security Council`
-      : `${nomineeCount} nominee${nomineeCount !== 1 ? "s" : ""} endorsed`;
+      : excludedCount > 0
+        ? `${nomineeCount} nominees (${excludedCount} excluded)`
+        : `${nomineeCount} nominee${nomineeCount !== 1 ? "s" : ""}`;
 
   return (
     <Card variant="glass">
@@ -149,7 +145,6 @@ export function NomineeList({
         ) : (
           <NomineeElectionList
             details={nomineeDetails}
-            phase={phase}
             electionIndex={electionIndex}
           />
         )}
@@ -158,57 +153,38 @@ export function NomineeList({
   );
 }
 
-function getVettingStatus(
+function isExcludedNominee(
   address: string,
   details: NomineeElectionDetails
-): "compliant" | "excluded" | "pending" {
+): boolean {
   const lower = address.toLowerCase();
-  if (details.compliantNominees.some((n) => n.address.toLowerCase() === lower))
-    return "compliant";
-  if (details.excludedNominees.some((n) => n.address.toLowerCase() === lower))
-    return "excluded";
-  return "pending";
+  return details.excludedNominees.some(
+    (n) => n.address.toLowerCase() === lower
+  );
 }
 
 function NomineeElectionList({
   details,
-  phase,
   electionIndex,
 }: {
   details: NomineeElectionDetails;
-  phase: ElectionPhase;
   electionIndex?: number;
 }): React.ReactElement {
-  const { nominees, quorumThreshold } = details;
-  const threshold = formatVotingPower(quorumThreshold.toString());
-  const showVettingStatus =
-    phase === "VETTING_PERIOD" ||
-    phase === "MEMBER_ELECTION" ||
-    phase === "PENDING_EXECUTION" ||
-    phase === "COMPLETED";
+  const { contenders } = details;
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Quorum threshold: {threshold} ARB
-      </div>
-
-      {nominees.length > 0 ? (
+      {contenders.length > 0 ? (
         <div className="space-y-2">
-          {nominees.map((nominee) => {
-            const status = showVettingStatus
-              ? getVettingStatus(nominee.address, details)
-              : undefined;
+          {contenders.map((contender) => {
+            const excluded = isExcludedNominee(contender.address, details);
             return (
               <NomineeRow
-                key={nominee.address}
-                address={nominee.address}
-                votes={formatVotingPower(nominee.votesReceived.toString())}
+                key={contender.address}
+                address={contender.address}
                 electionIndex={electionIndex}
                 round={1}
-                isCompliant={status === "compliant"}
-                isExcluded={status === "excluded"}
-                isPendingVetting={status === "pending"}
+                isExcluded={excluded}
               />
             );
           })}
@@ -327,15 +303,13 @@ function NomineeRow({
   round,
   isCompliant,
   isExcluded,
-  isPendingVetting,
 }: {
   address: string;
-  votes: string;
+  votes?: string;
   electionIndex?: number;
   round?: 1 | 2;
   isCompliant?: boolean;
   isExcluded?: boolean;
-  isPendingVetting?: boolean;
 }): React.ReactElement {
   const label = getDelegateLabel(address);
   const explorerUrl = getAddressExplorerUrl(address);
@@ -349,17 +323,13 @@ function NomineeRow({
       className={cn(
         "flex items-center justify-between rounded-lg border p-3",
         isCompliant && "border-green-500/30 bg-green-500/10",
-        isExcluded && "border-red-500/30 bg-red-500/10",
-        isPendingVetting && "border-yellow-500/30 bg-yellow-500/10"
+        isExcluded && "border-red-500/30 bg-red-500/10"
       )}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
+        {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
         {isCompliant && (
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-        )}
-        {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
-        {isPendingVetting && (
-          <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
         )}
         <div className="flex items-center gap-2 min-w-0">
           {label ? (
@@ -391,9 +361,11 @@ function NomineeRow({
           </div>
         </div>
       </div>
-      <span className="text-sm text-muted-foreground shrink-0 ml-2">
-        {votes} ARB
-      </span>
+      {votes && (
+        <span className="text-sm text-muted-foreground shrink-0 ml-2">
+          {votes} ARB
+        </span>
+      )}
     </div>
   );
 }
