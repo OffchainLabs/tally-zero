@@ -1,19 +1,19 @@
 import Features from "@components/section/display/Features";
-import Herosection from "@components/section/display/Hero";
-import Opensource from "@components/section/display/Opensource";
+import Hero from "@components/section/display/Hero";
+import DaoValues from "@components/section/display/Opensource";
 import HowItWorks from "@components/section/how-it-works/HowItWorks";
 
 export const metadata = {
-  title: "Run DAOs Onchain",
+  title: "Arbitrum DAO Governance",
 };
 
 export default async function IndexPage() {
   return (
     <>
-      <Herosection />
+      <Hero />
       <Features />
       <HowItWorks />
-      <Opensource />
+      <DaoValues />
     </>
   );
 }

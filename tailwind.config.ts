@@ -97,6 +97,14 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        arb: {
+          navy: "#05163D",
+          blue: "#016BE5",
+          teal: "#10E1FF",
+          green: "#00E340",
+          yellow: "#FFE103",
+          orange: "#FF4400",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

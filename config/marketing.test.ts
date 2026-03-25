@@ -51,7 +51,7 @@ describe("marketing config", () => {
           (item) => item.title === "Arbitrum DAO"
         );
         expect(dao).toBeDefined();
-        expect(dao?.href).toBe("https://arbitrum.io/");
+        expect(dao?.href).toBe("https://arbitrum.foundation/governance");
       });
 
       it("all nav items have title and href", () => {

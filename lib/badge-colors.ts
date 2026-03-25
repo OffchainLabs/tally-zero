@@ -39,11 +39,11 @@ export const QUORUM_COLORS = {
       "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]",
   },
   pending: {
-    text: "text-violet-600 dark:text-violet-400",
-    bg: "bg-violet-500/20",
-    ring: "ring-violet-500/30",
-    icon: "text-violet-500",
-    gradient: "bg-gradient-to-r from-violet-500 to-violet-400",
+    text: "text-arb-blue dark:text-arb-teal",
+    bg: "bg-arb-blue/20",
+    ring: "ring-arb-blue/30",
+    icon: "text-arb-blue",
+    gradient: "bg-gradient-to-r from-arb-blue to-arb-teal",
   },
 } as const;
 

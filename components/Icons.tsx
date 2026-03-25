@@ -109,8 +109,8 @@ function ReportingIcon() {
 function LogoIcon({ className }: { className?: string } = { className: "" }) {
   return (
     <Image
-      src="/favicon/favicon.ico"
-      alt="Tally Zero"
+      src="/favicon/favicon.png"
+      alt="Arbitrum Governance"
       className={className}
       width={30}
       height={30}

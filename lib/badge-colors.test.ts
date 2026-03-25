@@ -67,9 +67,9 @@ describe("badge-colors", () => {
       expect(QUORUM_COLORS.reached.icon).toContain("emerald");
     });
 
-    it("pending uses violet colors", () => {
-      expect(QUORUM_COLORS.pending.text).toContain("violet");
-      expect(QUORUM_COLORS.pending.icon).toContain("violet");
+    it("pending uses arb brand colors", () => {
+      expect(QUORUM_COLORS.pending.text).toContain("arb-blue");
+      expect(QUORUM_COLORS.pending.icon).toContain("arb-blue");
     });
   });
 

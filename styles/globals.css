@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 ::selection {
-  background: #460067;
-  color: #fff;
+  background: #10e1ff;
+  color: #05163d;
 }
 
 ::-webkit-scrollbar {
@@ -32,24 +32,24 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
+    --foreground: 222 85% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
+    --card-foreground: 222 85% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 228 19% 26%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
+    --popover-foreground: 222 85% 13%;
+    --primary: 212 99% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 222 85% 13%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 188 100% 53%;
+    --accent-foreground: 222 85% 13%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 262.1 83.3% 57.8%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 212 99% 45%;
     --radius: 0.5rem;
 
     /* Glass effect variables */
@@ -58,37 +58,37 @@
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-bg-subtle: rgba(255, 255, 255, 0.4);
     --glass-border: rgba(255, 255, 255, 0.2);
-    --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-    --shadow-card-hover: 0 20px 40px -15px rgba(0, 0, 0, 0.2);
+    --shadow-glass: 0 8px 32px 0 rgba(5, 22, 61, 0.12);
+    --shadow-card-hover: 0 20px 40px -15px rgba(1, 107, 229, 0.2);
   }
 
   .dark {
-    --background: 20 14.3% 4.1%;
-    --foreground: 60 9.1% 97.8%;
-    --card: 20 14.3% 4.1%;
-    --card-foreground: 60 9.1% 97.8%;
-    --popover: 20 14.3% 4.1%;
-    --popover-foreground: 60 9.1% 97.8%;
-    --primary: 60 9.1% 97.8%;
-    --primary-foreground: 24 9.8% 10%;
-    --secondary: 12 6.5% 15.1%;
-    --secondary-foreground: 60 9.1% 97.8%;
-    --muted: 12 6.5% 15.1%;
-    --muted-foreground: 24 5.4% 63.9%;
-    --accent: 12 6.5% 15.1%;
-    --accent-foreground: 60 9.1% 97.8%;
+    --background: 222 85% 7%;
+    --foreground: 200 20% 95%;
+    --card: 222 75% 9%;
+    --card-foreground: 200 20% 95%;
+    --popover: 222 75% 9%;
+    --popover-foreground: 200 20% 95%;
+    --primary: 188 100% 53%;
+    --primary-foreground: 222 85% 13%;
+    --secondary: 222 50% 15%;
+    --secondary-foreground: 200 20% 95%;
+    --muted: 222 50% 15%;
+    --muted-foreground: 210 15% 60%;
+    --accent: 212 99% 45%;
+    --accent-foreground: 200 20% 95%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --border: 12 6.5% 15.1%;
-    --input: 12 6.5% 15.1%;
-    --ring: 24 5.7% 82.9%;
+    --destructive-foreground: 200 20% 95%;
+    --border: 222 40% 18%;
+    --input: 222 40% 18%;
+    --ring: 188 100% 53%;
 
     /* Glass effect variables - dark mode */
-    --glass-bg: rgba(30, 30, 40, 0.6);
-    --glass-bg-subtle: rgba(30, 30, 40, 0.3);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-bg: rgba(5, 22, 61, 0.6);
+    --glass-bg-subtle: rgba(5, 22, 61, 0.3);
+    --glass-border: rgba(16, 225, 255, 0.08);
     --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-    --shadow-card-hover: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    --shadow-card-hover: 0 20px 40px -15px rgba(1, 107, 229, 0.3);
   }
 }
 
@@ -141,8 +141,8 @@
     padding: 1px;
     background: linear-gradient(
       135deg,
-      hsl(262 83% 58% / 0.6),
-      hsl(280 80% 50% / 0.4)
+      hsl(212 99% 45% / 0.6),
+      hsl(188 100% 53% / 0.4)
     );
     -webkit-mask:
       linear-gradient(#fff 0 0) content-box,
@@ -168,13 +168,13 @@
     background: rgba(255, 255, 255, 0.95);
   }
   .dark .glass {
-    background: rgba(20, 20, 30, 0.98);
+    background: rgba(5, 22, 61, 0.98);
   }
   .glass-subtle {
     background: rgba(255, 255, 255, 0.9);
   }
   .dark .glass-subtle {
-    background: rgba(20, 20, 30, 0.95);
+    background: rgba(5, 22, 61, 0.95);
   }
 }
 

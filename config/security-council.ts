@@ -66,7 +66,7 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
     description:
       "Election succeeded. Waiting for execution to install new council members.",
     durationDays: 0,
-    colorClass: "text-purple-500",
+    colorClass: "text-arb-blue",
   },
   COMPLETED: {
     name: "Completed",

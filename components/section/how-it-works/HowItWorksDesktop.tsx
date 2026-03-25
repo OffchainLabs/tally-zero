@@ -13,7 +13,7 @@ function StepConnector({ isActive }: { isActive: boolean }) {
         className={clsx(
           "flex h-6 w-6 items-center justify-center rounded-full transition-all duration-300",
           isActive
-            ? "bg-violet-500 shadow-lg shadow-violet-500/30"
+            ? "bg-arb-blue shadow-lg shadow-arb-blue/30"
             : "bg-slate-300 dark:bg-slate-600"
         )}
       >
@@ -81,7 +81,7 @@ export default function HowItWorksDesktop(steps: StepType[]) {
                   style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
                   aria-hidden={stepIndex !== selectedIndex}
                 >
-                  <div className="w-[52.75rem] overflow-hidden rounded-xl glass-subtle bg-violet-500/20 dark:bg-violet-500/25 shadow-xl shadow-slate-900/10 ring-1 ring-violet-500/20 dark:ring-violet-500/25">
+                  <div className="w-[52.75rem] overflow-hidden rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 shadow-xl shadow-slate-900/10 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
                     <Image
                       className="w-full"
                       src={step.image}

@@ -192,7 +192,7 @@ export function ParameterView({
                   "pl-2 sm:pl-3 border-l-2 glass-subtle rounded-lg p-2 sm:p-3 transition-all duration-200 hover:shadow-sm",
                   isRetryableTicket
                     ? "border-l-amber-500/50"
-                    : "border-l-violet-500/50"
+                    : "border-l-arb-blue/50"
                 )}
               >
                 <span
@@ -200,7 +200,7 @@ export function ParameterView({
                     "text-[10px] font-medium block mb-2 uppercase tracking-wide",
                     isRetryableTicket
                       ? "text-amber-600 dark:text-amber-400"
-                      : "text-violet-600 dark:text-violet-400"
+                      : "text-arb-blue dark:text-arb-teal"
                   )}
                 >
                   Batch action [{nestedIdx}]

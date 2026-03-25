@@ -68,7 +68,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
 
       <body
         className={cn(
-          "min-h-screen font-sans antialiased bg-gradient-to-b from-[#ffffff] via-[#efecff] to-[#e8e4ff] dark:from-[#1c1733] dark:via-[#16102b] dark:to-[#0f0c1b] transition-colors duration-200 ease-in-out",
+          "min-h-screen font-sans antialiased bg-gradient-to-b from-[#ffffff] via-[#eef5ff] to-[#dbeeff] dark:from-[#05163D] dark:via-[#071d4a] dark:to-[#031030] transition-colors duration-200 ease-in-out",
           GeistSans.className
         )}
       >

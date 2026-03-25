@@ -119,7 +119,7 @@ const StageItem = memo(function StageItem({
                 metadata.chain === "ethereum"
                   ? "bg-blue-500/20 text-blue-700 dark:text-blue-300"
                   : metadata.chain === "arb1"
-                    ? "bg-purple-500/20 text-purple-700 dark:text-purple-300"
+                    ? "bg-arb-blue/20 text-arb-blue dark:text-arb-teal"
                     : "bg-orange-500/20 text-orange-700 dark:text-orange-300"
               )}
             >

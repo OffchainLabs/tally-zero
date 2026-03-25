@@ -32,7 +32,7 @@ export const RetryableCreationDetails = memo(function RetryableCreationDetails({
             key={`creation-${detail.index}`}
             className="flex items-center gap-2"
           >
-            <span className="text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <span className="text-xs px-1 py-0.5 rounded bg-arb-blue/15 text-arb-blue dark:bg-arb-navy/60 dark:text-arb-teal">
               {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
             </span>
             <a
@@ -76,7 +76,7 @@ export const RetryableRedemptionDetails = memo(
             key={`redemption-${detail.index}`}
             className="flex items-center gap-2"
           >
-            <span className="text-xs px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <span className="text-xs px-1 py-0.5 rounded bg-arb-blue/15 text-arb-blue dark:bg-arb-navy/60 dark:text-arb-teal">
               {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
             </span>
             {detail.l2TxHash ? (

@@ -186,7 +186,7 @@ const StageHeader = memo(function StageHeader({
           metadata?.chain === "ethereum"
             ? "bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-300"
             : metadata?.chain === "arb1"
-              ? "bg-purple-500/20 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300"
+              ? "bg-arb-blue/20 dark:bg-arb-blue/25 text-arb-blue dark:text-arb-teal"
               : "bg-orange-500/20 dark:bg-orange-500/25 text-orange-700 dark:text-orange-300"
         )}
       >

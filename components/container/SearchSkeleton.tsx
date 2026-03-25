@@ -8,7 +8,7 @@ export default function SearchSkeleton() {
         <div className="flex items-center justify-center">
           <div className="relative">
             <Skeleton className="w-16 h-16 rounded-full" />
-            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-500/10 to-blue-500/10 blur-sm animate-pulse" />
+            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-arb-blue/10 to-arb-teal/10 blur-sm animate-pulse" />
           </div>
         </div>
 

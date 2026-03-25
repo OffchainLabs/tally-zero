@@ -5,7 +5,7 @@ import type { ProposalStateName } from "@/types/proposal";
 
 /**
  * Glass-style status badge colors with glow effects
- * Maps proposal states to emerald, amber, green, rose, blue, violet, gray, orange themes
+ * Maps proposal states to emerald, amber, green, rose, blue, arb-blue, gray, orange themes
  */
 const STATE_GLASS_STYLES = {
   Active: {
@@ -44,11 +44,11 @@ const STATE_GLASS_STYLES = {
     dot: "bg-blue-400",
   },
   Queued: {
-    bg: "bg-violet-500/20",
-    text: "text-violet-400",
-    border: "border-violet-500/30",
-    shadow: "hover:shadow-violet-500/40",
-    dot: "bg-violet-400",
+    bg: "bg-arb-blue/20",
+    text: "text-arb-teal",
+    border: "border-arb-blue/30",
+    shadow: "hover:shadow-arb-blue/40",
+    dot: "bg-arb-teal",
   },
   Canceled: {
     bg: "bg-gray-500/20",
@@ -66,8 +66,7 @@ const STATE_GLASS_STYLES = {
   },
 } as const;
 
-export interface StatusBadgeGlassProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface StatusBadgeGlassProps extends React.HTMLAttributes<HTMLDivElement> {
   state: ProposalStateName;
 }
 

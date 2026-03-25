@@ -7,8 +7,8 @@ function MobileStepConnector() {
   return (
     <div className="flex justify-center py-6">
       <div className="flex flex-col items-center gap-1">
-        <div className="h-4 w-0.5 bg-gradient-to-b from-violet-400 to-violet-500" />
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 shadow-lg shadow-violet-500/30">
+        <div className="h-4 w-0.5 bg-gradient-to-b from-arb-teal to-arb-blue" />
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-arb-blue shadow-lg shadow-arb-blue/30">
           <svg
             className="h-3 w-3 text-white"
             fill="none"
@@ -23,7 +23,7 @@ function MobileStepConnector() {
             />
           </svg>
         </div>
-        <div className="h-4 w-0.5 bg-gradient-to-b from-violet-500 to-violet-400" />
+        <div className="h-4 w-0.5 bg-gradient-to-b from-arb-blue to-arb-teal" />
       </div>
     </div>
   );
@@ -45,7 +45,7 @@ export default function HowItWorksMobile(steps: StepType[]) {
 
           {/* Image container with glass styling */}
           <div className="glass relative mx-auto mt-8 max-w-2xl overflow-hidden rounded-2xl p-4">
-            <div className="overflow-hidden rounded-xl glass-subtle bg-violet-500/20 dark:bg-violet-500/25 shadow-lg shadow-slate-900/5 ring-1 ring-violet-500/20 dark:ring-violet-500/25">
+            <div className="overflow-hidden rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 shadow-lg shadow-slate-900/5 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
               <Image
                 className="w-full"
                 src={step.image}

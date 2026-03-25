@@ -105,9 +105,9 @@ export default function Search() {
             <div className="glass rounded-2xl p-8 w-full max-w-lg space-y-6">
               <div className="flex items-center justify-center">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-arb-blue/20 to-arb-teal/20 flex items-center justify-center">
                     <svg
-                      className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-pulse"
+                      className="w-8 h-8 text-arb-blue dark:text-arb-teal animate-pulse"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -120,7 +120,7 @@ export default function Search() {
                       />
                     </svg>
                   </div>
-                  <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 blur-sm animate-pulse" />
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-arb-blue/20 to-arb-teal/20 blur-sm animate-pulse" />
                 </div>
               </div>
               <div className="space-y-3">

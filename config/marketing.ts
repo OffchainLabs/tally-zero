@@ -26,7 +26,7 @@ export const marketingConfig: MarketingConfig = {
     },
     {
       title: "Arbitrum DAO",
-      href: "https://arbitrum.io/",
+      href: "https://arbitrum.foundation/governance",
     },
   ],
 };

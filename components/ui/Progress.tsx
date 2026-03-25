@@ -31,14 +31,15 @@ const progressVariants = cva(
 
 const indicatorStyles = {
   default: "bg-primary",
-  gradient: "bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500",
+  gradient: "bg-gradient-to-r from-arb-blue via-arb-teal to-arb-blue",
   success: "bg-gradient-to-r from-emerald-400 to-green-500",
   warning: "bg-gradient-to-r from-amber-400 to-orange-500",
   danger: "bg-gradient-to-r from-red-400 to-rose-500",
 };
 
 interface ProgressProps
-  extends React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>,
+  extends
+    React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>,
     VariantProps<typeof progressVariants> {
   showShimmer?: boolean;
 }

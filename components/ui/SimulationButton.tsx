@@ -45,7 +45,7 @@ const TYPE_CONFIG: Record<
     defaultLabel: "Simulate Execute",
     loadingLabel: "Simulating...",
     buttonClass:
-      "border-purple-500/50 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/30",
+      "border-arb-blue/50 hover:border-arb-blue hover:bg-arb-blue/10 dark:hover:bg-arb-navy/30",
     linkClass: "",
     badge: "schedule→execute",
   },
