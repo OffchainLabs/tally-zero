@@ -2,6 +2,7 @@ import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
   ExternalLink,
   User,
   XCircle,
@@ -12,18 +13,27 @@ import { getTallyProfileUrl } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import type { ElectionPhase } from "@/types/election";
 
 interface NomineeElectionListProps {
   details: SerializableNomineeDetails;
   electionIndex?: number;
+  phase?: ElectionPhase;
 }
 
 export function NomineeElectionList({
   details,
   electionIndex,
+  phase,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
+  const isVetting = phase === "VETTING_PERIOD";
+  const allSameVotes =
+    compliantNominees.length > 1 &&
+    compliantNominees.every(
+      (n) => n.votesReceived === compliantNominees[0].votesReceived
+    );
 
   return (
     <div className="space-y-4">
@@ -31,7 +41,23 @@ export function NomineeElectionList({
         Quorum threshold: {threshold} ARB
       </div>
 
-      {compliantNominees.length < details.targetNomineeCount && (
+      {isVetting && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+          <div className="flex items-start gap-2 text-yellow-500">
+            <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium">Compliance check in progress</p>
+              <p className="text-yellow-500/80 mt-1">
+                The Arbitrum Foundation is vetting nominees for compliance with
+                legal requirements. Non-compliant nominees will be excluded
+                before the member election begins.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isVetting && compliantNominees.length < details.targetNomineeCount && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
           <div className="flex items-start gap-2 text-yellow-500">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -54,18 +80,30 @@ export function NomineeElectionList({
 
       {compliantNominees.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-green-500">
-            Compliant Nominees ({compliantNominees.length})
+          <h4
+            className={cn(
+              "text-sm font-medium",
+              isVetting ? "text-yellow-500" : "text-green-500"
+            )}
+          >
+            {isVetting
+              ? `Pending Review (${compliantNominees.length})`
+              : `Compliant Nominees (${compliantNominees.length})`}
           </h4>
           <div className="space-y-2">
             {compliantNominees.map((nominee) => (
               <NomineeRow
                 key={nominee.address}
                 address={nominee.address}
-                votes={formatVotingPower(nominee.votesReceived.toString())}
+                votes={
+                  allSameVotes
+                    ? "Reached quorum"
+                    : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
+                }
                 electionIndex={electionIndex}
                 round={1}
-                isCompliant
+                isCompliant={!isVetting}
+                isPendingReview={isVetting}
               />
             ))}
           </div>
@@ -82,7 +120,7 @@ export function NomineeElectionList({
               <NomineeRow
                 key={nominee.address}
                 address={nominee.address}
-                votes={formatVotingPower(nominee.votesReceived.toString())}
+                votes={`${formatVotingPower(nominee.votesReceived.toString())} ARB`}
                 electionIndex={electionIndex}
                 round={1}
                 isExcluded
@@ -108,6 +146,7 @@ function NomineeRow({
   round,
   isCompliant,
   isExcluded,
+  isPendingReview,
 }: {
   address: string;
   votes: string;
@@ -115,6 +154,7 @@ function NomineeRow({
   round?: 1 | 2;
   isCompliant?: boolean;
   isExcluded?: boolean;
+  isPendingReview?: boolean;
 }): React.ReactElement {
   const label = getDelegateLabel(address);
   const explorerUrl = getAddressExplorerUrl(address);
@@ -128,12 +168,16 @@ function NomineeRow({
       className={cn(
         "flex items-center justify-between rounded-lg border p-3",
         isCompliant && "border-green-500/30 bg-green-500/10",
-        isExcluded && "border-red-500/30 bg-red-500/10"
+        isExcluded && "border-red-500/30 bg-red-500/10",
+        isPendingReview && "border-yellow-500/30 bg-yellow-500/10"
       )}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {isCompliant && (
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+        )}
+        {isPendingReview && (
+          <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
         )}
         {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
         <div className="flex items-center gap-2 min-w-0">
@@ -167,7 +211,7 @@ function NomineeRow({
         </div>
       </div>
       <span className="text-sm text-muted-foreground shrink-0 ml-2">
-        {votes} ARB
+        {votes}
       </span>
     </div>
   );

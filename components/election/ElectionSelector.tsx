@@ -55,7 +55,7 @@ export function ElectionSelector({
         <Button variant="outline" className="gap-2">
           <History className="h-4 w-4" />
           {selectedElection
-            ? `Election #${selectedElection.electionIndex}`
+            ? `Election #${selectedElection.electionIndex + 1}`
             : "Select Election"}
           <ChevronDown className="h-4 w-4" />
         </Button>
@@ -71,7 +71,7 @@ export function ElectionSelector({
               onSelect={() => onSelect(null)}
             >
               <div className="flex flex-col">
-                <span>Election #{nextElectionIndex}</span>
+                <span>Election #{nextElectionIndex + 1}</span>
                 <span className="text-xs text-muted-foreground">
                   Starts in {daysUntil(status.nextElectionTimestamp)}d
                 </span>
@@ -148,7 +148,7 @@ function ElectionMenuItem({
     >
       <div className="flex flex-col">
         <span className={isSelected ? "font-medium" : ""}>
-          Election #{election.electionIndex}
+          Election #{election.electionIndex + 1}
         </span>
         <span className="text-xs text-muted-foreground">
           {formatCohort(election.cohort)}

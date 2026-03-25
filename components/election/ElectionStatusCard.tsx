@@ -124,7 +124,7 @@ function ActiveElectionStatus({
     <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-4">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">
-          Election #{election.electionIndex}
+          Election #{election.electionIndex + 1}
         </span>
         <Badge variant="secondary" className={getPhaseColor(phase)}>
           {phaseInfo.name}
@@ -134,25 +134,16 @@ function ActiveElectionStatus({
       <p className="text-sm text-muted-foreground">{phaseInfo.description}</p>
 
       <div className="grid gap-2 text-sm">
-        {phase !== "CONTENDER_SUBMISSION" && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Compliant Nominees</span>
-            <span className="font-medium">
-              {election.compliantNomineeCount} / {election.targetNomineeCount}
-            </span>
-          </div>
-        )}
-
         {election.isInVettingPeriod && election.vettingDeadline && (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Vetting Deadline</span>
             <span className="font-medium">
-              Block #{election.vettingDeadline.toLocaleString()}
+              L1 Block #{election.vettingDeadline.toLocaleString()}
             </span>
           </div>
         )}
 
-        {election.canProceedToMemberPhase && (
+        {election.canProceedToMemberPhase && phase !== "VETTING_PERIOD" && (
           <div className="flex items-center gap-2 text-green-500">
             <CheckCircle2 className="h-4 w-4" />
             <span>Ready for Member Election</span>

@@ -121,7 +121,9 @@ export function NomineeList({
               )
             : showResults
               ? "Top 6 nominees will be elected to the Security Council"
-              : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
+              : phase === "VETTING_PERIOD"
+                ? `${nomineeDetails.compliantNominees.length} nominees pending compliance review`
+                : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
         </CardDescription>
       </CardHeader>
 
@@ -148,6 +150,7 @@ export function NomineeList({
           <NomineeElectionList
             details={nomineeDetails}
             electionIndex={electionIndex}
+            phase={phase}
           />
         )}
       </CardContent>
