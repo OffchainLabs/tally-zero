@@ -284,20 +284,20 @@ export function ElectionPhaseTimeline({
           const eta = phaseEtas?.[phase];
 
           return (
-            <div key={phase} className="flex items-start gap-4 pb-8 last:pb-0">
-              <div className="relative flex flex-col items-center">
+            <div key={phase} className="flex gap-4">
+              <div className="flex flex-col items-center">
                 <PhaseIcon isCompleted={isCompleted} isActive={isActive} />
                 {index < TIMELINE_PHASES.length - 1 && (
                   <div
                     className={cn(
-                      "absolute top-8 h-full w-0.5",
+                      "mt-1 flex-1 w-0.5",
                       isCompleted ? "bg-green-500" : "bg-border"
                     )}
                   />
                 )}
               </div>
 
-              <div className="flex-1 pt-0.5">
+              <div className="flex-1 pt-0.5 pb-8">
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
@@ -318,22 +318,23 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
-                {eta && isActive && (
-                  <p className="mt-1 text-xs font-medium text-primary">
+                {eta && (
+                  <p
+                    className={cn(
+                      "mt-1 text-xs",
+                      isActive && "font-medium text-primary",
+                      isCompleted && "text-green-500/70",
+                      isFuture && "text-muted-foreground/70"
+                    )}
+                  >
+                    {isFuture && "ETA: "}
                     {formatEtaDate(eta.startTimestamp)}
                     {eta.endTimestamp > 0 &&
                       ` → ${formatEtaDate(eta.endTimestamp)}`}
-                    {eta.endTimestamp > 0 &&
+                    {isActive &&
+                      eta.endTimestamp > 0 &&
                       eta.endTimestamp > Math.floor(Date.now() / 1000) &&
                       ` (${getTimeUntil(eta.endTimestamp)} remaining)`}
-                  </p>
-                )}
-                {eta && isFuture && (
-                  <p className="mt-1 text-xs text-muted-foreground/70">
-                    ETA: {formatEtaDate(eta.startTimestamp)} →{" "}
-                    {eta.endTimestamp > 0
-                      ? formatEtaDate(eta.endTimestamp)
-                      : "completion"}
                   </p>
                 )}
                 <PhaseTransactionLinks

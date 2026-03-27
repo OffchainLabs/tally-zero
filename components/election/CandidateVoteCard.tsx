@@ -3,7 +3,6 @@
 import { useRef } from "react";
 import { useAccount, useBlockNumber } from "wagmi";
 
-import type { SerializableMemberNominee } from "@gzeoneth/gov-tracker";
 import {
   memberElectionGovernorReadAbi,
   nomineeElectionGovernorReadAbi,
@@ -54,6 +53,7 @@ export function CandidateVoteCard({
   const phase = selectedElection?.phase;
   const isNomineeSelection = phase === "NOMINEE_SELECTION";
   const isMemberElection = phase === "MEMBER_ELECTION";
+  const lowerAddress = address.toLowerCase();
 
   const proposalId = isNomineeSelection
     ? selectedElection?.nomineeProposalId
@@ -98,79 +98,77 @@ export function CandidateVoteCard({
     );
   }
 
-  if (!proposalId || (!isNomineeSelection && !isMemberElection)) {
+  if (
+    phase === "VETTING_PERIOD" ||
+    !proposalId ||
+    (!isNomineeSelection && !isMemberElection)
+  ) {
     return null;
   }
 
   // Phase-specific data
-  let infoSlot: React.ReactNode = null;
-  let quorumBar: React.ReactNode = null;
-  let description: React.ReactNode = null;
-  let weightStatus: React.ReactNode = null;
-  let title: string;
+  const contenderData = isNomineeSelection
+    ? nomineeDetails?.nominees.find(
+        (n) => n.address.toLowerCase() === lowerAddress
+      )
+    : null;
+  const memberNomineeData = isMemberElection
+    ? memberDetails?.nominees.find(
+        (n) => n.address.toLowerCase() === lowerAddress
+      )
+    : null;
 
-  if (isNomineeSelection) {
-    title = "Vote for this Contender";
-    const nomineeData = nomineeDetails?.nominees.find(
-      (n) => n.address.toLowerCase() === address.toLowerCase()
-    );
-    const votes = nomineeData?.votesReceived ?? "0";
-    const quorumThreshold = nomineeDetails?.quorumThreshold ?? "0";
+  if (isNomineeSelection && !contenderData) return null;
+  if (isMemberElection && !memberNomineeData) return null;
 
-    if (quorumThreshold !== "0") {
-      description = (
-        <CardDescription>
-          Needs {formatVotingPower(quorumThreshold)} ARB to qualify as a nominee
-        </CardDescription>
-      );
-    }
-    quorumBar = (
-      <ContenderQuorumBar votes={votes} quorumThreshold={quorumThreshold} />
-    );
-  } else {
-    title = "Vote for this Nominee";
-    const nomineeData = memberDetails?.nominees.find(
-      (n) => n.address.toLowerCase() === address.toLowerCase()
-    );
-    if (!nomineeData) return null;
+  const quorumThreshold = nomineeDetails?.quorumThreshold ?? "0";
 
-    infoSlot = <NomineeInfo nominee={nomineeData} />;
-
-    const isFullWeight =
-      memberDetails &&
-      currentBlock !== undefined &&
-      currentBlock <= BigInt(memberDetails.fullWeightDeadline);
-
-    weightStatus = (
-      <div className="flex items-center gap-2 text-sm">
-        {isFullWeight ? (
-          <span className="text-green-500 text-xs font-medium">
-            Full weight voting active
-          </span>
-        ) : (
-          <div className="flex items-center gap-1 text-yellow-500">
-            <AlertCircle className="h-3 w-3" />
-            <span className="text-xs">
-              Vote weight is now decreasing, earlier votes count more
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  }
+  const isFullWeight =
+    isMemberElection &&
+    memberDetails &&
+    currentBlock !== undefined &&
+    currentBlock <= BigInt(memberDetails.fullWeightDeadline);
 
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Vote className="h-5 w-5" />
-          {title}
+          {isNomineeSelection
+            ? "Vote for this Contender"
+            : "Vote for this Nominee"}
         </CardTitle>
-        {description}
+        {isNomineeSelection && quorumThreshold !== "0" && (
+          <CardDescription>
+            Needs {formatVotingPower(quorumThreshold)} ARB to qualify as a
+            nominee
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
-        {quorumBar}
-        {weightStatus}
+        {isNomineeSelection && (
+          <ContenderQuorumBar
+            votes={contenderData?.votesReceived ?? "0"}
+            quorumThreshold={quorumThreshold}
+          />
+        )}
+
+        {isMemberElection && (
+          <div className="flex items-center gap-2 text-sm">
+            {isFullWeight ? (
+              <span className="text-green-500 text-xs font-medium">
+                Full weight voting active
+              </span>
+            ) : (
+              <div className="flex items-center gap-1 text-yellow-500">
+                <AlertCircle className="h-3 w-3" />
+                <span className="text-xs">
+                  Vote weight is now decreasing, earlier votes count more
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {!isConnected ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -186,12 +184,35 @@ export function CandidateVoteCard({
             />
 
             {totalVotingPower !== undefined &&
-              totalVotingPower === BigInt(0) && <NoVotingPowerWarning />}
+              totalVotingPower === BigInt(0) && (
+                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+                  <div className="flex items-start gap-2 text-yellow-500">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="text-sm">
+                      <p className="font-medium">No voting power</p>
+                      <p className="text-yellow-500/80 mt-1">
+                        Your wallet has no voting power for this election.
+                        Voting power is based on delegated ARB tokens at the
+                        proposal snapshot block.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             {availableVotes !== undefined &&
               availableVotes === BigInt(0) &&
               usedVotes !== undefined &&
-              usedVotes > BigInt(0) && <AllVotesUsedNotice />}
+              usedVotes > BigInt(0) && (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
+                  <div className="flex items-center gap-2 text-green-500">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span className="text-sm">
+                      You have used all your voting power for this round.
+                    </span>
+                  </div>
+                </div>
+              )}
 
             <ElectionVoteRow
               proposalId={proposalId}
@@ -200,7 +221,15 @@ export function CandidateVoteCard({
               chainId={chainId}
               availableVotes={availableVotes}
               onVoteSuccess={refetchUsedVotes}
-              infoSlot={infoSlot}
+              infoSlot={
+                memberNomineeData ? (
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    #{memberNomineeData.rank} ·{" "}
+                    {formatVotingPower(memberNomineeData.weightReceived)}{" "}
+                    weighted votes
+                  </span>
+                ) : null
+              }
               {...(isMemberElection && {
                 prepareVote: prepareMemberElectionVote,
               })}
@@ -209,48 +238,5 @@ export function CandidateVoteCard({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function NomineeInfo({
-  nominee,
-}: {
-  nominee: SerializableMemberNominee;
-}): React.ReactElement {
-  return (
-    <span className="text-xs text-muted-foreground shrink-0">
-      #{nominee.rank} · {formatVotingPower(nominee.weightReceived)} weighted
-      votes
-    </span>
-  );
-}
-
-function NoVotingPowerWarning(): React.ReactElement {
-  return (
-    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-      <div className="flex items-start gap-2 text-yellow-500">
-        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-        <div className="text-sm">
-          <p className="font-medium">No voting power</p>
-          <p className="text-yellow-500/80 mt-1">
-            Your wallet has no voting power for this election. Voting power is
-            based on delegated ARB tokens at the proposal snapshot block.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AllVotesUsedNotice(): React.ReactElement {
-  return (
-    <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
-      <div className="flex items-center gap-2 text-green-500">
-        <CheckCircle2 className="h-4 w-4 shrink-0" />
-        <span className="text-sm">
-          You have used all your voting power for this round.
-        </span>
-      </div>
-    </div>
   );
 }

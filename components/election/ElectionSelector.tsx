@@ -1,6 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
+
+import { nomineeElectionGovernorReadAbi } from "@gzeoneth/gov-tracker";
 import { ChevronDown, History } from "lucide-react";
+import { useReadContracts } from "wagmi";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -16,11 +20,19 @@ import {
   formatCohort,
   PHASE_METADATA,
 } from "@/config/security-council";
+import { useElectionContracts } from "@/hooks/use-election-contracts";
 import type { ElectionPhase } from "@/types/election";
 import type {
   ElectionProposalStatus,
   ElectionStatus,
 } from "@gzeoneth/gov-tracker";
+
+function formatElectionDate(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
+}
 
 interface ElectionSelectorProps {
   allElections: ElectionProposalStatus[];
@@ -35,6 +47,43 @@ export function ElectionSelector({
   status,
   onSelect,
 }: ElectionSelectorProps): React.ReactElement | null {
+  const { nomineeGovernorAddress, chainId } = useElectionContracts();
+
+  const timestampContracts = useMemo(
+    () =>
+      allElections.map((e) => ({
+        address: nomineeGovernorAddress,
+        abi: nomineeElectionGovernorReadAbi,
+        functionName: "electionToTimestamp" as const,
+        args: [BigInt(e.electionIndex)],
+        chainId,
+      })),
+    [allElections, nomineeGovernorAddress, chainId]
+  );
+
+  const { data: timestampResults } = useReadContracts({
+    contracts: timestampContracts,
+    query: {
+      enabled: allElections.length > 0,
+      staleTime: Infinity,
+    },
+  });
+
+  const timestampMap = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!timestampResults) return map;
+    for (let i = 0; i < allElections.length; i++) {
+      const result = timestampResults[i];
+      if (result?.status === "success" && result.result) {
+        const ts = Number(result.result);
+        if (ts > 0) {
+          map.set(allElections[i].electionIndex, formatElectionDate(ts));
+        }
+      }
+    }
+    return map;
+  }, [allElections, timestampResults]);
+
   if (allElections.length === 0) {
     return null;
   }
@@ -44,10 +93,15 @@ export function ElectionSelector({
     (e) => e.phase === "COMPLETED"
   );
   const nextElectionIndex = allElections.length;
-  const showNextElection =
-    status?.nextElectionTimestamp &&
-    status.secondsUntilElection > 0 &&
-    !allElections.some((e) => e.electionIndex === nextElectionIndex);
+  const hasNoActiveElection = activeElections.length === 0;
+  const notYetCreated = !allElections.some(
+    (e) => e.electionIndex === nextElectionIndex
+  );
+  const showNextElection = Boolean(
+    notYetCreated &&
+    (hasNoActiveElection ||
+      (status?.nextElectionTimestamp && status.secondsUntilElection >= 0))
+  );
 
   return (
     <DropdownMenu>
@@ -72,9 +126,15 @@ export function ElectionSelector({
             >
               <div className="flex flex-col">
                 <span>Election #{nextElectionIndex + 1}</span>
-                <span className="text-xs text-muted-foreground">
-                  Starts in {daysUntil(status.nextElectionTimestamp)}d
-                </span>
+                {status?.nextElectionTimestamp ? (
+                  <span className="text-xs text-muted-foreground">
+                    Starts in {daysUntil(status.nextElectionTimestamp)}d
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    Upcoming
+                  </span>
+                )}
               </div>
               <Badge variant="outline" className="text-xs">
                 Not Started
@@ -95,6 +155,7 @@ export function ElectionSelector({
               <ElectionMenuItem
                 key={election.electionIndex}
                 election={election}
+                electionDate={timestampMap.get(election.electionIndex)}
                 isSelected={
                   selectedElection?.electionIndex === election.electionIndex
                 }
@@ -117,6 +178,7 @@ export function ElectionSelector({
               <ElectionMenuItem
                 key={election.electionIndex}
                 election={election}
+                electionDate={timestampMap.get(election.electionIndex)}
                 isSelected={
                   selectedElection?.electionIndex === election.electionIndex
                 }
@@ -132,10 +194,12 @@ export function ElectionSelector({
 
 function ElectionMenuItem({
   election,
+  electionDate,
   isSelected,
   onSelect,
 }: {
   election: ElectionProposalStatus;
+  electionDate?: string;
   isSelected: boolean;
   onSelect: () => void;
 }): React.ReactElement {
@@ -152,6 +216,7 @@ function ElectionMenuItem({
         </span>
         <span className="text-xs text-muted-foreground">
           {formatCohort(election.cohort)}
+          {electionDate && ` · ${electionDate}`}
         </span>
       </div>
       <Badge

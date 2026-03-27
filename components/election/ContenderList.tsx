@@ -2,15 +2,11 @@ import type {
   SerializableContender,
   SerializableNominee,
 } from "@gzeoneth/gov-tracker";
-import { ExternalLink, User } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import {
-  getCandidateName,
-  getCandidateProfileUrl,
-  getTallyProfileUrl,
-} from "@/lib/election-utils";
+import { getCandidateName, getCandidateProfileUrl } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
@@ -43,10 +39,6 @@ export function ContenderList({
         const label = candidateName ?? getDelegateLabel(contender.address);
         const profileUrl = getCandidateProfileUrl(contender.address);
         const explorerUrl = getAddressExplorerUrl(contender.address);
-        const tallyUrl =
-          electionIndex !== undefined
-            ? getTallyProfileUrl(electionIndex, contender.address, 1)
-            : null;
         const nomineeData = nominees?.find(
           (n) => n.address.toLowerCase() === contender.address.toLowerCase()
         );
@@ -80,17 +72,6 @@ export function ContenderList({
                     </span>
                   )}
                   <div className="flex items-center gap-1 shrink-0">
-                    {tallyUrl && (
-                      <a
-                        href={tallyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition-colors"
-                        title="View on Tally"
-                      >
-                        <User className="h-3 w-3" />
-                      </a>
-                    )}
                     <a
                       href={explorerUrl}
                       target="_blank"

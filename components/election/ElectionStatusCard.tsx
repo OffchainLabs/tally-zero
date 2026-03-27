@@ -165,7 +165,7 @@ function NextElectionStatus({
   status,
 }: {
   status: ElectionStatus;
-}): React.ReactElement {
+}): React.ReactElement | null {
   if (status.canCreateElection) {
     return (
       <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4">
@@ -178,6 +178,10 @@ function NextElectionStatus({
         </p>
       </div>
     );
+  }
+
+  if (!status.nextElectionTimestamp) {
+    return null;
   }
 
   return (

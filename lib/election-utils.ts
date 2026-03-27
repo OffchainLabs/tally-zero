@@ -27,17 +27,6 @@ export function getCandidateProfileUrl(address: string): string | undefined {
   return undefined;
 }
 
-export function getTallyProfileUrl(
-  electionIndex: number,
-  address: string,
-  round: 1 | 2
-): string {
-  if (round === 1) {
-    return `https://www.tally.xyz/gov/arbitrum/council/security-council/election/${electionIndex}/round-1/candidate/${address}`;
-  }
-  return `https://www.tally.xyz/gov/arbitrum/council/security-council/election/${electionIndex}/round-2/nominee/${address}`;
-}
-
 export function hasNoVotingPower(
   totalVotingPower: bigint | undefined
 ): boolean {

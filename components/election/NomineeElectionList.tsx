@@ -3,28 +3,76 @@ import type {
   SerializableNominee,
   SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
-import {
-  AlertCircle,
-  Clock,
-  ExternalLink,
-  ShieldX,
-  User,
-  XCircle,
-} from "lucide-react";
+import { AlertCircle, Clock, ShieldX, XCircle } from "lucide-react";
 import Link from "next/link";
 
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getCandidateName, getTallyProfileUrl } from "@/lib/election-utils";
-import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { getCandidateName, getCandidateTitle } from "@/lib/election-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import type { ElectionPhase } from "@/types/election";
+import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
 
 interface NomineeElectionListProps {
   details: SerializableNomineeDetails;
   memberDetails?: SerializableMemberDetails | null;
   electionIndex?: number;
   phase?: ElectionPhase;
+  sortOrder?: NomineeSortOrder;
+  randomSeed?: number;
+}
+
+function sortNominees(
+  nominees: SerializableNominee[],
+  sortOrder: NomineeSortOrder,
+  randomSeed: number,
+  memberDataMap?: Map<string, { weight: string; rank: number }>
+): SerializableNominee[] {
+  const sorted = [...nominees];
+  switch (sortOrder) {
+    case "alphabetical":
+      sorted.sort((a, b) => {
+        const nameA = (
+          getCandidateName(a.address) ??
+          getDelegateLabel(a.address) ??
+          a.address
+        ).toLowerCase();
+        const nameB = (
+          getCandidateName(b.address) ??
+          getDelegateLabel(b.address) ??
+          b.address
+        ).toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      break;
+    case "votes": {
+      sorted.sort((a, b) => {
+        const voteA = BigInt(
+          memberDataMap?.get(a.address.toLowerCase())?.weight ??
+            a.votesReceived.toString()
+        );
+        const voteB = BigInt(
+          memberDataMap?.get(b.address.toLowerCase())?.weight ??
+            b.votesReceived.toString()
+        );
+        if (voteB > voteA) return 1;
+        if (voteB < voteA) return -1;
+        return 0;
+      });
+      break;
+    }
+    case "random": {
+      const seededRandom = (seed: number) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+      for (let i = sorted.length - 1; i > 0; i--) {
+        const j = Math.floor(seededRandom(randomSeed * 1000 + i) * (i + 1));
+        [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
+      }
+      break;
+    }
+  }
+  return sorted;
 }
 
 export function NomineeElectionList({
@@ -32,6 +80,8 @@ export function NomineeElectionList({
   memberDetails,
   electionIndex,
   phase,
+  sortOrder = "votes",
+  randomSeed = 0,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
@@ -70,6 +120,24 @@ export function NomineeElectionList({
       });
     }
   }
+
+  eligibleNominees = sortNominees(
+    eligibleNominees,
+    sortOrder,
+    randomSeed,
+    memberDataMap
+  );
+  nonCompliantNominees = sortNominees(
+    nonCompliantNominees,
+    sortOrder,
+    randomSeed,
+    memberDataMap
+  );
+  const sortedExcludedNominees = sortNominees(
+    excludedNominees,
+    sortOrder,
+    randomSeed
+  );
 
   const allSameVotes =
     !isMemberElection &&
@@ -150,7 +218,7 @@ export function NomineeElectionList({
                     isMemberElection && memberData
                       ? `${formatVotingPower(memberData.weight)} weighted votes`
                       : allSameVotes
-                        ? "Reached quorum"
+                        ? ""
                         : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
                   }
                   rank={memberData?.rank}
@@ -158,7 +226,7 @@ export function NomineeElectionList({
                   round={1}
                   isCompliant={!isVetting}
                   isPendingReview={isVetting}
-                  showVoteLink={isMemberElection}
+                  showVoteLink={phase === "MEMBER_ELECTION"}
                   phase={phase}
                 />
               );
@@ -187,13 +255,13 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {excludedNominees.length > 0 && (
+      {sortedExcludedNominees.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-red-500">
-            Excluded Nominees ({excludedNominees.length})
+            Excluded Nominees ({sortedExcludedNominees.length})
           </h4>
           <div className="space-y-2">
-            {excludedNominees.map((nominee) => (
+            {sortedExcludedNominees.map((nominee) => (
               <NomineeRow
                 key={nominee.address}
                 address={nominee.address}
@@ -207,7 +275,7 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {eligibleNominees.length === 0 && excludedNominees.length === 0 && (
+      {eligibleNominees.length === 0 && sortedExcludedNominees.length === 0 && (
         <div className="text-center text-muted-foreground py-8">
           No nominees yet
         </div>
@@ -242,11 +310,7 @@ function NomineeRow({
   phase?: ElectionPhase;
 }): React.ReactElement {
   const label = getCandidateName(address) ?? getDelegateLabel(address);
-  const explorerUrl = getAddressExplorerUrl(address);
-  const tallyUrl =
-    electionIndex !== undefined && round !== undefined
-      ? getTallyProfileUrl(electionIndex, address, round)
-      : null;
+  const title = isPendingReview ? getCandidateTitle(address) : undefined;
 
   return (
     <div
@@ -278,34 +342,19 @@ function NomineeRow({
         {isNonCompliant && (
           <ShieldX className="h-4 w-4 text-orange-500 shrink-0" />
         )}
-        <div className="flex items-center gap-2 min-w-0">
-          <Link
-            href={`/elections/contender/${address}`}
-            className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
-          >
-            {label ?? address}
-          </Link>
-          <div className="flex items-center gap-1 shrink-0">
-            {tallyUrl && (
-              <a
-                href={tallyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary transition-colors"
-                title="View on Tally"
-              >
-                <User className="h-3 w-3" />
-              </a>
-            )}
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary transition-colors"
-              title="View on Arbiscan"
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Link
+              href={`/elections/contender/${address.toLowerCase()}`}
+              className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
             >
-              <ExternalLink className="h-3 w-3" />
-            </a>
+              {label ?? address}
+            </Link>
+            {title && (
+              <span className="text-xs text-muted-foreground truncate">
+                {title}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -313,7 +362,7 @@ function NomineeRow({
         <span className="text-sm text-muted-foreground">{votes}</span>
         {showVoteLink && (
           <Link
-            href={`/elections/contender/${address}`}
+            href={`/elections/contender/${address.toLowerCase()}`}
             className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
           >
             Vote &rarr;

@@ -47,17 +47,83 @@ function NomineeSelectionBanner({
   );
 }
 
+import type { NomineeSortOrder } from "@/types/election";
+
+function sortContenders(
+  contenders: SerializableContender[],
+  nominees: SerializableNominee[],
+  sortOrder: NomineeSortOrder,
+  randomSeed: number
+): SerializableContender[] {
+  const sorted = [...contenders];
+  const nomineeMap = new Map(nominees.map((n) => [n.address.toLowerCase(), n]));
+
+  switch (sortOrder) {
+    case "votes":
+      sorted.sort((a, b) => {
+        const votesA = BigInt(
+          nomineeMap.get(a.address.toLowerCase())?.votesReceived ?? "0"
+        );
+        const votesB = BigInt(
+          nomineeMap.get(b.address.toLowerCase())?.votesReceived ?? "0"
+        );
+        if (votesB > votesA) return 1;
+        if (votesB < votesA) return -1;
+        return 0;
+      });
+      break;
+    case "alphabetical":
+      sorted.sort((a, b) => {
+        const nameA = (
+          getCandidateName(a.address) ??
+          getDelegateLabel(a.address) ??
+          a.address
+        ).toLowerCase();
+        const nameB = (
+          getCandidateName(b.address) ??
+          getDelegateLabel(b.address) ??
+          b.address
+        ).toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      break;
+    case "random": {
+      const seededRandom = (seed: number) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+      for (let i = sorted.length - 1; i > 0; i--) {
+        const j = Math.floor(seededRandom(randomSeed * 1000 + i) * (i + 1));
+        [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
+      }
+      break;
+    }
+  }
+  return sorted;
+}
+
 interface ContenderVoteListProps {
   contenders: SerializableContender[];
   nominees: SerializableNominee[];
   quorumThreshold: string;
+  sortOrder?: NomineeSortOrder;
+  randomSeed?: number;
 }
 
 export function ContenderVoteList({
   contenders,
   nominees,
   quorumThreshold,
+  sortOrder = "votes",
+  randomSeed = 0,
 }: ContenderVoteListProps): React.ReactElement {
+  const sortedContenders = sortContenders(
+    contenders,
+    nominees,
+    sortOrder,
+    randomSeed
+  );
+
   return (
     <div className="space-y-4">
       <NomineeSelectionBanner quorumThreshold={quorumThreshold} />
@@ -66,13 +132,13 @@ export function ContenderVoteList({
         Quorum threshold: {formatVotingPower(quorumThreshold)} ARB per contender
       </div>
 
-      {contenders.length === 0 ? (
+      {sortedContenders.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
           No contenders registered yet
         </div>
       ) : (
         <div className="space-y-2">
-          {contenders.map((contender) => {
+          {sortedContenders.map((contender) => {
             const candidateName = getCandidateName(contender.address);
             const candidateTitle = getCandidateTitle(contender.address);
             const label = candidateName ?? getDelegateLabel(contender.address);
