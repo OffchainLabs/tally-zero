@@ -7,6 +7,8 @@ export type ElectionPhase =
   | "PENDING_EXECUTION"
   | "COMPLETED";
 
+export type NomineeSortOrder = "random" | "alphabetical" | "votes";
+
 export interface PhaseMetadata {
   name: string;
   description: string;

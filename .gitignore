@@ -47,4 +47,6 @@ CLAUDE.md
 # Agent loop metadata
 .agent/summary.md
 
+.vscode/
+
 delegate-cache.json

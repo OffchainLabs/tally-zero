@@ -6,7 +6,7 @@ import type {
   SerializableMemberDetails,
   SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
-import { User, Users } from "lucide-react";
+import { ArrowDownUp, User, Users } from "lucide-react";
 
 import {
   Card,
@@ -15,13 +15,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import {
   countQualifiedNominees,
   getContenderDescription,
 } from "@/lib/election-utils";
-import type { ElectionPhase } from "@/types/election";
+import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
 
 import { ContenderList } from "./ContenderList";
 import { ContenderVoteList } from "./ContenderVoteList";
@@ -46,18 +53,23 @@ export function NomineeList({
   electionIndex,
 }: NomineeListProps): React.ReactElement | null {
   const hasMemberResults =
-    memberDetails &&
-    (phase === "MEMBER_ELECTION" ||
-      phase === "PENDING_EXECUTION" ||
-      phase === "COMPLETED");
+    memberDetails && (phase === "PENDING_EXECUTION" || phase === "COMPLETED");
 
   const [viewMode, setViewMode] = useState<ViewMode>("nominees");
+  const [sortOrder, setSortOrder] = useState<NomineeSortOrder>("votes");
+  const [randomSeed] = useState(() => Math.random());
 
   useEffect(() => {
     if (hasMemberResults) {
       setViewMode("results");
     }
   }, [hasMemberResults]);
+
+  useEffect(() => {
+    if (phase === "VETTING_PERIOD" && sortOrder === "votes") {
+      setSortOrder("random");
+    }
+  }, [phase, sortOrder]);
 
   if (isLoading && !nomineeDetails) {
     return <NomineeListSkeleton />;
@@ -71,12 +83,17 @@ export function NomineeList({
     phase === "CONTENDER_SUBMISSION" || phase === "NOMINEE_SELECTION";
   const canToggle = hasMemberResults && nomineeDetails;
   const showResults = viewMode === "results" && hasMemberResults;
+  const showNomineeList =
+    phase !== "NOMINEE_SELECTION" && !showContenders && !showResults;
+  const showSortDropdown = showNomineeList || phase === "NOMINEE_SELECTION";
 
   let title: string;
   if (showContenders) {
     title = "Contenders";
   } else if (showResults) {
     title = "Election Results";
+  } else if (phase === "VETTING_PERIOD") {
+    title = "Compliance Check";
   } else {
     title = "Nominees";
   }
@@ -93,21 +110,41 @@ export function NomineeList({
             )}
             {title}
           </CardTitle>
-          {canToggle && (
-            <Tabs
-              value={viewMode}
-              onValueChange={(v) => setViewMode(v as ViewMode)}
-            >
-              <TabsList className="h-8">
-                <TabsTrigger value="nominees" className="text-xs px-2 h-6">
-                  Nominees
-                </TabsTrigger>
-                <TabsTrigger value="results" className="text-xs px-2 h-6">
-                  Results
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          <div className="flex items-center gap-2">
+            {canToggle && (
+              <Tabs
+                value={viewMode}
+                onValueChange={(v) => setViewMode(v as ViewMode)}
+              >
+                <TabsList className="h-8">
+                  <TabsTrigger value="nominees" className="text-xs px-2 h-6">
+                    Nominees
+                  </TabsTrigger>
+                  <TabsTrigger value="results" className="text-xs px-2 h-6">
+                    Results
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+            {showSortDropdown && (
+              <Select
+                value={sortOrder}
+                onValueChange={(v) => setSortOrder(v as NomineeSortOrder)}
+              >
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <ArrowDownUp className="h-3 w-3 mr-1 shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {phase !== "VETTING_PERIOD" && (
+                    <SelectItem value="votes">Most Votes</SelectItem>
+                  )}
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                  <SelectItem value="random">Random</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
         <CardDescription>
           {showContenders
@@ -121,23 +158,27 @@ export function NomineeList({
               )
             : showResults
               ? "Top 6 nominees will be elected to the Security Council"
-              : `${nomineeDetails.compliantNominees.length} compliant nominees of ${nomineeDetails.targetNomineeCount} required`}
+              : phase === "VETTING_PERIOD"
+                ? `${nomineeDetails.compliantNominees.length} nominees pending compliance review`
+                : null}
         </CardDescription>
       </CardHeader>
 
       <CardContent>
-        {phase === "NOMINEE_SELECTION" ? (
-          <ContenderVoteList
-            contenders={nomineeDetails.contenders}
-            nominees={nomineeDetails.nominees}
-            quorumThreshold={nomineeDetails.quorumThreshold}
-          />
-        ) : showContenders ? (
+        {phase === "CONTENDER_SUBMISSION" ? (
           <ContenderList
             contenders={nomineeDetails.contenders}
             electionIndex={electionIndex}
             nominees={nomineeDetails.nominees}
             quorumThreshold={nomineeDetails.quorumThreshold}
+          />
+        ) : phase === "NOMINEE_SELECTION" ? (
+          <ContenderVoteList
+            contenders={nomineeDetails.contenders}
+            nominees={nomineeDetails.nominees}
+            quorumThreshold={nomineeDetails.quorumThreshold}
+            sortOrder={sortOrder}
+            randomSeed={randomSeed}
           />
         ) : showResults && memberDetails ? (
           <MemberElectionResults
@@ -147,7 +188,11 @@ export function NomineeList({
         ) : (
           <NomineeElectionList
             details={nomineeDetails}
+            memberDetails={memberDetails}
             electionIndex={electionIndex}
+            phase={phase}
+            sortOrder={sortOrder}
+            randomSeed={randomSeed}
           />
         )}
       </CardContent>

@@ -43,7 +43,7 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOMINEE_SELECTION: {
     name: "Nominee Selection",
     description:
-      "Delegates must endorse contenders with 0.2% of votable tokens for contenders to be nominated for the Member Election",
+      "Delegates must endorse contenders with 0.2% of votable tokens for contenders to be nominated for the Member Election.",
     durationDays: ELECTION_DURATIONS.NOMINEE_SELECTION,
     colorClass: "text-blue-500",
   },
@@ -57,7 +57,7 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   MEMBER_ELECTION: {
     name: "Member Election",
     description:
-      "Token holders vote for their preferred nominees. Top 6 are elected.",
+      "Delegates vote for their preferred nominees. Top 6 are elected.",
     durationDays: ELECTION_DURATIONS.MEMBER_ELECTION,
     colorClass: "text-green-500",
   },

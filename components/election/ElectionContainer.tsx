@@ -230,9 +230,6 @@ export function ElectionContainer(): React.ReactElement {
           <ElectionActionCard
             phase={currentPhase}
             selectedElection={overrideElection}
-            nomineeDetails={overrideNomineeDetails}
-            memberDetails={overrideMemberDetails}
-            bypassSimulation={hasOverride}
           />
         </>
       )}

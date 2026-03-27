@@ -1,9 +1,9 @@
 import type { SerializableMemberDetails } from "@gzeoneth/gov-tracker";
-import { ExternalLink, User } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getTallyProfileUrl } from "@/lib/election-utils";
+import { getCandidateName } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -28,12 +28,10 @@ export function MemberElectionResults({
 
       <div className="space-y-2">
         {details.nominees.map((nominee, index: number) => {
-          const label = getDelegateLabel(nominee.address);
+          const label =
+            getCandidateName(nominee.address) ??
+            getDelegateLabel(nominee.address);
           const explorerUrl = getAddressExplorerUrl(nominee.address);
-          const tallyUrl =
-            electionIndex !== undefined
-              ? getTallyProfileUrl(electionIndex, nominee.address, 2)
-              : null;
 
           return (
             <div
@@ -57,37 +55,12 @@ export function MemberElectionResults({
                   {index + 1}
                 </span>
                 <div className="flex items-center gap-2 min-w-0">
-                  {label ? (
-                    <span className="text-sm font-medium truncate">
-                      {label}
-                    </span>
-                  ) : (
-                    <span className="font-mono text-xs break-all">
-                      {nominee.address}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {tallyUrl && (
-                      <a
-                        href={tallyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition-colors"
-                        title="View on Tally"
-                      >
-                        <User className="h-3 w-3" />
-                      </a>
-                    )}
-                    <a
-                      href={explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      title="View on Arbiscan"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
+                  <Link
+                    href={`/elections/contender/${nominee.address.toLowerCase()}`}
+                    className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
+                  >
+                    {label ?? nominee.address}
+                  </Link>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">

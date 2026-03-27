@@ -172,10 +172,12 @@ export function useElectionStatus({
 
   const l2Url = l2RpcUrl || ARBITRUM_RPC_URL;
   const l1Url = l1RpcUrl || ETHEREUM_RPC_URL;
+  const isCustomL2Rpc = !!l2RpcUrl && l2RpcUrl !== ARBITRUM_RPC_URL;
 
-  // Reset error toast ref when URLs change
+  // Reset state when URLs change (e.g. switching to a fork)
   useEffect(() => {
     shownErrorToastRef.current = false;
+    bundledCacheInitializedRef.current = false;
   }, [l2Url, l1Url]);
 
   // Stable chunking config - only create object when values are truthy
@@ -192,7 +194,9 @@ export function useElectionStatus({
   const getTracker = useCallback(async () => {
     const cache = getCacheAdapter();
 
-    if (!bundledCacheInitializedRef.current) {
+    // Skip bundled cache when using a custom L2 RPC (e.g. Tenderly fork)
+    // to avoid stale mainnet data overriding the fork's actual state.
+    if (!bundledCacheInitializedRef.current && !isCustomL2Rpc) {
       await initializeBundledCache(cache);
       bundledCacheInitializedRef.current = true;
     }
@@ -208,7 +212,7 @@ export function useElectionStatus({
     });
 
     return { tracker, l2Provider, l1Provider };
-  }, [l2Url, l1Url, chunkingConfig]);
+  }, [l2Url, l1Url, chunkingConfig, isCustomL2Rpc]);
 
   const activeElections = useMemo(
     () => allElections.filter((e) => e.phase !== "COMPLETED"),
@@ -223,10 +227,10 @@ export function useElectionStatus({
   }, [allElections, activeElections, selectedIndex]);
 
   const nomineeDetails = selectedElection
-    ? nomineeDetailsMap[selectedElection.electionIndex] ?? null
+    ? (nomineeDetailsMap[selectedElection.electionIndex] ?? null)
     : null;
   const memberDetails = selectedElection
-    ? memberDetailsMap[selectedElection.electionIndex] ?? null
+    ? (memberDetailsMap[selectedElection.electionIndex] ?? null)
     : null;
 
   const electionConfig = useMemo<ElectionConfig | undefined>(() => {
@@ -247,6 +251,24 @@ export function useElectionStatus({
     debug.app("Fetching election data with address overrides...");
 
     const elections = await getAllElectionStatuses(l2Provider, electionConfig);
+
+    // Apply vetting period correction (same as fetchDefault)
+    for (const election of elections) {
+      if (
+        election.nomineeProposalState === "Succeeded" &&
+        !election.isInVettingPeriod &&
+        (!election.memberProposalState ||
+          election.memberProposalState === "Pending")
+      ) {
+        election.phase = "VETTING_PERIOD";
+        election.isInVettingPeriod = true;
+        debug.app(
+          "Election %d: corrected phase to VETTING_PERIOD (override path)",
+          election.electionIndex
+        );
+      }
+    }
+
     debug.app("Fetched %d elections via override config", elections.length);
 
     setAllElections(elections);
@@ -312,49 +334,52 @@ export function useElectionStatus({
   const fetchDefault = useCallback(async () => {
     const { tracker, l2Provider, l1Provider } = await getTracker();
 
-    debug.app("Fetching SC election status...");
+    debug.app("Fetching SC election status... (customRpc=%s)", isCustomL2Rpc);
 
     // Phase 1: Load from cache first (no RPC needed).
-    // Probe indices 0..MAX to find all cached elections.
+    // Skip cache entirely when using a custom L2 RPC (e.g. Tenderly fork)
+    // because cached mainnet state may conflict with the fork's block state.
     const MAX_ELECTIONS = 10;
     const cachedElections: ElectionProposalStatus[] = [];
     const cachedNomineeDetails: Record<number, NomineeElectionDetails> = {};
     const cachedMemberDetails: Record<number, MemberElectionDetails> = {};
 
-    const checkpointResults = await Promise.all(
-      Array.from({ length: MAX_ELECTIONS }, (_, i) =>
-        tracker
-          .getElectionCheckpoint(i)
-          .then((checkpoint) => ({ index: i, checkpoint }))
-      )
-    );
+    if (!isCustomL2Rpc) {
+      const checkpointResults = await Promise.all(
+        Array.from({ length: MAX_ELECTIONS }, (_, i) =>
+          tracker
+            .getElectionCheckpoint(i)
+            .then((checkpoint) => ({ index: i, checkpoint }))
+        )
+      );
 
-    for (const { index: i, checkpoint } of checkpointResults) {
-      if (checkpoint && checkpoint.status.phase !== "NOT_STARTED") {
-        debug.cache(
-          "Election %d loaded from cache: %s",
-          i,
-          checkpoint.status.phase
-        );
-        cachedElections.push(checkpoint.status);
-        if (checkpoint.nomineeDetails) {
-          cachedNomineeDetails[i] = checkpoint.nomineeDetails;
-        }
-        if (checkpoint.memberDetails) {
-          cachedMemberDetails[i] = checkpoint.memberDetails;
+      for (const { index: i, checkpoint } of checkpointResults) {
+        if (checkpoint && checkpoint.status.phase !== "NOT_STARTED") {
+          debug.cache(
+            "Election %d loaded from cache: %s",
+            i,
+            checkpoint.status.phase
+          );
+          cachedElections.push(checkpoint.status);
+          if (checkpoint.nomineeDetails) {
+            cachedNomineeDetails[i] = checkpoint.nomineeDetails;
+          }
+          if (checkpoint.memberDetails) {
+            cachedMemberDetails[i] = checkpoint.memberDetails;
+          }
         }
       }
-    }
 
-    // Immediately render cached data so the UI shows elections right away.
-    if (cachedElections.length > 0) {
-      const sorted = [...cachedElections].sort(
-        (a, b) => a.electionIndex - b.electionIndex
-      );
-      setAllElections(sorted);
-      setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
-      setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
-      initialLoadDoneRef.current = true;
+      // Immediately render cached data so the UI shows elections right away.
+      if (cachedElections.length > 0) {
+        const sorted = [...cachedElections].sort(
+          (a, b) => a.electionIndex - b.electionIndex
+        );
+        setAllElections(sorted);
+        setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
+        setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
+        initialLoadDoneRef.current = true;
+      }
     }
 
     // Phase 2: Get live election count from RPC and fetch fresh data.
@@ -382,6 +407,30 @@ export function useElectionStatus({
         uncachedIndices.map(async (i) => {
           try {
             const liveStatus = await getElectionStatus(l2Provider, i);
+
+            // On forks, getL1BlockNumberFromL2 may fail or return a stale
+            // value inside getElectionStatus, causing the vetting period
+            // check to be skipped. Additionally, gov-tracker computes
+            // memberProposalId deterministically and state() returns
+            // "Pending" for non-existent proposals, so memberProposalId
+            // can appear non-null even when the member election hasn't
+            // been created. The reliable check: nominee is "Succeeded"
+            // and member state is null or "Pending" (not yet created).
+            if (
+              liveStatus.nomineeProposalState === "Succeeded" &&
+              !liveStatus.isInVettingPeriod &&
+              (!liveStatus.memberProposalState ||
+                liveStatus.memberProposalState === "Pending")
+            ) {
+              liveStatus.phase = "VETTING_PERIOD";
+              liveStatus.isInVettingPeriod = true;
+              debug.app(
+                "Election %d: corrected phase to VETTING_PERIOD (nominee Succeeded, member state=%s)",
+                i,
+                liveStatus.memberProposalState ?? "null"
+              );
+            }
+
             debug.app("Election %d fetched live: %s", i, liveStatus.phase);
 
             // Contender/nominee lists are immutable after CONTENDER_SUBMISSION.
@@ -503,8 +552,25 @@ export function useElectionStatus({
             electionStatus.canCreateElection
           );
         })
-        .catch((err) => {
+        .catch(async (err) => {
           debug.app("checkElectionStatus failed (non-fatal): %O", err);
+          // On forks, L1 block lookup often fails. Synthesize a minimal
+          // status from the election count so the UI doesn't show an error.
+          try {
+            const count = await getElectionCount(l2Provider);
+            setStatus({
+              electionCount: count,
+              cohort: (count % 2) as 0 | 1,
+              nextElectionTimestamp: 0,
+              currentL1Timestamp: 0,
+              canCreateElection: false,
+              secondsUntilElection: 0,
+              timeUntilElection: "Unknown",
+            });
+            debug.app("Synthesized partial election status (count=%d)", count);
+          } catch {
+            debug.app("Failed to synthesize election status");
+          }
         }),
     ]);
 
@@ -529,7 +595,7 @@ export function useElectionStatus({
     setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
     setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
     initialLoadDoneRef.current = true;
-  }, [getTracker]);
+  }, [getTracker, isCustomL2Rpc]);
 
   const fetchElectionData = useCallback(async () => {
     if (!enabled) return;
