@@ -3,7 +3,7 @@ import { ExternalLink, User } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getTallyProfileUrl } from "@/lib/election-utils";
+import { getCandidateName, getTallyProfileUrl } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,9 @@ export function MemberElectionResults({
 
       <div className="space-y-2">
         {details.nominees.map((nominee, index: number) => {
-          const label = getDelegateLabel(nominee.address);
+          const label =
+            getCandidateName(nominee.address) ??
+            getDelegateLabel(nominee.address);
           const explorerUrl = getAddressExplorerUrl(nominee.address);
           const tallyUrl =
             electionIndex !== undefined

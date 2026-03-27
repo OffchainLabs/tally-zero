@@ -57,7 +57,7 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   MEMBER_ELECTION: {
     name: "Member Election",
     description:
-      "Token holders vote for their preferred nominees. Top 6 are elected.",
+      "Delegates vote for their preferred nominees. Top 6 are elected.",
     durationDays: ELECTION_DURATIONS.MEMBER_ELECTION,
     colorClass: "text-green-500",
   },

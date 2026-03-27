@@ -1,10 +1,6 @@
 "use client";
 
-import type {
-  ElectionProposalStatus,
-  SerializableMemberDetails,
-  SerializableNomineeDetails,
-} from "@gzeoneth/gov-tracker";
+import type { ElectionProposalStatus } from "@gzeoneth/gov-tracker";
 
 import {
   Card,
@@ -17,32 +13,19 @@ import { PHASE_METADATA } from "@/config/security-council";
 import type { ElectionPhase } from "@/types/election";
 
 import { ContenderSignupForm } from "./ContenderSignupForm";
-import { NomineeVoteForm } from "./NomineeVoteForm";
 
 interface ElectionActionCardProps {
   phase: ElectionPhase;
   selectedElection: ElectionProposalStatus | null;
-  nomineeDetails: SerializableNomineeDetails | null;
-  memberDetails: SerializableMemberDetails | null;
-  bypassSimulation?: boolean;
 }
 
 export function ElectionActionCard({
   phase,
   selectedElection,
-  nomineeDetails,
-  memberDetails,
-  bypassSimulation = false,
 }: ElectionActionCardProps): React.ReactElement | null {
   if (!selectedElection) return null;
 
-  const content = getPhaseContent({
-    phase,
-    selectedElection,
-    nomineeDetails,
-    memberDetails,
-    bypassSimulation,
-  });
+  const content = getPhaseContent({ phase, selectedElection });
 
   if (!content) return null;
 
@@ -59,21 +42,13 @@ export function ElectionActionCard({
   );
 }
 
-interface PhaseContentInput {
-  phase: ElectionPhase;
-  selectedElection: ElectionProposalStatus;
-  nomineeDetails: SerializableNomineeDetails | null;
-  memberDetails: SerializableMemberDetails | null;
-  bypassSimulation: boolean;
-}
-
 function getPhaseContent({
   phase,
   selectedElection,
-  nomineeDetails,
-  memberDetails,
-  bypassSimulation,
-}: PhaseContentInput): {
+}: {
+  phase: ElectionPhase;
+  selectedElection: ElectionProposalStatus;
+}): {
   title: string;
   form: React.ReactElement;
 } | null {
@@ -96,18 +71,8 @@ function getPhaseContent({
     }
 
     case "MEMBER_ELECTION": {
-      if (!selectedElection.memberProposalId || !memberDetails) return null;
-      return {
-        title: "Vote for Nominees",
-        form: (
-          <NomineeVoteForm
-            proposalId={selectedElection.memberProposalId}
-            nominees={memberDetails.nominees}
-            fullWeightDeadline={memberDetails.fullWeightDeadline}
-            bypassSimulation={bypassSimulation}
-          />
-        ),
-      };
+      // Voting UI is on each nominee's candidate profile page
+      return null;
     }
 
     default:

@@ -23,14 +23,13 @@ import {
 } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-import { shortenAddress } from "@/lib/format-utils";
 
-import candidatesData from "@/data/election-5-candidates.json";
+import candidatesData from "@/data/election-candidates.json";
 
-const ContenderVoteCard = dynamic(
+const CandidateVoteCard = dynamic(
   () =>
-    import("./ContenderVoteCard").then((mod) => ({
-      default: mod.ContenderVoteCard,
+    import("./CandidateVoteCard").then((mod) => ({
+      default: mod.CandidateVoteCard,
     })),
   {
     ssr: false,
@@ -65,6 +64,7 @@ interface CandidateData {
   skills: CandidateSkills;
   projects: string;
   country: string;
+  registered_at: string;
 }
 
 const candidates = candidatesData as Record<string, CandidateData>;
@@ -200,19 +200,32 @@ export function ContenderProfile({
   )?.[1];
 
   if (!candidate) {
+    const explorerUrl = getAddressExplorerUrl(address);
     return (
-      <Card variant="glass">
-        <CardContent className="py-12">
-          <div className="text-center text-muted-foreground">
-            <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Contender not found</p>
-            <p className="text-sm mt-1">
-              No candidate profile found for address{" "}
-              <code className="text-xs">{shortenAddress(address)}</code>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card variant="glass">
+          <CardHeader>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              <User className="h-6 w-6" />
+              Candidate
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span className="font-mono text-xs break-all">{address}</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </CardContent>
+        </Card>
+
+        <CandidateVoteCard address={address} />
+      </div>
     );
   }
 
@@ -291,7 +304,7 @@ export function ContenderProfile({
 
       <div className="flex flex-col lg:flex-row-reverse gap-5">
         <div className="lg:min-w-[450px]">
-          <ContenderVoteCard address={address} />
+          <CandidateVoteCard address={address} />
         </div>
         <div className="flex space-y-6 flex-col">
           <Card variant="glass">

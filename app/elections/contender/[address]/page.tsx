@@ -1,27 +1,60 @@
+import type { BundledCache } from "@gzeoneth/gov-tracker";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { ContenderProfile } from "@/components/election/ContenderProfile";
-import candidatesData from "@/data/election-5-candidates.json";
+import candidatesData from "@/data/election-candidates.json";
 
 interface ContenderPageProps {
   params: Promise<{ address: string }>;
 }
 
 export function generateStaticParams() {
-  const params: { address: string }[] = [];
+  const addresses = new Set<string>();
+
+  // Include all candidate profile addresses
   for (const address of Object.keys(candidatesData)) {
-    params.push({ address });
-    const lower = address.toLowerCase();
-    if (lower !== address) {
-      params.push({ address: lower });
-    }
+    addresses.add(address.toLowerCase());
   }
-  return params;
+
+  // Include all nominee/contender addresses from bundled election cache
+  // so profile pages exist for nominees without candidate profiles
+  try {
+    const cache =
+      require("@gzeoneth/gov-tracker/bundled-cache.json") as BundledCache;
+    for (const key of Object.keys(cache)) {
+      if (!key.startsWith("election:")) continue;
+      const entry = cache[key] as {
+        cachedData?: {
+          nomineeDetails?: {
+            nominees?: { address: string }[];
+            contenders?: { address: string }[];
+          };
+          memberDetails?: { nominees?: { address: string }[] };
+        };
+      };
+      const nd = entry?.cachedData?.nomineeDetails;
+      const md = entry?.cachedData?.memberDetails;
+      if (nd) {
+        for (const n of [...(nd.nominees ?? []), ...(nd.contenders ?? [])]) {
+          addresses.add(n.address.toLowerCase());
+        }
+      }
+      if (md) {
+        for (const n of md.nominees ?? []) {
+          addresses.add(n.address.toLowerCase());
+        }
+      }
+    }
+  } catch {
+    // bundled cache not available at build time, proceed with candidates only
+  }
+
+  return Array.from(addresses).map((address) => ({ address }));
 }
 
 export const metadata = {
-  title: "Contender Profile | Security Council Elections",
+  title: "Candidate Profile | Security Council Elections",
   description:
     "View candidate profile for the Arbitrum Security Council election.",
 };
@@ -41,10 +74,10 @@ export default async function ContenderPage({ params }: ContenderPageProps) {
             Back to Elections
           </Link>
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Contender Profile
+            Candidate Profile
           </h1>
           <p className="text-muted-foreground mt-2">
-            Election 5 — Security Council candidate information
+            Security Council election candidate
           </p>
         </div>
 

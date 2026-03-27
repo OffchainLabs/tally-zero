@@ -20,6 +20,7 @@ import { utils as ethersUtils } from "ethers";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getDelegateLabel } from "@/lib/delegate-cache";
+import { getCandidateName } from "@/lib/election-utils";
 import { getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
@@ -62,7 +63,10 @@ export function ElectionVoteRow({
 }: ElectionVoteRowProps): React.ReactElement {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
-  const label = labelOverride ?? getDelegateLabel(targetAddress);
+  const label =
+    labelOverride ??
+    getCandidateName(targetAddress) ??
+    getDelegateLabel(targetAddress);
   const explorerUrl = getAddressExplorerUrl(targetAddress);
 
   const voteAmountWei = useMemo(() => {

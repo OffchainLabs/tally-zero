@@ -1,15 +1,20 @@
-import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
+import type {
+  SerializableMemberDetails,
+  SerializableNominee,
+  SerializableNomineeDetails,
+} from "@gzeoneth/gov-tracker";
 import {
   AlertCircle,
-  CheckCircle2,
   Clock,
   ExternalLink,
+  ShieldX,
   User,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getTallyProfileUrl } from "@/lib/election-utils";
+import { getCandidateName, getTallyProfileUrl } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -17,29 +22,69 @@ import type { ElectionPhase } from "@/types/election";
 
 interface NomineeElectionListProps {
   details: SerializableNomineeDetails;
+  memberDetails?: SerializableMemberDetails | null;
   electionIndex?: number;
   phase?: ElectionPhase;
 }
 
 export function NomineeElectionList({
   details,
+  memberDetails,
   electionIndex,
   phase,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
   const isVetting = phase === "VETTING_PERIOD";
+  const isMemberElection =
+    phase === "MEMBER_ELECTION" ||
+    phase === "PENDING_EXECUTION" ||
+    phase === "COMPLETED";
+
+  // During member election and beyond, cross-reference with memberDetails
+  // to separate eligible nominees from those excluded during compliance review.
+  let eligibleNominees: SerializableNominee[];
+  let nonCompliantNominees: SerializableNominee[];
+  if (isMemberElection && memberDetails) {
+    const memberAddresses = new Set(
+      memberDetails.nominees.map((n) => n.address.toLowerCase())
+    );
+    eligibleNominees = compliantNominees.filter((n) =>
+      memberAddresses.has(n.address.toLowerCase())
+    );
+    nonCompliantNominees = compliantNominees.filter(
+      (n) => !memberAddresses.has(n.address.toLowerCase())
+    );
+  } else {
+    eligibleNominees = compliantNominees;
+    nonCompliantNominees = [];
+  }
+
+  // Build a lookup for member election data (weight + rank) by address
+  const memberDataMap = new Map<string, { weight: string; rank: number }>();
+  if (isMemberElection && memberDetails) {
+    for (const n of memberDetails.nominees) {
+      memberDataMap.set(n.address.toLowerCase(), {
+        weight: n.weightReceived,
+        rank: n.rank,
+      });
+    }
+  }
+
   const allSameVotes =
-    compliantNominees.length > 1 &&
-    compliantNominees.every(
-      (n) => n.votesReceived === compliantNominees[0].votesReceived
+    !isMemberElection &&
+    eligibleNominees.length > 1 &&
+    eligibleNominees.every(
+      (n) => n.votesReceived === eligibleNominees[0].votesReceived
     );
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Quorum threshold: {threshold} ARB
-      </div>
+      {!isMemberElection && (
+        <div className="text-sm text-muted-foreground">
+          Quorum threshold: {threshold} ARB
+        </div>
+      )}
 
       {isVetting && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
@@ -57,13 +102,13 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {!isVetting && compliantNominees.length < details.targetNomineeCount && (
+      {!isVetting && eligibleNominees.length < details.targetNomineeCount && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
           <div className="flex items-start gap-2 text-yellow-500">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="text-sm">
               <p className="font-medium">
-                {compliantNominees.length} of {details.targetNomineeCount}{" "}
+                {eligibleNominees.length} of {details.targetNomineeCount}{" "}
                 nominees qualified
               </p>
               <p className="text-yellow-500/80 mt-1">
@@ -78,7 +123,7 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {compliantNominees.length > 0 && (
+      {eligibleNominees.length > 0 && (
         <div className="space-y-2">
           <h4
             className={cn(
@@ -87,23 +132,55 @@ export function NomineeElectionList({
             )}
           >
             {isVetting
-              ? `Pending Review (${compliantNominees.length})`
-              : `Compliant Nominees (${compliantNominees.length})`}
+              ? `Undergoing Review (${eligibleNominees.length})`
+              : isMemberElection
+                ? `Eligible Nominees (${eligibleNominees.length})`
+                : `Compliant Nominees (${eligibleNominees.length})`}
           </h4>
           <div className="space-y-2">
-            {compliantNominees.map((nominee) => (
+            {eligibleNominees.map((nominee) => {
+              const memberData = memberDataMap.get(
+                nominee.address.toLowerCase()
+              );
+              return (
+                <NomineeRow
+                  key={nominee.address}
+                  address={nominee.address}
+                  votes={
+                    isMemberElection && memberData
+                      ? `${formatVotingPower(memberData.weight)} weighted votes`
+                      : allSameVotes
+                        ? "Reached quorum"
+                        : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
+                  }
+                  rank={memberData?.rank}
+                  electionIndex={electionIndex}
+                  round={1}
+                  isCompliant={!isVetting}
+                  isPendingReview={isVetting}
+                  showVoteLink={isMemberElection}
+                  phase={phase}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {nonCompliantNominees.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-orange-500">
+            Non-Compliant ({nonCompliantNominees.length})
+          </h4>
+          <div className="space-y-2">
+            {nonCompliantNominees.map((nominee) => (
               <NomineeRow
                 key={nominee.address}
                 address={nominee.address}
-                votes={
-                  allSameVotes
-                    ? "Reached quorum"
-                    : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
-                }
+                votes={`${formatVotingPower(nominee.votesReceived.toString())} ARB`}
                 electionIndex={electionIndex}
                 round={1}
-                isCompliant={!isVetting}
-                isPendingReview={isVetting}
+                isNonCompliant
               />
             ))}
           </div>
@@ -130,7 +207,7 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {compliantNominees.length === 0 && excludedNominees.length === 0 && (
+      {eligibleNominees.length === 0 && excludedNominees.length === 0 && (
         <div className="text-center text-muted-foreground py-8">
           No nominees yet
         </div>
@@ -142,21 +219,29 @@ export function NomineeElectionList({
 function NomineeRow({
   address,
   votes,
+  rank,
   electionIndex,
   round,
   isCompliant,
   isExcluded,
+  isNonCompliant,
   isPendingReview,
+  showVoteLink,
+  phase,
 }: {
   address: string;
   votes: string;
+  rank?: number;
   electionIndex?: number;
   round?: 1 | 2;
   isCompliant?: boolean;
   isExcluded?: boolean;
+  isNonCompliant?: boolean;
   isPendingReview?: boolean;
+  showVoteLink?: boolean;
+  phase?: ElectionPhase;
 }): React.ReactElement {
-  const label = getDelegateLabel(address);
+  const label = getCandidateName(address) ?? getDelegateLabel(address);
   const explorerUrl = getAddressExplorerUrl(address);
   const tallyUrl =
     electionIndex !== undefined && round !== undefined
@@ -169,23 +254,37 @@ function NomineeRow({
         "flex items-center justify-between rounded-lg border p-3",
         isCompliant && "border-green-500/30 bg-green-500/10",
         isExcluded && "border-red-500/30 bg-red-500/10",
+        isNonCompliant && "border-orange-500/30 bg-orange-500/10",
         isPendingReview && "border-yellow-500/30 bg-yellow-500/10"
       )}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {isCompliant && (
-          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+        {rank !== undefined && (
+          <span
+            className={cn(
+              "text-xs font-bold shrink-0 w-6 text-center",
+              rank <= 6 && phase === "PENDING_EXECUTION"
+                ? "text-green-500"
+                : "text-muted-foreground"
+            )}
+          >
+            #{rank}
+          </span>
         )}
         {isPendingReview && (
           <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
         )}
         {isExcluded && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+        {isNonCompliant && (
+          <ShieldX className="h-4 w-4 text-orange-500 shrink-0" />
+        )}
         <div className="flex items-center gap-2 min-w-0">
-          {label ? (
-            <span className="text-sm font-medium truncate">{label}</span>
-          ) : (
-            <span className="font-mono text-xs break-all">{address}</span>
-          )}
+          <Link
+            href={`/elections/contender/${address}`}
+            className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
+          >
+            {label ?? address}
+          </Link>
           <div className="flex items-center gap-1 shrink-0">
             {tallyUrl && (
               <a
@@ -210,9 +309,17 @@ function NomineeRow({
           </div>
         </div>
       </div>
-      <span className="text-sm text-muted-foreground shrink-0 ml-2">
-        {votes}
-      </span>
+      <div className="flex items-center gap-2 shrink-0 ml-2">
+        <span className="text-sm text-muted-foreground">{votes}</span>
+        {showVoteLink && (
+          <Link
+            href={`/elections/contender/${address}`}
+            className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            Vote &rarr;
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

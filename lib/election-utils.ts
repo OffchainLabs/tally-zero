@@ -1,4 +1,4 @@
-import candidatesData from "@/data/election-5-candidates.json";
+import candidatesData from "@/data/election-candidates.json";
 import type { ElectionPhase } from "@/types/election";
 
 const candidateNames = new Map<string, string>();

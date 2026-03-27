@@ -318,10 +318,14 @@ export function ElectionPhaseTimeline({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {metadata.description}
                 </p>
-                {eta && isActive && eta.endTimestamp > 0 && (
+                {eta && isActive && (
                   <p className="mt-1 text-xs font-medium text-primary">
-                    Ends {formatEtaDate(eta.endTimestamp)} (
-                    {getTimeUntil(eta.endTimestamp)})
+                    {formatEtaDate(eta.startTimestamp)}
+                    {eta.endTimestamp > 0 &&
+                      ` → ${formatEtaDate(eta.endTimestamp)}`}
+                    {eta.endTimestamp > 0 &&
+                      eta.endTimestamp > Math.floor(Date.now() / 1000) &&
+                      ` (${getTimeUntil(eta.endTimestamp)} remaining)`}
                   </p>
                 )}
                 {eta && isFuture && (

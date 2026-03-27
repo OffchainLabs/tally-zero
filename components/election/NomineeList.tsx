@@ -46,10 +46,7 @@ export function NomineeList({
   electionIndex,
 }: NomineeListProps): React.ReactElement | null {
   const hasMemberResults =
-    memberDetails &&
-    (phase === "MEMBER_ELECTION" ||
-      phase === "PENDING_EXECUTION" ||
-      phase === "COMPLETED");
+    memberDetails && (phase === "PENDING_EXECUTION" || phase === "COMPLETED");
 
   const [viewMode, setViewMode] = useState<ViewMode>("nominees");
 
@@ -149,6 +146,7 @@ export function NomineeList({
         ) : (
           <NomineeElectionList
             details={nomineeDetails}
+            memberDetails={memberDetails}
             electionIndex={electionIndex}
             phase={phase}
           />
