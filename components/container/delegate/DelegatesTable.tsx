@@ -1,7 +1,12 @@
 "use client";
 
+import shuffle from "lodash.shuffle";
+
 import { columns } from "@/components/table/ColumnsDelegates";
-import { DelegatesToolbar } from "@/components/table/DelegatesToolbar";
+import {
+  DelegatesToolbar,
+  type DelegateSortOrder,
+} from "@/components/table/DelegatesToolbar";
 import { DataTablePagination } from "@/components/table/Pagination";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -26,7 +31,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface DelegatesTableProps {
   delegates: DelegateInfo[];
@@ -51,10 +56,18 @@ export function DelegatesTable({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [sortOrder, setSortOrder] = useState<DelegateSortOrder>("votingPower");
+  const shuffledRef = useRef<DelegateInfo[]>([]);
   const lastAddressesRef = useRef<string>("");
 
+  const sortedDelegates = useMemo(() => {
+    if (sortOrder !== "random") return delegates;
+    shuffledRef.current = shuffle(delegates);
+    return shuffledRef.current;
+  }, [delegates, sortOrder]);
+
   const table = useReactTable<DelegateInfo>({
-    data: delegates,
+    data: sortedDelegates,
     columns,
     state: {
       sorting,
@@ -99,7 +112,12 @@ export function DelegatesTable({
 
       {delegates.length > 0 && !error && (
         <div className="space-y-4 overflow-hidden">
-          <DelegatesToolbar table={table} onMinPowerChange={onMinPowerChange} />
+          <DelegatesToolbar
+            table={table}
+            onMinPowerChange={onMinPowerChange}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+          />
 
           <div className="relative">
             <div className="glass rounded-2xl overflow-x-auto scrollbar-thin">

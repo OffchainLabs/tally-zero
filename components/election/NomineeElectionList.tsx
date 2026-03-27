@@ -3,6 +3,7 @@ import type {
   SerializableNominee,
   SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
+import shuffle from "lodash.shuffle";
 import { AlertCircle, Clock, ShieldX, XCircle } from "lucide-react";
 import Link from "next/link";
 
@@ -18,13 +19,11 @@ interface NomineeElectionListProps {
   electionIndex?: number;
   phase?: ElectionPhase;
   sortOrder?: NomineeSortOrder;
-  randomSeed?: number;
 }
 
 function sortNominees(
   nominees: SerializableNominee[],
   sortOrder: NomineeSortOrder,
-  randomSeed: number,
   memberDataMap?: Map<string, { weight: string; rank: number }>
 ): SerializableNominee[] {
   const sorted = [...nominees];
@@ -60,17 +59,8 @@ function sortNominees(
       });
       break;
     }
-    case "random": {
-      const seededRandom = (seed: number) => {
-        const x = Math.sin(seed) * 10000;
-        return x - Math.floor(x);
-      };
-      for (let i = sorted.length - 1; i > 0; i--) {
-        const j = Math.floor(seededRandom(randomSeed * 1000 + i) * (i + 1));
-        [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
-      }
-      break;
-    }
+    case "random":
+      return shuffle(sorted);
   }
   return sorted;
 }
@@ -81,7 +71,6 @@ export function NomineeElectionList({
   electionIndex,
   phase,
   sortOrder = "votes",
-  randomSeed = 0,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
@@ -121,23 +110,13 @@ export function NomineeElectionList({
     }
   }
 
-  eligibleNominees = sortNominees(
-    eligibleNominees,
-    sortOrder,
-    randomSeed,
-    memberDataMap
-  );
+  eligibleNominees = sortNominees(eligibleNominees, sortOrder, memberDataMap);
   nonCompliantNominees = sortNominees(
     nonCompliantNominees,
     sortOrder,
-    randomSeed,
     memberDataMap
   );
-  const sortedExcludedNominees = sortNominees(
-    excludedNominees,
-    sortOrder,
-    randomSeed
-  );
+  const sortedExcludedNominees = sortNominees(excludedNominees, sortOrder);
 
   const allSameVotes =
     !isMemberElection &&

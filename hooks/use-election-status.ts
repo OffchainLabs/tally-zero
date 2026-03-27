@@ -370,6 +370,25 @@ export function useElectionStatus({
         }
       }
 
+      // Apply vetting period correction to cached data (same as live path)
+      // so the UI doesn't flash from NOMINEE_SELECTION → VETTING_PERIOD
+      // when the live fetch completes.
+      for (const election of cachedElections) {
+        if (
+          election.nomineeProposalState === "Succeeded" &&
+          !election.isInVettingPeriod &&
+          (!election.memberProposalState ||
+            election.memberProposalState === "Pending")
+        ) {
+          election.phase = "VETTING_PERIOD";
+          election.isInVettingPeriod = true;
+          debug.cache(
+            "Election %d: corrected cached phase to VETTING_PERIOD",
+            election.electionIndex
+          );
+        }
+      }
+
       // Immediately render cached data so the UI shows elections right away.
       if (cachedElections.length > 0) {
         const sorted = [...cachedElections].sort(

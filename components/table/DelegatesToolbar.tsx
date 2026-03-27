@@ -3,21 +3,35 @@
 import { useCallback, useState } from "react";
 
 import { Table } from "@tanstack/react-table";
+import { ArrowDownUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
 import { DataTableViewOptions } from "@components/table/ViewOptions";
 import { Input } from "@components/ui/Input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/Select";
+
+export type DelegateSortOrder = "votingPower" | "random";
 
 interface DelegatesToolbarProps<TData> {
   table: Table<TData>;
   onMinPowerChange?: (value: string) => void;
+  sortOrder: DelegateSortOrder;
+  onSortOrderChange: (value: DelegateSortOrder) => void;
 }
 
 export function DelegatesToolbar<TData>({
   table,
   onMinPowerChange,
+  sortOrder,
+  onSortOrderChange,
 }: DelegatesToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
   const [searchValue, setSearchValue] = useState("");
@@ -76,8 +90,23 @@ export function DelegatesToolbar<TData>({
 
         {isFiltered && <ToolbarResetButton onClick={handleReset} />}
       </div>
-      <div className="hidden sm:block">
-        <DataTableViewOptions table={table} />
+      <div className="flex items-center gap-2">
+        <Select
+          value={sortOrder}
+          onValueChange={(v) => onSortOrderChange(v as DelegateSortOrder)}
+        >
+          <SelectTrigger className="w-[160px] h-8 text-xs">
+            <ArrowDownUp className="h-3 w-3 mr-1 shrink-0" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="votingPower">Voting Power</SelectItem>
+            <SelectItem value="random">Random</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="hidden sm:block">
+          <DataTableViewOptions table={table} />
+        </div>
       </div>
     </div>
   );
