@@ -143,7 +143,9 @@ export function useElectionStatus({
 
   const selectedElection = useMemo(() => {
     if (selectedIndex === null) {
-      return activeElections[0] ?? null;
+      return (
+        activeElections[0] ?? allElections[allElections.length - 1] ?? null
+      );
     }
     return allElections.find((e) => e.electionIndex === selectedIndex) ?? null;
   }, [allElections, activeElections, selectedIndex]);
