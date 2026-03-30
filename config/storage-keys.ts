@@ -35,6 +35,7 @@ export const STORAGE_KEYS = {
   TENDERLY_ACCESS_TOKEN: "tally-zero-tenderly-access-token",
   LAST_CACHE_VERSION: "tally-zero-last-cache-version",
   ELECTION_PHASE_OVERRIDE: "tally-zero-election-phase-override",
+  ELECTION_LAST_KNOWN_PHASE: "tally-zero-election-last-known-phase",
   ELECTION_CONTRACT_OVERRIDES: "tally-zero-election-contract-overrides",
 } as const;
 

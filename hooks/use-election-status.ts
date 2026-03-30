@@ -6,27 +6,39 @@ import {
   checkElectionStatus,
   createTracker,
   getAllElectionStatuses,
-  getContenders,
   getElectionCount,
-  getElectionStatus,
   getMemberElectionDetails,
   getNomineeElectionDetails,
-  getNomineesWithVotes,
-  nomineeElectionGovernorReadAbi,
   serializeMemberDetails,
   serializeNomineeDetails,
   type ElectionConfig,
   type ElectionProposalStatus,
   type ElectionStatus,
   type ChunkingConfig as GovTrackerChunkingConfig,
-  type SerializableMemberDetails,
-  type SerializableNomineeDetails,
 } from "@gzeoneth/gov-tracker";
-import { Contract } from "ethers";
 import { toast } from "sonner";
 
 import { initializeBundledCache } from "@/lib/bundled-cache-loader";
 import { debug } from "@/lib/debug";
+import {
+  enrichContenderVotes,
+  fetchLiveElection,
+  fetchOverallStatus,
+  loadCachedElections,
+} from "@/lib/election-status/fetchers";
+import {
+  correctVettingPeriod,
+  isCorsOrNetworkError,
+  mergeResults,
+  preventPhaseRegression,
+} from "@/lib/election-status/helpers";
+import type {
+  CachedElectionData,
+  MemberElectionDetails,
+  NomineeElectionDetails,
+  UseElectionStatusOptions,
+  UseElectionStatusResult,
+} from "@/lib/election-status/types";
 import { getCacheAdapter } from "@/lib/gov-tracker-cache";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
 import {
@@ -34,97 +46,7 @@ import {
   ETHEREUM_RPC_URL,
 } from "@config/arbitrum-governance";
 
-type NomineeElectionDetails = SerializableNomineeDetails | null;
-type MemberElectionDetails = SerializableMemberDetails | null;
-
-function isCorsOrNetworkError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const msg = error.message.toLowerCase();
-  return (
-    msg.includes("failed to fetch") ||
-    msg.includes("network") ||
-    msg.includes("cors") ||
-    msg.includes("access-control-allow-origin") ||
-    msg.includes("blocked by cors")
-  );
-}
-
-/**
- * Fetch votesReceived for each contender from the nominee governor contract.
- * Merges results into the nominees array so the UI can display per-contender vote progress.
- */
-async function enrichContenderVotes(
-  details: SerializableNomineeDetails,
-  provider: InstanceType<typeof import("ethers").providers.JsonRpcProvider>,
-  governorAddress?: string
-): Promise<SerializableNomineeDetails> {
-  const address =
-    governorAddress ?? "0x8a1cDA8dee421cD06023470608605934c16A05a0";
-  const contract = new Contract(
-    address,
-    nomineeElectionGovernorReadAbi,
-    provider
-  );
-
-  const existingAddresses = new Set(
-    details.nominees.map((n) => n.address.toLowerCase())
-  );
-
-  const missing = details.contenders.filter(
-    (c) => !existingAddresses.has(c.address.toLowerCase())
-  );
-
-  if (missing.length === 0) return details;
-
-  const votes = await Promise.all(
-    missing.map(async (c) => {
-      try {
-        const v = await contract.votesReceived(details.proposalId, c.address);
-        return { address: c.address, votesReceived: v.toString() as string };
-      } catch {
-        return { address: c.address, votesReceived: "0" };
-      }
-    })
-  );
-
-  const enrichedNominees = [
-    ...details.nominees,
-    ...votes.map((v) => ({
-      address: v.address,
-      votesReceived: v.votesReceived,
-      isExcluded: false,
-    })),
-  ];
-
-  return { ...details, nominees: enrichedNominees };
-}
-
-export interface UseElectionStatusOptions {
-  enabled?: boolean;
-  l2RpcUrl?: string;
-  l1RpcUrl?: string;
-  l1ChunkSize?: number;
-  l2ChunkSize?: number;
-  refreshInterval?: number;
-  selectedElectionIndex?: number | null;
-  nomineeGovernorAddress?: string;
-  memberGovernorAddress?: string;
-}
-
-export interface UseElectionStatusResult {
-  status: ElectionStatus | null;
-  allElections: ElectionProposalStatus[];
-  activeElections: ElectionProposalStatus[];
-  selectedElection: ElectionProposalStatus | null;
-  nomineeDetails: NomineeElectionDetails;
-  memberDetails: MemberElectionDetails;
-  nomineeDetailsMap: Record<number, NomineeElectionDetails>;
-  memberDetailsMap: Record<number, MemberElectionDetails>;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => void;
-  selectElection: (index: number | null) => void;
-}
+export type { UseElectionStatusOptions, UseElectionStatusResult };
 
 export function useElectionStatus({
   enabled = true,
@@ -157,7 +79,7 @@ export function useElectionStatus({
   const [error, setError] = useState<Error | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Use refs for tracking state that shouldn't trigger re-renders
+  // Refs for tracking state that shouldn't trigger re-renders
   const trackingIndicesRef = useRef<Set<number>>(new Set());
   const shownErrorToastRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
@@ -242,6 +164,10 @@ export function useElectionStatus({
     };
   }, [nomineeGovernorAddress, memberGovernorAddress]);
 
+  // -----------------------------------
+  // Fetch with contract address overrides (Tenderly forks, testing)
+  // -----------------------------------
+
   const fetchWithOverrides = useCallback(async () => {
     if (!electionConfig) return;
 
@@ -252,16 +178,8 @@ export function useElectionStatus({
 
     const elections = await getAllElectionStatuses(l2Provider, electionConfig);
 
-    // Apply vetting period correction (same as fetchDefault)
     for (const election of elections) {
-      if (
-        election.nomineeProposalState === "Succeeded" &&
-        !election.isInVettingPeriod &&
-        (!election.memberProposalState ||
-          election.memberProposalState === "Pending")
-      ) {
-        election.phase = "VETTING_PERIOD";
-        election.isInVettingPeriod = true;
+      if (correctVettingPeriod(election)) {
         debug.app(
           "Election %d: corrected phase to VETTING_PERIOD (override path)",
           election.electionIndex
@@ -271,7 +189,7 @@ export function useElectionStatus({
 
     debug.app("Fetched %d elections via override config", elections.length);
 
-    setAllElections(elections);
+    setAllElections(preventPhaseRegression(elections));
 
     try {
       const electionStatus = await checkElectionStatus(
@@ -331,290 +249,85 @@ export function useElectionStatus({
     initialLoadDoneRef.current = true;
   }, [l2Url, l1Url, electionConfig]);
 
+  // -----------------------------------
+  // Default fetch (cache-first, then live RPC)
+  // -----------------------------------
+
   const fetchDefault = useCallback(async () => {
     const { tracker, l2Provider, l1Provider } = await getTracker();
 
     debug.app("Fetching SC election status... (customRpc=%s)", isCustomL2Rpc);
 
-    // Phase 1: Load from cache first (no RPC needed).
-    // Skip cache entirely when using a custom L2 RPC (e.g. Tenderly fork)
+    // Step 1: Load from cache (no RPC needed).
+    // Skip cache when using a custom L2 RPC (e.g. Tenderly fork)
     // because cached mainnet state may conflict with the fork's block state.
-    const MAX_ELECTIONS = 10;
-    const cachedElections: ElectionProposalStatus[] = [];
-    const cachedNomineeDetails: Record<number, NomineeElectionDetails> = {};
-    const cachedMemberDetails: Record<number, MemberElectionDetails> = {};
+    let cached: CachedElectionData = {
+      elections: [],
+      nomineeDetails: {},
+      memberDetails: {},
+    };
 
     if (!isCustomL2Rpc) {
-      const checkpointResults = await Promise.all(
-        Array.from({ length: MAX_ELECTIONS }, (_, i) =>
-          tracker
-            .getElectionCheckpoint(i)
-            .then((checkpoint) => ({ index: i, checkpoint }))
-        )
-      );
+      cached = await loadCachedElections(tracker);
 
-      for (const { index: i, checkpoint } of checkpointResults) {
-        if (checkpoint && checkpoint.status.phase !== "NOT_STARTED") {
-          debug.cache(
-            "Election %d loaded from cache: %s",
-            i,
-            checkpoint.status.phase
-          );
-          cachedElections.push(checkpoint.status);
-          if (checkpoint.nomineeDetails) {
-            cachedNomineeDetails[i] = checkpoint.nomineeDetails;
-          }
-          if (checkpoint.memberDetails) {
-            cachedMemberDetails[i] = checkpoint.memberDetails;
-          }
-        }
-      }
-
-      // Apply vetting period correction to cached data (same as live path)
-      // so the UI doesn't flash from NOMINEE_SELECTION → VETTING_PERIOD
-      // when the live fetch completes.
-      for (const election of cachedElections) {
-        if (
-          election.nomineeProposalState === "Succeeded" &&
-          !election.isInVettingPeriod &&
-          (!election.memberProposalState ||
-            election.memberProposalState === "Pending")
-        ) {
-          election.phase = "VETTING_PERIOD";
-          election.isInVettingPeriod = true;
-          debug.cache(
-            "Election %d: corrected cached phase to VETTING_PERIOD",
-            election.electionIndex
-          );
-        }
-      }
-
-      // Immediately render cached data so the UI shows elections right away.
-      if (cachedElections.length > 0) {
-        const sorted = [...cachedElections].sort(
+      // On first load, render cached data immediately so the UI isn't blank.
+      // On subsequent fetches (refreshes), skip the intermediate cache render
+      // to avoid flashing stale phases before live RPC results arrive.
+      if (cached.elections.length > 0 && !initialLoadDoneRef.current) {
+        const sorted = [...cached.elections].sort(
           (a, b) => a.electionIndex - b.electionIndex
         );
-        setAllElections(sorted);
-        setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
-        setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
+        setAllElections(preventPhaseRegression(sorted));
+        setNomineeDetailsMap((prev) => ({ ...prev, ...cached.nomineeDetails }));
+        setMemberDetailsMap((prev) => ({ ...prev, ...cached.memberDetails }));
         initialLoadDoneRef.current = true;
       }
     }
 
-    // Phase 2: Get live election count from RPC and fetch fresh data.
+    // Step 2: Fetch live data for non-completed elections.
     const electionCount = await getElectionCount(l2Provider);
     debug.app("Election count: %d", electionCount);
 
-    // COMPLETED elections are fully cached. Elections past CONTENDER_SUBMISSION
-    // have immutable contender/nominee lists — only vote counts change — so we
-    // can skip the full re-fetch and just enrich votes for those.
     const cachedPhaseByIndex = new Map(
-      cachedElections.map((e) => [e.electionIndex, e.phase])
+      cached.elections.map((e) => [e.electionIndex, e.phase])
     );
-    const fullyCachedIndices = new Set(
-      cachedElections
+    const completedIndices = new Set(
+      cached.elections
         .filter((e) => e.phase === "COMPLETED")
         .map((e) => e.electionIndex)
     );
-    const uncachedIndices = Array.from(
+    const indicesToFetch = Array.from(
       { length: electionCount },
       (_, i) => i
-    ).filter((i) => !fullyCachedIndices.has(i));
+    ).filter((i) => !completedIndices.has(i));
 
     const [liveResults] = await Promise.all([
       Promise.all(
-        uncachedIndices.map(async (i) => {
-          try {
-            const liveStatus = await getElectionStatus(l2Provider, i);
-
-            // On forks, getL1BlockNumberFromL2 may fail or return a stale
-            // value inside getElectionStatus, causing the vetting period
-            // check to be skipped. Additionally, gov-tracker computes
-            // memberProposalId deterministically and state() returns
-            // "Pending" for non-existent proposals, so memberProposalId
-            // can appear non-null even when the member election hasn't
-            // been created. The reliable check: nominee is "Succeeded"
-            // and member state is null or "Pending" (not yet created).
-            if (
-              liveStatus.nomineeProposalState === "Succeeded" &&
-              !liveStatus.isInVettingPeriod &&
-              (!liveStatus.memberProposalState ||
-                liveStatus.memberProposalState === "Pending")
-            ) {
-              liveStatus.phase = "VETTING_PERIOD";
-              liveStatus.isInVettingPeriod = true;
-              debug.app(
-                "Election %d: corrected phase to VETTING_PERIOD (nominee Succeeded, member state=%s)",
-                i,
-                liveStatus.memberProposalState ?? "null"
-              );
-            }
-
-            debug.app("Election %d fetched live: %s", i, liveStatus.phase);
-
-            // Contender/nominee lists are immutable after CONTENDER_SUBMISSION.
-            // If we have cached details, just refresh vote counts.
-            const cachedPhase = cachedPhaseByIndex.get(i);
-            const hasCachedDetails = !!cachedNomineeDetails[i];
-            // Contender list is immutable after submission, but vote counts
-            // and nominee status change during NOMINEE_SELECTION. Only skip
-            // full re-fetch for post-voting phases where everything is settled.
-            const contendersImmutable =
-              cachedPhase === "VETTING_PERIOD" ||
-              cachedPhase === "MEMBER_ELECTION" ||
-              cachedPhase === "PENDING_EXECUTION";
-
-            let nd: NomineeElectionDetails = null;
-            if (hasCachedDetails && contendersImmutable) {
-              nd = cachedNomineeDetails[i];
-              debug.app(
-                "Election %d: reusing cached nominee details (%s), refreshing votes",
-                i,
-                cachedPhase
-              );
-            } else {
-              const raw = await getNomineeElectionDetails(i, l2Provider).catch(
-                () => null
-              );
-              if (raw) {
-                nd = serializeNomineeDetails(raw);
-              } else if (liveStatus.nomineeProposalId) {
-                const [contenders, nominees] = await Promise.all([
-                  getContenders(liveStatus.nomineeProposalId, l2Provider).catch(
-                    () => []
-                  ),
-                  getNomineesWithVotes(
-                    liveStatus.nomineeProposalId,
-                    l2Provider
-                  ).catch(() => []),
-                ]);
-                if (contenders.length > 0 || nominees.length > 0) {
-                  const serializedNominees = nominees.map((n) => ({
-                    address: n.address,
-                    votesReceived: n.votesReceived.toString(),
-                    isExcluded: n.isExcluded,
-                    nominatedAtBlock: n.nominatedAtBlock,
-                    excludedAtBlock: n.excludedAtBlock,
-                    exclusionTxHash: n.exclusionTxHash,
-                  }));
-                  nd = {
-                    proposalId: liveStatus.nomineeProposalId,
-                    electionIndex: i,
-                    contenders: contenders.map((c) => ({
-                      address: c.address,
-                      registeredAtBlock: c.registeredAtBlock,
-                      registrationTxHash: c.registrationTxHash,
-                    })),
-                    nominees: serializedNominees,
-                    compliantNominees: serializedNominees.filter(
-                      (n) => !n.isExcluded
-                    ),
-                    excludedNominees: serializedNominees.filter(
-                      (n) => n.isExcluded
-                    ),
-                    quorumThreshold: "0",
-                    targetNomineeCount: liveStatus.targetNomineeCount,
-                  };
-                }
-              }
-            }
-
-            // Enrich with per-contender votes (always refresh — votes change)
-            if (nd && nd.contenders.length > 0) {
-              try {
-                nd = await enrichContenderVotes(nd, l2Provider);
-              } catch (err) {
-                debug.app(
-                  "Failed to enrich contender votes for election %d: %O",
-                  i,
-                  err
-                );
-              }
-            }
-
-            // Member nominee list is immutable during MEMBER_ELECTION.
-            // Reuse cached details if available for that phase.
-            const hasCachedMember = !!cachedMemberDetails[i];
-            // Member vote counts change during MEMBER_ELECTION.
-            // Only skip re-fetch once voting is done.
-            const memberImmutable = cachedPhase === "PENDING_EXECUTION";
-            let md: MemberElectionDetails = null;
-            if (hasCachedMember && memberImmutable) {
-              md = cachedMemberDetails[i];
-              debug.app(
-                "Election %d: reusing cached member details (%s)",
-                i,
-                cachedPhase
-              );
-            } else {
-              try {
-                const raw = await getMemberElectionDetails(i, l2Provider);
-                if (raw) md = serializeMemberDetails(raw);
-              } catch (err) {
-                debug.app("Member details failed for election %d: %O", i, err);
-              }
-            }
-
-            return { index: i, status: liveStatus, nominee: nd, member: md };
-          } catch (err) {
-            debug.app("Election %d live fetch failed: %O", i, err);
-            return null;
-          }
-        })
+        indicesToFetch.map((i) =>
+          fetchLiveElection(
+            i,
+            l2Provider,
+            cachedPhaseByIndex.get(i),
+            cached.nomineeDetails[i] ?? null,
+            cached.memberDetails[i] ?? null
+          )
+        )
       ),
-      checkElectionStatus(l2Provider, l1Provider)
-        .then((electionStatus) => {
-          setStatus(electionStatus);
-          debug.app(
-            "Election status: count=%d, canCreate=%s",
-            electionStatus.electionCount,
-            electionStatus.canCreateElection
-          );
-        })
-        .catch(async (err) => {
-          debug.app("checkElectionStatus failed (non-fatal): %O", err);
-          // On forks, L1 block lookup often fails. Synthesize a minimal
-          // status from the election count so the UI doesn't show an error.
-          try {
-            const count = await getElectionCount(l2Provider);
-            setStatus({
-              electionCount: count,
-              cohort: (count % 2) as 0 | 1,
-              nextElectionTimestamp: 0,
-              currentL1Timestamp: 0,
-              canCreateElection: false,
-              secondsUntilElection: 0,
-              timeUntilElection: "Unknown",
-            });
-            debug.app("Synthesized partial election status (count=%d)", count);
-          } catch {
-            debug.app("Failed to synthesize election status");
-          }
-        }),
+      fetchOverallStatus(l2Provider, l1Provider, setStatus),
     ]);
 
-    for (const result of liveResults) {
-      if (!result) continue;
-      // Live results for active elections replace stale cached versions
-      const existingIdx = cachedElections.findIndex(
-        (e) => e.electionIndex === result.index
-      );
-      if (existingIdx !== -1) {
-        cachedElections[existingIdx] = result.status;
-      } else {
-        cachedElections.push(result.status);
-      }
-      if (result.nominee) cachedNomineeDetails[result.index] = result.nominee;
-      if (result.member) cachedMemberDetails[result.index] = result.member;
-    }
+    // Step 3: Merge live results into cached data and render.
+    const merged = mergeResults(cached, liveResults);
 
-    cachedElections.sort((a, b) => a.electionIndex - b.electionIndex);
-
-    setAllElections(cachedElections);
-    setNomineeDetailsMap((prev) => ({ ...prev, ...cachedNomineeDetails }));
-    setMemberDetailsMap((prev) => ({ ...prev, ...cachedMemberDetails }));
+    setAllElections(preventPhaseRegression(merged.elections));
+    setNomineeDetailsMap((prev) => ({ ...prev, ...merged.nomineeDetails }));
+    setMemberDetailsMap((prev) => ({ ...prev, ...merged.memberDetails }));
     initialLoadDoneRef.current = true;
   }, [getTracker, isCustomL2Rpc]);
+
+  // -----------------------------------
+  // Fetch orchestration
+  // -----------------------------------
 
   const fetchElectionData = useCallback(async () => {
     if (!enabled) return;
@@ -739,7 +452,7 @@ export function useElectionStatus({
             }
             const updated = [...prev, result];
             updated.sort((a, b) => a.electionIndex - b.electionIndex);
-            return updated;
+            return preventPhaseRegression(updated);
           });
 
           // Load details from checkpoint (gov-tracker caches them for COMPLETED elections)
