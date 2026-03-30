@@ -18,6 +18,8 @@ import {
 
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import type { DelegateCacheStats } from "@/types/delegate";
+import type { DelegateIndex } from "@/types/tally-delegate";
+import delegateIndexData from "@data/delegate-index.json";
 import delegateLabelsData from "@data/delegate-labels.json";
 
 import { debug } from "./debug";
@@ -31,14 +33,29 @@ interface DelegateLabelsConfig {
 }
 
 const delegateLabels = delegateLabelsData as DelegateLabelsConfig;
+const delegateIndex = delegateIndexData as DelegateIndex;
 
 const normalizedDelegateLabels = new Map<string, string>();
 for (const [addr, label] of Object.entries(delegateLabels.delegates)) {
   normalizedDelegateLabels.set(addr.toLowerCase(), label);
 }
 
+/**
+ * Returns a display label for a delegate address.
+ * Checks curated delegate-labels.json first, then falls back
+ * to the name from delegate-index.json (derived from Tally profiles).
+ */
 export function getDelegateLabel(address: string): string | undefined {
-  return normalizedDelegateLabels.get(address.toLowerCase());
+  const key = address.toLowerCase();
+  return normalizedDelegateLabels.get(key) ?? delegateIndex[key]?.name;
+}
+
+/**
+ * Returns the Tally profile picture URL for a delegate, if available.
+ */
+export function getDelegatePicture(address: string): string | null {
+  const key = address.toLowerCase();
+  return delegateIndex[key]?.picture ?? null;
 }
 
 function getSkipDelegateCacheSetting(): boolean {

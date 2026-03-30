@@ -57,7 +57,6 @@ export function NomineeList({
 
   const [viewMode, setViewMode] = useState<ViewMode>("nominees");
   const [sortOrder, setSortOrder] = useState<NomineeSortOrder>("votes");
-  const [randomSeed] = useState(() => Math.random());
 
   useEffect(() => {
     if (hasMemberResults) {
@@ -178,7 +177,6 @@ export function NomineeList({
             nominees={nomineeDetails.nominees}
             quorumThreshold={nomineeDetails.quorumThreshold}
             sortOrder={sortOrder}
-            randomSeed={randomSeed}
           />
         ) : showResults && memberDetails ? (
           <MemberElectionResults
@@ -192,7 +190,6 @@ export function NomineeList({
             electionIndex={electionIndex}
             phase={phase}
             sortOrder={sortOrder}
-            randomSeed={randomSeed}
           />
         )}
       </CardContent>

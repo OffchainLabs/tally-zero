@@ -2,6 +2,7 @@ import type {
   SerializableContender,
   SerializableNominee,
 } from "@gzeoneth/gov-tracker";
+import shuffle from "lodash.shuffle";
 import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
 
@@ -52,8 +53,7 @@ import type { NomineeSortOrder } from "@/types/election";
 function sortContenders(
   contenders: SerializableContender[],
   nominees: SerializableNominee[],
-  sortOrder: NomineeSortOrder,
-  randomSeed: number
+  sortOrder: NomineeSortOrder
 ): SerializableContender[] {
   const sorted = [...contenders];
   const nomineeMap = new Map(nominees.map((n) => [n.address.toLowerCase(), n]));
@@ -87,17 +87,8 @@ function sortContenders(
         return nameA.localeCompare(nameB);
       });
       break;
-    case "random": {
-      const seededRandom = (seed: number) => {
-        const x = Math.sin(seed) * 10000;
-        return x - Math.floor(x);
-      };
-      for (let i = sorted.length - 1; i > 0; i--) {
-        const j = Math.floor(seededRandom(randomSeed * 1000 + i) * (i + 1));
-        [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
-      }
-      break;
-    }
+    case "random":
+      return shuffle(sorted);
   }
   return sorted;
 }
@@ -107,7 +98,6 @@ interface ContenderVoteListProps {
   nominees: SerializableNominee[];
   quorumThreshold: string;
   sortOrder?: NomineeSortOrder;
-  randomSeed?: number;
 }
 
 export function ContenderVoteList({
@@ -115,14 +105,8 @@ export function ContenderVoteList({
   nominees,
   quorumThreshold,
   sortOrder = "votes",
-  randomSeed = 0,
 }: ContenderVoteListProps): React.ReactElement {
-  const sortedContenders = sortContenders(
-    contenders,
-    nominees,
-    sortOrder,
-    randomSeed
-  );
+  const sortedContenders = sortContenders(contenders, nominees, sortOrder);
 
   return (
     <div className="space-y-4">

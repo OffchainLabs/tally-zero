@@ -2,6 +2,8 @@
 
 import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { BigNumber } from "ethers";
+import { ExternalLinkIcon } from "lucide-react";
+import Link from "next/link";
 
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import {
@@ -10,11 +12,10 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 
-import { getDelegateLabel } from "@/lib/delegate-cache";
+import { getDelegateLabel, getDelegatePicture } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { DelegateInfo } from "@/types/delegate";
-import { ExternalLinkIcon } from "lucide-react";
 
 declare module "@tanstack/react-table" {
   // TData is required for module augmentation but not used in this interface
@@ -43,11 +44,24 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       const address = row.getValue("address") as string;
       const shortened = shortenAddress(address);
       const label = getDelegateLabel(address);
+      const picture = getDelegatePicture(address);
 
       return (
         <HoverCard>
-          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105">
-            {label || shortened}
+          <HoverCardTrigger asChild>
+            <Link
+              href={`/delegates/${address.toLowerCase()}`}
+              className="inline-flex items-center gap-2 underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105"
+            >
+              {picture && (
+                <img
+                  src={picture}
+                  alt=""
+                  className="h-6 w-6 rounded-full object-cover shrink-0"
+                />
+              )}
+              {label || shortened}
+            </Link>
           </HoverCardTrigger>
           <HoverCardContent className="w-full">
             <div className="space-y-2">
