@@ -11,6 +11,16 @@ const nextConfig = {
     unoptimized: true,
     domains: ["placehold.co", "www.tally.xyz", "raw.githubusercontent.com"],
   },
+  turbopack: {
+    resolveAlias: {
+      async_hooks: "./lib/async-hooks-mock.js",
+      fs: "./lib/empty-module.js",
+      net: "./lib/empty-module.js",
+      tls: "./lib/empty-module.js",
+      dns: "./lib/empty-module.js",
+      child_process: "./lib/empty-module.js",
+    },
+  },
   webpack: (config, { isServer, webpack }) => {
     config.externals.push("pino-pretty", "lokijs", "encoding");
 

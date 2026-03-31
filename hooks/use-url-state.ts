@@ -101,18 +101,10 @@ interface UseUrlStateResult {
  * Provides bidirectional sync between URL hash and component state
  */
 export function useUrlState(): UseUrlStateResult {
-  const [urlState, setUrlStateInternal] = useState<UrlState>({
-    type: null,
-    id: null,
+  const [urlState, setUrlStateInternal] = useState<UrlState>(() => {
+    if (typeof window === "undefined") return { type: null, id: null };
+    return parseUrlHash(window.location.hash);
   });
-
-  // Parse initial hash on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const initialState = parseUrlHash(window.location.hash);
-    setUrlStateInternal(initialState);
-  }, []);
 
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {

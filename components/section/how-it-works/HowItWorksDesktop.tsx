@@ -2,7 +2,7 @@ import clsx from "clsx";
 import Image from "next/image";
 
 import { type StepType } from "@/types/steps";
-import { Tab } from "@headlessui/react";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 
 import Step from "@components/section/how-it-works/Step";
 
@@ -39,10 +39,10 @@ export default function HowItWorksDesktop(steps: StepType[]) {
   const stepsArray = Object.values(steps);
 
   return (
-    <Tab.Group as="div" className="hidden lg:mt-20 lg:block">
+    <TabGroup as="div" className="hidden lg:mt-20 lg:block">
       {({ selectedIndex }) => (
         <>
-          <Tab.List className="grid grid-cols-3 gap-x-12">
+          <TabList className="grid grid-cols-3 gap-x-12">
             {stepsArray.map((step, stepIndex) => (
               <div key={step.name} className="relative">
                 <Step
@@ -65,13 +65,13 @@ export default function HowItWorksDesktop(steps: StepType[]) {
                 )}
               </div>
             ))}
-          </Tab.List>
+          </TabList>
 
           {/* Image panel with glass styling */}
-          <Tab.Panels className="glass relative mt-16 overflow-hidden rounded-2xl p-8 xl:p-10">
+          <TabPanels className="glass relative mt-16 overflow-hidden rounded-2xl p-8 xl:p-10">
             <div className="-mx-4 flex">
               {stepsArray.map((step, stepIndex) => (
-                <Tab.Panel
+                <TabPanel
                   static
                   key={step.name}
                   className={clsx(
@@ -91,12 +91,12 @@ export default function HowItWorksDesktop(steps: StepType[]) {
                       sizes="52.75rem"
                     />
                   </div>
-                </Tab.Panel>
+                </TabPanel>
               ))}
             </div>
-          </Tab.Panels>
+          </TabPanels>
         </>
       )}
-    </Tab.Group>
+    </TabGroup>
   );
 }

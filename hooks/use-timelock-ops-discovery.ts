@@ -310,6 +310,7 @@ export function useTimelockOpsDiscovery({
 
   useEffect(() => {
     if (enabled && rpcHydrated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- trigger async discovery
       discover();
     }
   }, [enabled, rpcHydrated, discover]);
