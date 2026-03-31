@@ -11,7 +11,7 @@
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
     "lint": "next lint --fix",
     "test": "npm run lint && tsc && vitest run",
-    "prepare": "husky install"
+    "prepare": "husky"
   },
   "prettier": {
     "semi": true,
