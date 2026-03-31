@@ -1,3 +1,8 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "export",
@@ -5,18 +10,20 @@ const nextConfig = {
     unoptimized: true,
     domains: ["placehold.co", "www.tally.xyz", "raw.githubusercontent.com"],
   },
-  turbopack: {
-    resolveAlias: {
-      async_hooks: "./lib/async-hooks-mock.js",
-      fs: "./lib/empty-module.js",
-      net: "./lib/empty-module.js",
-      tls: "./lib/empty-module.js",
-      dns: "./lib/empty-module.js",
-      child_process: "./lib/empty-module.js",
-      "pino-pretty": "./lib/empty-module.js",
-      lokijs: "./lib/empty-module.js",
-      encoding: "./lib/empty-module.js",
-    },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      async_hooks: path.resolve(__dirname, "lib/async-hooks-mock.js"),
+      fs: path.resolve(__dirname, "lib/empty-module.js"),
+      net: path.resolve(__dirname, "lib/empty-module.js"),
+      tls: path.resolve(__dirname, "lib/empty-module.js"),
+      dns: path.resolve(__dirname, "lib/empty-module.js"),
+      child_process: path.resolve(__dirname, "lib/empty-module.js"),
+      "pino-pretty": path.resolve(__dirname, "lib/empty-module.js"),
+      lokijs: path.resolve(__dirname, "lib/empty-module.js"),
+      encoding: path.resolve(__dirname, "lib/empty-module.js"),
+    };
+    return config;
   },
 };
 
