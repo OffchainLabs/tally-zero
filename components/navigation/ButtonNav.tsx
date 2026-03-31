@@ -34,6 +34,7 @@ export function ButtonNav() {
       customElements.get("appkit-network-button");
 
     if (checkReady()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- polling for web component registration
       setLoading(false);
       return;
     }

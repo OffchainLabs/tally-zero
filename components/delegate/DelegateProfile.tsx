@@ -71,6 +71,7 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {account.picture ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external avatar, static export
                 <img
                   src={account.picture}
                   alt=""

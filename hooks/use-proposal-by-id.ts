@@ -66,8 +66,10 @@ export function useProposalById({
   useEffect(() => {
     if (!isHydrated) return;
     if (!enabled || !proposalId) {
+      /* eslint-disable react-hooks/set-state-in-effect -- reset on param change */
       setProposal(null);
       setError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
 

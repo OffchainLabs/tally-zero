@@ -41,6 +41,7 @@ export function TimelockStagesList({
   const [showSlowHint, setShowSlowHint] = useState(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- loading timer management */
     if (isLoading && !loadingStartTime) {
       setLoadingStartTime(Date.now());
       setShowSlowHint(false);
@@ -48,6 +49,7 @@ export function TimelockStagesList({
       setLoadingStartTime(null);
       setShowSlowHint(false);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [isLoading, loadingStartTime]);
 
   useEffect(() => {

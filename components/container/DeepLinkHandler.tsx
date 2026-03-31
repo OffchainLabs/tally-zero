@@ -73,6 +73,7 @@ export function DeepLinkHandler({ proposals }: DeepLinkHandlerProps) {
 
   // Open modal when we have a deep link
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- sync modal state with URL */
     if (urlState.type && urlState.id) {
       setIsOpen(true);
       setLastType(urlState.type);
@@ -81,6 +82,7 @@ export function DeepLinkHandler({ proposals }: DeepLinkHandlerProps) {
     } else {
       setIsOpen(false);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [urlState]);
 
   // Handle modal close - clear the URL state

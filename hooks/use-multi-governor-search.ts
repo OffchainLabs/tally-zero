@@ -214,13 +214,6 @@ export function useMultiGovernorSearch({
     retry: false,
   });
 
-  // When cached data is served instantly, make sure progress reflects it
-  useEffect(() => {
-    if (data && !isFetching) {
-      setProgress(100);
-    }
-  }, [data, isFetching]);
-
   // Subscribe to live vote updates and patch the query cache
   useEffect(() => {
     return subscribeToVoteUpdates((update: VoteUpdate) => {

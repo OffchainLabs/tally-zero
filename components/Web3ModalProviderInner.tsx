@@ -7,7 +7,7 @@ import {
   type AppKitNetwork,
 } from "@reown/appkit/networks";
 import { createAppKit } from "@reown/appkit/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { http } from "viem";
 import { WagmiProvider, type Config } from "wagmi";
 
@@ -73,16 +73,6 @@ export default function Web3ModalProviderInner({
 }: {
   children: ReactNode;
 }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig as Config}>
       {children}

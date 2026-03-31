@@ -21,4 +21,11 @@ export default defineConfig([
       "no-process-env": "off",
     },
   },
+  {
+    files: ["next.config.mjs"],
+
+    rules: {
+      "no-process-env": "off",
+    },
+  },
 ]);
