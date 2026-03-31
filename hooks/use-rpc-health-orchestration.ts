@@ -64,6 +64,7 @@ export function useRpcHealthOrchestration(
   // Auto-start when RPC is healthy and additional conditions are met
   useEffect(() => {
     if (additionalReadyCondition && rpcHealthy === true && !autoStarted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time latch
       setAutoStarted(true);
     }
   }, [additionalReadyCondition, rpcHealthy, autoStarted]);

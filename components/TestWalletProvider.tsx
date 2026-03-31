@@ -33,7 +33,6 @@ function testWalletConnector(account: ReturnType<typeof privateKeyToAccount>) {
       >[0]);
     };
 
-    // eslint-disable-next-line -- wagmi connector request handler needs flexible types
     const request = async ({
       method,
       params,

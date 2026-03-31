@@ -60,12 +60,14 @@ export function NomineeList({
 
   useEffect(() => {
     if (hasMemberResults) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-switch view when results available
       setViewMode("results");
     }
   }, [hasMemberResults]);
 
   useEffect(() => {
     if (phase === "VETTING_PERIOD" && sortOrder === "votes") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- enforce valid sort for phase
       setSortOrder("random");
     }
   }, [phase, sortOrder]);

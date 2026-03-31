@@ -41,8 +41,10 @@ export function useRpcProvider(rpcUrl: string): UseRpcProviderResult {
 
   useEffect(() => {
     let cancelled = false;
+    /* eslint-disable react-hooks/set-state-in-effect -- reset on rpcUrl change */
     setIsReady(false);
     setError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     createRpcProvider(rpcUrl)
       .then(() => {

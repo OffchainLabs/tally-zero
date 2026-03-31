@@ -1,32 +1,10 @@
-import dynamic from "next/dynamic";
-
-import { Skeleton } from "@/components/ui/Skeleton";
-
-const ElectionContainer = dynamic(
-  () =>
-    import("@/components/election").then((mod) => ({
-      default: mod.ElectionContainer,
-    })),
-  { ssr: false, loading: () => <ElectionSkeleton /> }
-);
+import ElectionPageClient from "./ElectionPageClient";
 
 export const metadata = {
   title: "Security Council Elections | Arbitrum Governance",
   description:
     "Track Security Council elections on Arbitrum DAO. View election status, nominees, and voting results.",
 };
-
-function ElectionSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-48 w-full" />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    </div>
-  );
-}
 
 export default function ElectionsPage() {
   return (
@@ -43,7 +21,7 @@ export default function ElectionsPage() {
           </p>
         </div>
 
-        <ElectionContainer />
+        <ElectionPageClient />
       </div>
     </div>
   );

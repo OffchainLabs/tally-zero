@@ -23,8 +23,9 @@ export function useLocalStorage<T>(
   const [storedValue, setStoredValue] = useState<T>(initialValue);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Hydrate from localStorage after mount
+  // Hydrate from localStorage after mount (SSR-safe: must run in effect)
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- SSR hydration from localStorage */
     try {
       const item = window.localStorage.getItem(key);
       if (item !== null) {
@@ -34,6 +35,7 @@ export function useLocalStorage<T>(
       debug.storage("failed to parse stored value for %s: %O", key, error);
     }
     setIsHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [key]);
 
   const setValue = useCallback(

@@ -2,7 +2,12 @@
  * Step type definitions for marketing page feature showcase
  */
 
-import { type ComponentType, type ReactNode, type SVGProps } from "react";
+import {
+  type ComponentType,
+  type JSX,
+  type ReactNode,
+  type SVGProps,
+} from "react";
 
 /** Configuration for a feature step in the marketing carousel */
 export type StepType = {

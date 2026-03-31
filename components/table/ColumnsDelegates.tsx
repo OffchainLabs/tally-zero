@@ -54,6 +54,7 @@ export const columns: ColumnDef<DelegateInfo>[] = [
               className="inline-flex items-center gap-2 underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105"
             >
               {picture && (
+                // eslint-disable-next-line @next/next/no-img-element -- external avatar, static export
                 <img
                   src={picture}
                   alt=""
