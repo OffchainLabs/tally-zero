@@ -65,7 +65,8 @@ export function MemberElectionResults({
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className="text-sm text-muted-foreground">
-                  {formatVotingPower(nominee.weightReceived.toString())} ARB
+                  {formatVotingPower(nominee.weightReceived.toString())}{" "}
+                  weighted votes
                 </span>
                 {nominee.isWinner && (
                   <Badge variant="default" className="bg-green-500">

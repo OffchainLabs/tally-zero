@@ -23,8 +23,7 @@ interface NomineeElectionListProps {
 
 function sortNominees(
   nominees: SerializableNominee[],
-  sortOrder: NomineeSortOrder,
-  memberDataMap?: Map<string, { weight: string; rank: number }>
+  sortOrder: NomineeSortOrder
 ): SerializableNominee[] {
   const sorted = [...nominees];
   switch (sortOrder) {
@@ -45,14 +44,8 @@ function sortNominees(
       break;
     case "votes": {
       sorted.sort((a, b) => {
-        const voteA = BigInt(
-          memberDataMap?.get(a.address.toLowerCase())?.weight ??
-            a.votesReceived.toString()
-        );
-        const voteB = BigInt(
-          memberDataMap?.get(b.address.toLowerCase())?.weight ??
-            b.votesReceived.toString()
-        );
+        const voteA = BigInt(a.votesReceived.toString());
+        const voteB = BigInt(b.votesReceived.toString());
         if (voteB > voteA) return 1;
         if (voteB < voteA) return -1;
         return 0;
@@ -99,27 +92,11 @@ export function NomineeElectionList({
     nonCompliantNominees = [];
   }
 
-  // Build a lookup for member election data (weight + rank) by address
-  const memberDataMap = new Map<string, { weight: string; rank: number }>();
-  if (isMemberElection && memberDetails) {
-    for (const n of memberDetails.nominees) {
-      memberDataMap.set(n.address.toLowerCase(), {
-        weight: n.weightReceived,
-        rank: n.rank,
-      });
-    }
-  }
-
-  eligibleNominees = sortNominees(eligibleNominees, sortOrder, memberDataMap);
-  nonCompliantNominees = sortNominees(
-    nonCompliantNominees,
-    sortOrder,
-    memberDataMap
-  );
+  eligibleNominees = sortNominees(eligibleNominees, sortOrder);
+  nonCompliantNominees = sortNominees(nonCompliantNominees, sortOrder);
   const sortedExcludedNominees = sortNominees(excludedNominees, sortOrder);
 
   const allSameVotes =
-    !isMemberElection &&
     eligibleNominees.length > 1 &&
     eligibleNominees.every(
       (n) => n.votesReceived === eligibleNominees[0].votesReceived
@@ -127,11 +104,9 @@ export function NomineeElectionList({
 
   return (
     <div className="space-y-4">
-      {!isMemberElection && (
-        <div className="text-sm text-muted-foreground">
-          Quorum threshold: {threshold} ARB
-        </div>
-      )}
+      <div className="text-sm text-muted-foreground">
+        Quorum threshold: {threshold} ARB
+      </div>
 
       {isVetting && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
@@ -186,21 +161,15 @@ export function NomineeElectionList({
           </h4>
           <div className="space-y-2">
             {eligibleNominees.map((nominee) => {
-              const memberData = memberDataMap.get(
-                nominee.address.toLowerCase()
-              );
               return (
                 <NomineeRow
                   key={nominee.address}
                   address={nominee.address}
                   votes={
-                    isMemberElection && memberData
-                      ? `${formatVotingPower(memberData.weight)} weighted votes`
-                      : allSameVotes
-                        ? ""
-                        : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
+                    allSameVotes
+                      ? ""
+                      : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
                   }
-                  rank={memberData?.rank}
                   electionIndex={electionIndex}
                   round={1}
                   isCompliant={!isVetting}

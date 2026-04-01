@@ -23,7 +23,6 @@ import {
   SelectValue,
 } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import {
   countQualifiedNominees,
   getContenderDescription,
@@ -34,8 +33,6 @@ import { ContenderList } from "./ContenderList";
 import { ContenderVoteList } from "./ContenderVoteList";
 import { MemberElectionResults } from "./MemberElectionResults";
 import { NomineeElectionList } from "./NomineeElectionList";
-
-type ViewMode = "nominees" | "results";
 
 interface NomineeListProps {
   nomineeDetails: SerializableNomineeDetails | null;
@@ -55,15 +52,7 @@ export function NomineeList({
   const hasMemberResults =
     memberDetails && (phase === "PENDING_EXECUTION" || phase === "COMPLETED");
 
-  const [viewMode, setViewMode] = useState<ViewMode>("nominees");
   const [sortOrder, setSortOrder] = useState<NomineeSortOrder>("votes");
-
-  useEffect(() => {
-    if (hasMemberResults) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-switch view when results available
-      setViewMode("results");
-    }
-  }, [hasMemberResults]);
 
   useEffect(() => {
     if (phase === "VETTING_PERIOD" && sortOrder === "votes") {
@@ -82,10 +71,8 @@ export function NomineeList({
 
   const showContenders =
     phase === "CONTENDER_SUBMISSION" || phase === "NOMINEE_SELECTION";
-  const canToggle = hasMemberResults && nomineeDetails;
-  const showResults = viewMode === "results" && hasMemberResults;
-  const showNomineeList =
-    phase !== "NOMINEE_SELECTION" && !showContenders && !showResults;
+  const showResults = !!hasMemberResults;
+  const showNomineeList = !showContenders && !showResults;
   const showSortDropdown = showNomineeList || phase === "NOMINEE_SELECTION";
 
   let title: string;
@@ -112,21 +99,6 @@ export function NomineeList({
             {title}
           </CardTitle>
           <div className="flex items-center gap-2">
-            {canToggle && (
-              <Tabs
-                value={viewMode}
-                onValueChange={(v) => setViewMode(v as ViewMode)}
-              >
-                <TabsList className="h-8">
-                  <TabsTrigger value="nominees" className="text-xs px-2 h-6">
-                    Nominees
-                  </TabsTrigger>
-                  <TabsTrigger value="results" className="text-xs px-2 h-6">
-                    Results
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            )}
             {showSortDropdown && (
               <Select
                 value={sortOrder}
