@@ -88,6 +88,7 @@ export interface UseElectionStatusResult {
   memberDetailsMap: Record<number, MemberElectionDetails>;
   latestL1Block: number | undefined;
   isLoading: boolean;
+  isRefreshing: boolean;
   error: Error | null;
   refresh: () => void;
   selectElection: (index: number | null) => void;

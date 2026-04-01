@@ -79,7 +79,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
                 <SettingsSheetProvider>
                   <header className="sticky top-0 z-50 w-full">
                     <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4">
-                      <div className="glass rounded-2xl px-4 sm:px-6">
+                      <div className="glass rounded-2xl px-4 sm:px-6 backdrop-blur-md">
                         <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
                           <MainNav items={marketingConfig.mainNav} />
                           <ButtonNav />

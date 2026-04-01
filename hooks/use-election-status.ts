@@ -462,6 +462,7 @@ export function useElectionStatus({
     memberDetailsMap,
     latestL1Block: data?.latestL1Block,
     isLoading,
+    isRefreshing: !!data && isFetching,
     error,
     refresh: refetch,
     selectElection: setSelectedIndex,

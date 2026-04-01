@@ -28,6 +28,7 @@ interface ElectionStatusCardProps {
   status: ElectionStatus | null;
   activeElection: ElectionProposalStatus | null;
   isLoading: boolean;
+  isRefreshing: boolean;
   onRefresh: () => void;
 }
 
@@ -35,6 +36,7 @@ export function ElectionStatusCard({
   status,
   activeElection,
   isLoading,
+  isRefreshing,
   onRefresh,
 }: ElectionStatusCardProps): React.ReactElement {
   if (isLoading && (!status || !activeElection)) {
@@ -70,10 +72,10 @@ export function ElectionStatusCard({
             variant="ghost"
             size="sm"
             onClick={onRefresh}
-            disabled={isLoading}
+            disabled={isRefreshing}
           >
             <RefreshCw
-              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
             />
           </Button>
         </div>

@@ -129,6 +129,7 @@ export function ElectionContainer(): React.ReactElement {
     nomineeDetailsMap,
     memberDetailsMap,
     isLoading,
+    isRefreshing,
     error,
     refresh,
     selectElection,
@@ -205,6 +206,7 @@ export function ElectionContainer(): React.ReactElement {
         status={status}
         activeElection={selectedElection}
         isLoading={isLoading}
+        isRefreshing={isRefreshing}
         onRefresh={refresh}
       />
 
