@@ -1,16 +1,9 @@
 "use client";
 
-import { CheckCircle2, Clock, RefreshCw, Users } from "lucide-react";
+import { CheckCircle2, Clock, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   formatCohort,
@@ -40,125 +33,74 @@ export function ElectionStatusCard({
   onRefresh,
 }: ElectionStatusCardProps): React.ReactElement {
   if (isLoading && (!status || !activeElection)) {
-    return <ElectionStatusSkeleton />;
+    return (
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-8 w-8 rounded-md" />
+      </div>
+    );
   }
 
   if (!status) {
     return (
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Security Council Elections
-          </CardTitle>
-          <CardDescription>Unable to load election status</CardDescription>
-        </CardHeader>
-      </Card>
+      <p className="text-sm text-muted-foreground">
+        Unable to load election status
+      </p>
     );
   }
 
-  const phase = activeElection?.phase ?? "NOT_STARTED";
+  const phase: ElectionPhase = activeElection?.phase ?? "NOT_STARTED";
   const phaseInfo = PHASE_METADATA[phase];
 
   return (
-    <Card variant="glass">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Security Council Elections
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-          </Button>
-        </div>
-        <CardDescription>
-          Arbitrum DAO elects 6 council members every 6 months
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Total Elections</div>
-            <div className="text-2xl font-bold">{status.electionCount}</div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Current Cohort</div>
-            <div className="text-2xl font-bold">
-              {formatCohort(status.cohort)}
-            </div>
-          </div>
-        </div>
-
-        {activeElection ? (
-          <ActiveElectionStatus
-            election={activeElection}
-            phaseInfo={phaseInfo}
-            phase={phase}
-          />
-        ) : (
-          <NextElectionStatus status={status} />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActiveElectionStatus({
-  election,
-  phaseInfo,
-  phase,
-}: {
-  election: ElectionProposalStatus;
-  phaseInfo: { name: string; description: string };
-  phase: ElectionPhase;
-}): React.ReactElement {
-  return (
-    <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">
-          Election #{election.electionIndex + 1}
-        </span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Badge variant="secondary" className={getPhaseColor(phase)}>
           {phaseInfo.name}
         </Badge>
-      </div>
-
-      <p className="text-sm text-muted-foreground">{phaseInfo.description}</p>
-
-      <div className="grid gap-2 text-sm">
-        {election.isInVettingPeriod && election.vettingDeadline && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Vetting Deadline</span>
-            <span className="font-medium">
-              L1 Block #{election.vettingDeadline.toLocaleString()}
-            </span>
-          </div>
+        {activeElection && (
+          <span className="text-sm text-muted-foreground">
+            {formatCohort(activeElection.cohort)}
+          </span>
         )}
 
-        {election.canProceedToMemberPhase && phase !== "VETTING_PERIOD" && (
-          <div className="flex items-center gap-2 text-green-500">
+        {activeElection?.isInVettingPeriod &&
+          activeElection.vettingDeadline && (
+            <span className="text-xs text-muted-foreground">
+              Vetting deadline: L1 block #
+              {activeElection.vettingDeadline.toLocaleString()}
+            </span>
+          )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="ml-auto h-7 w-7 p-0"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+          />
+        </Button>
+      </div>
+
+      {activeElection?.canProceedToMemberPhase &&
+        phase !== "VETTING_PERIOD" && (
+          <div className="flex items-center gap-2 text-green-500 text-sm">
             <CheckCircle2 className="h-4 w-4" />
             <span>Ready for Member Election</span>
           </div>
         )}
 
-        {election.canExecuteMember && (
-          <div className="flex items-center gap-2 text-arb-blue">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>Ready to Execute</span>
-          </div>
-        )}
-      </div>
+      {activeElection?.canExecuteMember && (
+        <div className="flex items-center gap-2 text-arb-blue text-sm">
+          <CheckCircle2 className="h-4 w-4" />
+          <span>Ready to Execute</span>
+        </div>
+      )}
+
+      {!activeElection && <NextElectionStatus status={status} />}
     </div>
   );
 }
@@ -170,14 +112,9 @@ function NextElectionStatus({
 }): React.ReactElement | null {
   if (status.canCreateElection) {
     return (
-      <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4">
-        <div className="flex items-center gap-2 text-green-500">
-          <CheckCircle2 className="h-5 w-5" />
-          <span className="font-medium">Ready to Create Election</span>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          A new Security Council election can be created now.
-        </p>
+      <div className="flex items-center gap-2 text-green-500 text-sm">
+        <CheckCircle2 className="h-4 w-4" />
+        <span>A new Security Council election can be created now.</span>
       </div>
     );
   }
@@ -187,41 +124,11 @@ function NextElectionStatus({
   }
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Clock className="h-5 w-5" />
-        <span className="font-medium">Next Election</span>
-      </div>
-      <div className="mt-2 text-2xl font-bold">
-        {formatDuration(status.secondsUntilElection)}
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {status.timeUntilElection}
-      </p>
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Clock className="h-4 w-4" />
+      <span>
+        Next election in {formatDuration(status.secondsUntilElection)}
+      </span>
     </div>
-  );
-}
-
-function ElectionStatusSkeleton(): React.ReactElement {
-  return (
-    <Card variant="glass">
-      <CardHeader>
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-64 mt-2" />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-12" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-32" />
-          </div>
-        </div>
-        <Skeleton className="h-24 w-full" />
-      </CardContent>
-    </Card>
   );
 }
