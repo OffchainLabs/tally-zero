@@ -40,7 +40,10 @@ export function MemberElectionWeightBanner({
             The 21-day member election uses a decaying vote weight to encourage
             early participation:
           </p>
-          <VoteWeightChart currentPct={weightInfo?.pct} />
+          <VoteWeightChart
+            currentPct={weightInfo?.pct}
+            currentDay={weightInfo?.elapsedDays}
+          />
           <a
             href="https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections"
             target="_blank"

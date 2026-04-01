@@ -4,6 +4,8 @@ export interface WeightInfo {
   pct: number;
   remaining: bigint;
   duration: bigint;
+  /** Approximate elapsed day (0-based) within the 21-day election period */
+  elapsedDays: number;
 }
 
 /**
@@ -27,14 +29,24 @@ export function computeWeightInfo(
   if (deadline === BigInt(0) || endBlock === BigInt(0) || endBlock <= deadline)
     return undefined;
 
+  // duration = decay period (day 7 to day 21) in L1 blocks
   const duration = endBlock - deadline;
+  // Total election span: decay covers 14 of 21 days, so total = duration * 3/2
+  const totalBlocks = (duration * BigInt(3)) / BigInt(2);
+  const startBlock = endBlock - totalBlocks;
+  const elapsed =
+    currentL1Block > startBlock ? currentL1Block - startBlock : BigInt(0);
+  const elapsedDays = Math.min(
+    21,
+    (Number(elapsed) / Number(totalBlocks)) * 21
+  );
 
   if (currentL1Block <= deadline)
-    return { pct: 100, remaining: duration, duration };
+    return { pct: 100, remaining: duration, duration, elapsedDays };
   if (currentL1Block >= endBlock)
-    return { pct: 0, remaining: BigInt(0), duration };
+    return { pct: 0, remaining: BigInt(0), duration, elapsedDays: 21 };
 
   const remaining = endBlock - currentL1Block;
   const pct = (Number(remaining) / Number(duration)) * 100;
-  return { pct, remaining, duration };
+  return { pct, remaining, duration, elapsedDays };
 }

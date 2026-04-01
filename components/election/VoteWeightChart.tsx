@@ -17,6 +17,7 @@ const TOTAL_DAYS = 21;
 
 interface VoteWeightChartProps {
   currentPct: number | undefined;
+  currentDay: number | undefined;
 }
 
 function getWeight(day: number): number {
@@ -27,6 +28,7 @@ function getWeight(day: number): number {
 
 export function VoteWeightChart({
   currentPct,
+  currentDay: currentDayProp,
 }: VoteWeightChartProps): React.ReactElement {
   const data = useMemo(
     () =>
@@ -38,17 +40,10 @@ export function VoteWeightChart({
   );
 
   // Current position marker
-  let currentDay: number | undefined;
-  if (currentPct !== undefined) {
-    if (currentPct >= 100) {
-      currentDay = 0;
-    } else if (currentPct <= 0) {
-      currentDay = TOTAL_DAYS;
-    } else {
-      currentDay =
-        TOTAL_DAYS - (currentPct / 100) * (TOTAL_DAYS - FULL_WEIGHT_DAYS);
-    }
-  }
+  const currentDay =
+    currentDayProp !== undefined
+      ? Math.min(TOTAL_DAYS, Math.max(0, currentDayProp))
+      : undefined;
 
   return (
     <ResponsiveContainer width="100%" height={120}>
@@ -121,10 +116,10 @@ export function VoteWeightChart({
           isAnimationActive={false}
         />
 
-        {currentDay !== undefined && currentPct !== undefined && (
+        {currentDay !== undefined && (
           <ReferenceDot
             x={Math.round(currentDay)}
-            y={Math.min(100, Math.max(0, currentPct))}
+            y={getWeight(Math.round(currentDay))}
             r={4}
             fill="hsl(var(--chart-warning, 45 93% 47%))"
             stroke="hsl(var(--background))"
