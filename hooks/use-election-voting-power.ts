@@ -28,11 +28,15 @@ export function useElectionVotingPower({
   const { address, isConnected } = useAccount();
   const { tokenAddress } = useElectionContracts();
 
+  const hasProposalId = !!proposalId;
+  const proposalIdBigInt = hasProposalId ? BigInt(proposalId) : BigInt(0);
+
   const { data: snapshotBlock } = useReadContract({
     address: governorAddress,
     abi: governorReadAbi,
     functionName: "proposalSnapshot",
-    args: [BigInt(proposalId)],
+    args: [proposalIdBigInt],
+    query: { enabled: hasProposalId },
   });
 
   const { data: totalVotingPower } = useReadContract({
@@ -48,8 +52,8 @@ export function useElectionVotingPower({
     address: governorAddress,
     abi: governorReadAbi,
     functionName: "votesUsed",
-    args: address ? [BigInt(proposalId), address] : undefined,
-    query: { enabled: isConnected && !!address },
+    args: address ? [proposalIdBigInt, address] : undefined,
+    query: { enabled: isConnected && !!address && hasProposalId },
   });
 
   const availableVotes = useMemo(() => {

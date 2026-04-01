@@ -54,6 +54,7 @@ export interface ElectionQueryData {
   elections: ElectionProposalStatus[];
   nomineeDetailsMap: Record<number, NomineeElectionDetails>;
   memberDetailsMap: Record<number, MemberElectionDetails>;
+  latestL1Block?: number;
 }
 
 export const DEFAULT_NOMINEE_GOVERNOR =
@@ -85,6 +86,7 @@ export interface UseElectionStatusResult {
   memberDetails: MemberElectionDetails;
   nomineeDetailsMap: Record<number, NomineeElectionDetails>;
   memberDetailsMap: Record<number, MemberElectionDetails>;
+  latestL1Block: number | undefined;
   isLoading: boolean;
   error: Error | null;
   refresh: () => void;

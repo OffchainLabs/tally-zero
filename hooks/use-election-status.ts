@@ -76,6 +76,32 @@ const VOTING_PHASE_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 // Non-hook helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Get the block number as seen by Solidity's `block.number` on the L2 chain.
+ * On Arbitrum, `block.number` returns the **L1 block number**, which is the
+ * same clock the Governor contract uses for proposalDeadline and
+ * fullWeightVotingDeadline. We call Multicall3's `getBlockNumber()` via
+ * eth_call to get this value, since the JSON-RPC `eth_blockNumber` and
+ * `eth_getBlockByNumber` return the L2 block number instead.
+ */
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const GET_BLOCK_NUMBER_SELECTOR = "0x42cbb15c"; // getBlockNumber()
+
+async function getL1BlockFromL2(
+  l2Provider: ReturnType<typeof getOrCreateProvider>
+): Promise<number | undefined> {
+  try {
+    const result = await l2Provider.call({
+      to: MULTICALL3,
+      data: GET_BLOCK_NUMBER_SELECTOR,
+    });
+    const blockNum = Number(BigInt(result));
+    return blockNum > 0 ? blockNum : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function createTrackerInstance(
   l2Url: string,
   l1Url: string,
@@ -434,6 +460,7 @@ export function useElectionStatus({
     memberDetails,
     nomineeDetailsMap,
     memberDetailsMap,
+    latestL1Block: data?.latestL1Block,
     isLoading,
     error,
     refresh: refetch,
@@ -486,7 +513,7 @@ async function fetchDefault(
     (_, i) => i
   ).filter((i) => !completedIndices.has(i));
 
-  const [liveResults, status] = await Promise.all([
+  const [liveResults, status, latestL1Block] = await Promise.all([
     Promise.all(
       indicesToFetch.map((i) =>
         fetchLiveElection(
@@ -499,6 +526,7 @@ async function fetchDefault(
       )
     ),
     fetchOverallStatus(l2Provider, l1Provider),
+    getL1BlockFromL2(l2Provider),
   ]);
 
   const merged = mergeResults(cached, liveResults);
@@ -508,6 +536,7 @@ async function fetchDefault(
     elections: preventPhaseRegression(merged.elections),
     nomineeDetailsMap: merged.nomineeDetails,
     memberDetailsMap: merged.memberDetails,
+    latestL1Block,
   };
 }
 
@@ -597,10 +626,13 @@ async function fetchWithOverrides(
     })
   );
 
+  const latestL1Block = await getL1BlockFromL2(l2Provider);
+
   return {
     status,
     elections: preventPhaseRegression(elections),
     nomineeDetailsMap: nDetails,
     memberDetailsMap: mDetails,
+    latestL1Block,
   };
 }

@@ -209,8 +209,8 @@ export function useMultiGovernorSearch({
       };
     },
     enabled: enabled && providerReady,
-    staleTime: 5 * 60 * 1000, // 5 min: skip refetch if data is fresh
-    gcTime: 10 * 60 * 1000, // 10 min: keep unused data in cache
+    staleTime: Infinity, // never refetch after initial load
+    gcTime: 30 * 60 * 1000, // 30 min: keep unused data in cache
     retry: false,
   });
 
