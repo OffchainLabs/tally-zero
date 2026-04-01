@@ -308,10 +308,10 @@ export function ContenderProfile({
       </Card>
 
       <div className="flex flex-col lg:flex-row-reverse gap-5">
-        <div className="lg:min-w-[450px]">
+        <div className="lg:w-[450px]">
           <CandidateVoteCard address={address} />
         </div>
-        <div className="flex space-y-6 flex-col">
+        <div className="flex space-y-6 flex-col flex-1 min-w-0">
           <Card variant="glass">
             <CardHeader>
               <CardTitle>Motivation</CardTitle>
@@ -355,9 +355,9 @@ export function ContenderProfile({
 
                 <div className="space-y-2 pt-2">
                   <h4 className="text-sm font-medium">Cybersecurity</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {candidate.skills.cyberSecurity}
-                  </p>
+                  <div className="space-y-3">
+                    {textToElements(candidate.skills.cyberSecurity)}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-2">
@@ -388,9 +388,9 @@ export function ContenderProfile({
               <CardTitle>Projects</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {candidate.projects}
-              </p>
+              <div className="space-y-3">
+                {textToElements(candidate.projects)}
+              </div>
             </CardContent>
           </Card>
         </div>

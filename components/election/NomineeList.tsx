@@ -170,8 +170,6 @@ export function NomineeList({
           <ContenderList
             contenders={nomineeDetails.contenders}
             electionIndex={electionIndex}
-            nominees={nomineeDetails.nominees}
-            quorumThreshold={nomineeDetails.quorumThreshold}
           />
         ) : phase === "NOMINEE_SELECTION" ? (
           <ContenderVoteList

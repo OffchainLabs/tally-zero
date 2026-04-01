@@ -12,6 +12,7 @@ import { http } from "viem";
 import { WagmiProvider, type Config } from "wagmi";
 
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
+import { STORAGE_KEYS } from "@/config/storage-keys";
 import { env } from "../env";
 
 // Get project ID from environment
@@ -34,10 +35,23 @@ const metadata = {
   icons: ["/favicon/favicon.ico"],
 };
 
+/** Read stored L2 RPC from localStorage (JSON-encoded by useLocalStorage) */
+function getStoredL2Rpc(): string {
+  try {
+    const item = localStorage.getItem(STORAGE_KEYS.L2_RPC);
+    if (item) {
+      const parsed = JSON.parse(item);
+      if (typeof parsed === "string" && parsed) return parsed;
+    }
+  } catch {}
+  return ARBITRUM_RPC_URL;
+}
+
 // Configure custom transport with rate limiting settings
-// Using Arbitrum's public RPC with batch support
+// Reads the user's stored RPC at module load so wagmi hooks
+// use the same endpoint as the rest of the election flow.
 const customTransports = {
-  [arbitrum.id]: http(ARBITRUM_RPC_URL, {
+  [arbitrum.id]: http(getStoredL2Rpc(), {
     batch: { wait: 50 },
     retryCount: 2,
     retryDelay: 1000,

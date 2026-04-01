@@ -6,7 +6,11 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getCandidateName, getCandidateProfileUrl } from "@/lib/election-utils";
+import {
+  getCandidateName,
+  getCandidateProfileUrl,
+  getCandidateTitle,
+} from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
@@ -37,6 +41,7 @@ export function ContenderList({
       {contenders.map((contender, index) => {
         const candidateName = getCandidateName(contender.address);
         const label = candidateName ?? getDelegateLabel(contender.address);
+        const title = getCandidateTitle(contender.address);
         const profileUrl = getCandidateProfileUrl(contender.address);
         const explorerUrl = getAddressExplorerUrl(contender.address);
         const nomineeData = nominees?.find(
@@ -54,47 +59,41 @@ export function ContenderList({
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">
                   {index + 1}
                 </span>
-                <div className="flex items-center gap-2 min-w-0">
-                  {profileUrl ? (
-                    <Link
-                      href={profileUrl}
-                      className="text-sm font-medium truncate hover:text-primary transition-colors"
-                    >
-                      {label ?? contender.address}
-                    </Link>
-                  ) : label ? (
-                    <span className="text-sm font-medium truncate">
-                      {label}
-                    </span>
-                  ) : (
-                    <span className="font-mono text-xs break-all">
-                      {contender.address}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1 shrink-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {profileUrl ? (
+                      <Link
+                        href={profileUrl}
+                        className="text-sm font-medium truncate hover:text-primary transition-colors"
+                      >
+                        {label ?? contender.address}
+                      </Link>
+                    ) : label ? (
+                      <span className="text-sm font-medium truncate">
+                        {label}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-xs break-all">
+                        {contender.address}
+                      </span>
+                    )}
                     <a
                       href={explorerUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
+                      className="text-muted-foreground hover:text-primary transition-colors shrink-0"
                       title="View on Arbiscan"
                     >
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
+                  {title && (
+                    <span className="text-xs text-muted-foreground">
+                      {title}
+                    </span>
+                  )}
                 </div>
               </div>
-              {!nominees && (
-                <a
-                  href={`https://arbiscan.io/tx/${contender.registrationTxHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2"
-                  title="Registration transaction"
-                >
-                  Registered
-                </a>
-              )}
             </div>
             {nominees && quorumThreshold && (
               <ContenderQuorumBar

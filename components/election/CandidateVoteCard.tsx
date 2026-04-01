@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { useAccount, useBlockNumber } from "wagmi";
+import { useAccount } from "wagmi";
 
 import {
   memberElectionGovernorReadAbi,
@@ -22,10 +22,12 @@ import { useElectionContracts } from "@/hooks/use-election-contracts";
 import { useElectionStatus } from "@/hooks/use-election-status";
 import { useElectionVotingPower } from "@/hooks/use-election-voting-power";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
+import { computeWeightInfo } from "@/lib/election-weight";
 import { formatVotingPower } from "@/lib/format-utils";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
 import { ElectionVoteRow } from "./ElectionVoteRow";
+import { MemberElectionWeightBanner } from "./MemberElectionWeightBanner";
 import { VotingPowerSummary } from "./VotingPowerSummary";
 
 interface CandidateVoteCardProps {
@@ -41,14 +43,19 @@ export function CandidateVoteCard({
   const { l2Rpc, l1Rpc, l1ChunkSize, l2ChunkSize, isHydrated } =
     useRpcSettings();
 
-  const { selectedElection, nomineeDetails, memberDetails, isLoading } =
-    useElectionStatus({
-      enabled: isHydrated,
-      l2RpcUrl: l2Rpc || undefined,
-      l1RpcUrl: l1Rpc || undefined,
-      l1ChunkSize,
-      l2ChunkSize,
-    });
+  const {
+    selectedElection,
+    nomineeDetails,
+    memberDetails,
+    latestL1Block,
+    isLoading,
+  } = useElectionStatus({
+    enabled: isHydrated,
+    l2RpcUrl: l2Rpc || undefined,
+    l1RpcUrl: l1Rpc || undefined,
+    l1ChunkSize,
+    l2ChunkSize,
+  });
 
   const phase = selectedElection?.phase;
   const isNomineeSelection = phase === "NOMINEE_SELECTION";
@@ -76,7 +83,8 @@ export function CandidateVoteCard({
       governorReadAbi,
     });
 
-  const { data: currentBlock } = useBlockNumber({ watch: true });
+  const currentBlock =
+    latestL1Block !== undefined ? BigInt(latestL1Block) : undefined;
 
   // Only show skeleton on first load
   const hasLoadedRef = useRef(false);
@@ -127,7 +135,12 @@ export function CandidateVoteCard({
     isMemberElection &&
     memberDetails &&
     currentBlock !== undefined &&
+    memberDetails.fullWeightDeadline > 0 &&
     currentBlock <= BigInt(memberDetails.fullWeightDeadline);
+
+  const weightInfo = isMemberElection
+    ? computeWeightInfo(memberDetails, currentBlock)
+    : undefined;
 
   return (
     <Card variant="glass">
@@ -154,20 +167,10 @@ export function CandidateVoteCard({
         )}
 
         {isMemberElection && (
-          <div className="flex items-center gap-2 text-sm">
-            {isFullWeight ? (
-              <span className="text-green-500 text-xs font-medium">
-                Full weight voting active
-              </span>
-            ) : (
-              <div className="flex items-center gap-1 text-yellow-500">
-                <AlertCircle className="h-3 w-3" />
-                <span className="text-xs">
-                  Vote weight is now decreasing, earlier votes count more
-                </span>
-              </div>
-            )}
-          </div>
+          <MemberElectionWeightBanner
+            isFullWeight={!!isFullWeight}
+            weightInfo={weightInfo}
+          />
         )}
 
         {!isConnected ? (
@@ -181,6 +184,7 @@ export function CandidateVoteCard({
               totalVotingPower={totalVotingPower}
               usedVotes={usedVotes}
               availableVotes={availableVotes}
+              weightInfo={weightInfo}
             />
 
             {totalVotingPower !== undefined &&
