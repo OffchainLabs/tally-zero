@@ -58,6 +58,7 @@ export function getTotalStorageUsage(): string {
 export function clearCache(): number {
   const keysToRemove = collectStorageKeys(isCacheKey);
   keysToRemove.forEach((key) => localStorage.removeItem(key));
+  localStorage.removeItem(STORAGE_KEYS.ELECTION_LAST_KNOWN_PHASE);
   return keysToRemove.length;
 }
 

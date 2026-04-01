@@ -138,7 +138,7 @@ export function ElectionContainer(): React.ReactElement {
     l1RpcUrl: l1Rpc || undefined,
     l1ChunkSize,
     l2ChunkSize,
-    refreshInterval: 60000,
+
     nomineeGovernorAddress: contractOverrides?.nomineeGovernor || undefined,
     memberGovernorAddress: contractOverrides?.memberGovernor || undefined,
   });

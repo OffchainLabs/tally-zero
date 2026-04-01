@@ -324,13 +324,13 @@ describe("derived state logic", () => {
   });
 
   describe("refetchInterval phase-awareness", () => {
+    const VOTING_PHASE_POLL_INTERVAL = 5 * 60 * 1000;
+
     function computeRefetchInterval(
       data: ElectionQueryData | undefined,
-      selectedIndex: number | null,
-      refreshInterval: number
+      selectedIndex: number | null
     ): number | false {
-      if (refreshInterval <= 0) return false;
-      if (!data) return refreshInterval;
+      if (!data) return false;
 
       const active = data.elections.filter((e) => e.phase !== "COMPLETED");
       const selected =
@@ -338,28 +338,60 @@ describe("derived state logic", () => {
           ? data.elections.find((e) => e.electionIndex === selectedIndex)
           : (active[0] ?? data.elections[data.elections.length - 1]);
 
-      if (selected?.phase === "VETTING_PERIOD") return false;
-      return refreshInterval;
+      if (
+        selected?.phase === "NOMINEE_SELECTION" ||
+        selected?.phase === "MEMBER_ELECTION"
+      ) {
+        return VOTING_PHASE_POLL_INTERVAL;
+      }
+
+      return false;
     }
 
-    it("returns refreshInterval when no data yet", () => {
-      expect(computeRefetchInterval(undefined, null, 60000)).toBe(60000);
+    it("returns false when no data yet", () => {
+      expect(computeRefetchInterval(undefined, null)).toBe(false);
     });
 
     it("returns false during VETTING_PERIOD", () => {
       const data = createQueryData();
       // Election 4 is in VETTING_PERIOD and is the only active election
-      expect(computeRefetchInterval(data, null, 60000)).toBe(false);
+      expect(computeRefetchInterval(data, null)).toBe(false);
     });
 
-    it("returns refreshInterval during MEMBER_ELECTION", () => {
+    it("returns poll interval during MEMBER_ELECTION", () => {
       const data = createQueryData({
         elections: [
           createElection({ electionIndex: 0, phase: "COMPLETED" }),
           createElection({ electionIndex: 1, phase: "MEMBER_ELECTION" }),
         ],
       });
-      expect(computeRefetchInterval(data, null, 60000)).toBe(60000);
+      expect(computeRefetchInterval(data, null)).toBe(
+        VOTING_PHASE_POLL_INTERVAL
+      );
+    });
+
+    it("returns poll interval during NOMINEE_SELECTION", () => {
+      const data = createQueryData({
+        elections: [
+          createElection({ electionIndex: 0, phase: "COMPLETED" }),
+          createElection({ electionIndex: 1, phase: "NOMINEE_SELECTION" }),
+        ],
+      });
+      expect(computeRefetchInterval(data, null)).toBe(
+        VOTING_PHASE_POLL_INTERVAL
+      );
+    });
+
+    it("returns false during CONTENDER_SUBMISSION", () => {
+      const data = createQueryData({
+        elections: [
+          createElection({
+            electionIndex: 0,
+            phase: "CONTENDER_SUBMISSION",
+          }),
+        ],
+      });
+      expect(computeRefetchInterval(data, null)).toBe(false);
     });
 
     it("returns false when selected election is in VETTING_PERIOD", () => {
@@ -374,10 +406,10 @@ describe("derived state logic", () => {
         ],
       });
       // Explicitly select the vetting period election
-      expect(computeRefetchInterval(data, 1, 60000)).toBe(false);
+      expect(computeRefetchInterval(data, 1)).toBe(false);
     });
 
-    it("returns refreshInterval when selected election is not in VETTING_PERIOD", () => {
+    it("returns poll interval when selected election is MEMBER_ELECTION", () => {
       const data = createQueryData({
         elections: [
           createElection({ electionIndex: 0, phase: "MEMBER_ELECTION" }),
@@ -388,13 +420,8 @@ describe("derived state logic", () => {
           }),
         ],
       });
-      // Explicitly select the non-vetting election
-      expect(computeRefetchInterval(data, 0, 60000)).toBe(60000);
-    });
-
-    it("returns false when refreshInterval is 0", () => {
-      const data = createQueryData();
-      expect(computeRefetchInterval(data, null, 0)).toBe(false);
+      // Explicitly select the voting election
+      expect(computeRefetchInterval(data, 0)).toBe(VOTING_PHASE_POLL_INTERVAL);
     });
   });
 

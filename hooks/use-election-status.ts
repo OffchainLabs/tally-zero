@@ -70,6 +70,7 @@ export const electionKeys = {
 
 const EMPTY_NOMINEE_MAP: Record<number, NomineeElectionDetails> = {};
 const EMPTY_MEMBER_MAP: Record<number, MemberElectionDetails> = {};
+const VOTING_PHASE_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 // ---------------------------------------------------------------------------
 // Non-hook helpers
@@ -106,7 +107,7 @@ export function useElectionStatus({
   l1RpcUrl,
   l1ChunkSize,
   l2ChunkSize,
-  refreshInterval = 60000,
+
   selectedElectionIndex: initialSelectedIndex = null,
   nomineeGovernorAddress,
   memberGovernorAddress,
@@ -234,9 +235,9 @@ export function useElectionStatus({
     gcTime: 5 * 60 * 1000,
     retry: 1,
     refetchInterval: (query) => {
-      if (!enabled || refreshInterval <= 0) return false;
+      if (!enabled) return false;
       const currentData = query.state.data;
-      if (!currentData) return refreshInterval;
+      if (!currentData) return false;
 
       // Derive the selected election to check its phase
       const active = currentData.elections.filter(
@@ -248,10 +249,15 @@ export function useElectionStatus({
           : (active[0] ??
             currentData.elections[currentData.elections.length - 1]);
 
-      // No on-chain state changes during vetting (off-chain compliance review)
-      if (selected?.phase === "VETTING_PERIOD") return false;
+      // Only poll during active voting phases
+      if (
+        selected?.phase === "NOMINEE_SELECTION" ||
+        selected?.phase === "MEMBER_ELECTION"
+      ) {
+        return VOTING_PHASE_POLL_INTERVAL;
+      }
 
-      return refreshInterval;
+      return false;
     },
   });
 

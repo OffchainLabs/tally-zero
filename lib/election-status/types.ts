@@ -69,7 +69,7 @@ export interface UseElectionStatusOptions {
   l1RpcUrl?: string;
   l1ChunkSize?: number;
   l2ChunkSize?: number;
-  refreshInterval?: number;
+
   selectedElectionIndex?: number | null;
   nomineeGovernorAddress?: string;
   memberGovernorAddress?: string;
