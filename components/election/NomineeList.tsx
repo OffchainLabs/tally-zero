@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   SerializableMemberDetails,
@@ -24,7 +24,9 @@ import {
 } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
+  buildShuffleMap,
   countQualifiedNominees,
+  getAddressKey,
   getContenderDescription,
 } from "@/lib/election-utils";
 import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
@@ -58,6 +60,42 @@ export function NomineeList({
 
   const effectiveSort =
     phase === "VETTING_PERIOD" && sortOrder === "votes" ? "random" : sortOrder;
+
+  // Stable random ordering: only reshuffle when the user switches to "random"
+  // via dropdown. Data refreshes preserve the existing order.
+  const [randomOrder, setRandomOrder] = useState<Map<string, number>>(
+    new Map()
+  );
+  const prevEffectiveSortRef = useRef(effectiveSort);
+  const addressKey = getAddressKey(nomineeDetails);
+
+  useEffect(() => {
+    if (effectiveSort !== "random" || !addressKey) {
+      prevEffectiveSortRef.current = effectiveSort;
+      return;
+    }
+
+    const freshShuffle = prevEffectiveSortRef.current !== "random";
+    prevEffectiveSortRef.current = effectiveSort;
+
+    setRandomOrder((prev) => {
+      const addresses = addressKey.split(",");
+
+      // Fresh shuffle when user switches to random or on first data load
+      if (freshShuffle || prev.size === 0) return buildShuffleMap(addresses);
+
+      // No new addresses: keep existing order
+      if (addresses.every((a) => prev.has(a))) return prev;
+
+      // Append new addresses to existing order
+      const map = new Map(prev);
+      let nextIdx = map.size;
+      for (const addr of addresses) {
+        if (!map.has(addr)) map.set(addr, nextIdx++);
+      }
+      return map;
+    });
+  }, [effectiveSort, addressKey]);
 
   if (isLoading && !nomineeDetails) {
     return <NomineeListSkeleton />;
@@ -147,6 +185,7 @@ export function NomineeList({
             nominees={nomineeDetails.nominees}
             quorumThreshold={nomineeDetails.quorumThreshold}
             sortOrder={effectiveSort}
+            randomOrder={randomOrder}
           />
         ) : showResults && memberDetails ? (
           <MemberElectionResults
@@ -160,6 +199,7 @@ export function NomineeList({
             electionIndex={electionIndex}
             phase={phase}
             sortOrder={effectiveSort}
+            randomOrder={randomOrder}
           />
         )}
       </CardContent>

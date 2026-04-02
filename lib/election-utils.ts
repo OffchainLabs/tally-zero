@@ -1,3 +1,6 @@
+import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
+import shuffle from "lodash.shuffle";
+
 import candidatesData from "@/data/election-candidates.json";
 import type { ElectionPhase } from "@/types/election";
 
@@ -79,4 +82,22 @@ export function getContenderDescription(
     return `${contenderCount} contender${suffix} registered`;
   }
   return `${contenderCount} contender${suffix} registered, ${qualifiedCount} qualified as nominees`;
+}
+
+export function buildShuffleMap(addresses: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  shuffle(addresses).forEach((addr, i) => map.set(addr, i));
+  return map;
+}
+
+export function getAddressKey(
+  details: SerializableNomineeDetails | null
+): string {
+  if (!details) return "";
+  const addresses = new Set([
+    ...details.contenders.map((c) => c.address.toLowerCase()),
+    ...details.compliantNominees.map((n) => n.address.toLowerCase()),
+    ...details.excludedNominees.map((n) => n.address.toLowerCase()),
+  ]);
+  return [...addresses].sort().join(",");
 }

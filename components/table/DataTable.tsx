@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import {
   ColumnDef,
@@ -64,6 +65,7 @@ export function DataTable<TData, TValue>({
     [xl, lg, md, sm]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

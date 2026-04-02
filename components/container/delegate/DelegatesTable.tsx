@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import shuffle from "lodash.shuffle";
 
@@ -66,6 +67,7 @@ export function DelegatesTable({
     return shuffledRef.current;
   }, [delegates, sortOrder]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<DelegateInfo>({
     data: sortedDelegates,
     columns,

@@ -19,12 +19,14 @@ interface NomineeElectionListProps {
   electionIndex?: number;
   phase?: ElectionPhase;
   sortOrder?: NomineeSortOrder;
+  randomOrder?: Map<string, number>;
 }
 
 function sortNominees(
   nominees: SerializableNominee[],
   sortOrder: NomineeSortOrder,
-  memberDataMap?: Map<string, { weight: string; rank: number }>
+  memberDataMap?: Map<string, { weight: string; rank: number }>,
+  randomOrder?: Map<string, number>
 ): SerializableNominee[] {
   const sorted = [...nominees];
   switch (sortOrder) {
@@ -60,6 +62,16 @@ function sortNominees(
       break;
     }
     case "random":
+      if (randomOrder && randomOrder.size > 0) {
+        sorted.sort((a, b) => {
+          const idxA =
+            randomOrder.get(a.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+          const idxB =
+            randomOrder.get(b.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+          return idxA - idxB;
+        });
+        return sorted;
+      }
       return shuffle(sorted);
   }
   return sorted;
@@ -71,6 +83,7 @@ export function NomineeElectionList({
   electionIndex,
   phase,
   sortOrder = "votes",
+  randomOrder,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
   const threshold = formatVotingPower(quorumThreshold.toString());
@@ -110,13 +123,24 @@ export function NomineeElectionList({
     }
   }
 
-  eligibleNominees = sortNominees(eligibleNominees, sortOrder, memberDataMap);
+  eligibleNominees = sortNominees(
+    eligibleNominees,
+    sortOrder,
+    memberDataMap,
+    randomOrder
+  );
   nonCompliantNominees = sortNominees(
     nonCompliantNominees,
     sortOrder,
-    memberDataMap
+    memberDataMap,
+    randomOrder
   );
-  const sortedExcludedNominees = sortNominees(excludedNominees, sortOrder);
+  const sortedExcludedNominees = sortNominees(
+    excludedNominees,
+    sortOrder,
+    undefined,
+    randomOrder
+  );
 
   const allSameVotes =
     eligibleNominees.length > 1 &&
@@ -126,10 +150,6 @@ export function NomineeElectionList({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Quorum threshold: {threshold} ARB
-      </div>
-
       {isVetting && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
           <div className="flex items-start gap-2 text-yellow-500">

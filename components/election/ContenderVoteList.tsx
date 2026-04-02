@@ -53,7 +53,8 @@ import type { NomineeSortOrder } from "@/types/election";
 function sortContenders(
   contenders: SerializableContender[],
   nominees: SerializableNominee[],
-  sortOrder: NomineeSortOrder
+  sortOrder: NomineeSortOrder,
+  randomOrder?: Map<string, number>
 ): SerializableContender[] {
   const sorted = [...contenders];
   const nomineeMap = new Map(nominees.map((n) => [n.address.toLowerCase(), n]));
@@ -88,6 +89,16 @@ function sortContenders(
       });
       break;
     case "random":
+      if (randomOrder && randomOrder.size > 0) {
+        sorted.sort((a, b) => {
+          const idxA =
+            randomOrder.get(a.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+          const idxB =
+            randomOrder.get(b.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+          return idxA - idxB;
+        });
+        return sorted;
+      }
       return shuffle(sorted);
   }
   return sorted;
@@ -98,6 +109,7 @@ interface ContenderVoteListProps {
   nominees: SerializableNominee[];
   quorumThreshold: string;
   sortOrder?: NomineeSortOrder;
+  randomOrder?: Map<string, number>;
 }
 
 export function ContenderVoteList({
@@ -105,8 +117,14 @@ export function ContenderVoteList({
   nominees,
   quorumThreshold,
   sortOrder = "votes",
+  randomOrder,
 }: ContenderVoteListProps): React.ReactElement {
-  const sortedContenders = sortContenders(contenders, nominees, sortOrder);
+  const sortedContenders = sortContenders(
+    contenders,
+    nominees,
+    sortOrder,
+    randomOrder
+  );
 
   return (
     <div className="space-y-4">
