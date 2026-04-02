@@ -7,6 +7,7 @@ settings:
 overrides:
   "@types/react": 19.2.14
   "@types/react-dom": 19.2.3
+  lodash: ">=4.18.0"
 
 importers:
   .:
@@ -78,7 +79,7 @@ importers:
         specifier: ^5.90.12
         version: 5.91.2(react@19.2.4)
       "@tanstack/react-table":
-        specifier: ^8.11.7
+        specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       "@vercel/analytics":
         specifier: ^1.1.2
@@ -7279,10 +7280,10 @@ packages:
         integrity: sha512-V/rTAABKLFjoecTZjKSv+A1ZomG8hZg8hlgeG6wwQVD9AGv+10zqqSf6mFq2tVA703Zd5R0YhSuSlXA+E/Ei+Q==,
       }
 
-  lodash@4.17.23:
+  lodash@4.18.1:
     resolution:
       {
-        integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==,
+        integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==,
       }
 
   log-update@6.1.0:
@@ -11475,7 +11476,7 @@ snapshots:
       "@types/debug": 4.1.13
       "@types/lodash": 4.17.24
       debug: 4.4.3
-      lodash: 4.17.23
+      lodash: 4.18.1
       pony-cause: 2.1.11
       semver: 7.7.4
       uuid: 9.0.1
@@ -16106,7 +16107,7 @@ snapshots:
       code-excerpt: 3.0.0
       indent-string: 4.0.0
       is-ci: 2.0.0
-      lodash: 4.17.23
+      lodash: 4.18.1
       patch-console: 1.0.0
       react: 17.0.2
       react-devtools-core: 4.28.5(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -16479,7 +16480,7 @@ snapshots:
 
   lodash.shuffle@4.2.0: {}
 
-  lodash@4.17.23: {}
+  lodash@4.18.1: {}
 
   log-update@6.1.0:
     dependencies:
