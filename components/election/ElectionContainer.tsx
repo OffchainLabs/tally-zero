@@ -4,6 +4,7 @@ import { AlertCircle, FlaskConical } from "lucide-react";
 
 import { DeepLinkHandler } from "@/components/container/DeepLinkHandler";
 import { Badge } from "@/components/ui/Badge";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { PHASE_METADATA } from "@/config/security-council";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import { useNerdMode } from "@/context/NerdModeContext";
@@ -97,6 +98,23 @@ function getOverrideData({
     overrideNomineeDetails: null,
     overrideMemberDetails: null,
   };
+}
+
+function ElectionTimelineSkeleton(): React.ReactElement {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-7 w-40" />
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex gap-4">
+          <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+          <div className="flex-1 space-y-2 pb-8">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ElectionContainer(): React.ReactElement {
@@ -210,30 +228,32 @@ export function ElectionContainer(): React.ReactElement {
         onRefresh={refresh}
       />
 
-      {(selectedElection || !isLoading) && (
-        <>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ElectionPhaseTimeline
-              currentPhase={currentPhase}
-              stages={selectedElection?.stages}
-              status={selectedElection ? status : null}
-              electionIndex={selectedElection?.electionIndex}
-            />
-
-            <NomineeList
-              nomineeDetails={nomineeDetails}
-              memberDetails={memberDetails}
-              isLoading={isLoading}
-              phase={currentPhase}
-              electionIndex={selectedElection?.electionIndex}
-            />
-          </div>
-
-          <ElectionActionCard
-            phase={currentPhase}
-            selectedElection={overrideElection}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {isLoading && !selectedElection ? (
+          <ElectionTimelineSkeleton />
+        ) : (
+          <ElectionPhaseTimeline
+            currentPhase={currentPhase}
+            stages={selectedElection?.stages}
+            status={selectedElection ? status : null}
+            electionIndex={selectedElection?.electionIndex}
           />
-        </>
+        )}
+
+        <NomineeList
+          nomineeDetails={overrideNomineeDetails ?? nomineeDetails}
+          memberDetails={overrideMemberDetails ?? memberDetails}
+          isLoading={isLoading}
+          phase={currentPhase}
+          electionIndex={selectedElection?.electionIndex}
+        />
+      </div>
+
+      {(selectedElection || !isLoading) && (
+        <ElectionActionCard
+          phase={currentPhase}
+          selectedElection={overrideElection}
+        />
       )}
 
       <DeepLinkHandler proposals={[]} />
