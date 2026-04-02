@@ -23,7 +23,8 @@ interface NomineeElectionListProps {
 
 function sortNominees(
   nominees: SerializableNominee[],
-  sortOrder: NomineeSortOrder
+  sortOrder: NomineeSortOrder,
+  memberDataMap?: Map<string, { weight: string; rank: number }>
 ): SerializableNominee[] {
   const sorted = [...nominees];
   switch (sortOrder) {
@@ -44,8 +45,14 @@ function sortNominees(
       break;
     case "votes": {
       sorted.sort((a, b) => {
-        const voteA = BigInt(a.votesReceived.toString());
-        const voteB = BigInt(b.votesReceived.toString());
+        const voteA = BigInt(
+          memberDataMap?.get(a.address.toLowerCase())?.weight ??
+            a.votesReceived.toString()
+        );
+        const voteB = BigInt(
+          memberDataMap?.get(b.address.toLowerCase())?.weight ??
+            b.votesReceived.toString()
+        );
         if (voteB > voteA) return 1;
         if (voteB < voteA) return -1;
         return 0;
@@ -92,8 +99,23 @@ export function NomineeElectionList({
     nonCompliantNominees = [];
   }
 
-  eligibleNominees = sortNominees(eligibleNominees, sortOrder);
-  nonCompliantNominees = sortNominees(nonCompliantNominees, sortOrder);
+  // Build a lookup for member election data (weight + rank) by address
+  const memberDataMap = new Map<string, { weight: string; rank: number }>();
+  if (isMemberElection && memberDetails) {
+    for (const n of memberDetails.nominees) {
+      memberDataMap.set(n.address.toLowerCase(), {
+        weight: n.weightReceived,
+        rank: n.rank,
+      });
+    }
+  }
+
+  eligibleNominees = sortNominees(eligibleNominees, sortOrder, memberDataMap);
+  nonCompliantNominees = sortNominees(
+    nonCompliantNominees,
+    sortOrder,
+    memberDataMap
+  );
   const sortedExcludedNominees = sortNominees(excludedNominees, sortOrder);
 
   const allSameVotes =
@@ -161,15 +183,21 @@ export function NomineeElectionList({
           </h4>
           <div className="space-y-2">
             {eligibleNominees.map((nominee) => {
+              const memberData = memberDataMap.get(
+                nominee.address.toLowerCase()
+              );
               return (
                 <NomineeRow
                   key={nominee.address}
                   address={nominee.address}
                   votes={
-                    allSameVotes
-                      ? ""
-                      : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
+                    isMemberElection && memberData
+                      ? `${formatVotingPower(memberData.weight)} weighted votes`
+                      : allSameVotes
+                        ? ""
+                        : `${formatVotingPower(nominee.votesReceived.toString())} ARB`
                   }
+                  rank={memberData?.rank}
                   electionIndex={electionIndex}
                   round={1}
                   isCompliant={!isVetting}
@@ -258,7 +286,7 @@ function NomineeRow({
   phase?: ElectionPhase;
 }): React.ReactElement {
   const label = getCandidateName(address) ?? getDelegateLabel(address);
-  const title = isPendingReview ? getCandidateTitle(address) : undefined;
+  const title = getCandidateTitle(address);
 
   return (
     <div

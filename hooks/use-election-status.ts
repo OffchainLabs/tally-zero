@@ -253,19 +253,25 @@ export function useElectionStatus({
           // Fall through to default path
         }
       }
-      return fetchDefault(l2Url, l1Url, chunkingConfig, isCustomL2Rpc);
+      const prevData = queryClient.getQueryData<ElectionQueryData>(queryKey);
+      return fetchDefault(
+        l2Url,
+        l1Url,
+        chunkingConfig,
+        isCustomL2Rpc,
+        prevData
+      );
     },
     enabled,
     placeholderData: keepPreviousData,
-    staleTime: 0,
+    staleTime: VOTING_PHASE_POLL_INTERVAL,
     gcTime: 5 * 60 * 1000,
     retry: 1,
+    refetchOnWindowFocus: "always",
     refetchInterval: (query) => {
-      if (!enabled) return false;
       const currentData = query.state.data;
       if (!currentData) return false;
 
-      // Derive the selected election to check its phase
       const active = currentData.elections.filter(
         (e) => e.phase !== "COMPLETED"
       );
@@ -275,7 +281,6 @@ export function useElectionStatus({
           : (active[0] ??
             currentData.elections[currentData.elections.length - 1]);
 
-      // Only poll during active voting phases
       if (
         selected?.phase === "NOMINEE_SELECTION" ||
         selected?.phase === "MEMBER_ELECTION"
@@ -477,7 +482,8 @@ async function fetchDefault(
   l2Url: string,
   l1Url: string,
   chunkingConfig: GovTrackerChunkingConfig | undefined,
-  isCustomL2Rpc: boolean
+  isCustomL2Rpc: boolean,
+  previousData?: ElectionQueryData
 ): Promise<ElectionQueryData> {
   const { tracker, l2Provider, l1Provider } = await createTrackerInstance(
     l2Url,
@@ -496,6 +502,20 @@ async function fetchDefault(
 
   if (!isCustomL2Rpc) {
     cached = await loadCachedElections(tracker);
+  }
+
+  // Carry forward completed elections from previous fetch to skip refetching
+  if (previousData) {
+    for (const e of previousData.elections) {
+      if (e.phase !== "COMPLETED") continue;
+      if (cached.elections.some((c) => c.electionIndex === e.electionIndex))
+        continue;
+      cached.elections.push(e);
+      const nd = previousData.nomineeDetailsMap[e.electionIndex];
+      if (nd) cached.nomineeDetails[e.electionIndex] = nd;
+      const md = previousData.memberDetailsMap[e.electionIndex];
+      if (md) cached.memberDetails[e.electionIndex] = md;
+    }
   }
 
   const electionCount = await getElectionCount(l2Provider);
