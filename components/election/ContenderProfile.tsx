@@ -367,7 +367,7 @@ export function ContenderProfile({
                       className="text-green-500 border-green-500/30 flex items-center gap-1"
                     >
                       <ShieldCheck className="h-3 w-3" />
-                      Can verify signing
+                      Can independently verify multisig transactions
                     </Badge>
                   ) : (
                     <Badge
@@ -375,7 +375,7 @@ export function ContenderProfile({
                       className="text-red-500 border-red-500/30 flex items-center gap-1"
                     >
                       <ShieldX className="h-3 w-3" />
-                      Cannot verify signing
+                      Cannot independently verify multisig transactions
                     </Badge>
                   )}
                 </div>

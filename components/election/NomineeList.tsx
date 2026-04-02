@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type {
   SerializableMemberDetails,
@@ -52,14 +52,12 @@ export function NomineeList({
   const hasMemberResults =
     memberDetails && (phase === "PENDING_EXECUTION" || phase === "COMPLETED");
 
-  const [sortOrder, setSortOrder] = useState<NomineeSortOrder>("votes");
+  const defaultSort: NomineeSortOrder =
+    phase === "PENDING_EXECUTION" ? "votes" : "random";
+  const [sortOrder, setSortOrder] = useState<NomineeSortOrder>(defaultSort);
 
-  useEffect(() => {
-    if (phase === "VETTING_PERIOD" && sortOrder === "votes") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- enforce valid sort for phase
-      setSortOrder("random");
-    }
-  }, [phase, sortOrder]);
+  const effectiveSort =
+    phase === "VETTING_PERIOD" && sortOrder === "votes" ? "random" : sortOrder;
 
   if (isLoading && !nomineeDetails) {
     return <NomineeListSkeleton />;
@@ -109,11 +107,11 @@ export function NomineeList({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="random">Random</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
                   {phase !== "VETTING_PERIOD" && (
                     <SelectItem value="votes">Most Votes</SelectItem>
                   )}
-                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                  <SelectItem value="random">Random</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -148,7 +146,7 @@ export function NomineeList({
             contenders={nomineeDetails.contenders}
             nominees={nomineeDetails.nominees}
             quorumThreshold={nomineeDetails.quorumThreshold}
-            sortOrder={sortOrder}
+            sortOrder={effectiveSort}
           />
         ) : showResults && memberDetails ? (
           <MemberElectionResults
@@ -161,7 +159,7 @@ export function NomineeList({
             memberDetails={memberDetails}
             electionIndex={electionIndex}
             phase={phase}
-            sortOrder={sortOrder}
+            sortOrder={effectiveSort}
           />
         )}
       </CardContent>
