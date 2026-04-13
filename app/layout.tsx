@@ -25,14 +25,14 @@ export const metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
-  keywords: ["Tally Zero", "TallyZero", "Tally"],
+  keywords: ["Arbitrum Governance", "Arbitrum DAO", "ArbitrumDAO"],
   authors: [
     {
-      name: "Tally Zero",
+      name: "Offchain Labs",
       url: `${siteConfig.url}`,
     },
   ],
-  creator: "Tally Zero",
+  creator: "Offchain Labs",
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -47,7 +47,7 @@ export const metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     images: [siteConfig.ogImage],
-    creator: "@tallyxyz",
+    creator: "@offchain",
   },
   icons: {
     icon: "/favicon/favicon.ico",

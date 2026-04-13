@@ -4,12 +4,9 @@ import { useCallback, useState } from "react";
 
 import { Table } from "@tanstack/react-table";
 
-import { DataTableFacetedFilter } from "@components/table/FacetedFilter";
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
 import { DataTableViewOptions } from "@components/table/ViewOptions";
-
-import { states } from "@data/table/data";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -44,13 +41,13 @@ export function DataTableToolbar<TData>({
           className="w-full sm:w-[150px] lg:w-[450px]"
         />
 
-        {table.getColumn("state") && (
+        {/* {table.getColumn("state") && (
           <DataTableFacetedFilter
             column={table.getColumn("state")}
             title="State"
             options={states}
           />
-        )}
+        )} */}
 
         {isFiltered && <ToolbarResetButton onClick={handleReset} />}
       </div>

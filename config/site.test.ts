@@ -22,16 +22,20 @@ describe("site config", () => {
     });
 
     it("has valid base URL", () => {
-      expect(siteConfig.url).toBe("https://zero.tally.xyz");
+      expect(siteConfig.url).toBe("https://alt.gov.arbitrum.foundation");
     });
 
     it("has ogImage with correct base URL", () => {
-      expect(siteConfig.ogImage).toContain("https://zero.tally.xyz");
-      expect(siteConfig.ogImage).toContain("og.png");
+      expect(siteConfig.ogImage).toContain(
+        "https://alt.gov.arbitrum.foundation"
+      );
+      expect(siteConfig.ogImage).toContain("opengraph-image.jpg");
     });
 
     it("has manifest with correct base URL", () => {
-      expect(siteConfig.manifest).toContain("https://zero.tally.xyz");
+      expect(siteConfig.manifest).toContain(
+        "https://alt.gov.arbitrum.foundation"
+      );
       expect(siteConfig.manifest).toContain("site.webmanifest");
     });
 
