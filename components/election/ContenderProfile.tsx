@@ -42,6 +42,14 @@ const CandidateVoteCard = dynamic(
   }
 );
 
+const NomineeVoterList = dynamic(
+  () =>
+    import("./NomineeVoterList").then((mod) => ({
+      default: mod.NomineeVoterList,
+    })),
+  { ssr: false }
+);
+
 interface CandidateSkills {
   canVerifySigning: boolean;
   golang: number;
@@ -224,6 +232,7 @@ export function ContenderProfile({
         </Card>
 
         <CandidateVoteCard address={address} />
+        <NomineeVoterList address={address} />
       </div>
     );
   }
@@ -308,8 +317,9 @@ export function ContenderProfile({
       </Card>
 
       <div className="flex flex-col lg:flex-row-reverse gap-5">
-        <div className="lg:w-[450px]">
+        <div className="lg:w-[450px] space-y-5">
           <CandidateVoteCard address={address} />
+          <NomineeVoterList address={address} />
         </div>
         <div className="flex space-y-6 flex-col flex-1 min-w-0">
           <Card variant="glass">
