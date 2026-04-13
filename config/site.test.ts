@@ -46,7 +46,7 @@ describe("site config", () => {
 
       it("has github link", () => {
         expect(siteConfig.links.github).toBe(
-          "https://github.com/withtally/tally-zero"
+          "https://github.com/offchainlabs/tally-zero"
         );
       });
 
