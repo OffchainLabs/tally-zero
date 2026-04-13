@@ -3,8 +3,6 @@
   // Fail on moderate and above
   "moderate": true,
   "allowlist": [
-    // esbuild dev server CORS (vitest>vite>esbuild) - dev only
-    "GHSA-67mh-4wv8-2f99",
     // picomatch issues (eslint-config-next>...>picomatch) - dev only
     "GHSA-3v7f-55p6-f55p",
     "GHSA-c2c7-rcm5-vvqj",

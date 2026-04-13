@@ -6,19 +6,21 @@ import type { ParsedProposal, Proposal } from "@/types/proposal";
 vi.mock("ethers", () => {
   return {
     ethers: {
-      Contract: vi.fn().mockImplementation(() => ({
-        state: vi.fn().mockResolvedValue(1),
-        proposalVotes: vi.fn().mockResolvedValue({
-          forVotes: { toString: () => "1000" },
-          againstVotes: { toString: () => "500" },
-          abstainVotes: { toString: () => "200" },
-        }),
-        quorum: vi.fn().mockResolvedValue({ toString: () => "5000" }),
-        filters: {
-          ProposalCreated: vi.fn().mockReturnValue({}),
-        },
-        queryFilter: vi.fn().mockResolvedValue([]),
-      })),
+      Contract: function MockContract() {
+        return {
+          state: vi.fn().mockResolvedValue(1),
+          proposalVotes: vi.fn().mockResolvedValue({
+            forVotes: { toString: () => "1000" },
+            againstVotes: { toString: () => "500" },
+            abstainVotes: { toString: () => "200" },
+          }),
+          quorum: vi.fn().mockResolvedValue({ toString: () => "5000" }),
+          filters: {
+            ProposalCreated: vi.fn().mockReturnValue({}),
+          },
+          queryFilter: vi.fn().mockResolvedValue([]),
+        };
+      },
     },
   };
 });

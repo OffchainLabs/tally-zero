@@ -7,17 +7,17 @@ import {
 
 // Mock ethers to avoid real network calls
 vi.mock("ethers", () => {
-  const mockProviderFactory = (url: string) => ({
-    ready: Promise.resolve(),
-    getBlockNumber: vi.fn().mockResolvedValue(12345),
-    getNetwork: vi.fn().mockResolvedValue({ chainId: 42161 }),
-    _url: url,
-  });
+  function mockProviderFactory(this: Record<string, unknown>, url: string) {
+    this.ready = Promise.resolve();
+    this.getBlockNumber = vi.fn().mockResolvedValue(12345);
+    this.getNetwork = vi.fn().mockResolvedValue({ chainId: 42161 });
+    this._url = url;
+  }
   return {
     ethers: {
       providers: {
-        JsonRpcProvider: vi.fn().mockImplementation(mockProviderFactory),
-        StaticJsonRpcProvider: vi.fn().mockImplementation(mockProviderFactory),
+        JsonRpcProvider: mockProviderFactory,
+        StaticJsonRpcProvider: mockProviderFactory,
       },
     },
   };
