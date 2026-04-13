@@ -3,40 +3,10 @@
   // Fail on moderate and above
   "moderate": true,
   "allowlist": [
-    // esbuild dev server CORS (vitest>vite>esbuild) - dev only
-    "GHSA-67mh-4wv8-2f99",
     // picomatch issues (eslint-config-next>...>picomatch) - dev only
     "GHSA-3v7f-55p6-f55p",
     "GHSA-c2c7-rcm5-vvqj",
     // brace-expansion ReDoS (eslint>minimatch>brace-expansion) - dev only
     "GHSA-f886-m6hf-6m8v",
-    // https://github.com/advisories/GHSA-4w7w-66w2-5vf9
-    // vite dev server path traversal in optimized deps .map handling
-    // vite is only used with vitest for running tests, without exposing the dev server
-    // from: vitest>vite
-    "GHSA-4w7w-66w2-5vf9",
-    // https://github.com/advisories/GHSA-26pp-8wgv-hjvm
-    // hono missing validation of cookie name on write path in setCookie()
-    //
-    // https://github.com/advisories/GHSA-r5rp-j6wh-rvv4
-    // hono non-breaking space prefix bypass in cookie name handling in getCookie()
-    //
-    // https://github.com/advisories/GHSA-xpcf-pg52-r92g
-    // hono incorrect IP matching in ipRestriction() for IPv4-mapped IPv6 addresses
-    //
-    // https://github.com/advisories/GHSA-xf4j-xp2r-rqqx
-    // hono path traversal in toSSG() allows writing files outside the output directory
-    //
-    // https://github.com/advisories/GHSA-wmmm-f939-6g9c
-    // hono middleware bypass via repeated slashes in serveStatic
-    //
-    // hono is a transitive dependency of porto (wallet connector); this app does not
-    // use hono directly for HTTP serving, cookie handling, IP restrictions, SSG, or static files
-    // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>porto>hono
-    "GHSA-26pp-8wgv-hjvm",
-    "GHSA-r5rp-j6wh-rvv4",
-    "GHSA-xpcf-pg52-r92g",
-    "GHSA-xf4j-xp2r-rqqx",
-    "GHSA-wmmm-f939-6g9c",
   ],
 }
