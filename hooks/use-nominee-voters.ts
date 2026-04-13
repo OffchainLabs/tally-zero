@@ -69,13 +69,15 @@ export function useNomineeVoters({
         });
         const voterAddr: string = event.args.voter;
         const votes: ethers.BigNumber = event.args.votes;
-        const weight: ethers.BigNumber = event.args.weight;
-        const weightedVotes: ethers.BigNumber = event.args.weightReceived;
+        // "weight" in the event is the already-computed weighted contribution
+        // for this vote (votes * decayFactor / WAD), not a raw multiplier.
+        // "weightReceived" is the cumulative total for the nominee.
+        const weightedVotes: ethers.BigNumber = event.args.weight;
 
         return {
           address: voterAddr,
           votes: votes.toString(),
-          weight: weight.toString(),
+          weight: weightedVotes.toString(),
           weightedVotes: weightedVotes.toString(),
           label: getDelegateLabel(voterAddr),
           picture: getDelegatePicture(voterAddr),
