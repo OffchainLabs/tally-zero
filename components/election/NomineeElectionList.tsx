@@ -251,7 +251,7 @@ export function NomineeElectionList({
         </div>
       )}
 
-      {sortedExcludedNominees.length > 0 && (
+      {isVetting && sortedExcludedNominees.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-red-500">
             Excluded Nominees ({sortedExcludedNominees.length})

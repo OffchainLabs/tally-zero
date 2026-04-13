@@ -1,3 +1,5 @@
+"use client";
+
 import { CheckIcon, PlusCircledIcon } from "@radix-ui/react-icons";
 import { Column } from "@tanstack/react-table";
 import * as React from "react";
@@ -90,7 +92,7 @@ export function DataTableFacetedFilter<TData, TValue>({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0" align="start">
-        <Command className="!border-0 !bg-transparent !shadow-none backdrop-blur">
+        <Command className="!border-0 !bg-transparent !shadow-none !backdrop-blur-none">
           <CommandInput placeholder={title} />
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
