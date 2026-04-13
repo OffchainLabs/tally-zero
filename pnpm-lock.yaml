@@ -16,8 +16,8 @@ importers:
   .:
     dependencies:
       "@gzeoneth/gov-tracker":
-        specifier: 0.4.0-alpha.fix-order.b231ac5
-        version: 0.4.0-alpha.fix-order.b231ac5(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+        specifier: 0.5.0
+        version: 0.5.0(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       "@headlessui/react":
         specifier: ^2.2.9
         version: 2.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1210,10 +1210,10 @@ packages:
     peerDependencies:
       viem: ">=2.0.0"
 
-  "@gzeoneth/gov-tracker@0.4.0-alpha.fix-order.b231ac5":
+  "@gzeoneth/gov-tracker@0.5.0":
     resolution:
       {
-        integrity: sha512-OXgP+xDPEgMXUHhLdeuTujCTXys09cT/wRQ3xqGvhU72TL7EfafSd0Yd4LjuMZW11ZAX3piLPIvxRBx4kcCR7w==,
+        integrity: sha512-WCC00SbhAU42XOl/GBryhI8405xDVdQgdv/M984Ofp/WUWlIgYuu+P49xbd59F7W4UEIF+H/LjYMFS4DqSCblw==,
       }
     engines: { node: ">=18.0.0" }
     hasBin: true
@@ -11135,7 +11135,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@gzeoneth/gov-tracker@0.4.0-alpha.fix-order.b231ac5(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)":
+  "@gzeoneth/gov-tracker@0.5.0(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)":
     dependencies:
       "@arbitrum/sdk": 4.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       debug: 4.4.3
