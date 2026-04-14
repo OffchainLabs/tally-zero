@@ -1,6 +1,7 @@
 "use client";
 
 import { ColumnDef, Row } from "@tanstack/react-table";
+import Link from "next/link";
 
 import { ProposerCell } from "@components/container/ProposerCell";
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
@@ -34,8 +35,14 @@ export const columns: ColumnDef<ParsedProposal>[] = [
         <span className="text-xs text-foreground/90 font-mono">{id}</span>
       ) : (
         <HoverCard>
-          <HoverCardTrigger className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs text-foreground/90 font-mono">
-            {`${id.substring(0, 5)}...${id.substring(id.length - 2)}`}
+          <HoverCardTrigger asChild>
+            <Link
+              href={`/proposal/${id}`}
+              className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs text-foreground/90 font-mono"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {`${id.substring(0, 5)}...${id.substring(id.length - 2)}`}
+            </Link>
           </HoverCardTrigger>
           <HoverCardContent className="w-full font-mono text-xs">
             {id}
