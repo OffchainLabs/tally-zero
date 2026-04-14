@@ -57,8 +57,8 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     proposalStages;
 
   const handleClick = useCallback(() => {
-    openProposal(proposal.id, "stages");
-  }, [proposal.id, openProposal]);
+    openProposal(proposal.id, proposal.contractAddress, "stages");
+  }, [proposal.id, proposal.contractAddress, openProposal]);
 
   if (!proposal.creationTxHash) {
     return <span className="text-xs text-muted-foreground">-</span>;

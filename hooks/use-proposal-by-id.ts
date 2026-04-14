@@ -23,6 +23,8 @@ import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 interface UseProposalByIdOptions {
   /** The proposal ID to fetch */
   proposalId: string | null;
+  /** Governor contract address to search, if known */
+  governorAddress?: string | null;
   /** Whether lookup is enabled */
   enabled?: boolean;
   /** Custom RPC URL to use */
@@ -49,6 +51,7 @@ interface UseProposalByIdResult {
  */
 export function useProposalById({
   proposalId,
+  governorAddress,
   enabled = true,
   customRpcUrl,
 }: UseProposalByIdOptions): UseProposalByIdResult {
@@ -82,8 +85,15 @@ export function useProposalById({
       try {
         const provider = await createRpcProvider(l2Rpc);
 
+        const governorsToSearch = governorAddress
+          ? ARBITRUM_GOVERNORS.filter(
+              (governor) =>
+                governor.address.toLowerCase() === governorAddress.toLowerCase()
+            )
+          : ARBITRUM_GOVERNORS;
+
         // Try each governor until we find the proposal
-        for (const governor of ARBITRUM_GOVERNORS) {
+        for (const governor of governorsToSearch) {
           if (cancelled) return;
 
           try {
@@ -226,7 +236,7 @@ export function useProposalById({
     return () => {
       cancelled = true;
     };
-  }, [isHydrated, proposalId, enabled, l2Rpc, fetchTrigger]);
+  }, [isHydrated, proposalId, governorAddress, enabled, l2Rpc, fetchTrigger]);
 
   return {
     proposal,

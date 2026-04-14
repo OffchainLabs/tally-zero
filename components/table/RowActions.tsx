@@ -21,7 +21,7 @@ interface DataTableRowActionsProps<TData> {
 }
 
 /**
- * Row actions dropdown - opens proposal via DeepLinkHandler.
+ * Row actions dropdown for proposal actions.
  */
 function DataTableRowActionsComponent<TData>({
   row,
@@ -49,7 +49,7 @@ function DataTableRowActionsComponent<TData>({
       >
         <DropdownMenuItem
           className="transition-all duration-200 hover:bg-white/20 dark:hover:bg-white/10"
-          onClick={() => openProposal(proposal.id)}
+          onClick={() => openProposal(proposal.id, proposal.contractAddress)}
         >
           <span>
             View Proposal <span className="sr-only">{proposal.id}</span>

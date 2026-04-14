@@ -16,7 +16,7 @@ interface MobileProposalCardProps {
 }
 
 /**
- * Mobile proposal card - opens proposal via DeepLinkHandler.
+ * Mobile proposal card - navigates to the proposal page.
  */
 export const MobileProposalCard = memo(function MobileProposalCard({
   proposal,
@@ -28,8 +28,8 @@ export const MobileProposalCard = memo(function MobileProposalCard({
   );
 
   const handleClick = useCallback(() => {
-    openProposal(proposal.id);
-  }, [proposal.id, openProposal]);
+    openProposal(proposal.id, proposal.contractAddress);
+  }, [proposal.id, proposal.contractAddress, openProposal]);
 
   return (
     <button

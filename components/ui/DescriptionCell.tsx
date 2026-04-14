@@ -21,8 +21,7 @@ export const DescriptionCell = memo(function DescriptionCell({
 });
 
 /**
- * Clickable description cell that opens the proposal in DeepLinkHandler.
- * Only updates the URL - the DeepLinkHandler component renders the modal.
+ * Clickable description cell that navigates to the proposal page.
  */
 export function ClickableDescriptionCell({
   proposal,
@@ -34,8 +33,8 @@ export function ClickableDescriptionCell({
   const { openProposal } = useDeepLink();
 
   const handleClick = useCallback(() => {
-    openProposal(proposal.id, defaultTab);
-  }, [proposal.id, defaultTab, openProposal]);
+    openProposal(proposal.id, proposal.contractAddress, defaultTab);
+  }, [proposal.id, proposal.contractAddress, defaultTab, openProposal]);
 
   const plainText = truncateText(stripMarkdownAndHtml(proposal.description));
 

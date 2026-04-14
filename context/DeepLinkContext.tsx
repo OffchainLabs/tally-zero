@@ -1,11 +1,18 @@
 "use client";
 
 import { useUrlState, type UrlState } from "@hooks/use-url-state";
-import { createContext, useContext, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useMemo } from "react";
+
+import { buildProposalPath, type ProposalTab } from "@/lib/proposal-url";
 
 interface DeepLinkContextValue {
   urlState: UrlState;
-  openProposal: (proposalId: string, tab?: string) => void;
+  openProposal: (
+    proposalId: string,
+    governorAddress: string,
+    tab?: ProposalTab
+  ) => void;
   openTimelock: (txHash: string, opIndex?: number) => void;
   clearDeepLink: () => void;
 }
@@ -13,16 +20,30 @@ interface DeepLinkContextValue {
 const DeepLinkContext = createContext<DeepLinkContextValue | null>(null);
 
 export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
-  const { urlState, openProposal, openTimelock, clearUrlState } = useUrlState();
+  const router = useRouter();
+  const { urlState, openTimelock, clearUrlState } = useUrlState();
+
+  const openProposalPage = useCallback(
+    (proposalId: string, governorAddress: string, tab?: ProposalTab) => {
+      router.push(
+        buildProposalPath({
+          proposalId,
+          governorAddress,
+          tab,
+        })
+      );
+    },
+    [router]
+  );
 
   const value = useMemo(
     () => ({
       urlState,
-      openProposal,
+      openProposal: openProposalPage,
       openTimelock,
       clearDeepLink: clearUrlState,
     }),
-    [urlState, openProposal, openTimelock, clearUrlState]
+    [urlState, openProposalPage, openTimelock, clearUrlState]
   );
 
   return (
