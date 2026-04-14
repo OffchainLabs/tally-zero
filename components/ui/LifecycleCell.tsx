@@ -12,6 +12,7 @@ import { proposalSchema } from "@/config/schema";
 import { useDeepLink } from "@/context/DeepLinkContext";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
 import {
+  formatCurrentState,
   formatStageName,
   getEffectiveDisplayState,
   getStateStyle,
@@ -34,11 +35,18 @@ interface LifecycleCellProps {
  */
 export function LifecycleCell({ proposal }: LifecycleCellProps) {
   const { openProposal } = useDeepLink();
+  const normalizedProposalState = proposal.state.toLowerCase();
+  const shouldTrackLifecycle =
+    !!proposal.creationTxHash &&
+    (normalizedProposalState === "pending" ||
+      normalizedProposalState === "active" ||
+      normalizedProposalState === "succeeded" ||
+      normalizedProposalState === "queued");
   const proposalStages = useProposalStages({
     proposalId: proposal.id,
     creationTxHash: proposal.creationTxHash || "",
     governorAddress: proposal.contractAddress,
-    enabled: !!proposal.creationTxHash,
+    enabled: shouldTrackLifecycle,
   });
 
   // Derive status from proposal stages result
@@ -64,6 +72,17 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     return <span className="text-xs text-muted-foreground">-</span>;
   }
 
+  if (!shouldTrackLifecycle) {
+    return (
+      <button
+        onClick={handleClick}
+        className="text-left hover:opacity-80 transition-opacity"
+      >
+        <StaticLifecycleContent currentState={proposal.state} />
+      </button>
+    );
+  }
+
   const content = (
     <LifecycleContent
       status={status}
@@ -87,6 +106,28 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     >
       {content}
     </button>
+  );
+}
+
+function StaticLifecycleContent({ currentState }: { currentState: string }) {
+  const { icon, color } = getStateStyle(currentState);
+  const StateIcon = iconMap[icon];
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <StateIcon className={cn("h-3.5 w-3.5 drop-shadow-sm", color)} />
+          <span className={cn("text-xs font-medium", color)}>
+            {formatCurrentState(currentState)}
+          </span>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="glass w-auto">
+        <p className="text-sm">Lifecycle finalized on-chain</p>
+        <p className="text-xs text-muted-foreground">Click to view details</p>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 

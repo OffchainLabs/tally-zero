@@ -17,6 +17,7 @@ import {
   parseGovernorId,
   type ProposalTab,
 } from "@/lib/proposal-url";
+import { mergeProposalData } from "@/lib/proposal-utils";
 import { findStateByValue } from "@/lib/state-utils";
 import { stripMarkdownAndHtml, truncateText } from "@/lib/text-utils";
 import type { ParsedProposal } from "@/types/proposal";
@@ -40,6 +41,13 @@ export function ProposalPage({
     [requestedGovId]
   );
   const activeTab = normalizeProposalTab(requestedTab) ?? "description";
+  const shouldFetchLiveProposal = useMemo(() => {
+    if (!initialProposal) return true;
+
+    return (
+      initialProposal.state === "Queued" || initialProposal.state === "Pending"
+    );
+  }, [initialProposal]);
 
   const {
     proposal: fetchedProposal,
@@ -48,11 +56,14 @@ export function ProposalPage({
   } = useProposalById({
     proposalId,
     governorAddress,
-    enabled: !initialProposal,
+    enabled: shouldFetchLiveProposal,
   });
-  const proposal = initialProposal ?? fetchedProposal;
-  const isLoading = initialProposal ? false : isLiveLoading;
-  const error = initialProposal ? null : liveError;
+  const proposal = useMemo(
+    () => mergeProposalData(initialProposal, fetchedProposal),
+    [initialProposal, fetchedProposal]
+  );
+  const isLoading = !proposal && isLiveLoading;
+  const error = proposal ? null : liveError;
   const canonicalTab = useMemo(() => {
     if (!proposal) return activeTab;
     return activeTab === "vote" && proposal.state.toLowerCase() !== "active"

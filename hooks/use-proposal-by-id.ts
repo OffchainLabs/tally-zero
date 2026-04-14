@@ -120,15 +120,20 @@ export function useProposalById({
             // Search a reasonable range before the snapshot (proposals are created before voting starts)
             const searchStart = Math.max(snapshotBlock - 100000, 0);
 
-            const proposalCreatedFilter =
-              contract.filters.ProposalCreated(proposalId);
+            const proposalCreatedFilter = contract.filters.ProposalCreated();
             const events = await contract.queryFilter(
               proposalCreatedFilter,
               searchStart,
               snapshotBlock + 1000
             );
+            const matchingEvent = events.find((event) => {
+              const eventProposalId =
+                event.args?.proposalId?.toString() ??
+                event.args?.[0]?.toString();
+              return eventProposalId === proposalId;
+            });
 
-            if (events.length === 0) {
+            if (!matchingEvent) {
               // Proposal exists but we couldn't find the creation event
               // Create a minimal proposal object
               let quorum: string | undefined;
@@ -164,7 +169,7 @@ export function useProposalById({
             }
 
             // Found the creation event, parse it
-            const event = events[0];
+            const event = matchingEvent;
             const args = event.args!;
             const {
               proposer,

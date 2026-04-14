@@ -230,10 +230,10 @@ function mapProposalState(
  */
 export async function extractProposalsFromBundledCache(): Promise<{
   proposals: ParsedProposal[];
-  activeProposalIds: Set<string>;
+  incompleteProposalIds: Set<string>;
 }> {
   const proposals: ParsedProposal[] = [];
-  const activeProposalIds = new Set<string>();
+  const incompleteProposalIds = new Set<string>();
 
   const skipBundledCache = getStoredValue<boolean>(
     STORAGE_KEYS.SKIP_BUNDLED_CACHE,
@@ -241,7 +241,7 @@ export async function extractProposalsFromBundledCache(): Promise<{
   );
   if (skipBundledCache) {
     debug.cache("skipping bundled cache extraction (disabled via settings)");
-    return { proposals, activeProposalIds };
+    return { proposals, incompleteProposalIds };
   }
 
   try {
@@ -257,8 +257,8 @@ export async function extractProposalsFromBundledCache(): Promise<{
       // Extract state from currentState field or infer from stages
       const state = mapProposalState(proposal.currentState);
 
-      if (state === "Pending" || state === "Active") {
-        activeProposalIds.add(proposal.proposalId);
+      if (state === "Pending" || state === "Active" || state === "Queued") {
+        incompleteProposalIds.add(proposal.proposalId);
       }
 
       // Get proposal creation data from PROPOSAL_CREATED stage
@@ -299,13 +299,13 @@ export async function extractProposalsFromBundledCache(): Promise<{
     }
 
     debug.cache(
-      "extracted %d proposals from bundled cache (%d active)",
+      "extracted %d proposals from bundled cache (%d incomplete)",
       proposals.length,
-      activeProposalIds.size
+      incompleteProposalIds.size
     );
-    return { proposals, activeProposalIds };
+    return { proposals, incompleteProposalIds };
   } catch {
-    return { proposals: [], activeProposalIds: new Set() };
+    return { proposals: [], incompleteProposalIds: new Set() };
   }
 }
 
