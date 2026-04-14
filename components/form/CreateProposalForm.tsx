@@ -10,11 +10,12 @@ import rehypeSanitize from "rehype-sanitize";
 import { toast } from "sonner";
 import {
   useAccount,
-  useBlockNumber,
   useReadContract,
   useSimulateContract,
   useWriteContract,
 } from "wagmi";
+
+import { useL1Block } from "@/hooks/use-l1-block";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -45,6 +46,8 @@ import type { Abi } from "viem";
 
 const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
 
+const L1_BLOCK_SYNC_BUFFER = 100;
+
 export default function CreateProposalForm() {
   const { address, isConnected } = useAccount();
 
@@ -55,15 +58,13 @@ export default function CreateProposalForm() {
 
   const governor = GOVERNORS[governorType];
 
-  const { data: latestBlock } = useBlockNumber({
-    chainId: ARBITRUM_CHAIN_ID,
-    query: { refetchInterval: 12_000 },
-  });
+  const { currentL1Block } = useL1Block();
 
   const snapshotBlock = useMemo(() => {
-    if (latestBlock === undefined) return undefined;
-    return latestBlock > BigInt(0) ? latestBlock - BigInt(1) : BigInt(0);
-  }, [latestBlock]);
+    if (currentL1Block === null) return undefined;
+    const buffered = currentL1Block - L1_BLOCK_SYNC_BUFFER;
+    return buffered > 0 ? BigInt(buffered) : BigInt(0);
+  }, [currentL1Block]);
 
   const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
     useReadContract({
