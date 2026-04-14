@@ -5,7 +5,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import VoteForm from "@components/form/VoteForm";
@@ -48,6 +48,7 @@ interface StateValue {
 interface ProposalTabsContentProps {
   proposal: z.infer<typeof proposalSchema>;
   showStagesTab: boolean;
+  showVoteTab: boolean;
   variant: "modal" | "page";
   nerdMode: boolean;
   hasCalldataOverrides: boolean;
@@ -67,6 +68,7 @@ interface ProposalTabsContentProps {
 function ProposalTabsContent({
   proposal,
   showStagesTab,
+  showVoteTab,
   variant,
   nerdMode,
   hasCalldataOverrides,
@@ -181,19 +183,21 @@ function ProposalTabsContent({
         </TabsContent>
       )}
 
-      <TabsContent
-        value="vote"
-        className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-      >
-        <div className="pt-4">
-          {nerdMode && hasCalldataOverrides && (
-            <div className="mb-4 glass-subtle bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
-              You have calldata overrides active in the Payload tab.
-            </div>
-          )}
-          <VoteForm proposal={proposal} variant={variant} />
-        </div>
-      </TabsContent>
+      {showVoteTab && (
+        <TabsContent
+          value="vote"
+          className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+        >
+          <div className="pt-4">
+            {nerdMode && hasCalldataOverrides && (
+              <div className="mb-4 glass-subtle bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
+                You have calldata overrides active in the Payload tab.
+              </div>
+            )}
+            <VoteForm proposal={proposal} variant={variant} />
+          </div>
+        </TabsContent>
+      )}
     </>
   );
 }
@@ -221,15 +225,16 @@ function ProposalHeader({ stateValue }: ProposalHeaderProps) {
 
 interface TabsNavigationProps {
   showStagesTab: boolean;
+  showVoteTab: boolean;
 }
 
-function TabsNavigation({ showStagesTab }: TabsNavigationProps) {
+function TabsNavigation({ showStagesTab, showVoteTab }: TabsNavigationProps) {
   return (
     <TabsList className="flex-shrink-0 w-full justify-start">
       <TabsTrigger value="description">Description</TabsTrigger>
       <TabsTrigger value="payload">Payload</TabsTrigger>
       {showStagesTab && <TabsTrigger value="stages">Lifecycle</TabsTrigger>}
-      <TabsTrigger value="vote">Vote</TabsTrigger>
+      {showVoteTab && <TabsTrigger value="vote">Vote</TabsTrigger>}
     </TabsList>
   );
 }
@@ -259,16 +264,17 @@ export default function VoteModel({
   onTabChange?: (tab: ProposalTab) => void;
 }) {
   const showStagesTab = isArbitrumGovernor(proposal.contractAddress);
+  const showVoteTab = proposal.state.toLowerCase() === "active";
   const { nerdMode } = useNerdMode();
   const { currentL1Block } = useL1Block();
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
   );
-  const [activeTab, setActiveTab] = useState<ProposalTab>(defaultTab);
-
-  useEffect(() => {
-    setActiveTab(defaultTab);
-  }, [defaultTab]);
+  const normalizedDefaultTab = useMemo(
+    () => (defaultTab === "vote" && !showVoteTab ? "description" : defaultTab),
+    [defaultTab, showVoteTab]
+  );
+  const tabsKey = `${normalizedDefaultTab}-${showVoteTab ? "vote" : "novote"}`;
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -297,15 +303,19 @@ export default function VoteModel({
         return;
       }
 
-      setActiveTab(tab);
+      if (tab === "vote" && !showVoteTab) {
+        return;
+      }
+
       onTabChange?.(tab);
     },
-    [onTabChange]
+    [onTabChange, showVoteTab]
   );
 
   const tabsContentProps = {
     proposal,
     showStagesTab,
+    showVoteTab,
     variant,
     nerdMode,
     hasCalldataOverrides,
@@ -322,11 +332,15 @@ export default function VoteModel({
         </div>
 
         <Tabs
-          value={activeTab}
+          key={tabsKey}
+          defaultValue={normalizedDefaultTab}
           onValueChange={handleTabChange}
           className="flex flex-col"
         >
-          <TabsNavigation showStagesTab={showStagesTab} />
+          <TabsNavigation
+            showStagesTab={showStagesTab}
+            showVoteTab={showVoteTab}
+          />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight=""
@@ -347,11 +361,15 @@ export default function VoteModel({
         </DialogHeader>
 
         <Tabs
-          value={activeTab}
+          key={tabsKey}
+          defaultValue={normalizedDefaultTab}
           onValueChange={handleTabChange}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsNavigation showStagesTab={showStagesTab} />
+          <TabsNavigation
+            showStagesTab={showStagesTab}
+            showVoteTab={showVoteTab}
+          />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight="max-h-[60vh]"
@@ -371,11 +389,15 @@ export default function VoteModel({
       </DrawerHeader>
 
       <Tabs
-        value={activeTab}
+        key={tabsKey}
+        defaultValue={normalizedDefaultTab}
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col"
       >
-        <TabsNavigation showStagesTab={showStagesTab} />
+        <TabsNavigation
+          showStagesTab={showStagesTab}
+          showVoteTab={showVoteTab}
+        />
         <ProposalTabsContent
           {...tabsContentProps}
           maxHeight="max-h-[50vh]"

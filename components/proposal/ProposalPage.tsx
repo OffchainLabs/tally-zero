@@ -53,6 +53,12 @@ export function ProposalPage({
   const proposal = initialProposal ?? fetchedProposal;
   const isLoading = initialProposal ? false : isLiveLoading;
   const error = initialProposal ? null : liveError;
+  const canonicalTab = useMemo(() => {
+    if (!proposal) return activeTab;
+    return activeTab === "vote" && proposal.state.toLowerCase() !== "active"
+      ? "description"
+      : activeTab;
+  }, [activeTab, proposal]);
 
   useEffect(() => {
     if (!proposal) return;
@@ -61,17 +67,17 @@ export function ProposalPage({
     const canonicalUrl = buildProposalPath({
       proposalId: proposal.id,
       governorAddress: proposal.contractAddress,
-      tab: activeTab,
+      tab: canonicalTab,
     });
     const isTabCanonical =
-      activeTab === "description"
+      canonicalTab === "description"
         ? requestedTab === null
-        : requestedTab === activeTab;
+        : requestedTab === canonicalTab;
 
     if (requestedGovId !== canonicalGovId || !isTabCanonical) {
       router.replace(canonicalUrl, { scroll: false });
     }
-  }, [activeTab, proposal, requestedGovId, requestedTab, router]);
+  }, [canonicalTab, proposal, requestedGovId, requestedTab, router]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
@@ -123,7 +129,7 @@ export function ProposalPage({
         {!isLoading && proposal && (
           <ProposalPageContent
             proposal={proposal}
-            activeTab={activeTab}
+            activeTab={canonicalTab}
             onTabChange={handleTabChange}
           />
         )}
