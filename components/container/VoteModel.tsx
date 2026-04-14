@@ -5,7 +5,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import VoteForm from "@components/form/VoteForm";
@@ -46,6 +46,7 @@ interface StateValue {
 }
 
 interface ProposalTabsContentProps {
+  mountedTabs: ReadonlySet<ProposalTab>;
   proposal: z.infer<typeof proposalSchema>;
   showStagesTab: boolean;
   showVoteTab: boolean;
@@ -66,6 +67,7 @@ interface ProposalTabsContentProps {
 }
 
 function ProposalTabsContent({
+  mountedTabs,
   proposal,
   showStagesTab,
   showVoteTab,
@@ -81,8 +83,9 @@ function ProposalTabsContent({
   return (
     <>
       <TabsContent
+        forceMount={mountedTabs.has("description") ? true : undefined}
         value="description"
-        className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+        className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
       >
         <DescriptionWrapper asChild>
           <div
@@ -109,8 +112,9 @@ function ProposalTabsContent({
       </TabsContent>
 
       <TabsContent
+        forceMount={mountedTabs.has("payload") ? true : undefined}
         value="payload"
-        className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+        className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
       >
         <div
           className={cn(
@@ -142,8 +146,9 @@ function ProposalTabsContent({
 
       {showStagesTab && proposal.creationTxHash && (
         <TabsContent
+          forceMount={mountedTabs.has("stages") ? true : undefined}
           value="stages"
-          className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+          className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
         >
           <div
             className={cn("overflow-y-auto glass-subtle rounded-lg", maxHeight)}
@@ -166,8 +171,9 @@ function ProposalTabsContent({
 
       {showStagesTab && !proposal.creationTxHash && (
         <TabsContent
+          forceMount={mountedTabs.has("stages") ? true : undefined}
           value="stages"
-          className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+          className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
         >
           <div
             className={cn(
@@ -185,8 +191,9 @@ function ProposalTabsContent({
 
       {showVoteTab && (
         <TabsContent
+          forceMount={mountedTabs.has("vote") ? true : undefined}
           value="vote"
-          className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+          className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
         >
           <div className="pt-4">
             {nerdMode && hasCalldataOverrides && (
@@ -255,6 +262,7 @@ export default function VoteModel({
   variant = "modal",
   defaultTab = "description",
   onTabChange,
+  className,
 }: {
   proposal: z.infer<typeof proposalSchema>;
   stateValue: StateValue;
@@ -262,6 +270,7 @@ export default function VoteModel({
   variant?: "modal" | "page";
   defaultTab?: ProposalTab;
   onTabChange?: (tab: ProposalTab) => void;
+  className?: string;
 }) {
   const showStagesTab = isArbitrumGovernor(proposal.contractAddress);
   const showVoteTab = proposal.state.toLowerCase() === "active";
@@ -270,11 +279,34 @@ export default function VoteModel({
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
   );
-  const normalizedDefaultTab = useMemo(
-    () => (defaultTab === "vote" && !showVoteTab ? "description" : defaultTab),
-    [defaultTab, showVoteTab]
+  const normalizedDefaultTab = useMemo(() => {
+    if (defaultTab === "vote" && !showVoteTab) return "description";
+    if (defaultTab === "stages" && !showStagesTab) return "description";
+    return defaultTab;
+  }, [defaultTab, showStagesTab, showVoteTab]);
+  const [activeTab, setActiveTab] = useState<ProposalTab>(normalizedDefaultTab);
+  const [mountedTabs, setMountedTabs] = useState<Set<ProposalTab>>(
+    () => new Set<ProposalTab>(["description", "payload", normalizedDefaultTab])
   );
-  const tabsKey = `${normalizedDefaultTab}-${showVoteTab ? "vote" : "novote"}`;
+
+  useEffect(() => {
+    setActiveTab(normalizedDefaultTab);
+    setMountedTabs((prev) => {
+      if (prev.has(normalizedDefaultTab)) return prev;
+      const next = new Set(prev);
+      next.add(normalizedDefaultTab);
+      return next;
+    });
+  }, [normalizedDefaultTab]);
+
+  useEffect(() => {
+    setMountedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -307,12 +339,14 @@ export default function VoteModel({
         return;
       }
 
+      setActiveTab(tab);
       onTabChange?.(tab);
     },
     [onTabChange, showVoteTab]
   );
 
   const tabsContentProps = {
+    mountedTabs,
     proposal,
     showStagesTab,
     showVoteTab,
@@ -326,14 +360,15 @@ export default function VoteModel({
 
   if (variant === "page") {
     return (
-      <div className="glass rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5">
+      <div
+        className={`glass rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5 ${className}`}
+      >
         <div className="mb-4">
           <ProposalHeader stateValue={stateValue} />
         </div>
 
         <Tabs
-          key={tabsKey}
-          defaultValue={normalizedDefaultTab}
+          value={activeTab}
           onValueChange={handleTabChange}
           className="flex flex-col"
         >
@@ -361,8 +396,7 @@ export default function VoteModel({
         </DialogHeader>
 
         <Tabs
-          key={tabsKey}
-          defaultValue={normalizedDefaultTab}
+          value={activeTab}
           onValueChange={handleTabChange}
           className="flex-1 flex flex-col min-h-0"
         >
@@ -389,8 +423,7 @@ export default function VoteModel({
       </DrawerHeader>
 
       <Tabs
-        key={tabsKey}
-        defaultValue={normalizedDefaultTab}
+        value={activeTab}
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col"
       >

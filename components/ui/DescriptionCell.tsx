@@ -3,7 +3,7 @@
 import { memo, useCallback } from "react";
 
 import { useDeepLink } from "@/context/DeepLinkContext";
-import { stripMarkdownAndHtml, truncateText } from "@/lib/text-utils";
+import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { ParsedProposal } from "@/types/proposal";
 
 export const DescriptionCell = memo(function DescriptionCell({
@@ -11,7 +11,7 @@ export const DescriptionCell = memo(function DescriptionCell({
 }: {
   mdxContent: string;
 }) {
-  const plainText = truncateText(stripMarkdownAndHtml(mdxContent));
+  const plainText = truncateText(extractProposalTitle(mdxContent));
 
   return (
     <span className="block truncate font-medium text-foreground">
@@ -36,7 +36,7 @@ export function ClickableDescriptionCell({
     openProposal(proposal.id, proposal.contractAddress, defaultTab);
   }, [proposal.id, proposal.contractAddress, defaultTab, openProposal]);
 
-  const plainText = truncateText(stripMarkdownAndHtml(proposal.description));
+  const plainText = truncateText(extractProposalTitle(proposal.description));
 
   return (
     <button

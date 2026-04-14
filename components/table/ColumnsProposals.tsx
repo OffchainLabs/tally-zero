@@ -18,6 +18,7 @@ import { LifecycleCell } from "@components/ui/LifecycleCell";
 import { StatusBadgeGlass } from "@components/ui/StatusBadgeGlass";
 import { VoteDisplay } from "@components/ui/VoteDisplay";
 
+import { sumVoteCounts } from "@/lib/vote-utils";
 import { ParsedProposal, ProposalStateName } from "@/types/proposal";
 
 export const columns: ColumnDef<ParsedProposal>[] = [
@@ -119,10 +120,10 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       const votes = row.original.votes;
 
       // Calculate votes toward quorum (only For + Abstain count, not Against)
-      const votesTowardQuorum =
-        votes?.forVotes && votes?.abstainVotes
-          ? (BigInt(votes.forVotes) + BigInt(votes.abstainVotes)).toString()
-          : "0";
+      const votesTowardQuorum = sumVoteCounts(
+        votes?.forVotes,
+        votes?.abstainVotes
+      );
 
       return (
         <div className="flex items-center gap-3">

@@ -6,7 +6,7 @@ import { VoteDistributionBarCompact } from "@/components/proposal/stages/VoteDis
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
 import { useDeepLink } from "@/context/DeepLinkContext";
-import { stripMarkdownAndHtml, truncateText } from "@/lib/text-utils";
+import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { cn } from "@/lib/utils";
 import { ParsedProposal } from "@/types/proposal";
 import { ChevronRight } from "lucide-react";
@@ -23,7 +23,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
 }: MobileProposalCardProps) {
   const { openProposal } = useDeepLink();
   const plainText = truncateText(
-    stripMarkdownAndHtml(proposal.description),
+    extractProposalTitle(proposal.description),
     80
   );
 

@@ -10,6 +10,7 @@ import {
   formatEstimatedCompletion,
   type EstimatedTimeRange,
 } from "@/lib/date-utils";
+import { sumVoteCounts } from "@/lib/vote-utils";
 import {
   getStageData,
   type ProposalStage,
@@ -54,6 +55,10 @@ export const VotingStageContent = memo(function VotingStageContent({
   governorAddress,
 }: VotingStageContentProps) {
   const votingData = getVotingData(stage);
+  const votesTowardQuorum = sumVoteCounts(
+    String(votingData?.forVotes ?? "0"),
+    String(votingData?.abstainVotes ?? "0")
+  );
 
   return (
     <div className="mt-3 space-y-3">
@@ -92,7 +97,7 @@ export const VotingStageContent = memo(function VotingStageContent({
             )}
             {Boolean(
               votingData?.extensionPossible !== false &&
-                !votingData?.wasExtended
+              !votingData?.wasExtended
             ) && (
               <Badge
                 variant="outline"
@@ -112,7 +117,7 @@ export const VotingStageContent = memo(function VotingStageContent({
 
       {Boolean(votingData?.quorum) && (
         <QuorumProgressBar
-          current={String(votingData?.forVotes ?? "0")}
+          current={votesTowardQuorum}
           required={String(votingData?.quorum)}
           reached={Boolean(votingData?.quorumReached)}
         />
