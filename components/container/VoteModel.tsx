@@ -5,7 +5,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import VoteForm from "@components/form/VoteForm";
@@ -279,34 +279,44 @@ export default function VoteModel({
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
   );
+  const isControlled = onTabChange !== undefined;
   const normalizedDefaultTab = useMemo(() => {
     if (defaultTab === "vote" && !showVoteTab) return "description";
     if (defaultTab === "stages" && !showStagesTab) return "description";
     return defaultTab;
   }, [defaultTab, showStagesTab, showVoteTab]);
-  const [activeTab, setActiveTab] = useState<ProposalTab>(normalizedDefaultTab);
-  const [mountedTabs, setMountedTabs] = useState<Set<ProposalTab>>(
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] =
+    useState<ProposalTab>(normalizedDefaultTab);
+  const [visitedTabs, setVisitedTabs] = useState<Set<ProposalTab>>(
     () => new Set<ProposalTab>(["description", "payload", normalizedDefaultTab])
   );
+  const activeTab = useMemo(() => {
+    const nextTab = isControlled ? normalizedDefaultTab : uncontrolledActiveTab;
 
-  useEffect(() => {
-    setActiveTab(normalizedDefaultTab);
-    setMountedTabs((prev) => {
-      if (prev.has(normalizedDefaultTab)) return prev;
-      const next = new Set(prev);
-      next.add(normalizedDefaultTab);
-      return next;
-    });
-  }, [normalizedDefaultTab]);
+    if (nextTab === "vote" && !showVoteTab) return "description";
+    if (nextTab === "stages" && !showStagesTab) return "description";
+    return nextTab;
+  }, [
+    isControlled,
+    normalizedDefaultTab,
+    uncontrolledActiveTab,
+    showStagesTab,
+    showVoteTab,
+  ]);
+  const mountedTabs = useMemo(() => {
+    const next = new Set<ProposalTab>([
+      "description",
+      "payload",
+      normalizedDefaultTab,
+      activeTab,
+    ]);
 
-  useEffect(() => {
-    setMountedTabs((prev) => {
-      if (prev.has(activeTab)) return prev;
-      const next = new Set(prev);
-      next.add(activeTab);
-      return next;
-    });
-  }, [activeTab]);
+    for (const tab of visitedTabs) {
+      next.add(tab);
+    }
+
+    return next;
+  }, [activeTab, normalizedDefaultTab, visitedTabs]);
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -339,10 +349,20 @@ export default function VoteModel({
         return;
       }
 
-      setActiveTab(tab);
+      setVisitedTabs((prev) => {
+        if (prev.has(tab)) return prev;
+        const next = new Set(prev);
+        next.add(tab);
+        return next;
+      });
+
+      if (!isControlled) {
+        setUncontrolledActiveTab(tab);
+      }
+
       onTabChange?.(tab);
     },
-    [onTabChange, showVoteTab]
+    [isControlled, onTabChange, showVoteTab]
   );
 
   const tabsContentProps = {
