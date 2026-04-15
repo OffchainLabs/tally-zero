@@ -5,13 +5,12 @@ import { ArrowRight, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
 import { toast } from "sonner";
 import {
   useAccount,
   useReadContract,
   useSimulateContract,
+  useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
 
@@ -27,17 +26,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
+import {
+  buildSubmittedProposalPath,
+  createFormProposalAction,
+  getProposalEligibility,
+  getProposalPreviewRehypePlugins,
+  getProposalSubmissionPhase,
+  type FormProposalAction,
+  type ProposalEligibility,
+} from "@/lib/create-proposal-form-utils";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import {
   computeProposalId,
-  emptyAction,
   hasActionErrors,
   normalizeActions,
   validateAction,
   type ProposalAction,
 } from "@/lib/propose-utils";
-import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
 import { cn } from "@/lib/utils";
 
 import OzGovernorABI from "@data/OzGovernor_ABI.json";
@@ -48,13 +54,22 @@ const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
 
 const L1_BLOCK_SYNC_BUFFER = 100;
 
+interface SubmittedProposalMeta {
+  proposalId: string | null;
+  governorAddress: string;
+}
+
 export default function CreateProposalForm() {
   const { address, isConnected } = useAccount();
 
   const [governorType, setGovernorType] = useState<GovernorType>("treasury");
-  const [actions, setActions] = useState<ProposalAction[]>([emptyAction()]);
+  const [actions, setActions] = useState<FormProposalAction[]>([
+    createFormProposalAction(),
+  ]);
   const [description, setDescription] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [submittedProposalMeta, setSubmittedProposalMeta] =
+    useState<SubmittedProposalMeta | null>(null);
 
   const governor = GOVERNORS[governorType];
 
@@ -89,12 +104,17 @@ export default function CreateProposalForm() {
   );
   const proposalThreshold = rawThreshold as bigint | undefined;
 
-  const meetsThreshold =
-    votingPower !== undefined &&
-    proposalThreshold !== undefined &&
-    votingPower >= proposalThreshold;
+  const eligibility = getProposalEligibility(votingPower, proposalThreshold);
+  const meetsThreshold = eligibility === "meets";
 
-  const actionErrors = useMemo(() => actions.map(validateAction), [actions]);
+  const proposalActions = useMemo(
+    () => actions.map(({ id: _id, ...action }) => action),
+    [actions]
+  );
+  const actionErrors = useMemo(
+    () => proposalActions.map(validateAction),
+    [proposalActions]
+  );
   const anyActionInvalid = actionErrors.some(hasActionErrors);
   const descriptionInvalid = description.trim().length === 0;
   const formInvalid =
@@ -105,12 +125,12 @@ export default function CreateProposalForm() {
     | undefined => {
     if (formInvalid) return undefined;
     try {
-      const { targets, values, calldatas } = normalizeActions(actions);
+      const { targets, values, calldatas } = normalizeActions(proposalActions);
       return [targets, values, calldatas, description];
     } catch {
       return undefined;
     }
-  }, [actions, description, formInvalid]);
+  }, [description, formInvalid, proposalActions]);
 
   const predictedProposalId = useMemo(() => {
     if (!proposeArgs) return null;
@@ -147,21 +167,45 @@ export default function CreateProposalForm() {
     data: txHash,
     error: writeError,
     isPending: isWriting,
-    isSuccess,
     writeContract,
   } = useWriteContract();
+  const {
+    isLoading: isConfirming,
+    isSuccess: isConfirmed,
+    error: receiptError,
+  } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
+  const submissionPhase = getProposalSubmissionPhase({
+    txHash,
+    isWriting,
+    isConfirming,
+    isConfirmed,
+  });
+  const isBusy =
+    submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
 
   useEffect(() => {
-    if (txHash) {
+    if (submissionPhase === "confirmed") {
       toast("Proposal submitted.");
     }
-  }, [txHash]);
+  }, [submissionPhase]);
+
+  useEffect(() => {
+    if (writeError) {
+      setSubmittedProposalMeta(null);
+    }
+  }, [writeError]);
 
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
     : null;
+  const receiptErrorMessage = receiptError
+    ? getErrorMessage(receiptError, "confirm proposal")
+    : null;
 
   const canSubmit =
+    submissionPhase === "idle" &&
     isConnected &&
     meetsThreshold &&
     !!proposeArgs &&
@@ -170,23 +214,23 @@ export default function CreateProposalForm() {
     !isSimulateError;
 
   function handleAddAction() {
-    setActions((prev) => [...prev, emptyAction()]);
+    setActions((prev) => [...prev, createFormProposalAction()]);
   }
 
-  function handleRemoveAction(index: number) {
+  function handleRemoveAction(actionId: string) {
     setActions((prev) =>
-      prev.length === 1 ? prev : prev.filter((_, i) => i !== index)
+      prev.length === 1 ? prev : prev.filter((action) => action.id !== actionId)
     );
   }
 
   function handleActionChange(
-    index: number,
+    actionId: string,
     field: keyof ProposalAction,
     value: string
   ) {
     setActions((prev) =>
-      prev.map((action, i) =>
-        i === index ? { ...action, [field]: value } : action
+      prev.map((action) =>
+        action.id === actionId ? { ...action, [field]: value } : action
       )
     );
   }
@@ -194,11 +238,24 @@ export default function CreateProposalForm() {
   function handleSubmit() {
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
+    setSubmittedProposalMeta({
+      proposalId: predictedProposalId,
+      governorAddress: governor.address,
+    });
     writeContract(simulateData.request);
   }
 
-  if (isSuccess && txHash) {
-    return <SuccessState txHash={txHash} proposalId={predictedProposalId} />;
+  if (submissionPhase === "confirmed" && txHash) {
+    return (
+      <SuccessState
+        txHash={txHash}
+        proposalPath={buildSubmittedProposalPath({
+          proposalId: submittedProposalMeta?.proposalId ?? predictedProposalId,
+          governorAddress:
+            submittedProposalMeta?.governorAddress ?? governor.address,
+        })}
+      />
+    );
   }
 
   return (
@@ -206,13 +263,14 @@ export default function CreateProposalForm() {
       <GovernorPicker
         value={governorType}
         onChange={setGovernorType}
-        disabled={isWriting}
+        disabled={isBusy}
       />
 
       <ThresholdCard
         isConnected={isConnected}
         votingPower={votingPower}
         proposalThreshold={proposalThreshold}
+        eligibility={eligibility}
         isLoading={isLoadingVotingPower || isLoadingThreshold}
         governorName={governor.name}
       />
@@ -221,7 +279,7 @@ export default function CreateProposalForm() {
         actions={actions}
         errors={actionErrors}
         showErrors={attemptedSubmit}
-        disabled={isWriting}
+        disabled={isBusy}
         onChange={handleActionChange}
         onAdd={handleAddAction}
         onRemove={handleRemoveAction}
@@ -231,19 +289,20 @@ export default function CreateProposalForm() {
         value={description}
         onChange={setDescription}
         showError={attemptedSubmit && descriptionInvalid}
-        disabled={isWriting}
+        disabled={isBusy}
       />
 
       <SubmitSection
         isConnected={isConnected}
-        meetsThreshold={meetsThreshold}
+        eligibility={eligibility}
         governorName={governor.name}
         predictedProposalId={predictedProposalId}
+        submissionPhase={submissionPhase}
         isSimulating={isSimulating}
         isSimulateError={isSimulateError}
         simulationErrorMessage={simulationErrorMessage}
         writeErrorMessage={writeErrorMessage}
-        isWriting={isWriting}
+        receiptErrorMessage={receiptErrorMessage}
         canSubmit={canSubmit}
         formInvalid={formInvalid}
         onSubmit={handleSubmit}
@@ -320,6 +379,7 @@ interface ThresholdCardProps {
   isConnected: boolean;
   votingPower: bigint | undefined;
   proposalThreshold: bigint | undefined;
+  eligibility: ProposalEligibility;
   isLoading: boolean;
   governorName: string;
 }
@@ -328,14 +388,10 @@ function ThresholdCard({
   isConnected,
   votingPower,
   proposalThreshold,
+  eligibility,
   isLoading,
   governorName,
 }: ThresholdCardProps) {
-  const meetsThreshold =
-    votingPower !== undefined &&
-    proposalThreshold !== undefined &&
-    votingPower >= proposalThreshold;
-
   return (
     <Card variant="glass">
       <CardHeader>
@@ -370,16 +426,21 @@ function ThresholdCard({
             />
             {votingPower !== undefined &&
               proposalThreshold !== undefined &&
-              (meetsThreshold ? (
+              (eligibility === "meets" ? (
                 <div className="text-xs text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Threshold met
                 </div>
-              ) : (
+              ) : eligibility === "below" ? (
                 <div className="text-xs text-amber-400">
                   Voting power below threshold. You need at least{" "}
                   {formatVotingPower(proposalThreshold)} ARB to submit.
                 </div>
-              ))}
+              ) : null)}
+            {isConnected && !isLoading && eligibility === "unknown" && (
+              <div className="text-xs text-muted-foreground">
+                Could not determine proposer eligibility.
+              </div>
+            )}
           </>
         )}
       </CardContent>
@@ -397,13 +458,17 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 interface ActionsBuilderProps {
-  actions: ProposalAction[];
+  actions: FormProposalAction[];
   errors: ReturnType<typeof validateAction>[];
   showErrors: boolean;
   disabled: boolean;
-  onChange: (index: number, field: keyof ProposalAction, value: string) => void;
+  onChange: (
+    actionId: string,
+    field: keyof ProposalAction,
+    value: string
+  ) => void;
   onAdd: () => void;
-  onRemove: (index: number) => void;
+  onRemove: (actionId: string) => void;
 }
 
 function ActionsBuilder({
@@ -441,7 +506,7 @@ function ActionsBuilder({
           const showErr = showErrors;
           return (
             <div
-              key={index}
+              key={action.id}
               className="rounded-xl border border-border/40 glass-subtle backdrop-blur p-4 space-y-3"
             >
               <div className="flex items-center justify-between">
@@ -452,7 +517,7 @@ function ActionsBuilder({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => onRemove(index)}
+                  onClick={() => onRemove(action.id)}
                   disabled={disabled || actions.length === 1}
                   aria-label={`Remove action ${index + 1}`}
                 >
@@ -461,13 +526,15 @@ function ActionsBuilder({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor={`target-${index}`} className="text-xs">
+                <Label htmlFor={`target-${action.id}`} className="text-xs">
                   Target
                 </Label>
                 <Input
-                  id={`target-${index}`}
+                  id={`target-${action.id}`}
                   value={action.target}
-                  onChange={(e) => onChange(index, "target", e.target.value)}
+                  onChange={(e) =>
+                    onChange(action.id, "target", e.target.value)
+                  }
                   placeholder="0x…"
                   variant="glass"
                   disabled={disabled}
@@ -480,13 +547,15 @@ function ActionsBuilder({
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`value-${index}`} className="text-xs">
+                  <Label htmlFor={`value-${action.id}`} className="text-xs">
                     Value (wei)
                   </Label>
                   <Input
-                    id={`value-${index}`}
+                    id={`value-${action.id}`}
                     value={action.value}
-                    onChange={(e) => onChange(index, "value", e.target.value)}
+                    onChange={(e) =>
+                      onChange(action.id, "value", e.target.value)
+                    }
                     placeholder="0"
                     variant="glass"
                     disabled={disabled}
@@ -498,14 +567,14 @@ function ActionsBuilder({
                   )}
                 </div>
                 <div className="space-y-1.5 md:col-span-1">
-                  <Label htmlFor={`calldata-${index}`} className="text-xs">
+                  <Label htmlFor={`calldata-${action.id}`} className="text-xs">
                     Calldata
                   </Label>
                   <Input
-                    id={`calldata-${index}`}
+                    id={`calldata-${action.id}`}
                     value={action.calldata}
                     onChange={(e) =>
-                      onChange(index, "calldata", e.target.value)
+                      onChange(action.id, "calldata", e.target.value)
                     }
                     placeholder="0x"
                     variant="glass"
@@ -568,10 +637,7 @@ function DescriptionEditor({
             <div className="glass-subtle backdrop-blur rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary">
               {value.trim() ? (
                 <ReactMarkdown
-                  rehypePlugins={[
-                    [rehypeSanitize, proposalSanitizeSchema],
-                    rehypeRaw,
-                  ]}
+                  rehypePlugins={getProposalPreviewRehypePlugins()}
                 >
                   {value}
                 </ReactMarkdown>
@@ -590,14 +656,15 @@ function DescriptionEditor({
 
 interface SubmitSectionProps {
   isConnected: boolean;
-  meetsThreshold: boolean;
+  eligibility: ProposalEligibility;
   governorName: string;
   predictedProposalId: string | null;
+  submissionPhase: "idle" | "awaiting-wallet" | "confirming" | "confirmed";
   isSimulating: boolean;
   isSimulateError: boolean;
   simulationErrorMessage: string | null;
   writeErrorMessage: string | null;
-  isWriting: boolean;
+  receiptErrorMessage: string | null;
   canSubmit: boolean;
   formInvalid: boolean;
   onSubmit: () => void;
@@ -605,14 +672,15 @@ interface SubmitSectionProps {
 
 function SubmitSection({
   isConnected,
-  meetsThreshold,
+  eligibility,
   governorName,
   predictedProposalId,
+  submissionPhase,
   isSimulating,
   isSimulateError,
   simulationErrorMessage,
   writeErrorMessage,
-  isWriting,
+  receiptErrorMessage,
   canSubmit,
   formInvalid,
   onSubmit,
@@ -626,10 +694,16 @@ function SubmitSection({
           </p>
         )}
 
-        {isConnected && !meetsThreshold && (
+        {isConnected && eligibility === "below" && (
           <p className="text-sm text-amber-400">
             Your voting power does not meet the {governorName} proposal
             threshold. The transaction will revert if submitted.
+          </p>
+        )}
+
+        {isConnected && eligibility === "unknown" && (
+          <p className="text-sm text-muted-foreground">
+            Checking your voting power and proposal threshold.
           </p>
         )}
 
@@ -639,19 +713,40 @@ function SubmitSection({
           </p>
         )}
 
-        {!formInvalid && isConnected && meetsThreshold && (
+        {submissionPhase === "awaiting-wallet" && (
           <div className="text-xs text-muted-foreground">
-            {isSimulating
-              ? "Simulating…"
-              : isSimulateError
-                ? "Simulation failed"
-                : "Simulation successful"}
+            Confirm the transaction in your wallet.
           </div>
         )}
+
+        {submissionPhase === "confirming" && (
+          <div className="text-xs text-muted-foreground">
+            Waiting for transaction confirmation.
+          </div>
+        )}
+
+        {!formInvalid &&
+          isConnected &&
+          eligibility === "meets" &&
+          submissionPhase === "idle" && (
+            <div className="text-xs text-muted-foreground">
+              {isSimulating
+                ? "Simulating…"
+                : isSimulateError
+                  ? "Simulation failed"
+                  : "Simulation successful"}
+            </div>
+          )}
 
         {simulationErrorMessage && (
           <p className="text-sm text-red-400 whitespace-pre-wrap">
             {simulationErrorMessage}
+          </p>
+        )}
+
+        {receiptErrorMessage && (
+          <p className="text-sm text-red-400 whitespace-pre-wrap">
+            {receiptErrorMessage}
           </p>
         )}
 
@@ -669,10 +764,11 @@ function SubmitSection({
         )}
 
         <div className="flex justify-end">
-          {isWriting ? (
+          {submissionPhase === "awaiting-wallet" ||
+          submissionPhase === "confirming" ? (
             <Button disabled>
               <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
-              Submitting…
+              {submissionPhase === "confirming" ? "Confirming…" : "Submitting…"}
             </Button>
           ) : (
             <Button onClick={onSubmit} disabled={!canSubmit}>
@@ -687,10 +783,10 @@ function SubmitSection({
 
 interface SuccessStateProps {
   txHash: string;
-  proposalId: string | null;
+  proposalPath: string | null;
 }
 
-function SuccessState({ txHash, proposalId }: SuccessStateProps) {
+function SuccessState({ txHash, proposalPath }: SuccessStateProps) {
   return (
     <Card variant="glass" className="border-emerald-500/30">
       <CardContent className="pt-6 flex flex-col gap-4 items-start">
@@ -709,9 +805,9 @@ function SuccessState({ txHash, proposalId }: SuccessStateProps) {
           tx: {txHash}
         </div>
 
-        {proposalId && (
+        {proposalPath && (
           <Link
-            href={`/proposal/${proposalId}`}
+            href={proposalPath}
             className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           >
             View proposal page

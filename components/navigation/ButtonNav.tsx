@@ -2,83 +2,91 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
+import { ETHEREUM_RPC_URL } from "@/config/arbitrum-governance";
+import { shortenAddress } from "@/lib/format-utils";
 import { cn } from "@lib/utils";
+import {
+  useAppKit,
+  useAppKitAccount,
+  useAppKitNetwork,
+} from "@reown/appkit/react";
+import { http } from "viem";
+import { createConfig, useEnsName } from "wagmi";
+import { mainnet } from "wagmi/chains";
 
 import { Icons } from "@components/Icons";
 import { SettingsSheet } from "@components/container/SettingsSheet";
-import { buttonVariants } from "@components/ui/Button";
-import { Skeleton } from "@components/ui/Skeleton";
+import { Button, buttonVariants } from "@components/ui/Button";
 
-const LoadingSkeleton = ({ compact = false }: { compact?: boolean }) => (
-  <div className="inline-flex items-center justify-center transition-colors h-10 px-2 sm:px-4 py-2">
-    <Skeleton
-      className={cn(
-        "h-[38px]",
-        compact ? "w-[80px]" : "w-[120px] sm:w-[158px]"
-      )}
-    />
-  </div>
-);
+const ensConfig = createConfig({
+  chains: [mainnet],
+  transports: {
+    [mainnet.id]: http(ETHEREUM_RPC_URL),
+  },
+});
 
 export function ButtonNav() {
   const pathname = usePathname();
   const isAppPage = pathname !== "/";
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // AppKit uses Web Components that need to be registered before rendering
-    const checkReady = () =>
-      customElements.get("appkit-button") &&
-      customElements.get("appkit-network-button");
-
-    if (checkReady()) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- polling for web component registration
-      setLoading(false);
-      return;
-    }
-
-    const poll = setInterval(() => {
-      if (checkReady()) {
-        clearInterval(poll);
-        setLoading(false);
-      }
-    }, 50);
-
-    const timeout = setTimeout(() => {
-      clearInterval(poll);
-      setLoading(false);
-    }, 2000);
-
-    return () => {
-      clearInterval(poll);
-      clearTimeout(timeout);
-    };
-  }, []);
+  const { open } = useAppKit();
+  const account = useAppKitAccount();
+  const { caipNetwork } = useAppKitNetwork();
+  const ensAddress =
+    account?.address && account.address.startsWith("0x")
+      ? (account.address as `0x${string}`)
+      : undefined;
+  const { data: ensName } = useEnsName({
+    address: ensAddress,
+    chainId: mainnet.id,
+    config: ensConfig,
+    query: {
+      enabled: !!ensAddress,
+    },
+  });
+  const isConnected = account?.isConnected ?? false;
+  const isConnecting =
+    account?.status === "connecting" || account?.status === "reconnecting";
+  const networkLabel = caipNetwork?.name ?? "Network";
+  const accountLabel = ensName
+    ? ensName
+    : ensAddress
+      ? shortenAddress(ensAddress, 6)
+      : "Wallet";
 
   return (
     <nav className="flex-shrink-0">
       {isAppPage ? (
         <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle backdrop-blur rounded-xl p-2">
           <SettingsSheet />
-          {loading ? (
-            <div className="flex items-center gap-1 sm:gap-2">
-              <LoadingSkeleton compact />
-              <LoadingSkeleton compact />
-            </div>
-          ) : (
+          {isConnected ? (
             <>
               <div className="hidden sm:block">
-                <appkit-network-button />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void open({ view: "Networks" })}
+                >
+                  {networkLabel}
+                </Button>
               </div>
-              <div className="sm:hidden">
-                <appkit-button size="sm" balance="hide" />
-              </div>
-              <div className="hidden sm:block">
-                <appkit-button balance="show" />
-              </div>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => void open({ view: "Account" })}
+              >
+                {accountLabel}
+              </Button>
             </>
+          ) : (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => void open({ view: "Connect" })}
+              disabled={isConnecting}
+            >
+              {isConnecting ? "Connecting..." : "Connect Wallet"}
+            </Button>
           )}
         </div>
       ) : (
