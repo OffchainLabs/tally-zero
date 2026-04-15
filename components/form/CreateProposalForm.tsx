@@ -720,7 +720,7 @@ function SuccessState({ txHash, proposalId }: SuccessStateProps) {
         )}
 
         <Link
-          href="/explore"
+          href="/proposals"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           Back to Proposals

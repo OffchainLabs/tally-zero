@@ -12,7 +12,7 @@ interface ProposalPageProps {
  * gov-tracker cache so shareable URLs work in static export.
  *
  * Proposals not yet in the bundled cache can still be reached by clicking
- * through the /explore modal, which updates the hash-based deep link.
+ * through the /proposals modal, which updates the hash-based deep link.
  */
 export function generateStaticParams(): { id: string }[] {
   const ids = new Set<string>();
@@ -48,7 +48,7 @@ export default async function ProposalPage({ params }: ProposalPageProps) {
       <div className="container flex flex-col gap-6">
         <div>
           <Link
-            href="/explore"
+            href="/proposals"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
           >
             <ArrowLeft className="h-4 w-4" />

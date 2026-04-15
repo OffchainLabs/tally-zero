@@ -1,5 +1,17 @@
 import type { ParsedProposal } from "@/types/proposal";
 
+export function isIncompleteProposalState(
+  state: string | null | undefined
+): boolean {
+  const normalizedState = state?.toLowerCase();
+
+  return (
+    normalizedState === "pending" ||
+    normalizedState === "active" ||
+    normalizedState === "queued"
+  );
+}
+
 function isPlaceholderDescription(
   description: string | undefined,
   proposalId: string

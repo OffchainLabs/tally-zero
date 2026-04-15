@@ -118,7 +118,9 @@ function StaticLifecycleContent({ currentState }: { currentState: string }) {
     <HoverCard>
       <HoverCardTrigger asChild>
         <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-          <StateIcon className={cn("h-3.5 w-3.5 drop-shadow-sm", color)} />
+          <StateIcon
+            className={cn("h-3.5 w-3.5 drop-shadow-sm shrink-0", color)}
+          />
           <span className={cn("text-xs font-medium", color)}>
             {formatCurrentState(currentState)}
           </span>

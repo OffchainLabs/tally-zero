@@ -9,6 +9,10 @@ import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
 import { proposalSchema } from "@/config/schema";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
 import { extractProposalsFromBundledCache } from "@/lib/bundled-cache-loader";
+import {
+  isIncompleteProposalState,
+  mergeProposalData,
+} from "@/lib/proposal-utils";
 import { stripMarkdownAndHtml, truncateMiddle } from "@/lib/text-utils";
 import type { ParsedProposal } from "@/types/proposal";
 
@@ -19,18 +23,33 @@ interface ProposalPageClientProps {
 export default function ProposalPageClient({
   proposalId,
 }: ProposalPageClientProps) {
-  const bundledProposal = useBundledProposal(proposalId);
+  const { proposal: bundledProposal, isLoading: isLoadingBundledProposal } =
+    useBundledProposal(proposalId);
+  const stableBundledProposal = useMemo(() => {
+    if (!bundledProposal) return null;
+
+    return isIncompleteProposalState(bundledProposal.state)
+      ? null
+      : bundledProposal;
+  }, [bundledProposal]);
 
   const {
     proposal: fetchedProposal,
-    isLoading,
+    isLoading: isLoadingFetchedProposal,
     error,
   } = useProposalById({
     proposalId,
-    enabled: !bundledProposal,
+    enabled: !stableBundledProposal,
   });
 
-  const proposal = bundledProposal ?? fetchedProposal;
+  const proposal = useMemo(
+    () => mergeProposalData(stableBundledProposal, fetchedProposal),
+    [fetchedProposal, stableBundledProposal]
+  );
+  const isLoading =
+    isLoadingBundledProposal ||
+    (!proposal &&
+      (isLoadingFetchedProposal || (!stableBundledProposal && !error)));
 
   const parsed = useMemo(() => {
     if (!proposal) return null;
@@ -86,27 +105,47 @@ export default function ProposalPageClient({
  * Look the proposal up in the bundled gov-tracker cache so the standalone
  * page can render without waiting on (or needing) an RPC round-trip.
  */
-function useBundledProposal(proposalId: string): ParsedProposal | null {
-  const [proposal, setProposal] = useState<ParsedProposal | null>(null);
+function useBundledProposal(proposalId: string): {
+  proposal: ParsedProposal | null;
+  isLoading: boolean;
+} {
+  const [result, setResult] = useState<{
+    proposal: ParsedProposal | null;
+    loadedProposalId: string | null;
+  }>({
+    proposal: null,
+    loadedProposalId: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
+
     extractProposalsFromBundledCache()
       .then(({ proposals }) => {
         if (cancelled) return;
         const match = proposals.find((p) => p.id === proposalId) ?? null;
-        setProposal(match);
+        setResult({
+          proposal: match,
+          loadedProposalId: proposalId,
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        setProposal(null);
+        setResult({
+          proposal: null,
+          loadedProposalId: proposalId,
+        });
       });
     return () => {
       cancelled = true;
     };
   }, [proposalId]);
 
-  return proposal;
+  const isLoading = result.loadedProposalId !== proposalId;
+  const proposal =
+    result.loadedProposalId === proposalId ? result.proposal : null;
+
+  return { proposal, isLoading };
 }
 
 function deriveTitle(description: string): string | null {

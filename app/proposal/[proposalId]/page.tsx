@@ -3,6 +3,7 @@ import { extractProposals } from "@gzeoneth/gov-tracker";
 import type { Metadata } from "next";
 
 import { ProposalPage } from "@/components/proposal/ProposalPage";
+import { isIncompleteProposalState } from "@/lib/proposal-utils";
 import { getStaticProposalById } from "@/lib/static-proposal-data";
 
 type ProposalRouteParams = Awaited<
@@ -34,7 +35,11 @@ export default async function ProposalRoutePage(
   props: PageProps<"/proposal/[proposalId]">
 ) {
   const { proposalId } = await props.params;
-  const initialProposal = getStaticProposalById(proposalId);
+  const staticProposal = getStaticProposalById(proposalId);
+  const initialProposal =
+    staticProposal && !isIncompleteProposalState(staticProposal.state)
+      ? staticProposal
+      : null;
 
   return (
     <ProposalPage proposalId={proposalId} initialProposal={initialProposal} />
