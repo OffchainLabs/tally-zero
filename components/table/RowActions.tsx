@@ -2,6 +2,7 @@
 
 import { DotsHorizontalIcon } from "@radix-ui/react-icons";
 import { Row } from "@tanstack/react-table";
+import Link from "next/link";
 import { memo } from "react";
 
 import { Button } from "@components/ui/Button";
@@ -12,8 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@components/ui/DropdownMenu";
 
-import { useDeepLink } from "@/context/DeepLinkContext";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { buildProposalPath } from "@/lib/proposal-url";
 import { proposalSchema } from "@config/schema";
 
 interface DataTableRowActionsProps<TData> {
@@ -21,13 +22,12 @@ interface DataTableRowActionsProps<TData> {
 }
 
 /**
- * Row actions dropdown - opens proposal via DeepLinkHandler.
+ * Row actions dropdown for proposal actions.
  */
 function DataTableRowActionsComponent<TData>({
   row,
 }: DataTableRowActionsProps<TData>) {
   const proposal = proposalSchema.parse(row.original);
-  const { openProposal } = useDeepLink();
   const { copied, copy } = useCopyToClipboard();
 
   return (
@@ -48,12 +48,19 @@ function DataTableRowActionsComponent<TData>({
         className="w-[200px] glass-subtle rounded-lg"
       >
         <DropdownMenuItem
+          asChild
           className="transition-all duration-200 hover:bg-white/20 dark:hover:bg-white/10"
-          onClick={() => openProposal(proposal.id)}
         >
-          <span>
-            View Proposal <span className="sr-only">{proposal.id}</span>
-          </span>
+          <Link
+            href={buildProposalPath({
+              proposalId: proposal.id,
+              governorAddress: proposal.contractAddress,
+            })}
+          >
+            <span>
+              View Proposal <span className="sr-only">{proposal.id}</span>
+            </span>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="transition-all duration-200 hover:bg-white/20 dark:hover:bg-white/10"

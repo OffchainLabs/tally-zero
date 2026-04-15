@@ -1,12 +1,13 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import Link from "next/link";
+import { memo } from "react";
 
 import { VoteDistributionBarCompact } from "@/components/proposal/stages/VoteDistributionBarCompact";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
-import { useDeepLink } from "@/context/DeepLinkContext";
-import { stripMarkdownAndHtml, truncateText } from "@/lib/text-utils";
+import { buildProposalPath } from "@/lib/proposal-url";
+import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { cn } from "@/lib/utils";
 import { ParsedProposal } from "@/types/proposal";
 import { ChevronRight } from "lucide-react";
@@ -16,26 +17,24 @@ interface MobileProposalCardProps {
 }
 
 /**
- * Mobile proposal card - opens proposal via DeepLinkHandler.
+ * Mobile proposal card - navigates to the proposal page.
  */
 export const MobileProposalCard = memo(function MobileProposalCard({
   proposal,
 }: MobileProposalCardProps) {
-  const { openProposal } = useDeepLink();
   const plainText = truncateText(
-    stripMarkdownAndHtml(proposal.description),
+    extractProposalTitle(proposal.description),
     80
   );
 
-  const handleClick = useCallback(() => {
-    openProposal(proposal.id);
-  }, [proposal.id, openProposal]);
-
   return (
-    <button
-      onClick={handleClick}
+    <Link
+      href={buildProposalPath({
+        proposalId: proposal.id,
+        governorAddress: proposal.contractAddress,
+      })}
       className={cn(
-        "w-full text-left p-4 rounded-xl min-h-[88px]",
+        "block w-full text-left p-4 rounded-xl min-h-[88px]",
         "glass-subtle",
         "hover:bg-white/40 dark:hover:bg-white/10",
         "hover:shadow-lg hover:shadow-primary/5",
@@ -62,7 +61,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
       </div>
-    </button>
+    </Link>
   );
 });
 

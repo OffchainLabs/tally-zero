@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import Link from "next/link";
+import { memo } from "react";
 import { z } from "zod";
 
 import {
@@ -9,13 +10,14 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/HoverCard";
 import { proposalSchema } from "@/config/schema";
-import { useDeepLink } from "@/context/DeepLinkContext";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
 import {
+  formatCurrentState,
   formatStageName,
   getEffectiveDisplayState,
   getStateStyle,
 } from "@/lib/lifecycle-utils";
+import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
 import {
   CheckCircledIcon,
@@ -30,15 +32,21 @@ interface LifecycleCellProps {
 
 /**
  * LifecycleCell displays the proposal lifecycle status and opens
- * the stages tab via DeepLinkHandler when clicked.
+ * the stages tab when clicked.
  */
 export function LifecycleCell({ proposal }: LifecycleCellProps) {
-  const { openProposal } = useDeepLink();
+  const normalizedProposalState = proposal.state.toLowerCase();
+  const shouldTrackLifecycle =
+    !!proposal.creationTxHash &&
+    (normalizedProposalState === "pending" ||
+      normalizedProposalState === "active" ||
+      normalizedProposalState === "succeeded" ||
+      normalizedProposalState === "queued");
   const proposalStages = useProposalStages({
     proposalId: proposal.id,
     creationTxHash: proposal.creationTxHash || "",
     governorAddress: proposal.contractAddress,
-    enabled: !!proposal.creationTxHash,
+    enabled: shouldTrackLifecycle,
   });
 
   // Derive status from proposal stages result
@@ -55,13 +63,25 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   const currentState = proposalStages.result?.currentState || null;
   const { queuePosition, currentStageIndex, stages, isBackgroundRefreshing } =
     proposalStages;
-
-  const handleClick = useCallback(() => {
-    openProposal(proposal.id, "stages");
-  }, [proposal.id, openProposal]);
+  const stagesHref = buildProposalPath({
+    proposalId: proposal.id,
+    governorAddress: proposal.contractAddress,
+    tab: "stages",
+  });
 
   if (!proposal.creationTxHash) {
     return <span className="text-xs text-muted-foreground">-</span>;
+  }
+
+  if (!shouldTrackLifecycle) {
+    return (
+      <Link
+        href={stagesHref}
+        className="text-left hover:opacity-80 transition-opacity"
+      >
+        <StaticLifecycleContent currentState={proposal.state} />
+      </Link>
+    );
   }
 
   const content = (
@@ -81,12 +101,34 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   }
 
   return (
-    <button
-      onClick={handleClick}
+    <Link
+      href={stagesHref}
       className="text-left hover:opacity-80 transition-opacity"
     >
       {content}
-    </button>
+    </Link>
+  );
+}
+
+function StaticLifecycleContent({ currentState }: { currentState: string }) {
+  const { icon, color } = getStateStyle(currentState);
+  const StateIcon = iconMap[icon];
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <StateIcon className={cn("h-3.5 w-3.5 drop-shadow-sm", color)} />
+          <span className={cn("text-xs font-medium", color)}>
+            {formatCurrentState(currentState)}
+          </span>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="glass w-auto">
+        <p className="text-sm">Lifecycle finalized on-chain</p>
+        <p className="text-xs text-muted-foreground">Click to view details</p>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 

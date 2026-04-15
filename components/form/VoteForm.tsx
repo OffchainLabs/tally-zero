@@ -42,8 +42,10 @@ import { toast } from "sonner";
 
 export default function VoteForm({
   proposal,
+  variant = "modal",
 }: {
   proposal: z.infer<typeof proposalSchema>;
+  variant?: "modal" | "page";
 }) {
   const { address, isConnected } = useAccount();
 
@@ -85,6 +87,7 @@ export default function VoteForm({
     if (!isEstimateError || !estimateError) return null;
     return getSimulationErrorMessage(estimateError);
   }, [isEstimateError, estimateError]);
+  const isActiveProposal = proposal.state.toLowerCase() === "active";
 
   const {
     data: hash,
@@ -201,11 +204,23 @@ export default function VoteForm({
           </CardContent>
 
           <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="ghost">Cancel</Button>
-            </DialogClose>
+            {variant === "modal" ? (
+              <DialogClose asChild>
+                <Button type="button" variant="ghost">
+                  Cancel
+                </Button>
+              </DialogClose>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => form.reset()}
+              >
+                Clear
+              </Button>
+            )}
 
-            {proposal.state === "active" ? (
+            {isActiveProposal ? (
               isLoading ? (
                 <Button variant="secondary" disabled>
                   <ReloadIcon className="w-4 h-4 mr-2 animate-spin" />

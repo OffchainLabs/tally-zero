@@ -44,6 +44,12 @@ export interface QuorumProgress {
   required: number;
 }
 
+export interface PreciseQuorumProgress {
+  percentage: number;
+  progressPercentage: number;
+  isReached: boolean;
+}
+
 /**
  * Calculate vote distribution percentages from vote strings.
  * @param forVotes - String representation of "for" votes
@@ -54,6 +60,16 @@ export interface QuorumProgress {
 function safeParseFloat(value: string): number {
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function safeParseBigInt(value: string | undefined): bigint {
+  if (!value) return BigInt(0);
+
+  try {
+    return BigInt(value);
+  } catch {
+    return BigInt(0);
+  }
 }
 
 export function calculateVoteDistribution(
@@ -82,6 +98,47 @@ export function calculateVoteDistribution(
     abstainPct: (abstainNum / total) * 100,
     total,
     hasVotes: true,
+  };
+}
+
+/**
+ * Sum vote counts using bigint-safe arithmetic.
+ * This is used for constitution quorum checks where For + Abstain count.
+ */
+export function sumVoteCounts(...values: Array<string | undefined>): string {
+  return values
+    .reduce((total, value) => total + safeParseBigInt(value), BigInt(0))
+    .toString();
+}
+
+/**
+ * Calculate quorum progress from bigint vote strings without losing precision.
+ * Returns both the display percentage and a clamped percentage for bar widths.
+ */
+export function calculatePreciseQuorumProgress(
+  current: string,
+  required: string,
+  reachedOverride?: boolean
+): PreciseQuorumProgress {
+  const currentBig = safeParseBigInt(current);
+  const requiredBig = safeParseBigInt(required);
+
+  if (requiredBig <= BigInt(0)) {
+    return {
+      percentage: 0,
+      progressPercentage: 0,
+      isReached: reachedOverride ?? false,
+    };
+  }
+
+  const percentageTimesTen =
+    (currentBig * BigInt(1000) + requiredBig / BigInt(2)) / requiredBig;
+  const percentage = Number(percentageTimesTen) / 10;
+
+  return {
+    percentage,
+    progressPercentage: Math.min(percentage, 100),
+    isReached: reachedOverride ?? currentBig >= requiredBig,
   };
 }
 

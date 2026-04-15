@@ -5,7 +5,6 @@ import { createContext, useContext, useMemo } from "react";
 
 interface DeepLinkContextValue {
   urlState: UrlState;
-  openProposal: (proposalId: string, tab?: string) => void;
   openTimelock: (txHash: string, opIndex?: number) => void;
   clearDeepLink: () => void;
 }
@@ -13,16 +12,15 @@ interface DeepLinkContextValue {
 const DeepLinkContext = createContext<DeepLinkContextValue | null>(null);
 
 export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
-  const { urlState, openProposal, openTimelock, clearUrlState } = useUrlState();
+  const { urlState, openTimelock, clearUrlState } = useUrlState();
 
   const value = useMemo(
     () => ({
       urlState,
-      openProposal,
       openTimelock,
       clearDeepLink: clearUrlState,
     }),
-    [urlState, openProposal, openTimelock, clearUrlState]
+    [urlState, openTimelock, clearUrlState]
   );
 
   return (

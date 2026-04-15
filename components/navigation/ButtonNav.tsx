@@ -83,7 +83,7 @@ export function ButtonNav() {
         </div>
       ) : (
         <Link
-          href="/explore"
+          href="/proposals"
           className={cn(
             buttonVariants({ variant: "default", size: "sm" }),
             "px-3 sm:px-4 min-h-[44px] transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"

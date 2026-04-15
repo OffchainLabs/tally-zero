@@ -2,19 +2,18 @@
 
 /**
  * Hook for managing URL hash state and deep linking
- * Supports proposal and timelock deep links with bidirectional sync
+ * Supports timelock deep links with bidirectional sync
  */
 
 import { isValidTxHash } from "@/lib/address-utils";
 import { useCallback, useEffect, useState } from "react";
 
 /** URL state types for deep linking support */
-export type UrlStateType = "proposal" | "timelock" | null;
+export type UrlStateType = "timelock" | null;
 
 export interface UrlState {
   type: UrlStateType;
   id: string | null;
-  tab?: string;
   /** Operation index for timelock deep links (1-based) */
   opIndex?: number;
 }
@@ -22,8 +21,6 @@ export interface UrlState {
 /**
  * Parses the URL hash to extract deep link state
  * Supports formats:
- * - #proposal/<proposalId>
- * - #proposal/<proposalId>/<tab>
  * - #timelock/<txHash>
  * - #timelock/<txHash>/<opIndex>
  */
@@ -41,10 +38,6 @@ export function parseUrlHash(hash: string): UrlState {
   }
 
   const [type, id, thirdPart] = parts;
-
-  if (type === "proposal" && id) {
-    return { type: "proposal", id, tab: thirdPart };
-  }
 
   if (type === "timelock" && id && isValidTxHash(id)) {
     const opIndex = thirdPart ? parseInt(thirdPart, 10) : undefined;
@@ -66,13 +59,6 @@ export function buildUrlHash(state: UrlState): string {
     return "";
   }
 
-  if (state.type === "proposal") {
-    if (state.tab && state.tab !== "description") {
-      return `#proposal/${state.id}/${state.tab}`;
-    }
-    return `#proposal/${state.id}`;
-  }
-
   if (state.type === "timelock") {
     if (state.opIndex && state.opIndex > 0) {
       return `#timelock/${state.id}/${state.opIndex}`;
@@ -83,15 +69,8 @@ export function buildUrlHash(state: UrlState): string {
   return "";
 }
 
-interface SetUrlStateOptions {
-  /** If true, replaces current history entry instead of adding new one */
-  replace?: boolean;
-}
-
 interface UseUrlStateResult {
   urlState: UrlState;
-  setUrlState: (newState: UrlState, options?: SetUrlStateOptions) => void;
-  openProposal: (proposalId: string, tab?: string) => void;
   openTimelock: (txHash: string, opIndex?: number) => void;
   clearUrlState: () => void;
 }
@@ -125,7 +104,6 @@ export function useUrlState(): UseUrlStateResult {
       if (typeof window === "undefined") return;
 
       const newHash = buildUrlHash(newState);
-      // Normalize current hash for comparison (remove # prefix if present)
       const currentHashNormalized = window.location.hash.startsWith("#")
         ? window.location.hash.slice(1)
         : window.location.hash;
@@ -133,7 +111,6 @@ export function useUrlState(): UseUrlStateResult {
         ? newHash.slice(1)
         : newHash;
 
-      // Only update if different to avoid extra history entries
       if (newHashNormalized !== currentHashNormalized) {
         const baseUrl = window.location.pathname + window.location.search;
         const targetUrl = newHash ? baseUrl + newHash : baseUrl;
@@ -144,36 +121,21 @@ export function useUrlState(): UseUrlStateResult {
         // hash manipulation which avoids the patched history API.
         try {
           if (options?.replace || !newHash) {
-            // For clearing the hash or replace mode, use pushState with current state
             const safeState = window.history.state ?? {};
             window.history.pushState(safeState, "", targetUrl);
           } else {
-            // For adding a new hash, use direct hash assignment (triggers hashchange)
             window.location.hash = newHash;
           }
         } catch {
-          // Fallback: If Next.js history patch fails, use direct hash manipulation
-          // This can happen when history.state is missing Next.js internals
           if (newHash) {
             window.location.hash = newHash;
           }
-          // For clearing hash: silently fail - React state still updates correctly
-          // The URL will retain the old hash but the modal will close properly
-          // This is acceptable since the hash is only for deep linking on page load
         }
       }
 
       setUrlStateInternal(newState);
     },
     []
-  );
-
-  // Convenience methods
-  const openProposal = useCallback(
-    (proposalId: string, tab?: string) => {
-      setUrlState({ type: "proposal", id: proposalId, tab });
-    },
-    [setUrlState]
   );
 
   const openTimelock = useCallback(
@@ -189,8 +151,6 @@ export function useUrlState(): UseUrlStateResult {
 
   return {
     urlState,
-    setUrlState,
-    openProposal,
     openTimelock,
     clearUrlState,
   };

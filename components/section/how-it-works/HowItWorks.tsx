@@ -29,7 +29,7 @@ const steps = [
     title: "Onchain Voting",
     description:
       "Cast your final, binding vote onchain. Constitutional proposals need 5% participation; non-constitutional need 3%.",
-    href: "/explore",
+    href: "/proposals",
     cta: "Browse Proposals",
   },
 ];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extractProposalTitle,
   stripMarkdownAndHtml,
   truncateMiddle,
   truncateText,
@@ -101,6 +102,113 @@ describe("text-utils", () => {
 
     it("handles maxLength of 1", () => {
       expect(truncateText("Hello", 1)).toBe("H...");
+    });
+  });
+
+  describe("extractProposalTitle", () => {
+    it("uses the title before the non-constitutional boilerplate", () => {
+      const description = `# Proposal to Establish the Arbitrum Research & Development Collective
+This is a Non-Constitutional proposal.
+
+**Abstract** - This proposal aims to fund the collective.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "Proposal to Establish the Arbitrum Research & Development Collective"
+      );
+    });
+
+    it("deduplicates repeated headings before non-constitutional", () => {
+      const description = `# AIP-7: Arbitrum One Governance Parameter Fixes
+# AIP-7: Arbitrum One Governance Parameter Fixes
+
+## Non-Constitutional
+
+## Abstract
+Three independent issues have been identified.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "AIP-7: Arbitrum One Governance Parameter Fixes"
+      );
+    });
+
+    it("stops before abstract and ignores amendment metadata", () => {
+      const description = `# [UPDATED] Proposal to Establish the Arbitrum Research & Development Collective
+**Amendments in light of community feedback:**
+
+* Standard 50,000 ARB for the DAO Advocate role.
+
+**Abstract** - This proposal aims to fund the collective.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "[UPDATED] Proposal to Establish the Arbitrum Research & Development Collective"
+      );
+    });
+
+    it("ignores constitutional metadata lines before abstract", () => {
+      const description = `# AIP: ArbOS Version 11
+
+# Constitutional
+
+## Abstract
+
+This AIP introduces a number of improvements.`;
+
+      expect(extractProposalTitle(description)).toBe("AIP: ArbOS Version 11");
+    });
+
+    it("does not truncate at the spaced dash delimiter when the prefix is short", () => {
+      const description = `# AIP-1.2 - Foundation and DAO Governance
+Category: Constitutional - Process
+
+## Abstract:
+This document proposes amendments.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "AIP-1.2 - Foundation and DAO Governance"
+      );
+    });
+
+    it("truncates at the spaced dash delimiter when the prefix is long", () => {
+      const description = `# Experimental Delegates Incentive System
+# Final Version with Option 2 (Karma)
+
+## Abstract
+
+We introduce an experimental incentive system.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "Experimental Delegates Incentive System"
+      );
+    });
+
+    it("does not truncate when the prefix before the spaced dash is short", () => {
+      const description = `# [UPDATED] - Proposal to Establish the Arbitrum Research & Development Collective
+
+## Abstract
+
+This proposal aims to fund the collective.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "[UPDATED] - Proposal to Establish the Arbitrum Research & Development Collective"
+      );
+    });
+
+    it("falls back to the explicit proposal title line when needed", () => {
+      const description = `**Title**
+
+Proposal: Activate support for account abstraction endpoint on One and Nova
+
+**Author**
+
+Jason Windawi
+
+**Abstract**
+
+As part of the broader development of account abstraction standards.`;
+
+      expect(extractProposalTitle(description)).toBe(
+        "Activate support for account abstraction endpoint on One and Nova"
+      );
     });
   });
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calculatePreciseQuorumProgress,
   calculateQuorumProgress,
   calculateVoteDistribution,
   formatVotes,
+  sumVoteCounts,
 } from "./vote-utils";
 
 describe("vote-utils", () => {
@@ -111,6 +113,44 @@ describe("vote-utils", () => {
     it("handles large numbers", () => {
       const result = calculateQuorumProgress("5000000000", "10000000000");
       expect(result.percentage).toBe(50);
+    });
+  });
+
+  describe("sumVoteCounts", () => {
+    it("adds for and abstain votes with bigint precision", () => {
+      expect(sumVoteCounts("1000000000000000000", "2500000000000000000")).toBe(
+        "3500000000000000000"
+      );
+    });
+
+    it("treats invalid values as zero", () => {
+      expect(sumVoteCounts("100", "abc", undefined)).toBe("100");
+    });
+  });
+
+  describe("calculatePreciseQuorumProgress", () => {
+    it("calculates the full percentage and clamped bar progress", () => {
+      const result = calculatePreciseQuorumProgress("125", "100");
+
+      expect(result.percentage).toBe(125);
+      expect(result.progressPercentage).toBe(100);
+      expect(result.isReached).toBe(true);
+    });
+
+    it("keeps one decimal place of precision for display", () => {
+      const result = calculatePreciseQuorumProgress("1", "3");
+
+      expect(result.percentage).toBeCloseTo(33.3, 1);
+      expect(result.progressPercentage).toBeCloseTo(33.3, 1);
+      expect(result.isReached).toBe(false);
+    });
+
+    it("handles zero quorum safely", () => {
+      const result = calculatePreciseQuorumProgress("100", "0");
+
+      expect(result.percentage).toBe(0);
+      expect(result.progressPercentage).toBe(0);
+      expect(result.isReached).toBe(false);
     });
   });
 

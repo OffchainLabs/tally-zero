@@ -6,7 +6,7 @@
  * and avoids unnecessary refetches.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -54,6 +54,15 @@ interface ProposalSearchData {
   cacheInfo: CacheHitInfo;
 }
 
+function isIncompleteProposalState(state: string | undefined): boolean {
+  const normalizedState = state?.toLowerCase();
+  return (
+    normalizedState === "pending" ||
+    normalizedState === "active" ||
+    normalizedState === "queued"
+  );
+}
+
 /**
  * Hook for searching proposals across Core and Treasury governors.
  * Backed by TanStack Query so results are cached across navigations
@@ -66,6 +75,7 @@ export function useMultiGovernorSearch({
   blockRange = DEFAULT_BLOCK_RANGE,
 }: UseMultiGovernorSearchOptions): UseMultiGovernorSearchResult {
   const [progress, setProgress] = useState(0);
+  const lastIncompleteRefreshKeyRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
 
   const rpcUrl = customRpcUrl || ARBITRUM_RPC_URL;
@@ -90,11 +100,13 @@ export function useMultiGovernorSearch({
       setProgress(5);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const [{ proposals: cachedProposals, activeProposalIds }, watermarks] =
-        await Promise.all([
-          extractProposalsFromBundledCache(),
-          getBundledCacheWatermarks(),
-        ]);
+      const [
+        { proposals: cachedProposals, incompleteProposalIds },
+        watermarks,
+      ] = await Promise.all([
+        extractProposalsFromBundledCache(),
+        getBundledCacheWatermarks(),
+      ]);
 
       setProgress(10);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -105,16 +117,19 @@ export function useMultiGovernorSearch({
         watermarks?.watermarks.constitutionalGovernor ?? 0;
 
       debug.search(
-        "extracted %d proposals from cache (%d active)",
+        "extracted %d proposals from cache (%d incomplete)",
         cachedCount,
-        activeProposalIds.size
+        incompleteProposalIds.size
       );
 
-      if (activeProposalIds.size > 0) {
+      if (incompleteProposalIds.size > 0) {
         const activeProposals = allProposals.filter((p) =>
-          activeProposalIds.has(p.id)
+          incompleteProposalIds.has(p.id)
         );
-        debug.search("refreshing %d active proposals", activeProposals.length);
+        debug.search(
+          "refreshing %d incomplete proposals",
+          activeProposals.length
+        );
 
         const refreshed = await refreshProposalStates(
           provider,
@@ -252,6 +267,109 @@ export function useMultiGovernorSearch({
       );
     });
   }, [queryClient, rpcUrl, daysToSearch, blockRange]);
+
+  // When the proposals page remounts with cached query data, the queryFn does not rerun because
+  // staleTime is Infinity. Refresh incomplete proposals in the background so queued
+  // or pending proposals can advance without forcing a full RPC re-search.
+  useEffect(() => {
+    if (!enabled || !providerReady || isFetching || !data) return;
+
+    const incompleteProposals = data.proposals.filter((proposal) =>
+      isIncompleteProposalState(proposal.state)
+    );
+
+    if (incompleteProposals.length === 0) {
+      lastIncompleteRefreshKeyRef.current = null;
+      return;
+    }
+
+    const refreshKey = incompleteProposals
+      .map(
+        (proposal) =>
+          `${proposal.id}:${proposal.contractAddress.toLowerCase()}:${proposal.state.toLowerCase()}`
+      )
+      .sort()
+      .join("|");
+
+    if (lastIncompleteRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    lastIncompleteRefreshKeyRef.current = refreshKey;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const provider = await createRpcProvider(rpcUrl);
+        const refreshed = await refreshProposalStates(
+          provider,
+          incompleteProposals
+        );
+
+        if (cancelled) return;
+
+        const refreshedMap = buildLookupMap(
+          refreshed,
+          (proposal) =>
+            `${proposal.id}:${proposal.contractAddress.toLowerCase()}`
+        );
+
+        queryClient.setQueryData<ProposalSearchData>(
+          proposalKeys.search(rpcUrl, daysToSearch, blockRange),
+          (prev) => {
+            if (!prev) return prev;
+
+            let changed = false;
+            const updatedProposals = prev.proposals.map((proposal) => {
+              const updated = refreshedMap.get(
+                `${proposal.id}:${proposal.contractAddress.toLowerCase()}`
+              );
+
+              if (!updated) return proposal;
+
+              const sameState = updated.state === proposal.state;
+              const sameVotes =
+                updated.votes?.forVotes === proposal.votes?.forVotes &&
+                updated.votes?.againstVotes === proposal.votes?.againstVotes &&
+                updated.votes?.abstainVotes === proposal.votes?.abstainVotes &&
+                updated.votes?.quorum === proposal.votes?.quorum;
+
+              if (sameState && sameVotes) {
+                return proposal;
+              }
+
+              changed = true;
+              return updated;
+            });
+
+            if (!changed) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              proposals: sortProposals(updatedProposals),
+            };
+          }
+        );
+      } catch (error) {
+        debug.search("background refresh failed: %O", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    blockRange,
+    data,
+    daysToSearch,
+    enabled,
+    isFetching,
+    providerReady,
+    queryClient,
+    rpcUrl,
+  ]);
 
   // Derive progress: if we already have data and aren't fetching, always 100
   const effectiveProgress = data && !isFetching ? 100 : progress;
