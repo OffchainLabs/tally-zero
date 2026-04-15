@@ -268,7 +268,7 @@ export function useMultiGovernorSearch({
     });
   }, [queryClient, rpcUrl, daysToSearch, blockRange]);
 
-  // When explore remounts with cached query data, the queryFn does not rerun because
+  // When the proposals page remounts with cached query data, the queryFn does not rerun because
   // staleTime is Infinity. Refresh incomplete proposals in the background so queued
   // or pending proposals can advance without forcing a full RPC re-search.
   useEffect(() => {

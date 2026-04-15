@@ -20,52 +20,15 @@ describe("parseUrlHash", () => {
       expect(parseUrlHash("#proposal")).toEqual({ type: null, id: null });
     });
 
+    it("returns null state for proposal hash", () => {
+      expect(parseUrlHash("#proposal/12345")).toEqual({
+        type: null,
+        id: null,
+      });
+    });
+
     it("returns null state for unknown type", () => {
       expect(parseUrlHash("#unknown/123")).toEqual({ type: null, id: null });
-    });
-  });
-
-  describe("proposal URLs", () => {
-    it("parses proposal without tab", () => {
-      expect(parseUrlHash("#proposal/12345")).toEqual({
-        type: "proposal",
-        id: "12345",
-        tab: undefined,
-      });
-    });
-
-    it("parses proposal with tab", () => {
-      expect(parseUrlHash("#proposal/12345/payload")).toEqual({
-        type: "proposal",
-        id: "12345",
-        tab: "payload",
-      });
-    });
-
-    it("parses proposal with lifecycle tab", () => {
-      expect(parseUrlHash("#proposal/12345/lifecycle")).toEqual({
-        type: "proposal",
-        id: "12345",
-        tab: "lifecycle",
-      });
-    });
-
-    it("handles long proposal IDs", () => {
-      const longId =
-        "53154361738756237993090798888616593723057470462495169047773178676976253908001";
-      expect(parseUrlHash(`#proposal/${longId}`)).toEqual({
-        type: "proposal",
-        id: longId,
-        tab: undefined,
-      });
-    });
-
-    it("handles hash without # prefix", () => {
-      expect(parseUrlHash("proposal/12345")).toEqual({
-        type: "proposal",
-        id: "12345",
-        tab: undefined,
-      });
     });
   });
 
@@ -144,37 +107,11 @@ describe("buildUrlHash", () => {
     });
 
     it("returns empty string for null id", () => {
-      expect(buildUrlHash({ type: "proposal", id: null })).toBe("");
+      expect(buildUrlHash({ type: "timelock", id: null })).toBe("");
     });
 
     it("returns empty string for both null", () => {
       expect(buildUrlHash({ type: null, id: "123" })).toBe("");
-    });
-  });
-
-  describe("proposal state", () => {
-    it("builds proposal hash without tab", () => {
-      expect(buildUrlHash({ type: "proposal", id: "12345" })).toBe(
-        "#proposal/12345"
-      );
-    });
-
-    it("builds proposal hash with tab", () => {
-      expect(
-        buildUrlHash({ type: "proposal", id: "12345", tab: "payload" })
-      ).toBe("#proposal/12345/payload");
-    });
-
-    it("omits description tab from URL", () => {
-      expect(
-        buildUrlHash({ type: "proposal", id: "12345", tab: "description" })
-      ).toBe("#proposal/12345");
-    });
-
-    it("builds with lifecycle tab", () => {
-      expect(
-        buildUrlHash({ type: "proposal", id: "12345", tab: "lifecycle" })
-      ).toBe("#proposal/12345/lifecycle");
     });
   });
 
@@ -214,13 +151,6 @@ describe("buildUrlHash", () => {
   });
 
   describe("round-trip consistency", () => {
-    it("parse and build are inverses for proposal", () => {
-      const original: UrlState = { type: "proposal", id: "12345", tab: "vote" };
-      const hash = buildUrlHash(original);
-      const parsed = parseUrlHash(hash);
-      expect(parsed).toEqual(original);
-    });
-
     it("parse and build are inverses for timelock", () => {
       const txHash =
         "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";

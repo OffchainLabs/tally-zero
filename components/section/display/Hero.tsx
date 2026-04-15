@@ -44,7 +44,7 @@ export default function Hero() {
 
         {/* CTA buttons */}
         <div className="flex flex-col items-center gap-4 sm:flex-row animate-fade-in-up [animation-delay:300ms]">
-          <Link href="/explore">
+          <Link href="/proposals">
             <Button size="lg" className="group relative overflow-hidden px-8">
               <span className="relative z-10 flex items-center">
                 Explore Proposals

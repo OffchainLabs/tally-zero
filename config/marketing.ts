@@ -10,7 +10,7 @@ export const marketingConfig: MarketingConfig = {
   mainNav: [
     {
       title: "Proposals",
-      href: "/explore",
+      href: "/proposals",
     },
     {
       title: "Elections",

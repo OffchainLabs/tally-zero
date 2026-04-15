@@ -124,9 +124,9 @@ export function ProposalPage({
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
       <div className="container max-w-screen-xl space-y-6">
         <Button asChild variant="ghost" size="sm" className="w-fit">
-          <Link href="/explore">
+          <Link href="/proposals">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Explore
+            Back to Proposals
           </Link>
         </Button>
 

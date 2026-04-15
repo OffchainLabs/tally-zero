@@ -178,7 +178,7 @@ export function ElectionContainer(): React.ReactElement {
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
         </div>
-        <DeepLinkHandler proposals={[]} />
+        <DeepLinkHandler />
       </>
     );
   }
@@ -256,7 +256,7 @@ export function ElectionContainer(): React.ReactElement {
         />
       )}
 
-      <DeepLinkHandler proposals={[]} />
+      <DeepLinkHandler />
     </div>
   );
 }

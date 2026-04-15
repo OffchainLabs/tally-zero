@@ -9,7 +9,7 @@ const features = [
     title: "Proposals & Voting",
     description:
       "Submit and vote on Arbitrum Improvement Proposals. Constitutional changes require 5% participation; non-constitutional require 3%.",
-    href: "/explore",
+    href: "/proposals",
   },
   {
     icon: Shield,
@@ -30,7 +30,7 @@ const features = [
     title: "DAO Treasury",
     description:
       "The DAO controls all $ARB tokens held in governance contracts. Funding proposals allocate resources to grow the ecosystem.",
-    href: "/explore",
+    href: "/proposals",
   },
   {
     icon: Scale,

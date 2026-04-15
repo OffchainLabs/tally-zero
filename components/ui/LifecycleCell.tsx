@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import Link from "next/link";
+import { memo } from "react";
 import { z } from "zod";
 
 import {
@@ -9,7 +10,6 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/HoverCard";
 import { proposalSchema } from "@/config/schema";
-import { useDeepLink } from "@/context/DeepLinkContext";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
 import {
   formatCurrentState,
@@ -17,6 +17,7 @@ import {
   getEffectiveDisplayState,
   getStateStyle,
 } from "@/lib/lifecycle-utils";
+import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
 import {
   CheckCircledIcon,
@@ -31,10 +32,9 @@ interface LifecycleCellProps {
 
 /**
  * LifecycleCell displays the proposal lifecycle status and opens
- * the stages tab via DeepLinkHandler when clicked.
+ * the stages tab when clicked.
  */
 export function LifecycleCell({ proposal }: LifecycleCellProps) {
-  const { openProposal } = useDeepLink();
   const normalizedProposalState = proposal.state.toLowerCase();
   const shouldTrackLifecycle =
     !!proposal.creationTxHash &&
@@ -63,10 +63,11 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   const currentState = proposalStages.result?.currentState || null;
   const { queuePosition, currentStageIndex, stages, isBackgroundRefreshing } =
     proposalStages;
-
-  const handleClick = useCallback(() => {
-    openProposal(proposal.id, proposal.contractAddress, "stages");
-  }, [proposal.id, proposal.contractAddress, openProposal]);
+  const stagesHref = buildProposalPath({
+    proposalId: proposal.id,
+    governorAddress: proposal.contractAddress,
+    tab: "stages",
+  });
 
   if (!proposal.creationTxHash) {
     return <span className="text-xs text-muted-foreground">-</span>;
@@ -74,12 +75,12 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
 
   if (!shouldTrackLifecycle) {
     return (
-      <button
-        onClick={handleClick}
+      <Link
+        href={stagesHref}
         className="text-left hover:opacity-80 transition-opacity"
       >
         <StaticLifecycleContent currentState={proposal.state} />
-      </button>
+      </Link>
     );
   }
 
@@ -100,12 +101,12 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   }
 
   return (
-    <button
-      onClick={handleClick}
+    <Link
+      href={stagesHref}
       className="text-left hover:opacity-80 transition-opacity"
     >
       {content}
-    </button>
+    </Link>
   );
 }
 

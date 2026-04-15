@@ -19,7 +19,7 @@ describe("marketing config", () => {
           (item) => item.title === "Proposals"
         );
         expect(proposals).toBeDefined();
-        expect(proposals?.href).toBe("/explore");
+        expect(proposals?.href).toBe("/proposals");
       });
 
       it("has Elections nav item", () => {

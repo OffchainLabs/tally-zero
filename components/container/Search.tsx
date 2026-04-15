@@ -179,7 +179,7 @@ export default function Search() {
                   : `${cacheInfo.freshCount} proposals fetched from RPC`}
               </p>
             )}
-            <DeepLinkHandler proposals={proposals} />
+            <DeepLinkHandler />
           </>
         )}
       </section>
