@@ -90,7 +90,7 @@ function ProposalTabsContent({
         <DescriptionWrapper asChild>
           <div
             className={cn(
-              "overflow-y-auto text-left glass-subtle rounded-lg p-4",
+              "overflow-y-auto text-left glass-subtle backdrop-blur rounded-lg p-4",
               maxHeight
             )}
           >
@@ -118,7 +118,7 @@ function ProposalTabsContent({
       >
         <div
           className={cn(
-            "overflow-y-auto glass-subtle rounded-lg p-4",
+            "overflow-y-auto glass-subtle backdrop-blur rounded-lg p-4",
             maxHeight
           )}
         >
@@ -151,7 +151,10 @@ function ProposalTabsContent({
           className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
         >
           <div
-            className={cn("overflow-y-auto glass-subtle rounded-lg", maxHeight)}
+            className={cn(
+              "overflow-y-auto glass-subtle backdrop-blur rounded-lg",
+              maxHeight
+            )}
           >
             <ErrorBoundary
               fallback={(error, reset) => (
@@ -177,7 +180,7 @@ function ProposalTabsContent({
         >
           <div
             className={cn(
-              "overflow-y-auto glass-subtle rounded-lg p-4",
+              "overflow-y-auto glass-subtle backdrop-blur rounded-lg p-4",
               maxHeight
             )}
           >
@@ -197,7 +200,7 @@ function ProposalTabsContent({
         >
           <div className="pt-4">
             {nerdMode && hasCalldataOverrides && (
-              <div className="mb-4 glass-subtle bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
+              <div className="mb-4 glass-subtle backdrop-blur bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
                 You have calldata overrides active in the Payload tab.
               </div>
             )}

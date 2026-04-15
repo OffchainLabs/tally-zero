@@ -66,7 +66,7 @@ export default function HowItWorks() {
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-arb-blue text-white font-bold text-sm shrink-0">
                     {step.number}
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 shrink-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl glass-subtle backdrop-blur bg-arb-blue/20 dark:bg-arb-blue/25 shrink-0">
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
                 </div>
@@ -81,7 +81,7 @@ export default function HowItWorks() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="glass-subtle"
+                      className="glass-subtle backdrop-blur"
                     >
                       {step.cta}
                       <ArrowRight className="ml-1 h-3 w-3" />
@@ -92,7 +92,7 @@ export default function HowItWorks() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="glass-subtle"
+                      className="glass-subtle backdrop-blur"
                     >
                       {step.cta}
                       <ArrowRight className="ml-1 h-3 w-3" />

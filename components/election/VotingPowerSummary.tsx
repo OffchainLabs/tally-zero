@@ -23,7 +23,7 @@ export function VotingPowerSummary({
       : undefined;
 
   return (
-    <div className="glass-subtle rounded-lg p-3 space-y-1">
+    <div className="glass-subtle backdrop-blur rounded-lg p-3 space-y-1">
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Total Voting Power</span>
         <span className="font-semibold">

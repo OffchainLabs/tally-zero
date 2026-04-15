@@ -80,7 +80,7 @@ export default function DaoValues() {
                 key={value.title}
                 className="glass rounded-xl p-5 space-y-3 transition-all duration-300 hover:scale-[1.02] flex flex-col"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl glass-subtle backdrop-blur bg-arb-blue/20 dark:bg-arb-blue/25">
                   <Icon className="h-5 w-5 text-primary" />
                 </div>
                 <h3 className="font-semibold tracking-tight text-sm">

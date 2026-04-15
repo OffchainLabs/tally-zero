@@ -31,7 +31,7 @@ export function RpcTab({
 }: RpcTabProps) {
   return (
     <div className="mt-0 space-y-6">
-      <div className="glass-subtle rounded-lg p-4 space-y-4 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-4 transition-all duration-200 hover:shadow-md">
         <FormInputField
           id="l2-rpc"
           label="Arbitrum RPC URL"
@@ -53,7 +53,7 @@ export function RpcTab({
         />
       </div>
 
-      <div className="glass-subtle rounded-lg p-4 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 transition-all duration-200 hover:shadow-md">
         <CollapsibleSection title="Block Range Settings">
           <div className="space-y-4">
             <FormInputField

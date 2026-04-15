@@ -20,7 +20,7 @@ export function CacheManagementSection({
   onClearCache,
 }: CacheManagementSectionProps) {
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
       <Label className="text-sm font-medium">Cache Management</Label>
       <div className="pt-2 border-t border-[var(--glass-border)] space-y-2">
         <div className="flex justify-between text-sm">

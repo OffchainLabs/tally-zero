@@ -35,7 +35,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
       })}
       className={cn(
         "block w-full text-left p-4 rounded-xl min-h-[88px]",
-        "glass-subtle",
+        "glass-subtle backdrop-blur",
         "hover:bg-white/40 dark:hover:bg-white/10",
         "hover:shadow-lg hover:shadow-primary/5",
         "transition-all duration-200",

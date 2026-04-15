@@ -50,7 +50,7 @@ export function CopyableText({
       className={cn(
         "inline-flex items-center gap-1.5 group cursor-pointer transition-all duration-200 text-left",
         "hover:text-primary",
-        showCopyButton && "glass-subtle rounded-lg px-2.5 py-1.5",
+        showCopyButton && "glass-subtle backdrop-blur rounded-lg px-2.5 py-1.5",
         mono && "font-mono",
         className
       )}

@@ -28,7 +28,7 @@ export function TenderlyConfigSection({
   setTenderlyAccessTokenInput,
 }: TenderlyConfigSectionProps) {
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
       <div>
         <Label className="text-sm font-medium">Tenderly Simulation</Label>
         <p className="text-xs text-muted-foreground mt-1">

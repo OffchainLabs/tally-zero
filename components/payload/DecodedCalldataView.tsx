@@ -135,7 +135,7 @@ export function ParameterView({
 
       {/* Nested single bytes calldata */}
       {hasNestedSingle && (
-        <div className="ml-2 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-blue-500/40 glass-subtle rounded-lg p-2 sm:p-3 mt-2 transition-all duration-200 hover:shadow-sm">
+        <div className="ml-2 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-blue-500/40 glass-subtle backdrop-blur rounded-lg p-2 sm:p-3 mt-2 transition-all duration-200 hover:shadow-sm">
           <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 block mb-2 uppercase tracking-wide">
             Nested call
           </span>
@@ -189,7 +189,7 @@ export function ParameterView({
               <div
                 key={nestedIdx}
                 className={cn(
-                  "pl-2 sm:pl-3 border-l-2 glass-subtle rounded-lg p-2 sm:p-3 transition-all duration-200 hover:shadow-sm",
+                  "pl-2 sm:pl-3 border-l-2 glass-subtle backdrop-blur rounded-lg p-2 sm:p-3 transition-all duration-200 hover:shadow-sm",
                   isRetryableTicket
                     ? "border-l-amber-500/50"
                     : "border-l-arb-blue/50"

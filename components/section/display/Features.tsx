@@ -70,7 +70,7 @@ export default function Features() {
               className="floating-card glow-border group relative overflow-hidden p-6"
             >
               <div className="flex h-[180px] flex-col justify-between">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 transition-colors duration-300 group-hover:bg-arb-blue/30">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl glass-subtle backdrop-blur bg-arb-blue/20 dark:bg-arb-blue/25 transition-colors duration-300 group-hover:bg-arb-blue/30">
                   <Icon className="h-8 w-8 text-primary transition-transform duration-300 group-hover:scale-110" />
                 </div>
                 <div className="space-y-2">

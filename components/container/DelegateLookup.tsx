@@ -143,7 +143,7 @@ function DelegateInfoCard({
   }
 
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-4">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold">Delegate Info</h4>
         <div className="flex items-center gap-2">

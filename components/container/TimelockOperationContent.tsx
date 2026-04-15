@@ -283,7 +283,7 @@ function OperationSelector({ operations, onSelect }: OperationSelectorProps) {
         <button
           key={op.operationId}
           onClick={() => onSelect(op)}
-          className="w-full p-3 text-left rounded-lg glass-subtle hover:bg-muted/50 transition-all duration-200"
+          className="w-full p-3 text-left rounded-lg glass-subtle backdrop-blur hover:bg-muted/50 transition-all duration-200"
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Operation {idx + 1}</span>
@@ -320,7 +320,7 @@ function OperationHeader({
   const arbiscanUrl = `https://arbiscan.io/tx/${operation.txHash}`;
 
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-3">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {onBack && (

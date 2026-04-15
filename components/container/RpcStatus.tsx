@@ -72,7 +72,7 @@ const StatusIndicator = memo(function StatusIndicator({
     <div
       className={cn(
         "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs",
-        "glass-subtle",
+        "glass-subtle backdrop-blur",
         config.bgColor,
         config.color
       )}
@@ -109,7 +109,7 @@ export default function RpcStatus({
   const totalCount = results.length;
   const hasIssues =
     summary && (!summary.allHealthy || !summary.requiredHealthy);
-  
+
   // Check for degraded RPCs (e.g., lack of archive data support)
   const degradedRpcs = results.filter((r) => r.status === "degraded");
   const hasDegradedRpcs = degradedRpcs.length > 0;
@@ -118,10 +118,10 @@ export default function RpcStatus({
   useEffect(() => {
     if (hasDegradedRpcs && !isChecking && !shownToastRef.current) {
       shownToastRef.current = true;
-      
+
       const rpcNames = degradedRpcs.map((rpc) => rpc.name).join(", ");
-      const hasArchiveIssue = degradedRpcs.some(r => !r.archiveDataSupported);
-      
+      const hasArchiveIssue = degradedRpcs.some((r) => !r.archiveDataSupported);
+
       toast.warning("⚠️ Degraded RPC Detected", {
         description: `${rpcNames} ${degradedRpcs.length === 1 ? "has" : "have"} limited capabilities${hasArchiveIssue ? " (no archive data support)" : ""}. Consider providing an alternative RPC URL in settings.`,
         duration: 8000,
@@ -129,7 +129,9 @@ export default function RpcStatus({
           label: "Settings",
           onClick: () => {
             // Open settings sheet - we'll need to trigger this via context or event
-            document.querySelector<HTMLButtonElement>('[aria-label="Settings"]')?.click();
+            document
+              .querySelector<HTMLButtonElement>('[aria-label="Settings"]')
+              ?.click();
           },
         },
       });
@@ -148,7 +150,7 @@ export default function RpcStatus({
             <span>RPC Status</span>
             <span
               className={cn(
-                "px-2 py-1 rounded-md text-[10px] font-bold glass-subtle",
+                "px-2 py-1 rounded-md text-[10px] font-bold glass-subtle backdrop-blur",
                 hasIssues
                   ? "bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/25 dark:text-yellow-400"
                   : "bg-green-500/20 text-green-700 dark:bg-green-500/25 dark:text-green-400"
@@ -194,26 +196,29 @@ export default function RpcStatus({
           </div>
 
           {summary && !summary.requiredHealthy && (
-            <p className="text-xs text-red-700 dark:text-red-400 glass-subtle rounded-md px-3 py-2 bg-red-500/10 dark:bg-red-500/15">
+            <p className="text-xs text-red-700 dark:text-red-400 glass-subtle backdrop-blur rounded-md px-3 py-2 bg-red-500/10 dark:bg-red-500/15">
               Arbitrum One RPC is required for proposal search
             </p>
           )}
 
           {summary && summary.requiredHealthy && !summary.allHealthy && (
-            <p className="text-xs text-yellow-700 dark:text-yellow-400 glass-subtle rounded-md px-3 py-2 bg-yellow-500/10 dark:bg-yellow-500/15">
+            <p className="text-xs text-yellow-700 dark:text-yellow-400 glass-subtle backdrop-blur rounded-md px-3 py-2 bg-yellow-500/10 dark:bg-yellow-500/15">
               Some RPCs are unavailable. Lifecycle tracking may be incomplete.
             </p>
           )}
 
           {hasDegradedRpcs && (
-            <div className="text-xs glass-subtle rounded-md px-3 py-2 bg-orange-500/10 dark:bg-orange-500/15 space-y-1">
+            <div className="text-xs glass-subtle backdrop-blur rounded-md px-3 py-2 bg-orange-500/10 dark:bg-orange-500/15 space-y-1">
               <p className="text-orange-700 dark:text-orange-400 font-medium">
                 ⚠️ Degraded RPC detected
               </p>
               <p className="text-orange-700/90 dark:text-orange-400/90">
-                {degradedRpcs.map((rpc) => rpc.name).join(", ")} {degradedRpcs.length === 1 ? "has" : "have"} limited capabilities
-                {degradedRpcs.some(r => !r.archiveDataSupported) && " (no archive data support)"}.
-                Consider providing an alternative RPC URL in settings.
+                {degradedRpcs.map((rpc) => rpc.name).join(", ")}{" "}
+                {degradedRpcs.length === 1 ? "has" : "have"} limited
+                capabilities
+                {degradedRpcs.some((r) => !r.archiveDataSupported) &&
+                  " (no archive data support)"}
+                . Consider providing an alternative RPC URL in settings.
               </p>
             </div>
           )}

@@ -1,7 +1,6 @@
 "use client";
 
 import { ColumnDef, Row } from "@tanstack/react-table";
-import Link from "next/link";
 
 import { ProposerCell } from "@components/container/ProposerCell";
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
@@ -16,57 +15,32 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 import { LifecycleCell } from "@components/ui/LifecycleCell";
-import { StatusBadgeGlass } from "@components/ui/StatusBadgeGlass";
 import { VoteDisplay } from "@components/ui/VoteDisplay";
 
 import { sumVoteCounts } from "@/lib/vote-utils";
-import { ParsedProposal, ProposalStateName } from "@/types/proposal";
+import { ParsedProposal } from "@/types/proposal";
 
 export const columns: ColumnDef<ParsedProposal>[] = [
   {
-    accessorKey: "id",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="ID" />
-    ),
-    cell: ({ row }: { row: Row<ParsedProposal> }) => {
-      const id = row.getValue("id") as string;
-
-      return id.length < 6 ? (
-        <span className="text-xs text-foreground/90 font-mono">{id}</span>
-      ) : (
-        <HoverCard>
-          <HoverCardTrigger asChild>
-            <Link
-              href={`/proposal/${id}`}
-              className="underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs text-foreground/90 font-mono"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {`${id.substring(0, 5)}...${id.substring(id.length - 2)}`}
-            </Link>
-          </HoverCardTrigger>
-          <HoverCardContent className="w-full font-mono text-xs">
-            {id}
-          </HoverCardContent>
-        </HoverCard>
-      );
-    },
-    size: 70,
-    enableHiding: false,
-  },
-  {
     accessorKey: "proposer",
+    meta: {
+      label: "Proposer",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Proposer" />
     ),
     cell: ({ row }) => (
-      <div className="flex space-x-2">
+      <div className="flex space-x-2 shrink-0">
         <ProposerCell proposer={row.getValue("proposer")} />
       </div>
     ),
-    size: 120,
+    size: 140,
   },
   {
     accessorKey: "description",
+    meta: {
+      label: "Proposal",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Proposal" />
     ),
@@ -81,6 +55,9 @@ export const columns: ColumnDef<ParsedProposal>[] = [
   },
   {
     accessorKey: "governorName",
+    meta: {
+      label: "Governor",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Governor" />
     ),
@@ -92,24 +69,10 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     size: 90,
   },
   {
-    accessorKey: "state",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="State" />
-    ),
-    cell: ({ row }: { row: Row<ParsedProposal> }) => {
-      const state = row.getValue("state") as ProposalStateName;
-      if (!state) return null;
-
-      return <StatusBadgeGlass state={state} />;
-    },
-    filterFn: (row, id, value: string[]) => {
-      const rowState = (row.getValue(id) as string)?.toLowerCase();
-      return value.some((v) => v.toLowerCase() === rowState);
-    },
-    size: 90,
-  },
-  {
     accessorKey: "lifecycle",
+    meta: {
+      label: "Status",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
@@ -120,6 +83,9 @@ export const columns: ColumnDef<ParsedProposal>[] = [
   },
   {
     accessorKey: "votes",
+    meta: {
+      label: "Votes",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Votes" />
     ),

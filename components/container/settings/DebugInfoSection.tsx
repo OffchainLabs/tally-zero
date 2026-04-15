@@ -28,7 +28,7 @@ export function DebugInfoSection({ storedSettings }: DebugInfoSectionProps) {
   } = storedSettings;
 
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
       <Label className="text-sm font-medium">Debug Info</Label>
       <div className="pt-2 border-t border-[var(--glass-border)] space-y-2 font-mono text-xs">
         <div className="flex justify-between">

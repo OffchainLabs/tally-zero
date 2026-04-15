@@ -37,7 +37,7 @@ function DelegateSearchSkeleton() {
         ))}
       </div>
       {/* Toolbar skeleton */}
-      <div className="glass-subtle h-12 animate-pulse rounded-xl" />
+      <div className="glass-subtle backdrop-blur h-12 animate-pulse rounded-xl" />
       {/* Table skeleton */}
       <div className="glass h-96 animate-pulse rounded-2xl" />
     </div>

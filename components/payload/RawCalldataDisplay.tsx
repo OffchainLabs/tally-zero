@@ -34,7 +34,7 @@ export function RawCalldataDisplay({
   return (
     <div className="space-y-3">
       <div className="relative group">
-        <code className="text-xs font-mono break-all block glass-subtle rounded-lg p-3 pr-10 max-h-28 overflow-y-auto transition-all duration-200">
+        <code className="text-xs font-mono break-all block glass-subtle backdrop-blur rounded-lg p-3 pr-10 max-h-28 overflow-y-auto transition-all duration-200">
           {calldata}
         </code>
         <button

@@ -18,7 +18,7 @@ export function BackupRestoreSection({
   onImportSettings,
 }: BackupRestoreSectionProps) {
   return (
-    <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+    <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
       <Label className="text-sm font-medium">Backup & Restore</Label>
       <div className="grid grid-cols-2 gap-2">
         <Button

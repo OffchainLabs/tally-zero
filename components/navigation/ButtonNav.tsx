@@ -60,7 +60,7 @@ export function ButtonNav() {
   return (
     <nav className="flex-shrink-0">
       {isAppPage ? (
-        <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle rounded-xl p-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle backdrop-blur rounded-xl p-2">
           <SettingsSheet />
           {loading ? (
             <div className="flex items-center gap-1 sm:gap-2">

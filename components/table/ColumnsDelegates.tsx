@@ -28,6 +28,9 @@ declare module "@tanstack/react-table" {
 export const columns: ColumnDef<DelegateInfo>[] = [
   {
     id: "rank",
+    meta: {
+      label: "Rank",
+    },
     header: "Rank",
     cell: ({ row }: { row: Row<DelegateInfo> }) => {
       return <span className="font-medium">{row.index + 1}</span>;
@@ -37,6 +40,9 @@ export const columns: ColumnDef<DelegateInfo>[] = [
   },
   {
     accessorKey: "address",
+    meta: {
+      label: "Address",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Address" />
     ),
@@ -85,6 +91,9 @@ export const columns: ColumnDef<DelegateInfo>[] = [
   },
   {
     accessorKey: "votingPower",
+    meta: {
+      label: "Voting Power",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Voting Power" />
     ),
@@ -112,6 +121,9 @@ export const columns: ColumnDef<DelegateInfo>[] = [
   },
   {
     id: "percentage",
+    meta: {
+      label: "% of Total",
+    },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="% of Total" />
     ),

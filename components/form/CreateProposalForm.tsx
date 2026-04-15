@@ -280,7 +280,7 @@ function GovernorPicker({ value, onChange, disabled }: GovernorPickerProps) {
                 htmlFor={`gov-${type}`}
                 className={cn(
                   "flex gap-3 rounded-xl border p-4 cursor-pointer transition-all",
-                  "glass-subtle hover:border-primary/50",
+                  "glass-subtle backdrop-blur hover:border-primary/50",
                   selected
                     ? "border-primary/70 ring-1 ring-primary/40"
                     : "border-border/40"
@@ -442,7 +442,7 @@ function ActionsBuilder({
           return (
             <div
               key={index}
-              className="rounded-xl border border-border/40 glass-subtle p-4 space-y-3"
+              className="rounded-xl border border-border/40 glass-subtle backdrop-blur p-4 space-y-3"
             >
               <div className="flex items-center justify-between">
                 <div className="text-xs font-semibold text-muted-foreground">
@@ -556,7 +556,7 @@ function DescriptionEditor({
               placeholder={`# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported.`}
               rows={12}
               disabled={disabled}
-              className="flex w-full rounded-md border glass-subtle border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
+              className="flex w-full rounded-md border glass-subtle backdrop-blur border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
             />
             {showError && (
               <p className="text-xs text-red-400 mt-2">
@@ -565,7 +565,7 @@ function DescriptionEditor({
             )}
           </TabsContent>
           <TabsContent value="preview" className="mt-3">
-            <div className="glass-subtle rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary">
+            <div className="glass-subtle backdrop-blur rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary">
               {value.trim() ? (
                 <ReactMarkdown
                   rehypePlugins={[

@@ -15,7 +15,7 @@ export default function Hero() {
 
       <div className="container relative z-10 flex max-w-[64rem] flex-col items-center gap-8 text-center">
         {/* Badge */}
-        <div className="glass-subtle inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-arb-blue dark:text-arb-teal animate-fade-in">
+        <div className="glass-subtle backdrop-blur inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-arb-blue dark:text-arb-teal animate-fade-in">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-arb-blue opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-arb-blue dark:bg-arb-teal" />
@@ -56,7 +56,7 @@ export default function Hero() {
             <Button
               variant="outline"
               size="lg"
-              className="glass-subtle group border-arb-blue/30 hover:border-arb-blue/50 dark:border-arb-blue/30 dark:hover:border-arb-teal/40 px-8"
+              className="glass-subtle backdrop-blur group border-arb-blue/30 hover:border-arb-blue/50 dark:border-arb-blue/30 dark:hover:border-arb-teal/40 px-8"
             >
               <Icons.shield className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" />
               Security Council Elections

@@ -6,7 +6,7 @@ export function SiteFooter({ className }: React.HTMLAttributes<HTMLElement>) {
   return (
     <footer
       className={cn(
-        "relative glass-subtle rounded-t-xl",
+        "relative glass-subtle backdrop-blur rounded-t-xl",
         "border-t border-border/50",
         className
       )}

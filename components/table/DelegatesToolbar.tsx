@@ -79,7 +79,7 @@ export function DelegatesToolbar<TData>({
             onChange={handleMinPowerChange}
             className={cn(
               "h-12 w-full sm:w-[200px] text-base",
-              "glass-subtle rounded-xl",
+              "glass-subtle backdrop-blur rounded-xl",
               "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
               "placeholder:text-muted-foreground/40"
             )}

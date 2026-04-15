@@ -16,8 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@components/ui/DropdownMenu";
 
-interface DataTableColumnHeaderProps<TData, TValue>
-  extends React.HTMLAttributes<HTMLDivElement> {
+interface DataTableColumnHeaderProps<
+  TData,
+  TValue,
+> extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
   title: string;
 }
@@ -50,7 +52,10 @@ export function DataTableColumnHeader<TData, TValue>({
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="glass-subtle rounded-lg">
+        <DropdownMenuContent
+          align="start"
+          className="glass-subtle backdrop-blur rounded-lg"
+        >
           <DropdownMenuItem
             onClick={() => column.toggleSorting(false)}
             className="hover:bg-white/20 dark:hover:bg-white/10 transition-colors"

@@ -29,7 +29,7 @@ export function GeneralTab({
 }: GeneralTabProps) {
   return (
     <div className="mt-0 space-y-6">
-      <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
         <Label className="text-sm font-medium">Theme</Label>
         <div className="grid grid-cols-3 gap-2">
           {(["light", "dark", "system"] as const).map((t) => (
@@ -47,7 +47,7 @@ export function GeneralTab({
         </div>
       </div>
 
-      <div className="glass-subtle rounded-lg p-4 space-y-2 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-2 transition-all duration-200 hover:shadow-md">
         <Label htmlFor="days-search">Days to Search</Label>
         <Input
           id="days-search"

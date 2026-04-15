@@ -53,17 +53,21 @@ export function DataTable<TData, TValue>({
   const { isMobile, sm, md, lg, xl } = useBreakpoint();
 
   // Compute column visibility based on breakpoints
-  const columnVisibility = React.useMemo<VisibilityState>(
+  const defaultColumnVisibility = React.useMemo<VisibilityState>(
     () => ({
       proposer: xl,
       votes: lg,
       governorName: md,
-      id: sm,
-      state: false, // Hidden - lifecycle/status column shows similar info
       lifecycle: sm,
     }),
     [xl, lg, md, sm]
   );
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>(defaultColumnVisibility);
+
+  React.useEffect(() => {
+    setColumnVisibility(defaultColumnVisibility);
+  }, [defaultColumnVisibility]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -79,6 +83,7 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
