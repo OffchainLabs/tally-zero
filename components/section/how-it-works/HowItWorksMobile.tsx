@@ -45,7 +45,7 @@ export default function HowItWorksMobile(steps: StepType[]) {
 
           {/* Image container with glass styling */}
           <div className="glass relative mx-auto mt-8 max-w-2xl overflow-hidden rounded-2xl p-4">
-            <div className="overflow-hidden rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 shadow-lg shadow-slate-900/5 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
+            <div className="overflow-hidden rounded-xl glass-subtle backdrop-blur bg-arb-blue/20 dark:bg-arb-blue/25 shadow-lg shadow-slate-900/5 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
               <Image
                 className="w-full"
                 src={step.image}

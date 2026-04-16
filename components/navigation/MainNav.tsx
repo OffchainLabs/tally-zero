@@ -29,7 +29,7 @@ export function MainNav({ items, children }: MainNavProps) {
         </span>
       </Link>
       {items?.length ? (
-        <nav className="hidden gap-1 md:flex glass-subtle rounded-xl p-1">
+        <nav className="hidden gap-1 md:flex glass-subtle backdrop-blur rounded-xl p-1">
           {items?.map((item, index) => (
             <Link
               key={index}

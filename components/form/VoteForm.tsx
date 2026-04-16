@@ -117,7 +117,7 @@ export default function VoteForm({
           <CardContent className="grid gap-1">
             {/* Voting Power Display */}
             {isConnected && (
-              <div className="mb-4 p-3 glass-subtle rounded-lg">
+              <div className="mb-4 p-3 glass-subtle backdrop-blur rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     Your Voting Power (at snapshot)

@@ -4,7 +4,11 @@ import Link from "next/link";
 import { memo } from "react";
 
 import { buildProposalPath } from "@/lib/proposal-url";
-import { extractProposalTitle, truncateText } from "@/lib/text-utils";
+import {
+  extractProposalTitle,
+  truncateMiddle,
+  truncateText,
+} from "@/lib/text-utils";
 import { ParsedProposal } from "@/types/proposal";
 
 export const DescriptionCell = memo(function DescriptionCell({
@@ -32,6 +36,7 @@ export function ClickableDescriptionCell({
   defaultTab?: "description" | "payload" | "stages" | "vote";
 }) {
   const plainText = truncateText(extractProposalTitle(proposal.description));
+  const abbreviatedProposalId = truncateMiddle(proposal.id, 6, 6);
 
   return (
     <Link
@@ -40,10 +45,13 @@ export function ClickableDescriptionCell({
         governorAddress: proposal.contractAddress,
         tab: defaultTab,
       })}
-      className="block w-full truncate font-medium text-foreground text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+      className="block w-full text-left text-foreground hover:text-primary hover:underline transition-colors cursor-pointer"
       title="Click to view full description"
     >
-      {plainText}
+      <span className="block truncate font-medium">{plainText}</span>
+      <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
+        ID: {abbreviatedProposalId}
+      </span>
     </Link>
   );
 }

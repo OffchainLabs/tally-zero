@@ -78,7 +78,7 @@ export const StageItem = memo(function StageItem({
               ? "bg-green-500/20 dark:bg-green-500/25"
               : status === "PENDING"
                 ? "bg-yellow-500/20 dark:bg-yellow-500/25"
-                : "glass-subtle"
+                : "glass-subtle backdrop-blur"
           )}
         >
           {isActive || isRefreshing ? (
@@ -206,7 +206,7 @@ const StageHeader = memo(function StageHeader({
       {canRefresh && (
         <button
           onClick={() => onRefresh(stageIndex)}
-          className="p-1 rounded-full glass-subtle hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all duration-200"
+          className="p-1 rounded-full glass-subtle backdrop-blur hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all duration-200"
           title="Re-track from this stage"
         >
           <ReloadIcon className="h-3.5 w-3.5" />
@@ -235,7 +235,7 @@ const EstimatedCompletionDisplay = memo(function EstimatedCompletionDisplay({
   proposalId,
 }: EstimatedCompletionDisplayProps) {
   return (
-    <div className="text-xs text-muted-foreground mt-2 space-y-1 glass-subtle rounded-lg px-3 py-2">
+    <div className="text-xs text-muted-foreground mt-2 space-y-1 glass-subtle backdrop-blur rounded-lg px-3 py-2">
       {metadata?.estimatedDays !== undefined && metadata.estimatedDays > 0 && (
         <p className="italic">
           Est. duration: {metadata.estimatedDays} day

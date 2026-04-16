@@ -63,7 +63,7 @@ export const VotingStageContent = memo(function VotingStageContent({
   return (
     <div className="mt-3 space-y-3">
       {votingTimeRange && (
-        <div className="space-y-2 glass-subtle rounded-lg px-3 py-2">
+        <div className="space-y-2 glass-subtle backdrop-blur rounded-lg px-3 py-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-muted-foreground">
               Voting Period
@@ -101,7 +101,7 @@ export const VotingStageContent = memo(function VotingStageContent({
             ) && (
               <Badge
                 variant="outline"
-                className="text-xs py-0 px-2 glass-subtle"
+                className="text-xs py-0 px-2 glass-subtle backdrop-blur"
               >
                 +2d extension possible
               </Badge>
@@ -132,7 +132,7 @@ export const VotingStageContent = memo(function VotingStageContent({
       )}
 
       {estimatedCompletion && (
-        <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5 glass-subtle rounded-lg px-3 py-2">
+        <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5 glass-subtle backdrop-blur rounded-lg px-3 py-2">
           <span>
             Est. completion: {formatEstimatedCompletion(estimatedCompletion)}
           </span>

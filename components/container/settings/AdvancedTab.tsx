@@ -80,7 +80,7 @@ export function AdvancedTab({
   return (
     <div className="mt-0 space-y-6">
       {/* Cache Duration */}
-      <div className="glass-subtle rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3 transition-all duration-200 hover:shadow-md">
         <Label className="text-sm font-medium">Cache Duration</Label>
         <div className="grid grid-cols-3 gap-2">
           {CACHE_TTL_OPTIONS.map((option) => (
@@ -156,7 +156,7 @@ export function AdvancedTab({
       />
 
       {/* Danger Zone */}
-      <div className="glass-subtle rounded-lg p-4 transition-all duration-200 hover:shadow-md">
+      <div className="glass-subtle backdrop-blur rounded-lg p-4 transition-all duration-200 hover:shadow-md">
         <CollapsibleSection
           title="Danger Zone"
           icon={<AlertTriangle className="w-4 h-4" />}
@@ -208,7 +208,7 @@ export function AdvancedTab({
 
       {/* Nerd Mode Tools */}
       {nerdMode && (
-        <div className="glass-subtle rounded-lg p-4 space-y-4 transition-all duration-200 hover:shadow-md">
+        <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-4 transition-all duration-200 hover:shadow-md">
           <Label className="text-sm font-medium">Governance Tools</Label>
           <div className="space-y-4">
             {/* Delegate Lookup */}

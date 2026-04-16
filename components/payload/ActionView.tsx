@@ -84,7 +84,7 @@ export function ActionView({
   return (
     <div
       className={cn(
-        "glass-subtle rounded-xl p-3 sm:p-4 space-y-2 sm:space-y-3 text-sm transition-all duration-200 hover:shadow-md",
+        "glass-subtle backdrop-blur rounded-xl p-3 sm:p-4 space-y-2 sm:space-y-3 text-sm transition-all duration-200 hover:shadow-md",
         isOverridden && "border-l-4 border-l-amber-500"
       )}
     >
@@ -149,7 +149,7 @@ export function ActionView({
 
           {/* Editing mode */}
           {nerdMode && isEditing ? (
-            <div className="glass-subtle rounded-lg p-3 space-y-3">
+            <div className="glass-subtle backdrop-blur rounded-lg p-3 space-y-3">
               <Label className="text-xs font-medium">Edit Calldata (hex)</Label>
               <Input
                 value={editValue}

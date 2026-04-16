@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { Table } from "@tanstack/react-table";
@@ -7,6 +9,7 @@ import { Table } from "@tanstack/react-table";
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
 import { DataTableViewOptions } from "@components/table/ViewOptions";
+import { Button } from "@components/ui/Button";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -41,18 +44,18 @@ export function DataTableToolbar<TData>({
           className="w-full sm:w-[150px] lg:w-[450px]"
         />
 
-        {/* {table.getColumn("state") && (
-          <DataTableFacetedFilter
-            column={table.getColumn("state")}
-            title="State"
-            options={states}
-          />
-        )} */}
-
         {isFiltered && <ToolbarResetButton onClick={handleReset} />}
       </div>
-      <div className="hidden sm:block">
-        <DataTableViewOptions table={table} />
+      <div className="flex items-center gap-2">
+        <Button asChild size="sm" variant="default">
+          <Link href="/proposal/new">
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New Proposal
+          </Link>
+        </Button>
+        <div className="hidden sm:block">
+          <DataTableViewOptions table={table} />
+        </div>
       </div>
     </div>
   );

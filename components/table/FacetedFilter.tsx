@@ -49,7 +49,7 @@ export function DataTableFacetedFilter<TData, TValue>({
           size="sm"
           className={cn(
             "h-11 sm:h-12 min-w-[44px] px-2 sm:px-3 rounded-xl",
-            "glass-subtle",
+            "glass-subtle backdrop-blur",
             "hover:bg-white/30 dark:hover:bg-white/10",
             selectedValues.size > 0 && "border-primary/50"
           )}

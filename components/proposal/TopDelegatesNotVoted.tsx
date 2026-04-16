@@ -55,7 +55,7 @@ const DelegateBadge = memo(function DelegateBadge({
           <div className="text-sm font-semibold">
             {delegate.label || "Delegate"}
           </div>
-          <div className="font-mono text-xs text-muted-foreground break-all glass-subtle rounded-lg px-2 py-1.5">
+          <div className="font-mono text-xs text-muted-foreground break-all glass-subtle backdrop-blur rounded-lg px-2 py-1.5">
             {delegate.address}
           </div>
           <div className="text-xs text-muted-foreground">
@@ -85,7 +85,7 @@ export function TopDelegatesNotVoted({
 
   if (isLoading) {
     return (
-      <div className="glass-subtle rounded-xl px-3 py-2 mt-3">
+      <div className="glass-subtle backdrop-blur rounded-xl px-3 py-2 mt-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground font-medium">
             Didn&apos;t vote:
@@ -104,7 +104,7 @@ export function TopDelegatesNotVoted({
 
   if (allTopDelegatesVoted) {
     return (
-      <div className="glass-subtle rounded-xl px-3 py-2 mt-3">
+      <div className="glass-subtle backdrop-blur rounded-xl px-3 py-2 mt-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant="secondary"
@@ -118,7 +118,7 @@ export function TopDelegatesNotVoted({
   }
 
   return (
-    <div className="glass-subtle rounded-xl px-3 py-2 mt-3">
+    <div className="glass-subtle backdrop-blur rounded-xl px-3 py-2 mt-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground font-medium">
           Didn&apos;t vote:

@@ -51,7 +51,7 @@ export function MobileNav({ items, children }: MobileNavProps) {
           </SheetTitle>
         </SheetHeader>
 
-        <nav className="flex flex-col gap-1 glass-subtle rounded-xl p-3">
+        <nav className="flex flex-col gap-1 glass-subtle backdrop-blur rounded-xl p-3">
           {items.map((item, index) => (
             <Link
               key={index}

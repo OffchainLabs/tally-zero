@@ -15,6 +15,11 @@ blockExoticSubdeps: true
 # Gives time for malware to be detected before installation.
 minimumReleaseAge: 1440
 
+# Exempt first-party packages we publish ourselves from the release age gate,
+# so fresh prereleases aren't blocked by the 24h quarantine.
+minimumReleaseAgeExclude:
+  - "@gzeoneth/gov-tracker"
+
 # Prevent installing package versions with decreased trust levels
 # compared to previously published versions.
 trustPolicy: no-downgrade

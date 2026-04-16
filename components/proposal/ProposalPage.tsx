@@ -21,7 +21,10 @@ import {
   parseGovernorId,
   type ProposalTab,
 } from "@/lib/proposal-url";
-import { mergeProposalData } from "@/lib/proposal-utils";
+import {
+  isIncompleteProposalState,
+  mergeProposalData,
+} from "@/lib/proposal-utils";
 import { findStateByValue } from "@/lib/state-utils";
 import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { cn } from "@/lib/utils";
@@ -50,13 +53,14 @@ export function ProposalPage({
     [requestedGovId]
   );
   const activeTab = normalizeProposalTab(requestedTab) ?? "description";
-  const shouldFetchLiveProposal = useMemo(() => {
-    if (!initialProposal) return true;
+  const stableInitialProposal = useMemo(() => {
+    if (!initialProposal) return null;
 
-    return (
-      initialProposal.state === "Queued" || initialProposal.state === "Pending"
-    );
+    return isIncompleteProposalState(initialProposal.state)
+      ? null
+      : initialProposal;
   }, [initialProposal]);
+  const shouldFetchLiveProposal = stableInitialProposal === null;
 
   const {
     proposal: fetchedProposal,
@@ -68,10 +72,11 @@ export function ProposalPage({
     enabled: shouldFetchLiveProposal,
   });
   const proposal = useMemo(
-    () => mergeProposalData(initialProposal, fetchedProposal),
-    [initialProposal, fetchedProposal]
+    () => mergeProposalData(stableInitialProposal, fetchedProposal),
+    [stableInitialProposal, fetchedProposal]
   );
-  const isLoading = !proposal && isLiveLoading;
+  const isLoading =
+    !proposal && (isLiveLoading || (shouldFetchLiveProposal && !liveError));
   const error = proposal ? null : liveError;
   const canonicalTab = useMemo(() => {
     if (!proposal) return activeTab;

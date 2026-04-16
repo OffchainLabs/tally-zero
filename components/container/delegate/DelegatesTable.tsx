@@ -191,7 +191,7 @@ function RpcUnhealthyMessage({ show }: { show: boolean }) {
   if (!show) return null;
 
   return (
-    <div className="glass-subtle rounded-2xl p-8 flex flex-col items-center justify-center">
+    <div className="glass-subtle backdrop-blur rounded-2xl p-8 flex flex-col items-center justify-center">
       <p className="text-sm text-red-600 dark:text-red-400">
         Cannot connect to Arbitrum RPC. Please check your connection or try a
         different RPC URL in settings.
@@ -204,7 +204,7 @@ function LoadingState({ show }: { show: boolean }) {
   if (!show) return null;
 
   return (
-    <div className="glass-subtle rounded-2xl p-8 flex flex-col items-center justify-center space-y-4">
+    <div className="glass-subtle backdrop-blur rounded-2xl p-8 flex flex-col items-center justify-center space-y-4">
       <div className="space-y-2 w-full max-w-md">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
@@ -218,7 +218,7 @@ function ErrorMessage({ error }: { error: Error | null }) {
   if (!error) return null;
 
   return (
-    <div className="glass-subtle rounded-2xl p-4 border-red-200/50 dark:border-red-800/50 bg-red-50/50 dark:bg-red-900/20">
+    <div className="glass-subtle backdrop-blur rounded-2xl p-4 border-red-200/50 dark:border-red-800/50 bg-red-50/50 dark:bg-red-900/20">
       <p className="text-sm text-red-600 dark:text-red-400">
         Error: {error.message}. Please try again.
       </p>
@@ -236,7 +236,7 @@ function EmptyState({
   if (!show || rpcHealthy === false) return null;
 
   return (
-    <div className="glass-subtle rounded-2xl p-8 flex flex-col items-center justify-center">
+    <div className="glass-subtle backdrop-blur rounded-2xl p-8 flex flex-col items-center justify-center">
       <p className="text-sm text-muted-foreground">
         No delegates found. Try adjusting your filters.
       </p>

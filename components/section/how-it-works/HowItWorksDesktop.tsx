@@ -81,7 +81,7 @@ export default function HowItWorksDesktop(steps: StepType[]) {
                   style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
                   aria-hidden={stepIndex !== selectedIndex}
                 >
-                  <div className="w-[52.75rem] overflow-hidden rounded-xl glass-subtle bg-arb-blue/20 dark:bg-arb-blue/25 shadow-xl shadow-slate-900/10 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
+                  <div className="w-[52.75rem] overflow-hidden rounded-xl glass-subtle backdrop-blur bg-arb-blue/20 dark:bg-arb-blue/25 shadow-xl shadow-slate-900/10 ring-1 ring-arb-blue/20 dark:ring-arb-blue/25">
                     <Image
                       className="w-full"
                       src={step.image}

@@ -18,7 +18,7 @@ export const VoteDisplay = memo(function VoteDisplay({
     return (
       <div
         className={cn(
-          "glass-subtle rounded-xl p-4 text-sm text-muted-foreground transition-all duration-200",
+          "glass-subtle backdrop-blur rounded-xl p-4 text-sm text-muted-foreground transition-all duration-200",
           className
         )}
       >
@@ -35,7 +35,7 @@ export const VoteDisplay = memo(function VoteDisplay({
   return (
     <div
       className={cn(
-        "glass-subtle rounded-xl p-4 transition-all duration-200",
+        "glass-subtle backdrop-blur rounded-xl p-4 transition-all duration-200",
         className
       )}
     >

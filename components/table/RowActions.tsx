@@ -45,7 +45,7 @@ function DataTableRowActionsComponent<TData>({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-[200px] glass-subtle rounded-lg"
+        className="w-[200px] glass-subtle backdrop-blur rounded-lg"
       >
         <DropdownMenuItem
           asChild

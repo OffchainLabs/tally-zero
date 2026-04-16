@@ -3,6 +3,7 @@ import { extractProposals } from "@gzeoneth/gov-tracker";
 import type { Metadata } from "next";
 
 import { ProposalPage } from "@/components/proposal/ProposalPage";
+import { isIncompleteProposalState } from "@/lib/proposal-utils";
 import { getStaticProposalById } from "@/lib/static-proposal-data";
 
 type ProposalRouteParams = Awaited<
@@ -10,7 +11,8 @@ type ProposalRouteParams = Awaited<
 >;
 
 export const metadata: Metadata = {
-  title: "Proposal",
+  title: "Proposal | Arbitrum Governance",
+  description: "View an Arbitrum DAO proposal, its payload, and lifecycle.",
 };
 
 export function generateStaticParams(): ProposalRouteParams[] {
@@ -34,7 +36,11 @@ export default async function ProposalRoutePage(
   props: PageProps<"/proposal/[proposalId]">
 ) {
   const { proposalId } = await props.params;
-  const initialProposal = getStaticProposalById(proposalId);
+  const staticProposal = getStaticProposalById(proposalId);
+  const initialProposal =
+    staticProposal && !isIncompleteProposalState(staticProposal.state)
+      ? staticProposal
+      : null;
 
   return (
     <ProposalPage proposalId={proposalId} initialProposal={initialProposal} />

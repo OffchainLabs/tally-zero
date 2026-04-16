@@ -117,8 +117,10 @@ function StaticLifecycleContent({ currentState }: { currentState: string }) {
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
-        <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-          <StateIcon className={cn("h-3.5 w-3.5 drop-shadow-sm", color)} />
+        <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <StateIcon
+            className={cn("h-3.5 w-3.5 drop-shadow-sm shrink-0", color)}
+          />
           <span className={cn("text-xs font-medium", color)}>
             {formatCurrentState(currentState)}
           </span>
@@ -155,7 +157,7 @@ const LifecycleContent = memo(function LifecycleContent({
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
-          <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
             <ClockIcon className="h-3.5 w-3.5 text-yellow-500 drop-shadow-sm" />
             <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
               Queue #{queuePosition}
@@ -180,7 +182,7 @@ const LifecycleContent = memo(function LifecycleContent({
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
-          <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
             <ReloadIcon className="h-3.5 w-3.5 text-blue-500 animate-spin drop-shadow-sm" />
             <div className="flex flex-col gap-0.5">
               <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
@@ -211,7 +213,7 @@ const LifecycleContent = memo(function LifecycleContent({
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
-          <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md border-red-500/20">
+          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md border-red-500/20">
             <CrossCircledIcon className="h-3.5 w-3.5 text-red-500 drop-shadow-sm" />
             <span className="text-xs font-medium text-red-600 dark:text-red-400">
               Error
@@ -241,7 +243,7 @@ const LifecycleContent = memo(function LifecycleContent({
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
-          <div className="glass-subtle flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
+          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
             {isBackgroundRefreshing ? (
               <div className="relative">
                 <StateIcon

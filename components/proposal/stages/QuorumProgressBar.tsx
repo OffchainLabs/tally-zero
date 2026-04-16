@@ -27,7 +27,7 @@ export const QuorumProgressBar = memo(function QuorumProgressBar({
   const colors = isReached ? QUORUM_COLORS.reached : QUORUM_COLORS.pending;
 
   return (
-    <div className="glass-subtle rounded-lg px-3 py-2 space-y-2">
+    <div className="glass-subtle backdrop-blur rounded-lg px-3 py-2 space-y-2">
       {/* Header with icon and status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

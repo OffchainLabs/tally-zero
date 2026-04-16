@@ -24,7 +24,9 @@ export const ProposerCell = memo(function ProposerCell({
     <AddrethConfig>
       <Addreth
         ens={false}
+        icon={false}
         address={proposer}
+        actions="none"
         theme={theme === "dark" ? "dark" : "light"}
         explorer={explorer}
       />

@@ -12,7 +12,7 @@ const progressVariants = cva(
     variants: {
       variant: {
         default: "bg-secondary",
-        glass: "glass-subtle shadow-inner",
+        glass: "glass-subtle backdrop-blur shadow-inner",
       },
       indicatorVariant: {
         default: "",

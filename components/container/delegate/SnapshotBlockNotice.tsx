@@ -14,7 +14,7 @@ export function SnapshotBlockNotice({
   if (snapshotBlock <= 0) return null;
 
   return (
-    <div className="glass-subtle rounded-xl p-4 flex items-start gap-3">
+    <div className="glass-subtle backdrop-blur rounded-xl p-4 flex items-start gap-3">
       <InfoIcon className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
       <p className="text-sm text-muted-foreground">
         Delegate list indexed up to block{" "}
