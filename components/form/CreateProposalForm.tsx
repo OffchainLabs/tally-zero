@@ -16,7 +16,6 @@ import {
 
 import { useL1Block } from "@/hooks/use-l1-block";
 
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -48,7 +47,7 @@ import { cn } from "@/lib/utils";
 
 import OzGovernorABI from "@data/OzGovernor_ABI.json";
 import { readVotingPower } from "@gzeoneth/gov-tracker";
-import type { Abi } from "viem";
+import { zeroAddress, type Abi } from "viem";
 
 const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
 
@@ -70,6 +69,10 @@ export default function CreateProposalForm() {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submittedProposalMeta, setSubmittedProposalMeta] =
     useState<SubmittedProposalMeta | null>(null);
+  const [trackedTxHash, setTrackedTxHash] = useState<`0x${string}`>();
+  const [replacementErrorMessage, setReplacementErrorMessage] = useState<
+    string | null
+  >(null);
 
   const governor = GOVERNORS[governorType];
 
@@ -84,7 +87,7 @@ export default function CreateProposalForm() {
   const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
     useReadContract({
       ...readVotingPower(
-        address ?? "0x0000000000000000000000000000000000000000",
+        address ?? zeroAddress,
         snapshotBlock ?? BigInt(0),
         ARB_TOKEN.address
       ),
@@ -152,6 +155,7 @@ export default function CreateProposalForm() {
     abi: OZ_GOVERNOR_ABI,
     functionName: "propose",
     args: proposeArgs,
+    account: address,
     chainId: ARBITRUM_CHAIN_ID,
     query: {
       enabled: !!proposeArgs && isConnected && meetsThreshold && !!address,
@@ -164,7 +168,6 @@ export default function CreateProposalForm() {
   }, [isSimulateError, simulateError]);
 
   const {
-    data: txHash,
     error: writeError,
     isPending: isWriting,
     writeContract,
@@ -174,13 +177,34 @@ export default function CreateProposalForm() {
     isSuccess: isConfirmed,
     error: receiptError,
   } = useWaitForTransactionReceipt({
-    hash: txHash,
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: trackedTxHash,
+    onReplaced: ({ reason, transactionReceipt }) => {
+      if (reason === "cancelled") {
+        setTrackedTxHash(undefined);
+        setSubmittedProposalMeta(null);
+        setReplacementErrorMessage(
+          "Proposal transaction was cancelled in your wallet."
+        );
+        toast.error("Proposal transaction was cancelled.");
+        return;
+      }
+
+      setTrackedTxHash(transactionReceipt.transactionHash);
+      setReplacementErrorMessage(null);
+      toast(
+        reason === "repriced"
+          ? "Proposal transaction gas fee was updated in your wallet."
+          : "Proposal transaction was replaced in your wallet."
+      );
+    },
   });
+  const hasConfirmedSubmission = isConfirmed && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
-    txHash,
+    txHash: trackedTxHash,
     isWriting,
     isConfirming,
-    isConfirmed,
+    isConfirmed: hasConfirmedSubmission,
   });
   const isBusy =
     submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
@@ -193,6 +217,7 @@ export default function CreateProposalForm() {
 
   useEffect(() => {
     if (writeError) {
+      setTrackedTxHash(undefined);
       setSubmittedProposalMeta(null);
     }
   }, [writeError]);
@@ -238,17 +263,25 @@ export default function CreateProposalForm() {
   function handleSubmit() {
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
+    setReplacementErrorMessage(null);
     setSubmittedProposalMeta({
       proposalId: predictedProposalId,
       governorAddress: governor.address,
     });
-    writeContract(simulateData.request);
+    writeContract(simulateData.request, {
+      onSuccess: (hash) => {
+        setTrackedTxHash(hash);
+      },
+      onError: () => {
+        setTrackedTxHash(undefined);
+      },
+    });
   }
 
-  if (submissionPhase === "confirmed" && txHash) {
+  if (submissionPhase === "confirmed" && trackedTxHash) {
     return (
       <SuccessState
-        txHash={txHash}
+        txHash={trackedTxHash}
         proposalPath={buildSubmittedProposalPath({
           proposalId: submittedProposalMeta?.proposalId ?? predictedProposalId,
           governorAddress:
@@ -303,6 +336,7 @@ export default function CreateProposalForm() {
         simulationErrorMessage={simulationErrorMessage}
         writeErrorMessage={writeErrorMessage}
         receiptErrorMessage={receiptErrorMessage}
+        replacementErrorMessage={replacementErrorMessage}
         canSubmit={canSubmit}
         formInvalid={formInvalid}
         onSubmit={handleSubmit}
@@ -353,9 +387,9 @@ function GovernorPicker({ value, onChange, disabled }: GovernorPickerProps) {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{gov.name}</span>
-                    <Badge variant="outline" className="text-[10px]">
+                    {/* <Badge variant="outline" className="text-[10px]">
                       {gov.quorum} quorum
-                    </Badge>
+                    </Badge> */}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {gov.description}
@@ -665,6 +699,7 @@ interface SubmitSectionProps {
   simulationErrorMessage: string | null;
   writeErrorMessage: string | null;
   receiptErrorMessage: string | null;
+  replacementErrorMessage: string | null;
   canSubmit: boolean;
   formInvalid: boolean;
   onSubmit: () => void;
@@ -681,6 +716,7 @@ function SubmitSection({
   simulationErrorMessage,
   writeErrorMessage,
   receiptErrorMessage,
+  replacementErrorMessage,
   canSubmit,
   formInvalid,
   onSubmit,
@@ -744,16 +780,22 @@ function SubmitSection({
           </p>
         )}
 
-        {receiptErrorMessage && (
+        {replacementErrorMessage && (
           <p className="text-sm text-red-400 whitespace-pre-wrap">
-            {receiptErrorMessage}
+            {replacementErrorMessage}
           </p>
         )}
 
+        {receiptErrorMessage && (
+          <code className="block rounded-md border border-red-500/30 bg-zinc-950/80 px-3 py-2 font-mono text-xs leading-5 text-red-300 shadow-inner overflow-auto">
+            <pre>{receiptErrorMessage}</pre>
+          </code>
+        )}
+
         {writeErrorMessage && (
-          <p className="text-sm text-red-400 whitespace-pre-wrap">
-            {writeErrorMessage}
-          </p>
+          <code className="block rounded-md border border-red-500/30 bg-zinc-950/80 px-3 py-2 font-mono text-xs leading-5 text-red-300 shadow-inner overflow-auto">
+            <pre>{writeErrorMessage}</pre>
+          </code>
         )}
 
         {predictedProposalId && (
@@ -796,9 +838,9 @@ function SuccessState({ txHash, proposalPath }: SuccessStateProps) {
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Your propose() transaction has been sent. Once the transaction is
-          mined, the proposal will appear on the Proposals page and enter the
-          voting-active phase at the governor&apos;s voting delay.
+          Your propose() transaction has been confirmed. The proposal will
+          appear on the Proposals page and enter the voting-active phase at the
+          governor&apos;s voting delay.
         </p>
 
         <div className="text-xs font-mono text-muted-foreground break-all">
