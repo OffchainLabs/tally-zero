@@ -70,18 +70,9 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
-              {account.picture ? (
-                // eslint-disable-next-line @next/next/no-img-element -- external avatar, static export
-                <img
-                  src={account.picture}
-                  alt=""
-                  className="h-16 w-16 rounded-full object-cover shrink-0 ring-2 ring-border"
-                />
-              ) : (
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center shrink-0 ring-2 ring-border">
-                  <User className="h-8 w-8 text-muted-foreground" />
-                </div>
-              )}
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center shrink-0 ring-2 ring-border">
+                <User className="h-8 w-8 text-muted-foreground" />
+              </div>
               <div className="space-y-1">
                 <CardTitle className="text-2xl">{displayName}</CardTitle>
                 {account.bio && (

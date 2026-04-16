@@ -96,14 +96,6 @@ export function NomineeVoterList({
               className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
             >
               <div className="flex items-center gap-2 min-w-0">
-                {voter.picture && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={voter.picture}
-                    alt=""
-                    className="h-6 w-6 rounded-full object-cover shrink-0"
-                  />
-                )}
                 <a
                   href={getAddressExplorerUrl(voter.address)}
                   target="_blank"

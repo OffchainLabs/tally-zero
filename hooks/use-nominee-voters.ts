@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import { getDelegateLabel, getDelegatePicture } from "@/lib/delegate-cache";
+import { getDelegateLabel } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 
@@ -17,7 +17,6 @@ export interface NomineeVoter {
   weight: string;
   weightedVotes: string;
   label: string | undefined;
-  picture: string | null;
 }
 
 export function useNomineeVoters({
@@ -80,7 +79,6 @@ export function useNomineeVoters({
           weight: weightedVotes.toString(),
           weightedVotes: weightedVotes.toString(),
           label: getDelegateLabel(voterAddr),
-          picture: getDelegatePicture(voterAddr),
         };
       });
 
