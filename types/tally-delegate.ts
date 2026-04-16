@@ -3,7 +3,7 @@
  *
  * This is separate from the gov-tracker DelegateInfo type, which only
  * contains address + votingPower + lastChangeBlock from on-chain data.
- * TallyDelegate includes off-chain profile data (name, bio, picture, statement).
+ * TallyDelegate includes off-chain profile data (name, bio, statement).
  */
 
 export interface TallyDelegateAccount {
@@ -12,7 +12,6 @@ export interface TallyDelegateAccount {
   name: string;
   bio: string;
   twitter: string;
-  picture: string | null;
 }
 
 export interface TallyDelegateStatement {
@@ -38,7 +37,6 @@ export interface TallyDelegate {
  */
 export interface DelegateIndexEntry {
   name: string;
-  picture: string | null;
 }
 
 export type DelegateIndex = Record<string, DelegateIndexEntry>;

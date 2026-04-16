@@ -50,14 +50,6 @@ export function getDelegateLabel(address: string): string | undefined {
   return normalizedDelegateLabels.get(key) ?? delegateIndex[key]?.name;
 }
 
-/**
- * Returns the Tally profile picture URL for a delegate, if available.
- */
-export function getDelegatePicture(address: string): string | null {
-  const key = address.toLowerCase();
-  return delegateIndex[key]?.picture ?? null;
-}
-
 function getSkipDelegateCacheSetting(): boolean {
   return (
     getStoredValue<boolean>(STORAGE_KEYS.SKIP_DELEGATE_CACHE, false) === true

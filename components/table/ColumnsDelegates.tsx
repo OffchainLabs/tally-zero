@@ -12,7 +12,7 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 
-import { getDelegateLabel, getDelegatePicture } from "@/lib/delegate-cache";
+import { getDelegateLabel } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { DelegateInfo } from "@/types/delegate";
@@ -44,7 +44,6 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       const address = row.getValue("address") as string;
       const shortened = shortenAddress(address);
       const label = getDelegateLabel(address);
-      const picture = getDelegatePicture(address);
 
       return (
         <HoverCard>
@@ -53,14 +52,6 @@ export const columns: ColumnDef<DelegateInfo>[] = [
               href={`/delegates/${address.toLowerCase()}`}
               className="inline-flex items-center gap-2 underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105"
             >
-              {picture && (
-                // eslint-disable-next-line @next/next/no-img-element -- external avatar, static export
-                <img
-                  src={picture}
-                  alt=""
-                  className="h-6 w-6 rounded-full object-cover shrink-0"
-                />
-              )}
               {label || shortened}
             </Link>
           </HoverCardTrigger>

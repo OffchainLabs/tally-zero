@@ -3,7 +3,7 @@
  *
  * The full delegates.json is 200MB+ and cannot be imported client-side.
  * This script extracts only delegates with a name, producing a small
- * lookup (address -> { name, picture }) safe for client bundles.
+ * lookup (address -> { name }) safe for client bundles.
  *
  * Run: npx tsx scripts/build-delegate-index.ts
  */
@@ -15,7 +15,6 @@ interface RawDelegate {
   account: {
     address: string;
     name: string;
-    picture: string | null;
   };
 }
 
@@ -34,19 +33,18 @@ const raw: RawDelegate[] = [
   ),
 ];
 
-const index: Record<string, { name: string; picture: string | null }> = {};
+const index: Record<string, { name: string }> = {};
 
 for (const d of raw) {
   const name = d.account.name?.trim();
   if (!name) continue;
   index[d.account.address.toLowerCase()] = {
     name,
-    picture: d.account.picture || null,
   };
 }
 
 const count = Object.keys(index).length;
-fs.writeFileSync(OUTPUT, JSON.stringify(index), "utf-8");
+fs.writeFileSync(OUTPUT, `${JSON.stringify(index, null, 2)}\n`, "utf-8");
 
 const sizeKB = (fs.statSync(OUTPUT).size / 1024).toFixed(0);
 console.log(`Wrote ${count} entries to delegate-index.json (${sizeKB} KB)`);
