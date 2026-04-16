@@ -13,6 +13,7 @@ import { MainNav } from "@components/navigation/MainNav";
 import { SiteFooter } from "@components/navigation/SiteFooter";
 
 import { Analytics } from "@components/Analytics";
+import { PostHogProvider } from "@components/PostHogProvider";
 import { ThemeProvider } from "@components/ThemeProvider";
 import { DeepLinkProvider } from "@context/DeepLinkContext";
 import { NerdModeProvider } from "@context/NerdModeContext";
@@ -73,30 +74,32 @@ export default function RootLayout({ children }: RootLayoutProps) {
         )}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <Web3ModalProvider>
-            <NerdModeProvider>
-              <DeepLinkProvider>
-                <SettingsSheetProvider>
-                  <header className="sticky top-0 z-50 w-full">
-                    <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4">
-                      <div className="glass rounded-2xl px-4 sm:px-6 backdrop-blur-md">
-                        <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
-                          <MainNav items={marketingConfig.mainNav} />
-                          <ButtonNav />
+          <PostHogProvider>
+            <Web3ModalProvider>
+              <NerdModeProvider>
+                <DeepLinkProvider>
+                  <SettingsSheetProvider>
+                    <header className="sticky top-0 z-50 w-full">
+                      <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4">
+                        <div className="glass rounded-2xl px-4 sm:px-6 backdrop-blur-md">
+                          <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
+                            <MainNav items={marketingConfig.mainNav} />
+                            <ButtonNav />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </header>
+                    </header>
 
-                  {children}
-                  <SiteFooter />
+                    {children}
+                    <SiteFooter />
 
-                  <Toaster />
-                  <Analytics />
-                </SettingsSheetProvider>
-              </DeepLinkProvider>
-            </NerdModeProvider>
-          </Web3ModalProvider>
+                    <Toaster />
+                    <Analytics />
+                  </SettingsSheetProvider>
+                </DeepLinkProvider>
+              </NerdModeProvider>
+            </Web3ModalProvider>
+          </PostHogProvider>
         </ThemeProvider>
       </body>
     </html>
