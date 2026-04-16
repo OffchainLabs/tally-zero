@@ -31,7 +31,7 @@ const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
 const metadata = {
   name: "Arbitrum Governance",
   description: "Decentralized voting platform for onchain governance",
-  url: "https://zero.tally.xyz",
+  url: "https://alt.gov.arbitrum.foundation",
   icons: ["/favicon/favicon.ico"],
 };
 
