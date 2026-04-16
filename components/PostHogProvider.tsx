@@ -1,16 +1,26 @@
 "use client";
 
-import posthog from "posthog-js";
 import { PostHogProvider as PostHogReactProvider } from "posthog-js/react";
 
 import { env } from "@/env";
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  if (!env.NEXT_PUBLIC_POSTHOG_TOKEN) {
+  const token = env.NEXT_PUBLIC_POSTHOG_TOKEN;
+
+  if (!token) {
     return <>{children}</>;
   }
 
   return (
-    <PostHogReactProvider client={posthog}>{children}</PostHogReactProvider>
+    <PostHogReactProvider
+      apiKey={token}
+      options={{
+        api_host: env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
+        capture_pageview: true,
+        persistence: "memory",
+      }}
+    >
+      {children}
+    </PostHogReactProvider>
   );
 }
