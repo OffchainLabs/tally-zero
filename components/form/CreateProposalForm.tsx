@@ -1,7 +1,15 @@
 "use client";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { ArrowRight, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -23,6 +31,8 @@ import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 
+import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
+
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
@@ -36,6 +46,7 @@ import {
 } from "@/lib/create-proposal-form-utils";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import { formatVotingPower } from "@/lib/format-utils";
+import type { ProposalImportResult } from "@/lib/proposal-import";
 import {
   computeProposalId,
   hasActionErrors,
@@ -73,6 +84,7 @@ export default function CreateProposalForm() {
   const [replacementErrorMessage, setReplacementErrorMessage] = useState<
     string | null
   >(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const governor = GOVERNORS[governorType];
 
@@ -260,6 +272,25 @@ export default function CreateProposalForm() {
     );
   }
 
+  function handleImportDescription(result: ProposalImportResult) {
+    setDescription(result.markdown);
+    const switchedGovernor =
+      result.suggestedGovernor && result.suggestedGovernor !== governorType;
+    if (switchedGovernor) {
+      setGovernorType(result.suggestedGovernor!);
+    }
+    toast(
+      <div className="flex flex-col gap-1">
+        <p>Description imported.</p>
+        {switchedGovernor && (
+          <p>
+            Set target governor to {GOVERNORS[result.suggestedGovernor!].name}.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   function handleSubmit() {
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
@@ -323,6 +354,14 @@ export default function CreateProposalForm() {
         onChange={setDescription}
         showError={attemptedSubmit && descriptionInvalid}
         disabled={isBusy}
+        onOpenUpload={() => setUploadOpen(true)}
+      />
+
+      <UploadDescriptionDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        onImport={handleImportDescription}
+        hasExistingContent={description.trim().length > 0}
       />
 
       <SubmitSection
@@ -633,18 +672,48 @@ interface DescriptionEditorProps {
   onChange: (value: string) => void;
   showError: boolean;
   disabled: boolean;
+  onOpenUpload: () => void;
 }
+
+const PREVIEW_COLLAPSED_MAX_PX = 600;
 
 function DescriptionEditor({
   value,
   onChange,
   showError,
   disabled,
+  onOpenUpload,
 }: DescriptionEditorProps) {
+  const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [previewOverflowing, setPreviewOverflowing] = useState(false);
+
+  // Callback ref (not useRef) so we re-measure whenever the preview div
+  // mounts, since Radix Tabs unmounts inactive TabsContent by default.
+  useEffect(() => {
+    if (!previewEl) return;
+    const check = () =>
+      setPreviewOverflowing(previewEl.scrollHeight > PREVIEW_COLLAPSED_MAX_PX);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(previewEl);
+    return () => ro.disconnect();
+  }, [previewEl, value, previewExpanded]);
+
   return (
     <Card variant="glass">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Description</CardTitle>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onOpenUpload}
+          disabled={disabled}
+        >
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          Upload
+        </Button>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="write">
@@ -659,7 +728,7 @@ function DescriptionEditor({
               placeholder={`# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported.`}
               rows={12}
               disabled={disabled}
-              className="flex w-full rounded-md border glass-subtle backdrop-blur border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
+              className="flex w-full rounded-lg border glass-subtle backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
             />
             {showError && (
               <p className="text-xs text-red-400 mt-2">
@@ -668,7 +737,13 @@ function DescriptionEditor({
             )}
           </TabsContent>
           <TabsContent value="preview" className="mt-3">
-            <div className="glass-subtle backdrop-blur rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary">
+            <div
+              ref={setPreviewEl}
+              className={cn(
+                "glass-subtle backdrop-blur rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary",
+                !previewExpanded && "max-h-[600px] overflow-y-auto"
+              )}
+            >
               {value.trim() ? (
                 <ReactMarkdown
                   rehypePlugins={getProposalPreviewRehypePlugins()}
@@ -681,6 +756,28 @@ function DescriptionEditor({
                 </p>
               )}
             </div>
+            {previewOverflowing && (
+              <div className="flex justify-center mt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPreviewExpanded((v) => !v)}
+                >
+                  {previewExpanded ? (
+                    <>
+                      <ChevronsDownUp className="h-3.5 w-3.5 mr-1" />
+                      Collapse
+                    </>
+                  ) : (
+                    <>
+                      <ChevronsUpDown className="h-3.5 w-3.5 mr-1" />
+                      Expand
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </CardContent>

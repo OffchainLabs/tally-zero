@@ -47,8 +47,8 @@
     --accent-foreground: 222 85% 13%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
+    --border: 214 20% 80%;
+    --input: 214 20% 80%;
     --ring: 212 99% 45%;
     --radius: 0.5rem;
 
@@ -57,7 +57,7 @@
     --glass-saturation: 180%;
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-bg-subtle: rgba(255, 255, 255, 0.4);
-    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-border: rgba(5, 22, 61, 0.18);
     --shadow-glass: 0 8px 32px 0 rgba(5, 22, 61, 0.12);
     --shadow-card-hover: 0 20px 40px -15px rgba(1, 107, 229, 0.2);
   }
