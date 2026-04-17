@@ -1,18 +1,37 @@
 "use client";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
+import type { ICommand } from "@uiw/react-md-editor";
 import {
   ArrowRight,
+  Bold,
   CheckCircle2,
-  ChevronsDownUp,
-  ChevronsUpDown,
+  CircleQuestionMark,
+  Code,
+  Columns2,
+  Eye,
+  Heading,
+  Image as ImageIcon,
+  Italic,
+  Link2,
+  List,
+  ListChecks,
+  ListOrdered,
+  Maximize2,
+  MessageSquare,
+  Minus,
   Plus,
+  Quote,
+  SquareCode,
+  Strikethrough,
+  Table,
   Trash2,
   Upload,
 } from "lucide-react";
+import { useTheme } from "next-themes";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -22,6 +41,79 @@ import {
   useWriteContract,
 } from "wagmi";
 
+// Client-only: the editor touches `window`/`document` at import, which would
+// break the static export build.
+const MDEditor = dynamic(
+  () => import("@uiw/react-md-editor").then((m) => m.default),
+  {
+    ssr: false,
+    loading: () => <div className="h-[280px] rounded-md glass-subtle" />,
+  }
+);
+
+// Lazy-built once on the client to keep the MDEditor module off the SSR path.
+// Replaces the default SVG icons on both the main toolbar and the right-side
+// (edit/live/preview/fullscreen) toolbar with lucide equivalents so the editor
+// matches the rest of the app's icon set.
+const iconClass = "h-4 w-4";
+
+function withIcon(cmd: ICommand, icon: React.ReactElement): ICommand {
+  return { ...cmd, icon };
+}
+
+async function loadCommands(): Promise<ICommand[]> {
+  const { commands, group } = await import("@uiw/react-md-editor");
+  return [
+    withIcon(commands.bold, <Bold className={iconClass} />),
+    withIcon(commands.italic, <Italic className={iconClass} />),
+    withIcon(commands.strikethrough, <Strikethrough className={iconClass} />),
+    withIcon(commands.hr, <Minus className={iconClass} />),
+    group(
+      [
+        commands.title1,
+        commands.title2,
+        commands.title3,
+        commands.title4,
+        commands.title5,
+        commands.title6,
+      ],
+      {
+        name: "title",
+        groupName: "title",
+        buttonProps: { "aria-label": "Insert title", title: "Insert title" },
+        icon: <Heading className={iconClass} />,
+      }
+    ),
+    commands.divider,
+    withIcon(commands.link, <Link2 className={iconClass} />),
+    withIcon(commands.quote, <Quote className={iconClass} />),
+    withIcon(commands.code, <Code className={iconClass} />),
+    withIcon(commands.codeBlock, <SquareCode className={iconClass} />),
+    withIcon(commands.comment, <MessageSquare className={iconClass} />),
+    withIcon(commands.image, <ImageIcon className={iconClass} />),
+    withIcon(commands.table, <Table className={iconClass} />),
+    commands.divider,
+    withIcon(commands.unorderedListCommand, <List className={iconClass} />),
+    withIcon(
+      commands.orderedListCommand,
+      <ListOrdered className={iconClass} />
+    ),
+    withIcon(commands.checkedListCommand, <ListChecks className={iconClass} />),
+    commands.divider,
+    withIcon(commands.help, <CircleQuestionMark className={iconClass} />),
+  ];
+}
+
+async function loadExtraCommands(): Promise<ICommand[]> {
+  const { commands } = await import("@uiw/react-md-editor");
+  return [
+    withIcon(commands.codeLive, <Columns2 className={iconClass} />),
+    withIcon(commands.codePreview, <Eye className={iconClass} />),
+    commands.divider,
+    withIcon(commands.fullscreen, <Maximize2 className={iconClass} />),
+  ];
+}
+
 import { useL1Block } from "@/hooks/use-l1-block";
 
 import { Button } from "@/components/ui/Button";
@@ -29,7 +121,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
@@ -40,6 +131,7 @@ import {
   createFormProposalAction,
   getProposalEligibility,
   getProposalPreviewRehypePlugins,
+  getProposalPreviewRemarkPlugins,
   getProposalSubmissionPhase,
   type FormProposalAction,
   type ProposalEligibility,
@@ -323,39 +415,59 @@ export default function CreateProposalForm() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <GovernorPicker
-        value={governorType}
-        onChange={setGovernorType}
-        disabled={isBusy}
-      />
+    <>
+      <div className="flex flex-col gap-6">
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+          <GovernorPicker
+            value={governorType}
+            onChange={setGovernorType}
+            disabled={isBusy}
+          />
+          <ThresholdCard
+            isConnected={isConnected}
+            votingPower={votingPower}
+            proposalThreshold={proposalThreshold}
+            eligibility={eligibility}
+            isLoading={isLoadingVotingPower || isLoadingThreshold}
+            governorName={governor.name}
+          />
+        </div>
 
-      <ThresholdCard
-        isConnected={isConnected}
-        votingPower={votingPower}
-        proposalThreshold={proposalThreshold}
-        eligibility={eligibility}
-        isLoading={isLoadingVotingPower || isLoadingThreshold}
-        governorName={governor.name}
-      />
+        <DescriptionEditor
+          value={description}
+          onChange={setDescription}
+          showError={attemptedSubmit && descriptionInvalid}
+          disabled={isBusy}
+          onOpenUpload={() => setUploadOpen(true)}
+        />
 
-      <ActionsBuilder
-        actions={actions}
-        errors={actionErrors}
-        showErrors={attemptedSubmit}
-        disabled={isBusy}
-        onChange={handleActionChange}
-        onAdd={handleAddAction}
-        onRemove={handleRemoveAction}
-      />
+        <ActionsBuilder
+          actions={actions}
+          errors={actionErrors}
+          showErrors={attemptedSubmit}
+          disabled={isBusy}
+          onChange={handleActionChange}
+          onAdd={handleAddAction}
+          onRemove={handleRemoveAction}
+        />
 
-      <DescriptionEditor
-        value={description}
-        onChange={setDescription}
-        showError={attemptedSubmit && descriptionInvalid}
-        disabled={isBusy}
-        onOpenUpload={() => setUploadOpen(true)}
-      />
+        <SubmitSection
+          isConnected={isConnected}
+          eligibility={eligibility}
+          governorName={governor.name}
+          predictedProposalId={predictedProposalId}
+          submissionPhase={submissionPhase}
+          isSimulating={isSimulating}
+          isSimulateError={isSimulateError}
+          simulationErrorMessage={simulationErrorMessage}
+          writeErrorMessage={writeErrorMessage}
+          receiptErrorMessage={receiptErrorMessage}
+          replacementErrorMessage={replacementErrorMessage}
+          canSubmit={canSubmit}
+          formInvalid={formInvalid}
+          onSubmit={handleSubmit}
+        />
+      </div>
 
       <UploadDescriptionDialog
         open={uploadOpen}
@@ -363,24 +475,7 @@ export default function CreateProposalForm() {
         onImport={handleImportDescription}
         hasExistingContent={description.trim().length > 0}
       />
-
-      <SubmitSection
-        isConnected={isConnected}
-        eligibility={eligibility}
-        governorName={governor.name}
-        predictedProposalId={predictedProposalId}
-        submissionPhase={submissionPhase}
-        isSimulating={isSimulating}
-        isSimulateError={isSimulateError}
-        simulationErrorMessage={simulationErrorMessage}
-        writeErrorMessage={writeErrorMessage}
-        receiptErrorMessage={receiptErrorMessage}
-        replacementErrorMessage={replacementErrorMessage}
-        canSubmit={canSubmit}
-        formInvalid={formInvalid}
-        onSubmit={handleSubmit}
-      />
-    </div>
+    </>
   );
 }
 
@@ -675,8 +770,6 @@ interface DescriptionEditorProps {
   onOpenUpload: () => void;
 }
 
-const PREVIEW_COLLAPSED_MAX_PX = 600;
-
 function DescriptionEditor({
   value,
   onChange,
@@ -684,21 +777,46 @@ function DescriptionEditor({
   disabled,
   onOpenUpload,
 }: DescriptionEditorProps) {
-  const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
-  const [previewExpanded, setPreviewExpanded] = useState(false);
-  const [previewOverflowing, setPreviewOverflowing] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const [commands, setCommands] = useState<ICommand[]>();
+  const [extraCommands, setExtraCommands] = useState<ICommand[]>();
+  const [editorWrapper, setEditorWrapper] = useState<HTMLDivElement | null>(
+    null
+  );
 
-  // Callback ref (not useRef) so we re-measure whenever the preview div
-  // mounts, since Radix Tabs unmounts inactive TabsContent by default.
   useEffect(() => {
-    if (!previewEl) return;
-    const check = () =>
-      setPreviewOverflowing(previewEl.scrollHeight > PREVIEW_COLLAPSED_MAX_PX);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(previewEl);
-    return () => ro.disconnect();
-  }, [previewEl, value, previewExpanded]);
+    loadCommands().then(setCommands);
+    loadExtraCommands().then(setExtraCommands);
+  }, []);
+
+  // MDEditor sets `title` on toolbar buttons, which triggers the slow native
+  // tooltip. Copy it to `data-tooltip` (used by our CSS hover tooltip) and
+  // strip `title` so the native one stays out of the way. A MutationObserver
+  // covers future re-renders (mode toggles, commands list changes).
+  useEffect(() => {
+    if (!editorWrapper) return;
+    const migrate = () => {
+      editorWrapper
+        .querySelectorAll<HTMLButtonElement>(
+          ".w-md-editor-toolbar button[title]"
+        )
+        .forEach((btn) => {
+          const title = btn.getAttribute("title");
+          if (!title) return;
+          btn.setAttribute("data-tooltip", title);
+          btn.removeAttribute("title");
+        });
+    };
+    migrate();
+    const observer = new MutationObserver(migrate);
+    observer.observe(editorWrapper, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["title"],
+    });
+    return () => observer.disconnect();
+  }, [editorWrapper]);
 
   return (
     <Card variant="glass">
@@ -716,70 +834,32 @@ function DescriptionEditor({
         </Button>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="write">
-          <TabsList>
-            <TabsTrigger value="write">Write</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-          <TabsContent value="write" className="mt-3">
-            <textarea
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={`# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported.`}
-              rows={12}
-              disabled={disabled}
-              className="flex w-full rounded-lg border glass-subtle backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
-            />
-            {showError && (
-              <p className="text-xs text-red-400 mt-2">
-                Description is required
-              </p>
-            )}
-          </TabsContent>
-          <TabsContent value="preview" className="mt-3">
-            <div
-              ref={setPreviewEl}
-              className={cn(
-                "glass-subtle backdrop-blur rounded-lg p-4 min-h-[200px] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary",
-                !previewExpanded && "max-h-[600px] overflow-y-auto"
-              )}
-            >
-              {value.trim() ? (
-                <ReactMarkdown
-                  rehypePlugins={getProposalPreviewRehypePlugins()}
-                >
-                  {value}
-                </ReactMarkdown>
-              ) : (
-                <p className="text-muted-foreground text-sm italic">
-                  Nothing to preview yet.
-                </p>
-              )}
-            </div>
-            {previewOverflowing && (
-              <div className="flex justify-center mt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPreviewExpanded((v) => !v)}
-                >
-                  {previewExpanded ? (
-                    <>
-                      <ChevronsDownUp className="h-3.5 w-3.5 mr-1" />
-                      Collapse
-                    </>
-                  ) : (
-                    <>
-                      <ChevronsUpDown className="h-3.5 w-3.5 mr-1" />
-                      Expand
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        <div
+          ref={setEditorWrapper}
+          data-color-mode={resolvedTheme === "dark" ? "dark" : "light"}
+          className="rounded-md"
+        >
+          <MDEditor
+            value={value}
+            onChange={(next) => onChange(next ?? "")}
+            preview="live"
+            height={600}
+            commands={commands}
+            extraCommands={extraCommands}
+            previewOptions={{
+              remarkPlugins: getProposalPreviewRemarkPlugins(),
+              rehypePlugins: getProposalPreviewRehypePlugins(),
+            }}
+            textareaProps={{
+              placeholder:
+                "# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported.",
+              disabled,
+            }}
+          />
+        </div>
+        {showError && (
+          <p className="text-xs text-red-400 mt-2">Description is required</p>
+        )}
       </CardContent>
     </Card>
   );

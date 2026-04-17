@@ -1,6 +1,7 @@
 import type { Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 import { buildProposalPath } from "@/lib/proposal-url";
 import { emptyAction, type ProposalAction } from "@/lib/propose-utils";
@@ -74,4 +75,10 @@ export function getProposalPreviewRehypePlugins(): NonNullable<
   ReactMarkdownOptions["rehypePlugins"]
 > {
   return [rehypeRaw, [rehypeSanitize, proposalSanitizeSchema]];
+}
+
+export function getProposalPreviewRemarkPlugins(): NonNullable<
+  ReactMarkdownOptions["remarkPlugins"]
+> {
+  return [remarkGfm];
 }

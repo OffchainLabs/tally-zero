@@ -231,3 +231,95 @@
 .animate-gradient {
   animation: gradient 4s ease infinite;
 }
+
+/* Upsize MDEditor toolbar icons to 16px. */
+.w-md-editor-toolbar svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Roomier MDEditor toolbar padding. */
+.w-md-editor-toolbar {
+  padding: 8px 10px;
+  row-gap: 4px;
+}
+/* Each side of the toolbar (main commands + extra commands) must wrap on
+ * narrow viewports, otherwise the main command list overflows the editor
+ * width on mobile. */
+.w-md-editor-toolbar ul {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.w-md-editor-toolbar ul > li > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 4px 6px;
+  position: relative;
+}
+
+/* Tighten button padding and hide the decorative vertical dividers on small
+ * screens so more buttons fit per row after wrapping. */
+@media (max-width: 640px) {
+  .w-md-editor-toolbar {
+    padding: 6px 6px;
+  }
+  .w-md-editor-toolbar ul > li > button {
+    padding: 4px 4px;
+  }
+  .w-md-editor-toolbar .w-md-editor-toolbar-divider {
+    display: none;
+  }
+}
+
+/* Fast CSS tooltip driven by data-tooltip (mirrored from the button's title
+ * attribute in JS, which is then stripped to suppress the slow native title
+ * tooltip). Instant show/hide — no transition delay. */
+.w-md-editor-toolbar ul > li > button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(5, 22, 61, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+  z-index: 100;
+}
+.w-md-editor-toolbar ul > li > button[data-tooltip]:hover::after,
+.w-md-editor-toolbar ul > li > button[data-tooltip]:focus-visible::after {
+  display: block;
+}
+
+/* Tailwind's preflight strips list markers from every ul/ol. Restore them
+ * inside the MDEditor preview only so bullets/numbers render in the rendered
+ * markdown without leaking back into the toolbar, textarea, or app UI. */
+.w-md-editor-preview ul,
+.w-md-editor-preview ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.w-md-editor-preview ul {
+  list-style-type: disc;
+}
+.w-md-editor-preview ol {
+  list-style-type: decimal;
+}
+.w-md-editor-preview ul ul {
+  list-style-type: circle;
+}
+.w-md-editor-preview ul ul ul {
+  list-style-type: square;
+}
+.w-md-editor-preview li {
+  display: list-item;
+}
