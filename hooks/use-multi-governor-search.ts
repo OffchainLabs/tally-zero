@@ -29,6 +29,7 @@ import {
   subscribeToVoteUpdates,
   type VoteUpdate,
 } from "@/lib/proposal-tracker-manager";
+import { isIncompleteProposalState } from "@/lib/proposal-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { ParsedProposal } from "@/types/proposal";
 import {
@@ -52,15 +53,6 @@ export const proposalKeys = {
 interface ProposalSearchData {
   proposals: ParsedProposal[];
   cacheInfo: CacheHitInfo;
-}
-
-function isIncompleteProposalState(state: string | undefined): boolean {
-  const normalizedState = state?.toLowerCase();
-  return (
-    normalizedState === "pending" ||
-    normalizedState === "active" ||
-    normalizedState === "queued"
-  );
 }
 
 /**

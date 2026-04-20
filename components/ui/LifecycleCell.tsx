@@ -60,7 +60,7 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
           ? "complete"
           : "idle";
 
-  const currentState = proposalStages.result?.currentState || null;
+  const currentState = proposalStages.result?.currentState || proposal.state;
   const { queuePosition, currentStageIndex, stages, isBackgroundRefreshing } =
     proposalStages;
   const stagesHref = buildProposalPath({
@@ -74,6 +74,20 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   }
 
   if (!shouldTrackLifecycle) {
+    return (
+      <Link
+        href={stagesHref}
+        className="text-left hover:opacity-80 transition-opacity"
+      >
+        <StaticLifecycleContent currentState={proposal.state} />
+      </Link>
+    );
+  }
+
+  // Tracking can fail for reasons that have nothing to do with the proposal
+  // (RPC hiccups, rate limits). Fall back to the on-chain state so the cell
+  // matches what every other data path already shows for this proposal.
+  if (status === "error") {
     return (
       <Link
         href={stagesHref}
