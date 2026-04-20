@@ -1,8 +1,10 @@
 /**
  * Import proposal descriptions from the Arbitrum governance forum or Snapshot.
  *
- * Runs entirely in the browser because the app is statically exported. The
- * forum has no CORS headers, so its requests go through a public proxy.
+ * Runs in the browser. The forum lacks CORS headers, so forum requests go
+ * through our first-party Route Handler at /api/forum/topic, which is the
+ * only reason this app has any server-side code at all. Snapshot exposes
+ * CORS-enabled GraphQL, so those calls stay direct.
  *
  * Snapshot URLs come in two flavours:
  *   - off-chain (classic Snapshot):  snapshot.box/#/s:<ens>/proposal/<0x...>
@@ -35,36 +37,7 @@ const SNAPSHOT_HOSTS = new Set(["snapshot.box", "snapshot.org"]);
 const SNAPSHOT_HUB_GRAPHQL = "https://hub.snapshot.org/graphql";
 const SNAPSHOT_BOX_GRAPHQL = "https://api.snapshot.box/graphql";
 
-// Tried in order. Any single proxy is occasionally flaky (upstream 5xx), so we
-// fall back to the next one on non-2xx responses or network errors.
-const CORS_PROXIES: Array<(targetUrl: string) => string> = [
-  (url) =>
-    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
-  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
-
-async function fetchViaProxies(
-  targetUrl: string,
-  networkErrorMessage: string
-): Promise<Response> {
-  let last404: Response | null = null;
-  let lastStatus: number | null = null;
-  for (const buildProxy of CORS_PROXIES) {
-    try {
-      const res = await fetch(buildProxy(targetUrl));
-      if (res.ok) return res;
-      if (res.status === 404 && last404 === null) last404 = res;
-      lastStatus = res.status;
-    } catch {
-      // Network error or CORS rejection; try the next proxy.
-    }
-  }
-  if (last404) return last404;
-  if (lastStatus !== null) {
-    throw new Error(`Forum request failed (${lastStatus}).`);
-  }
-  throw new Error(networkErrorMessage);
-}
+const FORUM_PROXY_ENDPOINT = "/api/forum/topic";
 
 function detectGovernorFromText(text: string): GovernorType | undefined {
   const lower = text.toLowerCase();
@@ -137,34 +110,35 @@ export async function fetchForumDescription(
 ): Promise<ProposalImportResult> {
   const { topicId } = parseForumUrl(input);
 
-  const topicJsonUrl = `https://${FORUM_HOST}/t/${topicId}.json`;
-  const rawUrl = `https://${FORUM_HOST}/raw/${topicId}/1`;
-
-  const [topicRes, rawRes] = await Promise.all([
-    fetchViaProxies(topicJsonUrl, "Could not reach the forum."),
-    fetchViaProxies(rawUrl, "Could not reach the forum."),
-  ]);
-
-  if (topicRes.status === 404 || rawRes.status === 404) {
+  const res = await safeFetch(
+    `${FORUM_PROXY_ENDPOINT}?id=${topicId}`,
+    "Could not reach the forum."
+  );
+  // Our handler always responds with JSON. A non-JSON response means the
+  // request never reached it (missing deployment, route misconfigured, etc.).
+  // Surface that distinctly from a real topic 404.
+  const isJson = (res.headers.get("content-type") ?? "").includes(
+    "application/json"
+  );
+  if (!isJson) {
+    throw new Error("Forum proxy endpoint is not responding.");
+  }
+  if (res.status === 404) {
     throw new Error("Forum topic not found.");
   }
-  if (!topicRes.ok) {
-    throw new Error(`Forum request failed (${topicRes.status}).`);
-  }
-  if (!rawRes.ok) {
-    throw new Error(`Forum raw request failed (${rawRes.status}).`);
+  if (!res.ok) {
+    throw new Error(`Forum request failed (${res.status}).`);
   }
 
-  let topicJson: { title?: unknown };
+  let payload: { title?: unknown; body?: unknown };
   try {
-    topicJson = (await topicRes.json()) as { title?: unknown };
+    payload = (await res.json()) as typeof payload;
   } catch {
     throw new Error("Forum response was not valid JSON.");
   }
 
-  const title =
-    typeof topicJson.title === "string" ? topicJson.title.trim() : "";
-  const body = (await rawRes.text()).trim();
+  const title = typeof payload.title === "string" ? payload.title.trim() : "";
+  const body = typeof payload.body === "string" ? payload.body.trim() : "";
   if (!body) {
     throw new Error("Forum topic has no first-post content.");
   }

@@ -19,13 +19,13 @@ A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for
 - **Dual-governor support** — Core Governor (constitutional, 4.5% quorum) and Treasury Governor (funding, 3% quorum)
 - **Full lifecycle tracking** — Tracks proposals through all stages: voting → L2 timelock → L1 challenge period → L1 timelock → retryable tickets → final execution
 - **Security Council election support** — View and participate in Security Council member elections
-- **Zero backend** — All data fetched directly from the blockchain via RPC; no centralized API dependency
+- **RPC-direct governance data**. Proposals, delegates, lifecycle state, and Snapshot data are fetched directly from the blockchain or from CORS-enabled APIs. The only server-side code is a small first-party proxy used when importing a proposal description from the governance forum (which lacks CORS).
 - **Bundled cache** — Ships with pre-built tracking checkpoints for instant resume without RPC calls
 - **Delegate insights** — Pre-indexed delegate cache with voting power rankings
 
 ## Tech Stack
 
-- Next.js 14 (App Router, static export)
+- Next.js 16 (App Router)
 - TypeScript / React
 - Ethers.js v5
 - Wagmi v2 + Reown AppKit (wallet connection)
@@ -53,7 +53,7 @@ Get a project ID from [WalletConnect Cloud](https://cloud.walletconnect.com/).
 
 ```bash
 yarn dev        # Development server (port 3000)
-yarn build      # Production build (static export)
+yarn build      # Production build
 yarn lint       # ESLint with auto-fix
 yarn test       # Lint + typecheck + Vitest
 ```
