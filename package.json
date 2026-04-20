@@ -7,7 +7,7 @@
     "build": "next build",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
-    "start": "npx serve@latest out",
+    "start": "next start",
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
