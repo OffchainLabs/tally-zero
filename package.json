@@ -7,7 +7,7 @@
     "build": "next build",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
-    "start": "npx serve@latest out",
+    "start": "next start",
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
@@ -26,7 +26,7 @@
     ]
   },
   "dependencies": {
-    "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-refresh.3fdec9c",
+    "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-voting-not-started-l1-block.f80a951",
     "@headlessui/react": "^2.2.9",
     "@hookform/resolvers": "^3.3.4",
     "@next/bundle-analyzer": "16.2.3",
@@ -43,8 +43,8 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@reown/appkit": "^1.8.14",
-    "@reown/appkit-adapter-wagmi": "^1.8.14",
+    "@reown/appkit": "1.8.14",
+    "@reown/appkit-adapter-wagmi": "1.8.14",
     "@t3-oss/env-nextjs": "^0.10.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.90.12",
@@ -74,7 +74,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
     "viem": "^2",
-    "wagmi": "^2",
+    "wagmi": "2.19.4",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -106,7 +106,11 @@
       "lodash": ">=4.18.0",
       "axios": ">=1.15.0",
       "defu": ">=6.1.5",
-      "hono": ">=4.12.12"
+      "hono": ">=4.12.12",
+      "semver": "6.3.0",
+      "slow-redact": "0.3.1",
+      "@noble/curves": "1.8.2",
+      "@noble/hashes": "1.8.0"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

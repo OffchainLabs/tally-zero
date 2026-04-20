@@ -3,7 +3,6 @@
 import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { BigNumber } from "ethers";
 import { ExternalLinkIcon } from "lucide-react";
-import Link from "next/link";
 
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import {
@@ -54,12 +53,9 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       return (
         <HoverCard>
           <HoverCardTrigger asChild>
-            <Link
-              href={`/delegates/${address.toLowerCase()}`}
-              className="inline-flex items-center gap-2 underline hover:font-semibold hover:cursor-pointer transition-transform duration-200 ease-in-out transform hover:scale-105"
-            >
+            <span className="inline-flex items-center gap-2 cursor-default">
               {label || shortened}
-            </Link>
+            </span>
           </HoverCardTrigger>
           <HoverCardContent className="w-full">
             <div className="space-y-2">

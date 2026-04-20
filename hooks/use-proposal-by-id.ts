@@ -5,6 +5,7 @@
  * Searches all governors and used for deep linking
  */
 
+import { queryProposalCreatedEvents } from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,6 +19,12 @@ import { getStateName } from "@/lib/state-utils";
 import { formatVotes } from "@/lib/vote-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
+
+// Arbitrum governors report proposalSnapshot/proposalDeadline as L1 Ethereum
+// block numbers (voting is based on ARB token snapshots at L1 blocks), but the
+// governor contract and its ProposalCreated events live on L2 Arbitrum. Search
+// a recent L2 block window instead of the L1 snapshot block.
+const L2_CREATION_SEARCH_WINDOW_BLOCKS = 10_000_000;
 
 /** Options for configuring proposal lookup */
 interface UseProposalByIdOptions {
@@ -114,24 +121,21 @@ export function useProposalById({
                 contract.proposalDeadline(proposalId),
               ]);
 
-            // Try to get the proposal details from ProposalCreated events
-            // Search from the proposalSnapshot block backwards
             const snapshotBlock = proposalSnapshot.toNumber();
-            // Search a reasonable range before the snapshot (proposals are created before voting starts)
-            const searchStart = Math.max(snapshotBlock - 100000, 0);
-
-            const proposalCreatedFilter = contract.filters.ProposalCreated();
-            const events = await contract.queryFilter(
-              proposalCreatedFilter,
-              searchStart,
-              snapshotBlock + 1000
+            const currentL2Block = await provider.getBlockNumber();
+            const searchFromBlock = Math.max(
+              currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
+              0
             );
-            const matchingEvent = events.find((event) => {
-              const eventProposalId =
-                event.args?.proposalId?.toString() ??
-                event.args?.[0]?.toString();
-              return eventProposalId === proposalId;
-            });
+            const creationEvents = await queryProposalCreatedEvents(
+              provider,
+              governor.address,
+              searchFromBlock,
+              currentL2Block
+            );
+            const matchingEvent = creationEvents.find(
+              (event) => event.proposalId === proposalId
+            );
 
             if (!matchingEvent) {
               // Proposal exists but we couldn't find the creation event
@@ -168,23 +172,9 @@ export function useProposalById({
               return;
             }
 
-            // Found the creation event, parse it
-            const event = matchingEvent;
-            const args = event.args!;
-            const {
-              proposer,
-              targets,
-              signatures,
-              calldatas,
-              startBlock: propStartBlock,
-              endBlock: propEndBlock,
-              description,
-            } = args;
-            const proposalValues = args[3] as ethers.BigNumber[];
-
             let quorum: string | undefined;
             try {
-              const quorumBN = await contract.quorum(propStartBlock);
+              const quorumBN = await contract.quorum(matchingEvent.startBlock);
               quorum = quorumBN.toString();
             } catch {
               // Quorum fetch can fail
@@ -193,20 +183,18 @@ export function useProposalById({
             const parsedProposal: ParsedProposal = {
               id: proposalId,
               contractAddress: governor.address,
-              proposer,
-              targets,
-              values: Array.isArray(proposalValues)
-                ? proposalValues.map((v) => v.toString())
-                : [],
-              signatures,
-              calldatas,
-              startBlock: propStartBlock.toString(),
-              endBlock: propEndBlock.toString(),
-              description,
+              proposer: matchingEvent.proposer,
+              targets: matchingEvent.targets,
+              values: matchingEvent.values.map((v) => v.toString()),
+              signatures: matchingEvent.signatures,
+              calldatas: matchingEvent.calldatas,
+              startBlock: matchingEvent.startBlock.toString(),
+              endBlock: matchingEvent.endBlock.toString(),
+              description: matchingEvent.description,
               networkId: String(ARBITRUM_CHAIN_ID),
               state: getStateName(proposalState),
               governorName: governor.name,
-              creationTxHash: event.transactionHash,
+              creationTxHash: matchingEvent.creationTxHash,
               votes: formatVotes(votes, quorum),
             };
 

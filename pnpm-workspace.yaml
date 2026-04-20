@@ -5,7 +5,6 @@
 # pnpm v10 blocks postinstall scripts by default.
 onlyBuiltDependencies:
   - "@reown/appkit"
-  - sharp
 
 # Block transitive dependencies from using exotic sources (git repos, tarball URLs).
 # Only direct dependencies may use non-registry sources.
