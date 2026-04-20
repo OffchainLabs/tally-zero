@@ -9,6 +9,8 @@ interface DelegatePageProps {
   params: Promise<{ address: string }>;
 }
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   const addresses = new Set<string>();
 
