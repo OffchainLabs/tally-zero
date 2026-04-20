@@ -26,7 +26,7 @@
     ]
   },
   "dependencies": {
-    "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-refresh.3fdec9c",
+    "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-voting-not-started-l1-block.f80a951",
     "@headlessui/react": "^2.2.9",
     "@hookform/resolvers": "^3.3.4",
     "@next/bundle-analyzer": "16.2.3",

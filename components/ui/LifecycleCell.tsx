@@ -84,6 +84,20 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     );
   }
 
+  // Tracking can fail for reasons that have nothing to do with the proposal
+  // (RPC hiccups, rate limits). Fall back to the on-chain state so the cell
+  // matches what every other data path already shows for this proposal.
+  if (status === "error") {
+    return (
+      <Link
+        href={stagesHref}
+        className="text-left hover:opacity-80 transition-opacity"
+      >
+        <StaticLifecycleContent currentState={proposal.state} />
+      </Link>
+    );
+  }
+
   const content = (
     <LifecycleContent
       status={status}

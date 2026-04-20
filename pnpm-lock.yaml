@@ -20,8 +20,8 @@ importers:
   .:
     dependencies:
       "@gzeoneth/gov-tracker":
-        specifier: 0.5.0-alpha.fix-refresh.3fdec9c
-        version: 0.5.0-alpha.fix-refresh.3fdec9c(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+        specifier: 0.5.0-alpha.fix-voting-not-started-l1-block.f80a951
+        version: 0.5.0-alpha.fix-voting-not-started-l1-block.f80a951(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       "@headlessui/react":
         specifier: ^2.2.9
         version: 2.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1217,10 +1217,10 @@ packages:
     peerDependencies:
       viem: ">=2.0.0"
 
-  "@gzeoneth/gov-tracker@0.5.0-alpha.fix-refresh.3fdec9c":
+  "@gzeoneth/gov-tracker@0.5.0-alpha.fix-voting-not-started-l1-block.f80a951":
     resolution:
       {
-        integrity: sha512-R4aNFJMXyk2zFNZ1/mCwNJIUmhh1qDMJZcWPK50lzNcRL5bssOgrsSpxQbz3pPkx2leCuFnwApHCOIPphm+4fQ==,
+        integrity: sha512-KBbGJ8y4h0sZmQMMN26tnAVzpZuGxKPrTTeLqoHEJmbg6l5ZZGhSre2NJotp50ysN7rnVAVzfT+st5mFPPOKRw==,
       }
     engines: { node: ">=18.0.0" }
     hasBin: true
@@ -11361,7 +11361,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@gzeoneth/gov-tracker@0.5.0-alpha.fix-refresh.3fdec9c(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)":
+  "@gzeoneth/gov-tracker@0.5.0-alpha.fix-voting-not-started-l1-block.f80a951(@types/react@19.2.14)(bufferutil@4.1.0)(utf-8-validate@6.0.6)":
     dependencies:
       "@arbitrum/sdk": 4.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       debug: 4.4.3

@@ -15,18 +15,15 @@ export const metadata: Metadata = {
   description: "View an Arbitrum DAO proposal, its payload, and lifecycle.",
 };
 
-export function generateStaticParams(): ProposalRouteParams[] {
+export async function generateStaticParams(): Promise<ProposalRouteParams[]> {
+  const imported = await import("@gzeoneth/gov-tracker/bundled-cache.json");
+  const cache = imported.default as BundledCache;
   const proposalIds = new Set<string>();
 
-  try {
-    const cache =
-      require("@gzeoneth/gov-tracker/bundled-cache.json") as BundledCache;
-
-    for (const proposal of extractProposals(cache)) {
+  for (const proposal of extractProposals(cache)) {
+    if (proposal.proposalId) {
       proposalIds.add(proposal.proposalId);
     }
-  } catch {
-    // bundled cache not available at build time
   }
 
   return Array.from(proposalIds).map((proposalId) => ({ proposalId }));
