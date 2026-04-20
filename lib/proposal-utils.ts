@@ -6,6 +6,7 @@ export function isIncompleteProposalState(
   const normalizedState = state?.toLowerCase();
 
   return (
+    normalizedState === "unknown" ||
     normalizedState === "pending" ||
     normalizedState === "active" ||
     normalizedState === "queued"

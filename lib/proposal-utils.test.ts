@@ -4,10 +4,11 @@ import { isIncompleteProposalState, mergeProposalData } from "./proposal-utils";
 
 describe("proposal-utils", () => {
   describe("isIncompleteProposalState", () => {
-    it("treats pending, active, and queued proposals as incomplete", () => {
+    it("treats pending, active, queued, and unknown proposals as incomplete", () => {
       expect(isIncompleteProposalState("Pending")).toBe(true);
       expect(isIncompleteProposalState("active")).toBe(true);
       expect(isIncompleteProposalState("QUEUED")).toBe(true);
+      expect(isIncompleteProposalState("Unknown")).toBe(true);
     });
 
     it("treats terminal proposal states as complete", () => {

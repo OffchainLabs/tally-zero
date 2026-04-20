@@ -60,7 +60,7 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
           ? "complete"
           : "idle";
 
-  const currentState = proposalStages.result?.currentState || null;
+  const currentState = proposalStages.result?.currentState || proposal.state;
   const { queuePosition, currentStageIndex, stages, isBackgroundRefreshing } =
     proposalStages;
   const stagesHref = buildProposalPath({
