@@ -12,7 +12,7 @@ export const metadata = {
 export default function NewProposalPage() {
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
-      <div className="container flex flex-col gap-6 max-w-4xl">
+      <div className="container flex flex-col gap-6">
         <div>
           <Link
             href="/proposals"

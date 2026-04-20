@@ -11,7 +11,7 @@ const inputVariants = cva(
         default:
           "border-input bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         glass:
-          "glass-subtle backdrop-blur border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50",
+          "glass-subtle backdrop-blur border-black/10 dark:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50",
       },
     },
     defaultVariants: {
