@@ -203,10 +203,10 @@ export async function getBundledCacheWatermarks(): Promise<LoadedWatermarks | nu
 function mapProposalState(
   state: string | number | undefined
 ): ProposalStateName {
-  if (state === undefined || state === null) return "Pending";
+  if (state === undefined || state === null) return "Unknown";
 
   if (typeof state === "number") {
-    return (PROPOSAL_STATE_MAP[state] ?? "Pending") as ProposalStateName;
+    return (PROPOSAL_STATE_MAP[state] ?? "Unknown") as ProposalStateName;
   }
 
   const normalized = state.toLowerCase();
@@ -221,7 +221,7 @@ function mapProposalState(
     "Executed",
   ];
   const match = validStates.find((s) => s.toLowerCase() === normalized);
-  return match ?? "Pending";
+  return match ?? "Unknown";
 }
 
 /**
@@ -257,7 +257,12 @@ export async function extractProposalsFromBundledCache(): Promise<{
       // Extract state from currentState field or infer from stages
       const state = mapProposalState(proposal.currentState);
 
-      if (state === "Pending" || state === "Active" || state === "Queued") {
+      if (
+        state === "Pending" ||
+        state === "Active" ||
+        state === "Queued" ||
+        state === "Unknown"
+      ) {
         incompleteProposalIds.add(proposal.proposalId);
       }
 

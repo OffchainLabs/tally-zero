@@ -17,7 +17,7 @@ export type FinalizedState =
   | "Executed";
 
 /** Pending proposal states (may change) */
-export type PendingState = "Pending" | "Active";
+export type PendingState = "Pending" | "Active" | "Unknown";
 
 /** All possible proposal state names */
 export type ProposalStateName = FinalizedState | PendingState;

@@ -40,5 +40,5 @@ export function findStateByValue(
  */
 export function getStateName(stateNumber: number): ProposalStateName {
   const stateName = PROPOSAL_STATE_MAP[stateNumber];
-  return (stateName?.toLowerCase() ?? "pending") as ProposalStateName;
+  return (stateName?.toLowerCase() ?? "unknown") as ProposalStateName;
 }

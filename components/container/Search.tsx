@@ -56,6 +56,11 @@ export default function Search() {
       blockRange: storedBlockRange,
     });
 
+  const validProposals = useMemo(
+    () => proposals.filter((proposal) => proposal.id?.trim()),
+    [proposals]
+  );
+
   const progressMessage = useMemo(() => {
     if (progress === 0) return "Connecting to Arbitrum...";
     if (progress < 70) {
@@ -171,7 +176,11 @@ export default function Search() {
 
         {progress === 100 && !error && (
           <>
-            <DataTable isPaginated={true} columns={columns} data={proposals} />
+            <DataTable
+              isPaginated={true}
+              columns={columns}
+              data={validProposals}
+            />
             {cacheInfo && cacheInfo.loaded && (
               <p className="mt-2 text-xs text-muted-foreground text-center">
                 {cacheInfo.cacheUsed

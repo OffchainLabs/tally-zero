@@ -30,6 +30,7 @@ import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { ParsedProposal } from "@/types/proposal";
 import { MobileProposalList } from "@components/table/MobileProposalCard";
 import { DataTablePagination } from "@components/table/Pagination";
+import { StatusFilterHeader } from "@components/table/StatusFilterHeader";
 import { DataTableToolbar } from "@components/table/Toolbar";
 
 interface DataTableProps<TData, TValue> {
@@ -114,18 +115,24 @@ export function DataTable<TData, TValue>({
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
                       const size = header.column.columnDef.size;
+                      const isStatusColumn = header.column.id === "lifecycle";
                       return (
                         <TableHead
                           key={header.id}
                           colSpan={header.colSpan}
                           style={size ? { width: size } : undefined}
                         >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
+                          {header.isPlaceholder ? null : isStatusColumn ? (
+                            <StatusFilterHeader
+                              column={header.column}
+                              title="Status"
+                            />
+                          ) : (
+                            flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )
+                          )}
                         </TableHead>
                       );
                     })}
