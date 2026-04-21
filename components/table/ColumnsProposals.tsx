@@ -79,6 +79,11 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     cell: ({ row }: { row: Row<ParsedProposal> }) => {
       return <LifecycleCell proposal={row.original} />;
     },
+    filterFn: (row, _id, value: string[]) => {
+      if (!value?.length) return true;
+      const rowState = row.original.state?.toLowerCase();
+      return value.some((v) => v.toLowerCase() === rowState);
+    },
     size: 100,
   },
   {

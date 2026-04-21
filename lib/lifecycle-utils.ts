@@ -136,6 +136,7 @@ export function formatCurrentState(state: string | null): string {
     executed: "Executed",
     canceled: "Canceled",
     expired: "Expired",
+    unknown: "Unknown",
   };
 
   const normalized = state.toLowerCase();

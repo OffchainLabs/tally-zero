@@ -31,7 +31,7 @@ function normalizeProposalState(
     (value) => value.toLowerCase() === normalized
   );
 
-  return match ?? "Pending";
+  return match ?? "Unknown";
 }
 
 export function getStaticProposalById(

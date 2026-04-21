@@ -110,10 +110,10 @@ describe("state-utils", () => {
       expect(getStateName(7)).toBe("executed");
     });
 
-    it("returns pending for invalid state numbers", () => {
-      expect(getStateName(8)).toBe("pending");
-      expect(getStateName(-1)).toBe("pending");
-      expect(getStateName(100)).toBe("pending");
+    it("returns unknown for invalid state numbers", () => {
+      expect(getStateName(8)).toBe("unknown");
+      expect(getStateName(-1)).toBe("unknown");
+      expect(getStateName(100)).toBe("unknown");
     });
   });
 });
