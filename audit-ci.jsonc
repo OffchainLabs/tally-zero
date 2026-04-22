@@ -2,11 +2,5 @@
   "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
   // Fail on moderate and above
   "moderate": true,
-  "allowlist": [
-    // picomatch issues (eslint-config-next>...>picomatch) - dev only
-    "GHSA-3v7f-55p6-f55p",
-    "GHSA-c2c7-rcm5-vvqj",
-    // brace-expansion ReDoS (eslint>minimatch>brace-expansion) - dev only
-    "GHSA-f886-m6hf-6m8v",
-  ],
+  "allowlist": [],
 }
