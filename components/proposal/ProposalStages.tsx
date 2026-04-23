@@ -142,7 +142,7 @@ export default function ProposalStages({
   }
 
   return (
-    <div className="glass rounded-xl p-4">
+    <div className="p-4">
       {/* Header */}
       <div className="mb-4 pb-3 border-b border-border/50">
         <h3 className="text-sm font-semibold">Governance Lifecycle</h3>
