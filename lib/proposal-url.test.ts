@@ -26,7 +26,6 @@ describe("proposal-url", () => {
       expect(normalizeProposalTab("description")).toBe("description");
       expect(normalizeProposalTab("payload")).toBe("payload");
       expect(normalizeProposalTab("stages")).toBe("stages");
-      expect(normalizeProposalTab("vote")).toBe("vote");
     });
 
     it("rejects unsupported tabs", () => {

@@ -5,10 +5,9 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { z } from "zod";
 
-import VoteForm from "@components/form/VoteForm";
 import { PayloadView, type CalldataOverrides } from "@components/payload";
 import ProposalStages from "@components/proposal/ProposalStages";
 import ProposalStagesError from "@components/proposal/ProposalStagesError";
@@ -49,10 +48,7 @@ interface ProposalTabsContentProps {
   mountedTabs: ReadonlySet<ProposalTab>;
   proposal: z.infer<typeof proposalSchema>;
   showStagesTab: boolean;
-  showVoteTab: boolean;
-  variant: "modal" | "page";
   nerdMode: boolean;
-  hasCalldataOverrides: boolean;
   calldataOverrides: CalldataOverrides;
   onCalldataOverrideChange: (
     index: number,
@@ -70,10 +66,7 @@ function ProposalTabsContent({
   mountedTabs,
   proposal,
   showStagesTab,
-  showVoteTab,
-  variant,
   nerdMode,
-  hasCalldataOverrides,
   calldataOverrides,
   onCalldataOverrideChange,
   maxHeight,
@@ -191,23 +184,6 @@ function ProposalTabsContent({
           </div>
         </TabsContent>
       )}
-
-      {showVoteTab && (
-        <TabsContent
-          forceMount={mountedTabs.has("vote") ? true : undefined}
-          value="vote"
-          className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
-        >
-          <div className="pt-4">
-            {nerdMode && hasCalldataOverrides && (
-              <div className="mb-4 glass-subtle backdrop-blur bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
-                You have calldata overrides active in the Payload tab.
-              </div>
-            )}
-            <VoteForm proposal={proposal} variant={variant} />
-          </div>
-        </TabsContent>
-      )}
     </>
   );
 }
@@ -235,16 +211,14 @@ function ProposalHeader({ stateValue }: ProposalHeaderProps) {
 
 interface TabsNavigationProps {
   showStagesTab: boolean;
-  showVoteTab: boolean;
 }
 
-function TabsNavigation({ showStagesTab, showVoteTab }: TabsNavigationProps) {
+function TabsNavigation({ showStagesTab }: TabsNavigationProps) {
   return (
     <TabsList className="flex-shrink-0 w-full justify-start">
       <TabsTrigger value="description">Description</TabsTrigger>
       <TabsTrigger value="payload">Payload</TabsTrigger>
       {showStagesTab && <TabsTrigger value="stages">Lifecycle</TabsTrigger>}
-      {showVoteTab && <TabsTrigger value="vote">Vote</TabsTrigger>}
     </TabsList>
   );
 }
@@ -266,6 +240,8 @@ export default function VoteModel({
   defaultTab = "description",
   onTabChange,
   className,
+  calldataOverrides,
+  onCalldataOverrideChange,
 }: {
   proposal: z.infer<typeof proposalSchema>;
   stateValue: StateValue;
@@ -274,20 +250,20 @@ export default function VoteModel({
   defaultTab?: ProposalTab;
   onTabChange?: (tab: ProposalTab) => void;
   className?: string;
+  calldataOverrides: CalldataOverrides;
+  onCalldataOverrideChange: (
+    index: number,
+    newCalldata: string | undefined
+  ) => void;
 }) {
   const showStagesTab = isArbitrumGovernor(proposal.contractAddress);
-  const showVoteTab = proposal.state.toLowerCase() === "active";
   const { nerdMode } = useNerdMode();
   const { currentL1Block } = useL1Block();
-  const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
-    {}
-  );
   const isControlled = onTabChange !== undefined;
   const normalizedDefaultTab = useMemo(() => {
-    if (defaultTab === "vote" && !showVoteTab) return "description";
     if (defaultTab === "stages" && !showStagesTab) return "description";
     return defaultTab;
-  }, [defaultTab, showStagesTab, showVoteTab]);
+  }, [defaultTab, showStagesTab]);
   const [uncontrolledActiveTab, setUncontrolledActiveTab] =
     useState<ProposalTab>(normalizedDefaultTab);
   const [visitedTabs, setVisitedTabs] = useState<Set<ProposalTab>>(
@@ -296,7 +272,6 @@ export default function VoteModel({
   const activeTab = useMemo(() => {
     const nextTab = isControlled ? normalizedDefaultTab : uncontrolledActiveTab;
 
-    if (nextTab === "vote" && !showVoteTab) return "description";
     if (nextTab === "stages" && !showStagesTab) return "description";
     return nextTab;
   }, [
@@ -304,7 +279,6 @@ export default function VoteModel({
     normalizedDefaultTab,
     uncontrolledActiveTab,
     showStagesTab,
-    showVoteTab,
   ]);
   const mountedTabs = useMemo(() => {
     const next = new Set<ProposalTab>([
@@ -321,63 +295,32 @@ export default function VoteModel({
     return next;
   }, [activeTab, normalizedDefaultTab, visitedTabs]);
 
-  const handleCalldataOverrideChange = useCallback(
-    (index: number, newCalldata: string | undefined) => {
-      setCalldataOverrides((prev) => {
-        if (newCalldata === undefined) {
-          const next = { ...prev };
-          delete next[index];
-          return next;
-        }
-        return { ...prev, [index]: newCalldata };
-      });
-    },
-    []
-  );
+  const handleTabChange = (tab: string) => {
+    if (tab !== "description" && tab !== "payload" && tab !== "stages") {
+      return;
+    }
 
-  const hasCalldataOverrides = Object.keys(calldataOverrides).length > 0;
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
 
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      if (
-        tab !== "description" &&
-        tab !== "payload" &&
-        tab !== "stages" &&
-        tab !== "vote"
-      ) {
-        return;
-      }
+    if (!isControlled) {
+      setUncontrolledActiveTab(tab);
+    }
 
-      if (tab === "vote" && !showVoteTab) {
-        return;
-      }
-
-      setVisitedTabs((prev) => {
-        if (prev.has(tab)) return prev;
-        const next = new Set(prev);
-        next.add(tab);
-        return next;
-      });
-
-      if (!isControlled) {
-        setUncontrolledActiveTab(tab);
-      }
-
-      onTabChange?.(tab);
-    },
-    [isControlled, onTabChange, showVoteTab]
-  );
+    onTabChange?.(tab);
+  };
 
   const tabsContentProps = {
     mountedTabs,
     proposal,
     showStagesTab,
-    showVoteTab,
-    variant,
     nerdMode,
-    hasCalldataOverrides,
     calldataOverrides,
-    onCalldataOverrideChange: handleCalldataOverrideChange,
+    onCalldataOverrideChange,
     currentL1Block,
   };
 
@@ -395,10 +338,7 @@ export default function VoteModel({
           onValueChange={handleTabChange}
           className="flex flex-col"
         >
-          <TabsNavigation
-            showStagesTab={showStagesTab}
-            showVoteTab={showVoteTab}
-          />
+          <TabsNavigation showStagesTab={showStagesTab} />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight=""
@@ -423,10 +363,7 @@ export default function VoteModel({
           onValueChange={handleTabChange}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsNavigation
-            showStagesTab={showStagesTab}
-            showVoteTab={showVoteTab}
-          />
+          <TabsNavigation showStagesTab={showStagesTab} />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight="max-h-[60vh]"
@@ -450,10 +387,7 @@ export default function VoteModel({
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col"
       >
-        <TabsNavigation
-          showStagesTab={showStagesTab}
-          showVoteTab={showVoteTab}
-        />
+        <TabsNavigation showStagesTab={showStagesTab} />
         <ProposalTabsContent
           {...tabsContentProps}
           maxHeight="max-h-[50vh]"

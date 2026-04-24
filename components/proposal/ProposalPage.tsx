@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
+import VoteForm from "@/components/form/VoteForm";
+import { type CalldataOverrides } from "@/components/payload";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getGovernorByAddress } from "@/config/governors";
 import { proposalSchema } from "@/config/schema";
+import { useNerdMode } from "@/context/NerdModeContext";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { formatVotingPower } from "@/lib/format-utils";
@@ -78,13 +81,6 @@ export function ProposalPage({
   const isLoading =
     !proposal && (isLiveLoading || (shouldFetchLiveProposal && !liveError));
   const error = proposal ? null : liveError;
-  const canonicalTab = useMemo(() => {
-    if (!proposal) return activeTab;
-    return activeTab === "vote" && proposal.state.toLowerCase() !== "active"
-      ? "description"
-      : activeTab;
-  }, [activeTab, proposal]);
-
   useEffect(() => {
     if (!proposal) return;
 
@@ -92,17 +88,17 @@ export function ProposalPage({
     const canonicalUrl = buildProposalPath({
       proposalId: proposal.id,
       governorAddress: proposal.contractAddress,
-      tab: canonicalTab,
+      tab: activeTab,
     });
     const isTabCanonical =
-      canonicalTab === "description"
+      activeTab === "description"
         ? requestedTab === null
-        : requestedTab === canonicalTab;
+        : requestedTab === activeTab;
 
     if (requestedGovId !== canonicalGovId || !isTabCanonical) {
       router.replace(canonicalUrl, { scroll: false });
     }
-  }, [canonicalTab, proposal, requestedGovId, requestedTab, router]);
+  }, [activeTab, proposal, requestedGovId, requestedTab, router]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
@@ -154,7 +150,7 @@ export function ProposalPage({
         {!isLoading && proposal && (
           <ProposalPageContent
             proposal={proposal}
-            activeTab={canonicalTab}
+            activeTab={activeTab}
             onTabChange={handleTabChange}
           />
         )}
@@ -172,6 +168,24 @@ function ProposalPageContent({
   activeTab: ProposalTab;
   onTabChange: (tab: ProposalTab) => void;
 }) {
+  const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
+    {}
+  );
+
+  const handleCalldataOverrideChange = useCallback(
+    (index: number, newCalldata: string | undefined) => {
+      setCalldataOverrides((prev) => {
+        if (newCalldata === undefined) {
+          const next = { ...prev };
+          delete next[index];
+          return next;
+        }
+        return { ...prev, [index]: newCalldata };
+      });
+    },
+    []
+  );
+
   const parsedProposal = proposalSchema.safeParse(proposal);
 
   if (!parsedProposal.success) {
@@ -194,6 +208,8 @@ function ProposalPageContent({
   }
 
   const title = truncateText(extractProposalTitle(proposal.description), 140);
+  const isActiveProposal = proposal.state.toLowerCase() === "active";
+  const hasCalldataOverrides = Object.keys(calldataOverrides).length > 0;
 
   return (
     <div className="space-y-4">
@@ -214,10 +230,18 @@ function ProposalPageContent({
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        <ProposalVoteSummaryCard
-          governorAddress={proposal.contractAddress}
-          votes={proposal.votes}
-        />
+        <div className="space-y-6">
+          <ProposalVoteSummaryCard
+            governorAddress={proposal.contractAddress}
+            votes={proposal.votes}
+          />
+          {isActiveProposal && (
+            <ProposalVoteCard
+              proposal={parsedProposal.data}
+              hasCalldataOverrides={hasCalldataOverrides}
+            />
+          )}
+        </div>
 
         <VoteModel
           proposal={parsedProposal.data}
@@ -227,9 +251,42 @@ function ProposalPageContent({
           defaultTab={activeTab}
           onTabChange={onTabChange}
           className="md:col-span-2"
+          calldataOverrides={calldataOverrides}
+          onCalldataOverrideChange={handleCalldataOverrideChange}
         />
       </div>
     </div>
+  );
+}
+
+function ProposalVoteCard({
+  proposal,
+  hasCalldataOverrides,
+}: {
+  proposal: ReturnType<typeof proposalSchema.parse>;
+  hasCalldataOverrides: boolean;
+}) {
+  const { nerdMode } = useNerdMode();
+
+  return (
+    <Card
+      variant="glass"
+      className="rounded-2xl border border-white/40 shadow-lg shadow-black/5 dark:border-white/10 max-h-fit"
+    >
+      <CardContent className="p-4 md:p-6">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-foreground">
+            Cast Your Vote
+          </p>
+          {nerdMode && hasCalldataOverrides && (
+            <div className="glass-subtle backdrop-blur bg-orange-500/10 border-orange-500/30 rounded-lg p-3 text-xs text-orange-600 dark:text-orange-400">
+              You have calldata overrides active in the Payload tab.
+            </div>
+          )}
+          <VoteForm proposal={proposal} variant="page" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
