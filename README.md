@@ -16,7 +16,7 @@ A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for
 
 ## Key Features
 
-- **Dual-governor support** — Core Governor (constitutional, 4.5% quorum) and Treasury Governor (funding, 3% quorum)
+- **Dual-governor support** — Core Governor (constitutional) and Treasury Governor (funding)
 - **Full lifecycle tracking** — Tracks proposals through all stages: voting → L2 timelock → L1 challenge period → L1 timelock → retryable tickets → final execution
 - **Security Council election support** — View and participate in Security Council member elections
 - **RPC-direct governance data**. Proposals, delegates, lifecycle state, and Snapshot data are fetched directly from the blockchain or from CORS-enabled APIs. The only server-side code is a small first-party proxy used when importing a proposal description from the governance forum (which lacks CORS).

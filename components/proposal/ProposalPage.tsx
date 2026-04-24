@@ -407,7 +407,8 @@ function ProposalVoteSummaryCard({
                   ARB
                 </span>
                 <span className="text-muted-foreground">
-                  Quorum {governorConfig?.quorum ?? "N/A"}
+                  Quorum
+                  {/* Quorum {governorConfig?.quorum ?? "N/A"} */}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">

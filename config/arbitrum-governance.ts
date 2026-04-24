@@ -20,24 +20,22 @@ export const ETHEREUM_RPC_URL = "https://eth.drpc.org";
 
 /**
  * Core Governor Contract (Constitutional Proposals)
- * 4.5% quorum, ~42-44 day lifecycle
+ * ~42-44 day lifecycle
  */
 const CORE_GOVERNOR = {
   address: ADDRESSES.CONSTITUTIONAL_GOVERNOR,
   name: "Core Governor",
   description: "Constitutional and non-emergency proposals",
-  quorum: "4.5%",
 } as const;
 
 /**
  * Treasury Governor Contract (Non-Constitutional Proposals)
- * 3% quorum, ~24-27 day lifecycle (no L1 round-trip)
+ * ~24-27 day lifecycle (no L1 round-trip)
  */
 const TREASURY_GOVERNOR = {
   address: ADDRESSES.NON_CONSTITUTIONAL_GOVERNOR,
   name: "Treasury Governor",
   description: "Treasury and funding proposals",
-  quorum: "3%",
 } as const;
 
 /**
