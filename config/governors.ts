@@ -20,8 +20,6 @@ export interface GovernorConfig {
   name: string;
   /** Brief description of the governor's purpose */
   description: string;
-  /** Quorum threshold as a percentage string (e.g., "4.5%") */
-  quorum: string;
   /** L2 timelock contract address */
   l2TimelockAddress: string;
   /** L2 timelock delay as human-readable string (e.g., "8 days") */
@@ -41,7 +39,6 @@ const CORE_GOVERNOR_CONFIG: GovernorConfig = {
   type: "core",
   name: "Core Governor",
   description: "Constitutional and non-emergency proposals",
-  quorum: "4.5%",
   l2TimelockAddress: ADDRESSES.L2_CONSTITUTIONAL_TIMELOCK,
   l2TimelockDelay: "8 days",
   l1TimelockAddress: ADDRESSES.L1_TIMELOCK,
@@ -55,7 +52,6 @@ const TREASURY_GOVERNOR_CONFIG: GovernorConfig = {
   type: "treasury",
   name: "Treasury Governor",
   description: "Treasury and funding proposals",
-  quorum: "3%",
   l2TimelockAddress: ADDRESSES.L2_NON_CONSTITUTIONAL_TIMELOCK,
   l2TimelockDelay: "3 days",
   l1TimelockAddress: null,

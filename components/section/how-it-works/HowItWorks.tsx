@@ -28,7 +28,7 @@ const steps = [
     icon: Vote,
     title: "Onchain Voting",
     description:
-      "Cast your final, binding vote onchain. Constitutional proposals need 5% participation; non-constitutional need 3%.",
+      "Cast your final, binding vote onchain. Proposals must reach a participation quorum before they can pass.",
     href: "/proposals",
     cta: "Browse Proposals",
   },

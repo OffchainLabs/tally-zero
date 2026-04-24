@@ -8,7 +8,7 @@ const features = [
     icon: Vote,
     title: "Proposals & Voting",
     description:
-      "Submit and vote on Arbitrum Improvement Proposals. Constitutional changes require 5% participation; non-constitutional require 3%.",
+      "Submit and vote on Arbitrum Improvement Proposals. Each proposal must reach a participation quorum before it can pass.",
     href: "/proposals",
   },
   {
