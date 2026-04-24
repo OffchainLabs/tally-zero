@@ -33,7 +33,7 @@ export function ClickableDescriptionCell({
   defaultTab = "description",
 }: {
   proposal: ParsedProposal;
-  defaultTab?: "description" | "payload" | "stages" | "vote";
+  defaultTab?: "description" | "payload" | "stages";
 }) {
   const plainText = truncateText(extractProposalTitle(proposal.description));
   const abbreviatedProposalId = truncateMiddle(proposal.id, 6, 6);

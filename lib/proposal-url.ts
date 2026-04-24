@@ -1,12 +1,7 @@
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { isValidAddress } from "@/lib/address-utils";
 
-export const PROPOSAL_TABS = [
-  "description",
-  "payload",
-  "stages",
-  "vote",
-] as const;
+export const PROPOSAL_TABS = ["description", "payload", "stages"] as const;
 
 export type ProposalTab = (typeof PROPOSAL_TABS)[number];
 
