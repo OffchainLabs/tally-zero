@@ -2,5 +2,13 @@
   "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
   // Fail on moderate and above
   "moderate": true,
-  "allowlist": [],
+  "allowlist": [
+    // https://github.com/advisories/GHSA-w5hq-g745-h8pq
+    // uuid v3/v5/v6 do not perform bounds checking when a caller-supplied output buffer is passed.
+    // We only consume uuid transitively through wallet/RPC libraries (@metamask/*, @solana/web3.js, jayson, rpc-websockets) which generate UUIDs internally without exposing the buf/offset arguments to our code.
+    // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@metamask/sdk>@metamask/providers>@metamask/rpc-errors>@metamask/utils>uuid
+    // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>uuid
+    // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>rpc-websockets>uuid
+    "GHSA-w5hq-g745-h8pq",
+  ],
 }

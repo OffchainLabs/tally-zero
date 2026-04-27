@@ -115,7 +115,8 @@
       "@noble/hashes": "1.8.0",
       "follow-redirects": ">=1.16.0",
       "brace-expansion@1": "1.1.13",
-      "picomatch": ">=4.0.4"
+      "picomatch": ">=4.0.4",
+      "postcss": ">=8.5.10"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
