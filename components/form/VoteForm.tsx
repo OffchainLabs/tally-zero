@@ -1,7 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { zeroAddress } from "viem";
 import { z } from "zod";
 
 import {
@@ -31,15 +34,22 @@ import type { VoteSupport } from "@gzeoneth/gov-tracker";
 import {
   VOTE_SUPPORT,
   prepareCastVote,
+  readHasVoted,
   readVotingPower,
 } from "@gzeoneth/gov-tracker";
 
+import { useUserVote } from "@/hooks/use-user-vote";
+import { VOTE_COLORS } from "@/lib/badge-colors";
 import { ARB_TOKEN } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
 import { getSimulationErrorMessage } from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
-import { useEffect, useMemo } from "react";
-import { toast } from "sonner";
+
+const VOTE_OPTIONS = [
+  { label: "For", value: String(VOTE_SUPPORT.FOR) },
+  { label: "Against", value: String(VOTE_SUPPORT.AGAINST) },
+  { label: "Abstain", value: String(VOTE_SUPPORT.ABSTAIN) },
+] as const;
 
 export default function VoteForm({
   proposal,
@@ -54,88 +64,145 @@ export default function VoteForm({
     resolver: zodResolver(voteSchema),
   });
 
-  const voteValue = form.watch("vote");
-
+  const selectedVote = form.watch("vote");
+  const accountAddress = address ?? zeroAddress;
+  const governorAddress = proposal.contractAddress as `0x${string}`;
   const startBlock = proposal.startBlock
     ? BigInt(proposal.startBlock)
     : undefined;
+  const canReadAccountData = isConnected && !!address;
+  const isPageVariant = variant === "page";
+  const isActiveProposal = proposal.state.toLowerCase() === "active";
+
   const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
     useReadContract({
       ...readVotingPower(
-        address ?? "0x0000000000000000000000000000000000000000",
+        accountAddress,
         startBlock ?? BigInt(0),
         ARB_TOKEN.address
       ),
       query: {
-        enabled: isConnected && !!address && !!startBlock,
+        enabled: canReadAccountData && startBlock !== undefined,
       },
     });
   const votingPower = rawVotingPower as bigint | undefined;
 
-  const prepared = useMemo(() => {
-    if (!voteValue) return undefined;
-    const support = parseInt(voteValue) as VoteSupport;
-    return prepareCastVote(proposal.id, support, proposal.contractAddress);
-  }, [proposal.id, proposal.contractAddress, voteValue]);
+  const { data: rawHasVoted, isLoading: isLoadingHasVoted } = useReadContract({
+    ...readHasVoted(proposal.id, accountAddress, governorAddress),
+    query: {
+      enabled: canReadAccountData,
+    },
+  });
+  const hasVoted = rawHasVoted as boolean | undefined;
+  const hasRecordedVote = hasVoted === true;
 
-  const { error: estimateError, isError: isEstimateError } = useEstimateGas({
-    to: prepared?.to,
-    data: prepared?.data,
-    query: { enabled: !!prepared && isConnected },
+  const { data: userVote, isLoading: isLoadingUserVote } = useUserVote({
+    proposalId: proposal.id,
+    governorAddress: proposal.contractAddress,
+    voter: address,
+    enabled: hasRecordedVote,
   });
 
-  const simulationErrorMessage = useMemo(() => {
-    if (!isEstimateError || !estimateError) return null;
-    return getSimulationErrorMessage(estimateError);
-  }, [isEstimateError, estimateError]);
-  const isActiveProposal = proposal.state.toLowerCase() === "active";
+  const voteTransaction = useMemo(() => {
+    if (!selectedVote) return undefined;
+
+    const support = Number.parseInt(selectedVote, 10) as VoteSupport;
+    return prepareCastVote(proposal.id, support, governorAddress);
+  }, [governorAddress, proposal.id, selectedVote]);
+
+  const { error: estimateError, isError: isEstimateError } = useEstimateGas({
+    to: voteTransaction?.to,
+    data: voteTransaction?.data,
+    query: { enabled: !!voteTransaction && isConnected },
+  });
+
+  const simulationErrorMessage =
+    isEstimateError && estimateError
+      ? getSimulationErrorMessage(estimateError)
+      : null;
 
   const {
-    data: hash,
-    isPending: isLoading,
-    isSuccess,
+    data: transactionHash,
+    isPending: isSubmittingVote,
+    isSuccess: isVoteSubmitted,
     sendTransaction,
   } = useSendTransaction();
 
   useEffect(() => {
-    if (hash) {
+    if (transactionHash) {
       toast("Your vote has been submitted.");
     }
-  }, [hash]);
+  }, [transactionHash]);
 
-  function onSubmit(_values: z.infer<typeof voteSchema>) {
-    if (!prepared) return;
+  function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
+    if (!voteTransaction) return;
+
     sendTransaction({
-      to: prepared.to,
-      data: prepared.data,
+      to: voteTransaction.to,
+      data: voteTransaction.data,
     });
   }
 
-  const isPageVariant = variant === "page";
+  const showVoteForm = !hasRecordedVote;
+  const showZeroVotingPowerHint = votingPower === BigInt(0);
+
+  const voteActionButton = !isActiveProposal ? (
+    <Button variant="destructive" disabled>
+      Cannot vote
+    </Button>
+  ) : isSubmittingVote ? (
+    <Button variant="secondary" disabled>
+      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+      Voting
+    </Button>
+  ) : isVoteSubmitted ? (
+    <Button variant="secondary" disabled>
+      Voted
+    </Button>
+  ) : (
+    <Button type="submit" disabled={!voteTransaction || isEstimateError}>
+      Vote
+    </Button>
+  );
 
   const body = (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
+      <form onSubmit={form.handleSubmit(handleSubmitVote)}>
         <div className={cn("grid gap-1", !isPageVariant && "p-6 pt-0")}>
-          {/* Voting Power Display */}
           {isConnected && (
-            <div className="mb-4 glass-subtle backdrop-blur rounded-lg">
-              <div className="flex items-center justify-between p-4">
-                <span className="text-sm text-muted-foreground">
-                  Your Voting Power (at snapshot)
-                </span>
-                <span className="text-sm font-semibold">
-                  {isLoadingVotingPower ? (
-                    <span className="text-muted-foreground">Loading...</span>
-                  ) : votingPower !== undefined ? (
-                    <span>{formatVotingPower(votingPower)} ARB</span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </span>
-              </div>
-              {votingPower !== undefined && votingPower === BigInt(0) && (
-                <p className="text-xs text-muted-foreground mt-1">
+            <div className="mb-4 glass-subtle backdrop-blur rounded-lg p-4 space-y-3">
+              <VoteInfoRow
+                label="Your Voting Power (at snapshot)"
+                isLoading={isLoadingVotingPower}
+              >
+                {votingPower !== undefined ? (
+                  <span>{formatVotingPower(votingPower)} ARB</span>
+                ) : null}
+              </VoteInfoRow>
+              <VoteInfoRow label="Already voted" isLoading={isLoadingHasVoted}>
+                {hasVoted !== undefined ? (
+                  <span>{hasVoted ? "Yes" : "No"}</span>
+                ) : null}
+              </VoteInfoRow>
+              {hasRecordedVote && (
+                <>
+                  <VoteInfoRow label="Your vote" isLoading={isLoadingUserVote}>
+                    {userVote ? (
+                      <VoteSupportLabel support={userVote.support} />
+                    ) : null}
+                  </VoteInfoRow>
+                  <VoteInfoRow
+                    label="Voting power spent"
+                    isLoading={isLoadingUserVote}
+                  >
+                    {userVote ? (
+                      <span>{formatVotingPower(userVote.weight)} ARB</span>
+                    ) : null}
+                  </VoteInfoRow>
+                </>
+              )}
+              {showZeroVotingPowerHint && (
+                <p className="text-xs text-muted-foreground">
                   You need to delegate ARB tokens to yourself or receive
                   delegation to vote.
                 </p>
@@ -143,90 +210,48 @@ export default function VoteForm({
             </div>
           )}
 
-          <FormField
-            control={form.control}
-            name="vote"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>What would you like to vote?</FormLabel>
-                <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    className="flex flex-col space-y-1"
-                  >
-                    <div className="-mx-2 flex items-start space-x-4 rounded-md transition-all hover:bg-white/20 dark:hover:bg-white/10 hover:backdrop-blur-sm">
-                      <FormItem className="flex items-center space-x-3 space-y-0 py-2 px-2">
-                        <FormControl>
-                          <RadioGroupItem value={String(VOTE_SUPPORT.FOR)} />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          I&apos;m in favor of this proposal
-                        </FormLabel>
-                      </FormItem>
-                    </div>
-                    <div className="-mx-2 flex items-start space-x-4 rounded-md transition-all hover:bg-white/20 dark:hover:bg-white/10 hover:backdrop-blur-sm">
-                      <FormItem className="flex items-center space-x-3 space-y-0  py-2 px-2">
-                        <FormControl>
-                          <RadioGroupItem
-                            value={String(VOTE_SUPPORT.AGAINST)}
-                          />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          Against the proposal
-                        </FormLabel>
-                      </FormItem>
-                    </div>
-                    <div className="-mx-2 flex items-start space-x-4 rounded-md transition-all hover:bg-white/20 dark:hover:bg-white/10 hover:backdrop-blur-sm">
-                      <FormItem className="flex items-center space-x-3 space-y-0 py-2 px-2">
-                        <FormControl>
-                          <RadioGroupItem
-                            value={String(VOTE_SUPPORT.ABSTAIN)}
-                          />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          I&apos;m abstaining
-                        </FormLabel>
-                      </FormItem>
-                    </div>
-                  </RadioGroup>
-                </FormControl>
-                <FormDescription>
-                  Your vote will be public and cannot be changed.
-                </FormDescription>
-                <FormMessage />
-                {simulationErrorMessage && voteValue && (
-                  <p className="text-sm text-red-500 dark:text-red-400 mt-2">
-                    {simulationErrorMessage}
-                  </p>
-                )}
-              </FormItem>
-            )}
-          />
+          {showVoteForm && (
+            <FormField
+              control={form.control}
+              name="vote"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>What would you like to vote?</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="flex flex-col space-y-1"
+                    >
+                      {VOTE_OPTIONS.map((option) => (
+                        <VoteOption
+                          key={option.value}
+                          label={option.label}
+                          value={option.value}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormDescription>
+                    Your vote will be public and cannot be changed.
+                  </FormDescription>
+                  <FormMessage />
+                  {simulationErrorMessage && selectedVote && (
+                    <p className="mt-2 text-sm text-red-500 dark:text-red-400">
+                      {simulationErrorMessage}
+                    </p>
+                  )}
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
-        <DialogFooter className={cn(isPageVariant && "pt-4")}>
-          {isActiveProposal ? (
-            isLoading ? (
-              <Button variant="secondary" disabled>
-                <ReloadIcon className="w-4 h-4 mr-2 animate-spin" />
-                Voting
-              </Button>
-            ) : isSuccess ? (
-              <Button variant="secondary" disabled>
-                Voted
-              </Button>
-            ) : (
-              <Button type="submit" disabled={!prepared || isEstimateError}>
-                Vote
-              </Button>
-            )
-          ) : (
-            <Button variant="destructive" disabled>
-              Cannot vote
-            </Button>
-          )}
-        </DialogFooter>
+        {showVoteForm && (
+          <DialogFooter className={cn(isPageVariant && "pt-4")}>
+            {voteActionButton}
+          </DialogFooter>
+        )}
       </form>
     </Form>
   );
@@ -240,4 +265,67 @@ export default function VoteForm({
       {body}
     </Card>
   );
+}
+
+function VoteInfoRow({
+  label,
+  isLoading,
+  children,
+}: {
+  label: string;
+  isLoading?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold">
+        <VoteInfoValue isLoading={isLoading}>{children}</VoteInfoValue>
+      </span>
+    </div>
+  );
+}
+
+function VoteInfoValue({
+  isLoading,
+  children,
+}: {
+  isLoading?: boolean;
+  children?: ReactNode;
+}) {
+  if (isLoading) {
+    return <span className="text-muted-foreground">Loading...</span>;
+  }
+
+  if (children == null) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return <>{children}</>;
+}
+
+function VoteOption({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="-mx-2 rounded-md transition-all hover:bg-white/20 hover:backdrop-blur-sm dark:hover:bg-white/10">
+      <FormItem className="flex items-center space-x-3 space-y-0 px-2 py-2">
+        <FormControl>
+          <RadioGroupItem value={value} />
+        </FormControl>
+        <FormLabel className="font-normal">{label}</FormLabel>
+      </FormItem>
+    </div>
+  );
+}
+
+function VoteSupportLabel({ support }: { support: number }) {
+  if (support === VOTE_SUPPORT.FOR) {
+    return <span className={VOTE_COLORS.for.text}>For</span>;
+  }
+  if (support === VOTE_SUPPORT.AGAINST) {
+    return <span className={VOTE_COLORS.against.text}>Against</span>;
+  }
+  if (support === VOTE_SUPPORT.ABSTAIN) {
+    return <span className={VOTE_COLORS.abstain.text}>Abstain</span>;
+  }
+  return <span className="text-muted-foreground">Unknown</span>;
 }
