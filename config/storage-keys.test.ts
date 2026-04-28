@@ -17,6 +17,7 @@ import {
   DEFAULT_TENDERLY_PROJECT,
   L1_BLOCK_CACHE_FRESHNESS_MS,
   L1_BLOCK_REFRESH_INTERVAL_MS,
+  PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS,
   STORAGE_KEYS,
   STORAGE_PREFIX,
 } from "./storage-keys";
@@ -42,6 +43,10 @@ describe("storage-keys config", () => {
 
     it("has L2_RPC key", () => {
       expect(STORAGE_KEYS.L2_RPC).toBe("tally-zero-l2-rpc");
+    });
+
+    it("has PROPOSAL_DRAFT key", () => {
+      expect(STORAGE_KEYS.PROPOSAL_DRAFT).toBe("tally-zero-proposal-draft");
     });
 
     it("has BLOCK_RANGE key", () => {
@@ -140,6 +145,10 @@ describe("storage-keys config", () => {
 
     it("L1_BLOCK_CACHE_FRESHNESS_MS is 30 seconds", () => {
       expect(L1_BLOCK_CACHE_FRESHNESS_MS).toBe(30000);
+    });
+
+    it("PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS is 5 minutes", () => {
+      expect(PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS).toBe(300000);
     });
   });
 
