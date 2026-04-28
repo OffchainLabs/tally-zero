@@ -422,6 +422,7 @@ export default function CreateProposalForm() {
             value={governorType}
             onChange={setGovernorType}
             disabled={isBusy}
+            snapshotBlock={snapshotBlock}
           />
           <ThresholdCard
             isConnected={isConnected}
@@ -430,6 +431,7 @@ export default function CreateProposalForm() {
             eligibility={eligibility}
             isLoading={isLoadingVotingPower || isLoadingThreshold}
             governorName={governor.name}
+            snapshotBlock={snapshotBlock}
           />
         </div>
 
@@ -483,9 +485,15 @@ interface GovernorPickerProps {
   value: GovernorType;
   onChange: (value: GovernorType) => void;
   disabled: boolean;
+  snapshotBlock: bigint | undefined;
 }
 
-function GovernorPicker({ value, onChange, disabled }: GovernorPickerProps) {
+function GovernorPicker({
+  value,
+  onChange,
+  disabled,
+  snapshotBlock,
+}: GovernorPickerProps) {
   return (
     <Card variant="glass">
       <CardHeader>
@@ -498,48 +506,84 @@ function GovernorPicker({ value, onChange, disabled }: GovernorPickerProps) {
           className="grid gap-3 md:grid-cols-2"
           disabled={disabled}
         >
-          {(Object.keys(GOVERNORS) as GovernorType[]).map((type) => {
-            const gov = GOVERNORS[type];
-            const selected = value === type;
-            return (
-              <label
-                key={type}
-                htmlFor={`gov-${type}`}
-                className={cn(
-                  "flex gap-3 rounded-xl border p-4 cursor-pointer transition-all",
-                  "glass-subtle backdrop-blur hover:border-primary/50",
-                  selected
-                    ? "border-primary/70 ring-1 ring-primary/40"
-                    : "border-border/40"
-                )}
-              >
-                <RadioGroupItem
-                  value={type}
-                  id={`gov-${type}`}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">{gov.name}</span>
-                    {/* <Badge variant="outline" className="text-[10px]">
-                      {gov.quorum} quorum
-                    </Badge> */}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {gov.description}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-2">
-                    {gov.hasL1Timelock
-                      ? `L2 timelock ${gov.l2TimelockDelay} → L1 challenge + ${gov.l1TimelockDelay}`
-                      : `L2 timelock ${gov.l2TimelockDelay}`}
-                  </p>
-                </div>
-              </label>
-            );
-          })}
+          {(Object.keys(GOVERNORS) as GovernorType[]).map((type) => (
+            <GovernorOption
+              key={type}
+              type={type}
+              selected={value === type}
+              snapshotBlock={snapshotBlock}
+            />
+          ))}
         </RadioGroup>
       </CardContent>
     </Card>
+  );
+}
+
+interface GovernorOptionProps {
+  type: GovernorType;
+  selected: boolean;
+  snapshotBlock: bigint | undefined;
+}
+
+function GovernorOption({
+  type,
+  selected,
+  snapshotBlock,
+}: GovernorOptionProps) {
+  const gov = GOVERNORS[type];
+  // `governor.quorum(blockNumber)` returns the on-chain quorum at the given
+  // L1 block. Post-DVP-upgrade the contract computes this from delegated
+  // voting power directly, so this single read is correct in both regimes.
+  const { data: rawQuorum, isLoading: isLoadingQuorum } = useReadContract({
+    address: gov.address as `0x${string}`,
+    abi: OZ_GOVERNOR_ABI,
+    functionName: "quorum",
+    args: snapshotBlock !== undefined ? [snapshotBlock] : undefined,
+    chainId: ARBITRUM_CHAIN_ID,
+    query: {
+      enabled: snapshotBlock !== undefined,
+    },
+  });
+  const quorum = rawQuorum as bigint | undefined;
+
+  return (
+    <label
+      htmlFor={`gov-${type}`}
+      className={cn(
+        "flex gap-3 rounded-xl border p-4 cursor-pointer transition-all",
+        "glass-subtle backdrop-blur hover:border-primary/50",
+        selected
+          ? "border-primary/70 ring-1 ring-primary/40"
+          : "border-border/40"
+      )}
+    >
+      <RadioGroupItem value={type} id={`gov-${type}`} className="mt-1" />
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm">{gov.name}</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{gov.description}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {gov.hasL1Timelock
+            ? `L2 timelock ${gov.l2TimelockDelay} → L1 challenge + ${gov.l1TimelockDelay}`
+            : `L2 timelock ${gov.l2TimelockDelay}`}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Quorum at block #
+          {snapshotBlock !== undefined ? snapshotBlock.toLocaleString() : "?"}:{" "}
+          {quorum !== undefined ? (
+            <span className="tabular-nums text-foreground">
+              {formatVotingPower(quorum)} ARB
+            </span>
+          ) : isLoadingQuorum ? (
+            "Loading…"
+          ) : (
+            "—"
+          )}
+        </p>
+      </div>
+    </label>
   );
 }
 
@@ -550,6 +594,7 @@ interface ThresholdCardProps {
   eligibility: ProposalEligibility;
   isLoading: boolean;
   governorName: string;
+  snapshotBlock: bigint | undefined;
 }
 
 function ThresholdCard({
@@ -559,11 +604,27 @@ function ThresholdCard({
   eligibility,
   isLoading,
   governorName,
+  snapshotBlock,
 }: ThresholdCardProps) {
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="text-base">Proposer Eligibility</CardTitle>
+        <p className="text-[11px] text-muted-foreground">
+          Values at block #
+          {snapshotBlock !== undefined ? (
+            <a
+              href={`https://arbiscan.io/block/${snapshotBlock.toString()}`}
+              target="_blank"
+              className="underline"
+              rel="noopener noreferrer"
+            >
+              {snapshotBlock.toLocaleString()}
+            </a>
+          ) : (
+            "?"
+          )}
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
         {!isConnected ? (
@@ -573,7 +634,7 @@ function ThresholdCard({
         ) : (
           <>
             <Row
-              label={`Your voting power (latest block)`}
+              label="Your voting power"
               value={
                 isLoading
                   ? "Loading…"
