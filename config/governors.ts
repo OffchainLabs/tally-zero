@@ -1,5 +1,5 @@
 /**
- * Governor configuration for Arbitrum DAO governance
+ * Governor configuration for ArbitrumDAO governance
  * Defines Core and Treasury governors with their respective timelocks
  */
 
@@ -97,7 +97,7 @@ export function isTreasuryGovernor(address: string): boolean {
 }
 
 /**
- * Check if an address is any Arbitrum DAO governor (Core or Treasury)
+ * Check if an address is any ArbitrumDAO governor (Core or Treasury)
  * @param address - The address to check
  * @returns True if the address matches either governor
  */

@@ -1,7 +1,7 @@
 <p align="center">
-	<h1 align="center"><b>TallyZero for Arbitrum DAO</b></h1>
+	<h1 align="center"><b>TallyZero for ArbitrumDAO</b></h1>
 <p align="center">
-    Decentralized Governance Tracking for Arbitrum DAO
+    Decentralized Governance Tracking for ArbitrumDAO
     <br />
     <br />
     <a href="https://github.com/withtally/tally-zero">Upstream</a>
@@ -12,7 +12,7 @@
 
 # What is this
 
-A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for **Arbitrum DAO** governance. It uses the [`@gzeoneth/gov-tracker`](https://github.com/gzeoneth/gov-tracker) SDK to track the full proposal lifecycle across L1 and L2, from voting through timelock execution and retryable ticket redemption.
+A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for **ArbitrumDAO** governance. It uses the [`@gzeoneth/gov-tracker`](https://github.com/gzeoneth/gov-tracker) SDK to track the full proposal lifecycle across L1 and L2, from voting through timelock execution and retryable ticket redemption.
 
 ## Key Features
 

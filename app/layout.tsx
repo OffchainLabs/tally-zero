@@ -26,7 +26,7 @@ export const metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
-  keywords: ["Arbitrum Governance", "Arbitrum DAO", "ArbitrumDAO"],
+  keywords: ["Arbitrum Governance", "ArbitrumDAO", "ArbitrumDAO"],
   authors: [
     {
       name: "Offchain Labs",

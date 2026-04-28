@@ -5,7 +5,7 @@ import { Suspense } from "react";
 export const metadata = {
   title: "Timelock Operations | Arbitrum Governance",
   description:
-    "Track timelock operations on Arbitrum DAO that are not part of regular proposals. View Security Council operations and direct timelock executions.",
+    "Track timelock operations on ArbitrumDAO that are not part of regular proposals. View Security Council operations and direct timelock executions.",
 };
 
 function TimelockSkeleton() {

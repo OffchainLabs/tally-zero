@@ -66,7 +66,7 @@ export default function DaoValues() {
             </span>
           </p>
           <p className="mt-6 text-lg leading-8 text-muted-foreground">
-            The Arbitrum DAO is guided by seven core values enshrined in its
+            The ArbitrumDAO is guided by seven core values enshrined in its
             Constitution. Every proposal and governance action should uphold
             these principles.
           </p>

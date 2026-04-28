@@ -20,7 +20,7 @@ export default function Hero() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-arb-blue opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-arb-blue dark:bg-arb-teal" />
           </span>
-          Arbitrum DAO Governance
+          ArbitrumDAO Governance
         </div>
 
         {/* Main heading */}
@@ -35,7 +35,7 @@ export default function Hero() {
         {/* Description */}
         <div className="floating-card glow-border max-w-[42rem] p-6 animate-fade-in-up [animation-delay:200ms]">
           <p className="leading-relaxed text-muted-foreground sm:text-lg sm:leading-8">
-            The Arbitrum DAO governs the Arbitrum ecosystem through token-holder
+            The ArbitrumDAO governs the Arbitrum ecosystem through token-holder
             voting, delegate representation, and Security Council elections.
             Participate in proposals, elect council members, and shape the
             future of Arbitrum.
