@@ -25,7 +25,7 @@ export const marketingConfig: MarketingConfig = {
       href: "/timelock",
     },
     {
-      title: "Arbitrum DAO",
+      title: "ArbitrumDAO",
       href: "https://arbitrum.foundation/governance",
     },
   ],

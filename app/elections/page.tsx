@@ -3,7 +3,7 @@ import ElectionPageClient from "./ElectionPageClient";
 export const metadata = {
   title: "Security Council Elections | Arbitrum Governance",
   description:
-    "Track Security Council elections on Arbitrum DAO. View election status, nominees, and voting results.",
+    "Track Security Council elections on ArbitrumDAO. View election status, nominees, and voting results.",
 };
 
 export default function ElectionsPage() {

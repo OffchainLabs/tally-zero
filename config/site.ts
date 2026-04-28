@@ -11,7 +11,7 @@ const url = "https://alt.gov.arbitrum.foundation";
 /** Site-wide configuration for metadata and links */
 export const siteConfig = {
   name: "Arbitrum Governance",
-  description: "Vote on Arbitrum DAO proposals",
+  description: "Vote on ArbitrumDAO proposals",
   url,
   ogImage: `${url}/opengraph-image.jpg`,
   links: {

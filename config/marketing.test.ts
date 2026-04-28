@@ -46,9 +46,9 @@ describe("marketing config", () => {
         expect(timelock?.href).toBe("/timelock");
       });
 
-      it("has Arbitrum DAO nav item", () => {
+      it("has ArbitrumDAO nav item", () => {
         const dao = marketingConfig.mainNav.find(
-          (item) => item.title === "Arbitrum DAO"
+          (item) => item.title === "ArbitrumDAO"
         );
         expect(dao).toBeDefined();
         expect(dao?.href).toBe("https://arbitrum.foundation/governance");

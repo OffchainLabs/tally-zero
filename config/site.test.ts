@@ -18,7 +18,7 @@ describe("site config", () => {
     });
 
     it("has correct description", () => {
-      expect(siteConfig.description).toBe("Vote on Arbitrum DAO proposals");
+      expect(siteConfig.description).toBe("Vote on ArbitrumDAO proposals");
     });
 
     it("has valid base URL", () => {

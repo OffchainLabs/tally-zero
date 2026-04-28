@@ -3,7 +3,7 @@ import { Suspense } from "react";
 
 export const metadata = {
   title: "Delegates | Arbitrum Governance",
-  description: "View voting power distribution across Arbitrum DAO delegates",
+  description: "View voting power distribution across ArbitrumDAO delegates",
 };
 
 export default function DelegatesPage() {
@@ -13,7 +13,7 @@ export default function DelegatesPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight">Delegates</h1>
           <p className="text-muted-foreground">
-            View voting power distribution across Arbitrum DAO delegates
+            View voting power distribution across ArbitrumDAO delegates
           </p>
         </div>
         <Suspense fallback={<DelegateSearchSkeleton />}>

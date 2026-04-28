@@ -12,7 +12,7 @@ type ProposalRouteParams = Awaited<
 
 export const metadata: Metadata = {
   title: "Proposal | Arbitrum Governance",
-  description: "View an Arbitrum DAO proposal, its payload, and lifecycle.",
+  description: "View an ArbitrumDAO proposal, its payload, and lifecycle.",
 };
 
 export async function generateStaticParams(): Promise<ProposalRouteParams[]> {

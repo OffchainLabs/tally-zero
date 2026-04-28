@@ -4,7 +4,7 @@ import DaoValues from "@components/section/display/Opensource";
 import HowItWorks from "@components/section/how-it-works/HowItWorks";
 
 export const metadata = {
-  title: "Arbitrum DAO Governance",
+  title: "ArbitrumDAO Governance",
 };
 
 export default async function IndexPage() {

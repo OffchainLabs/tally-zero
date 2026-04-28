@@ -58,7 +58,7 @@ export default function Features() {
         <SectionHeader
           sectionTitle="How Arbitrum Governance works"
           title="Governance at a Glance"
-          description="The Arbitrum DAO empowers $ARB token holders to shape the protocol through proposals, elections, and delegation — all onchain."
+          description="The ArbitrumDAO empowers $ARB token holders to shape the protocol through proposals, elections, and delegation — all onchain."
         />
       </div>
       <div className="mx-auto grid justify-center gap-6 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">

@@ -218,7 +218,7 @@ export function createStageCalendarUrl(
 ): string {
   const details = `Estimated completion for proposal stage.\n\nProposal ID: ${proposalId}\nStage: ${stageTitle}\n\nView proposal at TallyZero`;
   return createGoogleCalendarUrl(
-    `Arbitrum DAO: ${stageTitle}`,
+    `ArbitrumDAO: ${stageTitle}`,
     estimatedTime.minDate,
     details
   );
