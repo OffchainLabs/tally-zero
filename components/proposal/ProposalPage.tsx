@@ -224,9 +224,7 @@ function ProposalPageContent({
       <div className="grid md:grid-cols-3 gap-6">
         <div className="space-y-6">
           <ProposalVoteSummaryCard
-            proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
-            snapshotBlock={proposal.startBlock}
             votes={proposal.votes}
           />
           {isActiveProposal && (

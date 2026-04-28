@@ -2,12 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/Card";
 import { getGovernorByAddress } from "@/config/governors";
-import { useTotalDelegationAt } from "@/hooks/use-total-delegation-at";
 import { VOTE_COLORS } from "@/lib/badge-colors";
-import {
-  calculateDvpQuorum,
-  isAfterDvpQuorumActivation,
-} from "@/lib/dvp-quorum";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import {
@@ -18,29 +13,23 @@ import {
 import type { ProposalVotes } from "@/types/proposal";
 
 export function ProposalVoteSummaryCard({
-  proposalId,
   governorAddress,
-  snapshotBlock,
   votes,
 }: {
-  proposalId: string;
   governorAddress: string;
-  snapshotBlock: string;
   votes?: ProposalVotes | null;
 }) {
   const governorConfig = getGovernorByAddress(governorAddress);
   const forVotes = votes?.forVotes ?? "0";
   const againstVotes = votes?.againstVotes ?? "0";
   const abstainVotes = votes?.abstainVotes ?? "0";
-  const isDvpQuorumProposal =
-    Boolean(governorConfig?.type) &&
-    isAfterDvpQuorumActivation(proposalId, snapshotBlock);
-  const totalDelegation = useTotalDelegationAt(
-    snapshotBlock,
-    isDvpQuorumProposal
-  );
-  const dvpQuorum = calculateDvpQuorum(totalDelegation, governorConfig?.type);
-  const quorum = isDvpQuorumProposal ? dvpQuorum : votes?.quorum;
+  // `votes.quorum` is the on-chain quorum, fetched via
+  // `governor.quorum(governor.proposalSnapshot(proposalId))`. After the DVP
+  // upgrade the governors compute this from delegated voting power on-chain
+  // (DVP minus the EXCLUDE_ADDRESS delegation, scaled by quorumNumerator), so
+  // this single call returns the correct value in both pre- and post-DVP
+  // regimes — no client-side recomputation is needed.
+  const quorum = votes?.quorum;
   const votesTowardQuorum = sumVoteCounts(forVotes, abstainVotes);
   const { forPct, againstPct, abstainPct, hasVotes } =
     calculateVoteDistribution(forVotes, againstVotes, abstainVotes);
@@ -136,9 +125,7 @@ export function ProposalVoteSummaryCard({
                   {formatVotingPower(votesTowardQuorum)} /{" "}
                   {formatVotingPower(quorum)} ARB
                 </span>
-                <span className="text-muted-foreground">
-                  {isDvpQuorumProposal ? "DVP Quorum" : "Quorum"}
-                </span>
+                <span className="text-muted-foreground">Quorum</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                 <div
