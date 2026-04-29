@@ -227,12 +227,10 @@ function ProposalPageContent({
             governorAddress={proposal.contractAddress}
             votes={proposal.votes}
           />
-          {isActiveProposal && (
-            <ProposalVoteCard
-              proposal={parsedProposal.data}
-              hasCalldataOverrides={hasCalldataOverrides}
-            />
-          )}
+          <ProposalVoteCard
+            proposal={parsedProposal.data}
+            hasCalldataOverrides={hasCalldataOverrides}
+          />
         </div>
 
         <VoteModel
