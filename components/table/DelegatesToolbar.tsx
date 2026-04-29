@@ -22,6 +22,7 @@ export type DelegateSortOrder = "votingPower" | "random";
 
 interface DelegatesToolbarProps<TData> {
   table: Table<TData>;
+  minPowerFloor: number;
   onMinPowerChange?: (value: string) => void;
   sortOrder: DelegateSortOrder;
   onSortOrderChange: (value: DelegateSortOrder) => void;
@@ -29,13 +30,15 @@ interface DelegatesToolbarProps<TData> {
 
 export function DelegatesToolbar<TData>({
   table,
+  minPowerFloor,
   onMinPowerChange,
   sortOrder,
   onSortOrderChange,
 }: DelegatesToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
+  const minPowerFloorValue = String(minPowerFloor);
   const [searchValue, setSearchValue] = useState("");
-  const [minPowerValue, setMinPowerValue] = useState("");
+  const [minPowerValue, setMinPowerValue] = useState(minPowerFloorValue);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -56,10 +59,10 @@ export function DelegatesToolbar<TData>({
 
   const handleReset = useCallback(() => {
     setSearchValue("");
-    setMinPowerValue("");
+    setMinPowerValue(minPowerFloorValue);
     table.resetColumnFilters();
-    onMinPowerChange?.("");
-  }, [table, onMinPowerChange]);
+    onMinPowerChange?.(minPowerFloorValue);
+  }, [minPowerFloorValue, table, onMinPowerChange]);
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -78,12 +81,12 @@ export function DelegatesToolbar<TData>({
             value={minPowerValue}
             onChange={handleMinPowerChange}
             className={cn(
-              "h-12 w-full sm:w-[200px] text-base",
+              "w-full sm:w-[200px] text-base",
               "glass-subtle backdrop-blur rounded-xl",
               "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
               "placeholder:text-muted-foreground/40"
             )}
-            min="0"
+            min={minPowerFloorValue}
             step="1000"
           />
         </div>

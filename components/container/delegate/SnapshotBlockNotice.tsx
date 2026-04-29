@@ -21,7 +21,7 @@ export function SnapshotBlockNotice({
         <span className="font-medium text-foreground">
           {snapshotBlock.toLocaleString()}
         </span>
-        . Only addresses with {"\u2265"}10 ARB delegated are included; total
+        . Only addresses with {"\u2265"}5000 ARB delegated are included; total
         count and voting power reflect this subset.
         {cacheAge && (
           <>

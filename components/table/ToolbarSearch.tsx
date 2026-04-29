@@ -34,7 +34,7 @@ export const ToolbarSearch = memo(function ToolbarSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "pl-11 h-12 text-base",
+          "pl-11 text-base",
           "glass-subtle backdrop-blur rounded-xl",
           "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
           "placeholder:text-muted-foreground/40",

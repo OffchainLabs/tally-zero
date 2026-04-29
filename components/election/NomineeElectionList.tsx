@@ -7,6 +7,7 @@ import shuffle from "lodash.shuffle";
 import { AlertCircle, Clock, ShieldX, XCircle } from "lucide-react";
 import Link from "next/link";
 
+import { sortByOrderMap } from "@/lib/collection-utils";
 import { getDelegateLabel } from "@/lib/delegate-cache";
 import { getCandidateName, getCandidateTitle } from "@/lib/election-utils";
 import { formatVotingPower } from "@/lib/format-utils";
@@ -63,14 +64,11 @@ function sortNominees(
     }
     case "random":
       if (randomOrder && randomOrder.size > 0) {
-        sorted.sort((a, b) => {
-          const idxA =
-            randomOrder.get(a.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
-          const idxB =
-            randomOrder.get(b.address.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
-          return idxA - idxB;
-        });
-        return sorted;
+        return sortByOrderMap(
+          nominees,
+          (nominee) => nominee.address.toLowerCase(),
+          randomOrder
+        );
       }
       return shuffle(sorted);
   }

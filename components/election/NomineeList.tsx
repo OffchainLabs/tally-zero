@@ -24,13 +24,13 @@ import {
 } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  buildShuffleMap,
   countQualifiedNominees,
   getAddressKey,
   getContenderDescription,
 } from "@/lib/election-utils";
 import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
 
+import { buildShuffleMap } from "@/lib/collection-utils";
 import { ContenderList } from "./ContenderList";
 import { ContenderVoteList } from "./ContenderVoteList";
 import { MemberElectionResults } from "./MemberElectionResults";

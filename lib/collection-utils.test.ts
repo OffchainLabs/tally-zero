@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildLookupMap,
+  buildShuffleMap,
   compareBigInt,
   compareBigIntDesc,
+  sortByOrderMap,
   sumBigInt,
 } from "./collection-utils";
 
@@ -116,6 +118,82 @@ describe("collection-utils", () => {
       expect(compareBigInt("0", "1")).toBe(-1);
       expect(compareBigInt("1", "0")).toBe(1);
       expect(compareBigInt("0", "0")).toBe(0);
+    });
+  });
+
+  describe("buildShuffleMap", () => {
+    it("assigns each key a unique randomized index", () => {
+      const keys = ["0xabc", "0xdef", "0x123"];
+
+      const orderMap = buildShuffleMap(keys);
+
+      expect([...orderMap.keys()].sort()).toEqual([...keys].sort());
+      expect([...orderMap.values()].sort((a, b) => a - b)).toEqual([0, 1, 2]);
+    });
+
+    it("does not mutate the input array", () => {
+      const keys = ["0xabc", "0xdef"];
+      const original = [...keys];
+
+      buildShuffleMap(keys);
+
+      expect(keys).toEqual(original);
+    });
+  });
+
+  describe("sortByOrderMap", () => {
+    it("sorts items by their mapped order", () => {
+      const delegates = [
+        { address: "0xbbb" },
+        { address: "0xccc" },
+        { address: "0xaaa" },
+      ];
+      const orderMap = new Map([
+        ["0xaaa", 0],
+        ["0xbbb", 1],
+        ["0xccc", 2],
+      ]);
+
+      const sorted = sortByOrderMap(
+        delegates,
+        (delegate) => delegate.address,
+        orderMap
+      );
+
+      expect(sorted.map((delegate) => delegate.address)).toEqual([
+        "0xaaa",
+        "0xbbb",
+        "0xccc",
+      ]);
+    });
+
+    it("places items missing from the order map at the end", () => {
+      const delegates = [{ address: "0xbbb" }, { address: "0xaaa" }];
+      const orderMap = new Map([["0xaaa", 0]]);
+
+      const sorted = sortByOrderMap(
+        delegates,
+        (delegate) => delegate.address,
+        orderMap
+      );
+
+      expect(sorted.map((delegate) => delegate.address)).toEqual([
+        "0xaaa",
+        "0xbbb",
+      ]);
+    });
+
+    it("does not mutate the original array", () => {
+      const delegates = [{ address: "0xbbb" }, { address: "0xaaa" }];
+      const original = [...delegates];
+      const orderMap = new Map([
+        ["0xaaa", 0],
+        ["0xbbb", 1],
+      ]);
+
+      sortByOrderMap(delegates, (delegate) => delegate.address, orderMap);
+
+      expect(delegates).toEqual(original);
     });
   });
 

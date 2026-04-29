@@ -1,3 +1,5 @@
+import shuffle from "lodash.shuffle";
+
 /**
  * Collection utilities
  * Common functions for working with arrays and maps
@@ -20,6 +22,46 @@ export function buildLookupMap<T, K>(
   getKey: (item: T) => K
 ): Map<K, T> {
   return new Map(items.map((item) => [getKey(item), item]));
+}
+
+/**
+ * Build a randomized key-to-index map for stable random ordering.
+ *
+ * @param keys - Keys to assign randomized indices to
+ * @returns Map from key to randomized index
+ *
+ * @example
+ * const randomOrder = buildShuffleMap(["0x1", "0x2", "0x3"]);
+ * randomOrder.get("0x2"); // randomized index
+ */
+export function buildShuffleMap(keys: readonly string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  shuffle([...keys]).forEach((key, index) => map.set(key, index));
+  return map;
+}
+
+/**
+ * Sort items using a precomputed key-to-index map.
+ * Items missing from the map are placed at the end.
+ *
+ * @param items - Items to sort
+ * @param getKey - Function to extract the lookup key from each item
+ * @param orderMap - Precomputed ordering map
+ * @returns New array sorted by the order map
+ *
+ * @example
+ * const sorted = sortByOrderMap(delegates, d => d.address, randomOrder);
+ */
+export function sortByOrderMap<T>(
+  items: readonly T[],
+  getKey: (item: T) => string,
+  orderMap: ReadonlyMap<string, number>
+): T[] {
+  return [...items].sort((a, b) => {
+    const aIndex = orderMap.get(getKey(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bIndex = orderMap.get(getKey(b)) ?? Number.MAX_SAFE_INTEGER;
+    return aIndex - bIndex;
+  });
 }
 
 /**

@@ -15,9 +15,18 @@ import { useRpcHealthOrchestration } from "@/hooks/use-rpc-health-orchestration"
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
 
+const ARB_DECIMALS = BigNumber.from(10).pow(18);
+const MIN_DELEGATE_POWER_ARB = 5000;
+const MIN_DELEGATE_POWER_WEI = BigNumber.from(MIN_DELEGATE_POWER_ARB)
+  .mul(ARB_DECIMALS)
+  .toString();
+const MIN_POWER_PATTERN = /^\d+(?:\.\d+)?$/;
+
 export default function DelegateSearch() {
   const searchParams = useSearchParams();
-  const [minPowerFilter, setMinPowerFilter] = useState<string>("");
+  const [minPowerFilter, setMinPowerFilter] = useState<string>(
+    String(MIN_DELEGATE_POWER_ARB)
+  );
 
   const { l1Rpc, l2Rpc, isHydrated: rpcSettingsHydrated } = useRpcSettings();
 
@@ -35,18 +44,28 @@ export default function DelegateSearch() {
   const { autoStarted, rpcHealthy, handleRpcHealthChecked } =
     useRpcHealthOrchestration();
 
-  // Convert min power from ARB to wei (18 decimals) for filtering
+  // Always enforce a 5000 ARB minimum, while still allowing the UI to raise it.
   const minVotingPowerWei = useMemo(() => {
-    if (!minPowerFilter || minPowerFilter === "") return undefined;
+    const trimmedMinPowerFilter = minPowerFilter.trim();
+    if (!trimmedMinPowerFilter) return MIN_DELEGATE_POWER_WEI;
+
+    if (!MIN_POWER_PATTERN.test(trimmedMinPowerFilter)) {
+      debug.delegates("invalid min power filter: %s", trimmedMinPowerFilter);
+      return MIN_DELEGATE_POWER_WEI;
+    }
+
     try {
-      const arbValue = parseFloat(minPowerFilter);
-      if (isNaN(arbValue) || arbValue < 0) return undefined;
-      // Convert ARB to wei
-      const weiValue = BigNumber.from(10).pow(18).mul(Math.floor(arbValue));
-      return weiValue.toString();
+      const requestedWholeArb = BigNumber.from(
+        trimmedMinPowerFilter.split(".")[0] || "0"
+      );
+      const effectiveArb = requestedWholeArb.lt(MIN_DELEGATE_POWER_ARB)
+        ? BigNumber.from(MIN_DELEGATE_POWER_ARB)
+        : requestedWholeArb;
+
+      return effectiveArb.mul(ARB_DECIMALS).toString();
     } catch (error) {
       debug.delegates("invalid min power filter: %O", error);
-      return undefined;
+      return MIN_DELEGATE_POWER_WEI;
     }
   }, [minPowerFilter]);
 
@@ -118,6 +137,7 @@ export default function DelegateSearch() {
         isLoading={isLoading}
         error={error}
         rpcHealthy={rpcHealthy}
+        minPowerFloor={MIN_DELEGATE_POWER_ARB}
         onMinPowerChange={setMinPowerFilter}
         onVisibleRowsChange={handleVisibleRowsChange}
       />
