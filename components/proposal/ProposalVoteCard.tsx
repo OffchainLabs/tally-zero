@@ -5,7 +5,12 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { proposalSchema } from "@/config/schema";
 import { useNerdMode } from "@/context/NerdModeContext";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
+import {
+  isActiveProposalState,
+  shouldRenderProposalVoteCard,
+} from "@/lib/proposal-vote-visibility";
 import { cn } from "@/lib/utils";
+import { useAccount } from "wagmi";
 
 export function ProposalVoteCard({
   proposal,
@@ -14,11 +19,21 @@ export function ProposalVoteCard({
   proposal: ReturnType<typeof proposalSchema.parse>;
   hasCalldataOverrides: boolean;
 }) {
+  const { isConnected } = useAccount();
   const { nerdMode } = useNerdMode();
   const { hasRecordedVote } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress as `0x${string}`,
   });
+  const isActiveProposal = isActiveProposalState(proposal.state);
+
+  if (
+    !shouldRenderProposalVoteCard({
+      isConnected,
+    })
+  ) {
+    return null;
+  }
 
   return (
     <Card

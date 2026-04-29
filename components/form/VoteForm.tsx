@@ -4,15 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { zeroAddress } from "viem";
 import { z } from "zod";
 
-import {
-  useAccount,
-  useEstimateGas,
-  useReadContract,
-  useSendTransaction,
-} from "wagmi";
+import { useAccount, useEstimateGas, useSendTransaction } from "wagmi";
 
 import { Button } from "@components/ui/Button";
 import { Card } from "@components/ui/Card";
@@ -31,19 +25,21 @@ import { cn } from "@lib/utils";
 import { ReloadIcon } from "@radix-ui/react-icons";
 
 import type { VoteSupport } from "@gzeoneth/gov-tracker";
-import {
-  VOTE_SUPPORT,
-  prepareCastVote,
-  readVotingPower,
-} from "@gzeoneth/gov-tracker";
+import { VOTE_SUPPORT, prepareCastVote } from "@gzeoneth/gov-tracker";
 
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
+import { useProposalVotingPower } from "@/hooks/use-proposal-voting-power";
 import { useUserVote } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
-import { ARB_TOKEN } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
 import { getSimulationErrorMessage } from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
+import {
+  hasZeroVotingPower,
+  isActiveProposalState,
+  shouldShowVoteActionSection,
+  shouldShowVoteStats,
+} from "@lib/proposal-vote-visibility";
 
 const VOTE_OPTIONS = [
   { label: "For", value: String(VOTE_SUPPORT.FOR) },
@@ -65,27 +61,13 @@ export default function VoteForm({
   });
 
   const selectedVote = form.watch("vote");
-  const accountAddress = address ?? zeroAddress;
   const governorAddress = proposal.contractAddress as `0x${string}`;
-  const startBlock = proposal.startBlock
-    ? BigInt(proposal.startBlock)
-    : undefined;
-  const canReadAccountData = isConnected && !!address;
   const isPageVariant = variant === "page";
-  const isActiveProposal = proposal.state.toLowerCase() === "active";
+  const isActiveProposal = isActiveProposalState(proposal.state);
 
-  const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
-    useReadContract({
-      ...readVotingPower(
-        accountAddress,
-        startBlock ?? BigInt(0),
-        ARB_TOKEN.address
-      ),
-      query: {
-        enabled: canReadAccountData && startBlock !== undefined,
-      },
-    });
-  const votingPower = rawVotingPower as bigint | undefined;
+  const { votingPower, isLoadingVotingPower } = useProposalVotingPower({
+    startBlock: proposal.startBlock,
+  });
 
   const { hasVoted, hasRecordedVote, isLoadingHasVoted } = useProposalHasVoted({
     proposalId: proposal.id,
@@ -139,8 +121,12 @@ export default function VoteForm({
     });
   }
 
-  const showVoteForm = !hasRecordedVote;
-  const showZeroVotingPowerHint = votingPower === BigInt(0);
+  const showVoteStats = shouldShowVoteStats({ isConnected });
+  const showZeroVotingPowerHint = hasZeroVotingPower(votingPower);
+  const showVoteForm = shouldShowVoteActionSection({
+    hasRecordedVote,
+    votingPower,
+  });
 
   const voteActionButton = !isActiveProposal ? (
     <Button variant="destructive" disabled>
@@ -165,7 +151,7 @@ export default function VoteForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmitVote)}>
         <div className={cn("grid gap-1", !isPageVariant && "p-6 pt-0")}>
-          {isConnected && (
+          {showVoteStats && (
             <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3">
               <VoteInfoRow
                 label="Your Voting Power (at snapshot)"
