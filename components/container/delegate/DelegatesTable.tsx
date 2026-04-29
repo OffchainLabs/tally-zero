@@ -1,8 +1,6 @@
 "use client";
 "use no memo";
 
-import shuffle from "lodash.shuffle";
-
 import { columns } from "@/components/table/ColumnsDelegates";
 import {
   DelegatesToolbar,
@@ -18,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
+import { buildShuffleMap, sortByOrderMap } from "@/lib/collection-utils";
 import type { DelegateInfo } from "@/types/delegate";
 import {
   ColumnFiltersState,
@@ -40,6 +39,7 @@ export interface DelegatesTableProps {
   isLoading: boolean;
   error: Error | null;
   rpcHealthy: boolean | null;
+  minPowerFloor: number;
   onMinPowerChange: (value: string) => void;
   onVisibleRowsChange: (addresses: string[]) => void;
 }
@@ -50,6 +50,7 @@ export function DelegatesTable({
   isLoading,
   error,
   rpcHealthy,
+  minPowerFloor,
   onMinPowerChange,
   onVisibleRowsChange,
 }: DelegatesTableProps) {
@@ -58,14 +59,44 @@ export function DelegatesTable({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [sortOrder, setSortOrder] = useState<DelegateSortOrder>("votingPower");
-  const shuffledRef = useRef<DelegateInfo[]>([]);
+  const prevSortOrderRef = useRef(sortOrder);
+  const randomOrderRef = useRef<Map<string, number>>(new Map());
+  const randomOrderKeyRef = useRef("");
   const lastAddressesRef = useRef<string>("");
+  const delegateAddressKey = useMemo(
+    () =>
+      delegates
+        .map((delegate) => delegate.address.toLowerCase())
+        .sort()
+        .join(","),
+    [delegates]
+  );
 
   const sortedDelegates = useMemo(() => {
-    if (sortOrder !== "random") return delegates;
-    shuffledRef.current = shuffle(delegates);
-    return shuffledRef.current;
-  }, [delegates, sortOrder]);
+    if (sortOrder !== "random") {
+      prevSortOrderRef.current = sortOrder;
+      return delegates;
+    }
+
+    const shouldRefreshRandomOrder =
+      prevSortOrderRef.current !== "random" ||
+      randomOrderKeyRef.current !== delegateAddressKey;
+
+    if (shouldRefreshRandomOrder) {
+      randomOrderRef.current = buildShuffleMap(
+        delegates.map((delegate) => delegate.address.toLowerCase())
+      );
+      randomOrderKeyRef.current = delegateAddressKey;
+    }
+
+    prevSortOrderRef.current = sortOrder;
+
+    return sortByOrderMap(
+      delegates,
+      (delegate) => delegate.address.toLowerCase(),
+      randomOrderRef.current
+    );
+  }, [delegateAddressKey, delegates, sortOrder]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<DelegateInfo>({
@@ -116,6 +147,7 @@ export function DelegatesTable({
         <div className="space-y-4 overflow-hidden">
           <DelegatesToolbar
             table={table}
+            minPowerFloor={minPowerFloor}
             onMinPowerChange={onMinPowerChange}
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
