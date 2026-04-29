@@ -34,10 +34,10 @@ import type { VoteSupport } from "@gzeoneth/gov-tracker";
 import {
   VOTE_SUPPORT,
   prepareCastVote,
-  readHasVoted,
   readVotingPower,
 } from "@gzeoneth/gov-tracker";
 
+import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
 import { useUserVote } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { ARB_TOKEN } from "@config/arbitrum-governance";
@@ -87,18 +87,14 @@ export default function VoteForm({
     });
   const votingPower = rawVotingPower as bigint | undefined;
 
-  const { data: rawHasVoted, isLoading: isLoadingHasVoted } = useReadContract({
-    ...readHasVoted(proposal.id, accountAddress, governorAddress),
-    query: {
-      enabled: canReadAccountData,
-    },
+  const { hasVoted, hasRecordedVote, isLoadingHasVoted } = useProposalHasVoted({
+    proposalId: proposal.id,
+    governorAddress,
   });
-  const hasVoted = rawHasVoted as boolean | undefined;
-  const hasRecordedVote = hasVoted === true;
 
   const { data: userVote, isLoading: isLoadingUserVote } = useUserVote({
     proposalId: proposal.id,
-    governorAddress: proposal.contractAddress,
+    governorAddress,
     voter: address,
     enabled: hasRecordedVote,
   });
@@ -170,7 +166,7 @@ export default function VoteForm({
       <form onSubmit={form.handleSubmit(handleSubmitVote)}>
         <div className={cn("grid gap-1", !isPageVariant && "p-6 pt-0")}>
           {isConnected && (
-            <div className="mb-4 glass-subtle backdrop-blur rounded-lg p-4 space-y-3">
+            <div className="glass-subtle backdrop-blur rounded-lg p-4 space-y-3">
               <VoteInfoRow
                 label="Your Voting Power (at snapshot)"
                 isLoading={isLoadingVotingPower}
@@ -215,8 +211,8 @@ export default function VoteForm({
               control={form.control}
               name="vote"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>What would you like to vote?</FormLabel>
+                <FormItem className="mt-4">
+                  <FormLabel>Cast Your Vote</FormLabel>
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
