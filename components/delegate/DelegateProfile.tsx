@@ -19,10 +19,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import type { TallyDelegateProfile } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
-import type { TallyDelegateProfile } from "@/lib/tally-data";
 
 interface DelegateProfileProps {
   address: string;

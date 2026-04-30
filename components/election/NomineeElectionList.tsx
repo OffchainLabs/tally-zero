@@ -10,11 +10,11 @@ import { AlertCircle, Clock, ShieldX, XCircle } from "lucide-react";
 import Link from "next/link";
 
 import { sortByOrderMap } from "@/lib/collection-utils";
-import { formatVotingPower } from "@/lib/format-utils";
 import {
   useAddressDisplayRecords,
   type TallyAddressDisplayRecord,
-} from "@/lib/tally-data/client";
+} from "@/lib/election-utils";
+import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
 

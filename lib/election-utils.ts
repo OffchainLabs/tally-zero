@@ -1,6 +1,58 @@
 import type { ElectionPhase } from "@/types/election";
 import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
 
+import {
+  getCachedAddressDisplayRecord,
+  getTallyDataClient,
+  useAddressDisplayRecord,
+  useAddressDisplayRecords,
+} from "./tally-data/client";
+import type {
+  TallyAddressDisplayRecord,
+  TallyCandidateSummary,
+  TallyElectionCandidate,
+} from "./tally-data/types";
+
+export async function getCandidate(
+  address: string
+): Promise<TallyElectionCandidate | null> {
+  return getTallyDataClient().getCandidate(address);
+}
+
+export async function getCandidateSummaries(
+  addresses: string[]
+): Promise<Map<string, TallyCandidateSummary>> {
+  return getTallyDataClient().getCandidateSummaries(addresses);
+}
+
+export function getCandidateName(address: string): string | undefined {
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.label ?? undefined)
+    : undefined;
+}
+
+export function getCandidateTitle(address: string): string | undefined {
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.title ?? undefined)
+    : undefined;
+}
+
+export function getCandidateProfileUrl(address: string): string | undefined {
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.profileUrl ?? undefined)
+    : undefined;
+}
+
+export { useAddressDisplayRecord, useAddressDisplayRecords };
+export type {
+  TallyAddressDisplayRecord,
+  TallyCandidateSummary,
+  TallyElectionCandidate,
+};
+
 export function hasNoVotingPower(
   totalVotingPower: bigint | undefined
 ): boolean {

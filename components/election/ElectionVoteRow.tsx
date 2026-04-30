@@ -19,10 +19,10 @@ import { utils as ethersUtils } from "ethers";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useAddressDisplayRecord } from "@/lib/election-utils";
 import { getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
-import { useAddressDisplayRecord } from "@/lib/tally-data/client";
 
 type PrepareVoteFn = (
   proposalId: string,

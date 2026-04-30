@@ -17,11 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function getBlobUrl(): string {
-  return (
-    process.env.TALLY_DATA_SQLITE_BLOB_URL ??
-    process.env.NEXT_PUBLIC_TALLY_DATA_SQLITE_URL ??
-    DEFAULT_BLOB_URL
-  );
+  return process.env.TALLY_DATA_SQLITE_BLOB_URL ?? DEFAULT_BLOB_URL;
 }
 
 function headersForResponse(extraHeaders?: HeadersInit): Headers {

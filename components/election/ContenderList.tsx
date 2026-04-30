@@ -7,8 +7,8 @@ import type {
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
+import { useAddressDisplayRecords } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-import { useAddressDisplayRecords } from "@/lib/tally-data/client";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
 

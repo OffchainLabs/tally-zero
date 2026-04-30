@@ -21,8 +21,8 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import type { TallyElectionCandidate } from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-import type { TallyElectionCandidate } from "@/lib/tally-data";
 
 const CandidateVoteCard = dynamic(
   () =>

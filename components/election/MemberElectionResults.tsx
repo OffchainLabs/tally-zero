@@ -4,8 +4,8 @@ import type { SerializableMemberDetails } from "@gzeoneth/gov-tracker";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
+import { useAddressDisplayRecords } from "@/lib/election-utils";
 import { formatVotingPower } from "@/lib/format-utils";
-import { useAddressDisplayRecords } from "@/lib/tally-data/client";
 import { cn } from "@/lib/utils";
 
 interface MemberElectionResultsProps {

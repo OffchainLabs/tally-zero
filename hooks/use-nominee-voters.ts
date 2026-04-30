@@ -7,9 +7,9 @@ import { ethers } from "ethers";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
+import { getDelegateDisplayRecords } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import { getTallyDataClient } from "@/lib/tally-data/client";
 
 export interface NomineeVoter {
   address: string;
@@ -108,10 +108,9 @@ export function useNomineeVoters({
         return 0;
       });
 
-      const displayRecords =
-        await getTallyDataClient().getAddressDisplayRecords(
-          sorted.map((voter) => voter.address)
-        );
+      const displayRecords = await getDelegateDisplayRecords(
+        sorted.map((voter) => voter.address)
+      );
       for (const voter of sorted) {
         voter.label =
           displayRecords.get(voter.address.toLowerCase())?.label ?? undefined;

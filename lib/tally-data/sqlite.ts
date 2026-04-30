@@ -19,13 +19,16 @@ import type {
   TallyElectionCandidate,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_URL = "/tally-data/tally-zero.sqlite";
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-list-v1";
 const DEFAULT_DB_SIZE_BYTES = 198082560;
+const DEFAULT_DB_URL = "/tally-data/tally-zero.sqlite";
+const DEFAULT_DB_CACHE_BUST = `${DEFAULT_DB_SCHEMA_VERSION}-${DEFAULT_DB_SIZE_BYTES}`;
+const DEFAULT_DB_VIRTUAL_FILENAME = `tally-zero-${DEFAULT_DB_CACHE_BUST}.sqlite`;
 const DEFAULT_CHUNK_SIZE = 4096;
 const MAX_BATCH_SIZE = 800;
 const DEFAULT_MIN_VOTING_POWER = "10000000000000000000";
 const ARB_TOTAL_SUPPLY = "10000000000000000000000000000";
-const LOCAL_STORAGE_PREFIX = `tally-zero:sqlite:${DEFAULT_DB_SIZE_BYTES}:`;
+const LOCAL_STORAGE_PREFIX = `tally-zero:sqlite:${DEFAULT_DB_SCHEMA_VERSION}:${DEFAULT_DB_SIZE_BYTES}:`;
 const LOCAL_STORAGE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 let workerPromise: Promise<WorkerHttpvfs> | null = null;
@@ -109,9 +112,11 @@ function getWorker(): Promise<WorkerHttpvfs> {
 
   const databaseConfig = {
     from: "inline" as const,
+    virtualFilename: DEFAULT_DB_VIRTUAL_FILENAME,
     config: {
       serverMode: "full" as const,
       requestChunkSize: DEFAULT_CHUNK_SIZE,
+      cacheBust: DEFAULT_DB_CACHE_BUST,
       url: getDatabaseUrl(),
     },
   };

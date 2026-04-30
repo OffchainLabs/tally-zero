@@ -46,7 +46,7 @@ function parseArgs(argv: string[]): Options {
     skipBuild: false,
     skipEnv: false,
     environments: ["preview", "production", "development"],
-    envName: "NEXT_PUBLIC_TALLY_DATA_SQLITE_URL",
+    envName: "TALLY_DATA_SQLITE_BLOB_URL",
   };
 
   for (let index = 0; index < argv.length; index += 1) {

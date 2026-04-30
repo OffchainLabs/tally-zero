@@ -9,12 +9,12 @@ import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
 
 import { sortByOrderMap } from "@/lib/collection-utils";
-import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import {
   useAddressDisplayRecords,
   type TallyAddressDisplayRecord,
-} from "@/lib/tally-data/client";
+} from "@/lib/election-utils";
+import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import type { NomineeSortOrder } from "@/types/election";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";

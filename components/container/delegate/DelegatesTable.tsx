@@ -18,9 +18,9 @@ import {
 } from "@/components/ui/Table";
 import { buildShuffleMap, sortByOrderMap } from "@/lib/collection-utils";
 import {
-  getTallyDataClient,
+  getDelegateSummaries,
   type TallyDelegateSummary,
-} from "@/lib/tally-data/client";
+} from "@/lib/delegate-cache";
 import type { DelegateInfo } from "@/types/delegate";
 import {
   ColumnFiltersState,
@@ -136,7 +136,7 @@ export function DelegatesTable({
     return summaries;
   }, [sortedDelegates]);
   const tableDelegateSummaries = useMemo(
-    () => new Map([...rowDelegateSummaries, ...delegateSummaries]),
+    () => new Map([...delegateSummaries, ...rowDelegateSummaries]),
     [rowDelegateSummaries, delegateSummaries]
   );
 
@@ -198,8 +198,7 @@ export function DelegatesTable({
     }
 
     let cancelled = false;
-    getTallyDataClient()
-      .getDelegateSummaries(visibleAddresses)
+    getDelegateSummaries(visibleAddresses)
       .then((summaries) => {
         if (!cancelled) setDelegateSummaries(summaries);
       })

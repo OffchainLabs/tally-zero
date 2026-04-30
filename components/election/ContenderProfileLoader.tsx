@@ -6,9 +6,9 @@ import { ContenderProfile } from "@/components/election/ContenderProfile";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  getTallyDataClient,
+  getCandidate,
   type TallyElectionCandidate,
-} from "@/lib/tally-data/client";
+} from "@/lib/election-utils";
 
 type ContenderProfileState = {
   address: string;
@@ -19,26 +19,30 @@ type ContenderProfileState = {
 
 export function ContenderProfileLoader({
   address,
+  initialCandidate,
 }: {
   address: string;
+  initialCandidate?: TallyElectionCandidate | null;
 }): React.ReactElement {
+  const hasInitialCandidate =
+    initialCandidate?.address.toLowerCase() === address.toLowerCase();
   const [state, setState] = useState<ContenderProfileState>({
     address,
-    candidate: null,
+    candidate: hasInitialCandidate ? initialCandidate : null,
     error: null,
-    isLoading: true,
+    isLoading: !hasInitialCandidate,
   });
 
   useEffect(() => {
     let cancelled = false;
 
-    getTallyDataClient()
-      .getCandidate(address)
+    getCandidate(address)
       .then((nextCandidate) => {
         if (!cancelled) {
           setState({
             address,
-            candidate: nextCandidate,
+            candidate:
+              nextCandidate ?? (hasInitialCandidate ? initialCandidate : null),
             error: null,
             isLoading: false,
           });
@@ -48,8 +52,12 @@ export function ContenderProfileLoader({
         if (!cancelled) {
           setState({
             address,
-            candidate: null,
-            error: err instanceof Error ? err.message : String(err),
+            candidate: hasInitialCandidate ? initialCandidate : null,
+            error: hasInitialCandidate
+              ? null
+              : err instanceof Error
+                ? err.message
+                : String(err),
             isLoading: false,
           });
         }
@@ -58,10 +66,17 @@ export function ContenderProfileLoader({
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, hasInitialCandidate, initialCandidate]);
 
-  const isLoading = state.address !== address || state.isLoading;
-  const { candidate, error } = state;
+  const isLoading =
+    !hasInitialCandidate && (state.address !== address || state.isLoading);
+  const candidate =
+    state.address === address
+      ? state.candidate
+      : hasInitialCandidate
+        ? initialCandidate
+        : null;
+  const error = hasInitialCandidate && state.isLoading ? null : state.error;
 
   if (isLoading) {
     return (

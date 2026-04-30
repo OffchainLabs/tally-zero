@@ -2,6 +2,10 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { ContenderProfileLoader } from "@/components/election/ContenderProfileLoader";
+import {
+  getCachedElectionCandidate,
+  getCachedElectionCandidateStaticParams,
+} from "@/lib/tally-data/server";
 
 interface ContenderPageProps {
   params: Promise<{ address: string }>;
@@ -13,8 +17,16 @@ export const metadata = {
     "View candidate profile for the Arbitrum Security Council election.",
 };
 
+export const dynamicParams = true;
+export const revalidate = false;
+
+export async function generateStaticParams() {
+  return getCachedElectionCandidateStaticParams();
+}
+
 export default async function ContenderPage({ params }: ContenderPageProps) {
   const { address } = await params;
+  const initialCandidate = await getCachedElectionCandidate(address);
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
@@ -35,7 +47,10 @@ export default async function ContenderPage({ params }: ContenderPageProps) {
           </p>
         </div>
 
-        <ContenderProfileLoader address={address} />
+        <ContenderProfileLoader
+          address={address}
+          initialCandidate={initialCandidate}
+        />
       </div>
     </div>
   );

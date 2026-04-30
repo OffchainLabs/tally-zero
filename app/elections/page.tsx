@@ -1,4 +1,8 @@
+import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 import ElectionPageClient from "./ElectionPageClient";
+
+export const dynamic = "force-static";
+export const revalidate = false;
 
 export const metadata = {
   title: "Security Council Elections | Arbitrum Governance",
@@ -6,7 +10,9 @@ export const metadata = {
     "Track Security Council elections on ArbitrumDAO. View election status, nominees, and voting results.",
 };
 
-export default function ElectionsPage() {
+export default async function ElectionsPage() {
+  const initialDisplayRecords = await getCachedElectionAddressDisplayRecords();
+
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
       <div className="container flex flex-col gap-4">
@@ -21,7 +27,7 @@ export default function ElectionsPage() {
           </p>
         </div>
 
-        <ElectionPageClient />
+        <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
       </div>
     </div>
   );

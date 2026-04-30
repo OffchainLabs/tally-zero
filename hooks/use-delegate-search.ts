@@ -12,14 +12,16 @@ import {
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { compareBigIntDesc } from "@/lib/collection-utils";
 import { debug } from "@/lib/debug";
+import {
+  delegateMatchesSearch,
+  getDelegateListStats,
+  loadDelegateList,
+  type TallyDelegateListItem,
+  type TallyDelegateListResult,
+} from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
-import { formatCacheAge } from "@/lib/format-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import { getTallyDataClient } from "@/lib/tally-data/client";
-import type { TallyDelegateListItem } from "@/lib/tally-data/types";
 import type { DelegateCacheStats } from "@/types/delegate";
-
-const DEFAULT_MIN_VOTING_POWER = "10000000000000000000";
 
 export interface UseDelegateSearchOptions {
   enabled: boolean;
@@ -40,12 +42,6 @@ export interface UseDelegateSearchResult {
   isRefreshingVisible: boolean;
 }
 
-type DelegateData = {
-  delegates: TallyDelegateListItem[];
-  totalVotingPower: string;
-  totalSupply: string;
-};
-
 export function filterDelegates(
   delegates: DelegateInfo[],
   options: {
@@ -62,22 +58,6 @@ export function filterDelegates(
     result = filterDelegatesByAddress(result, trimmedAddress);
   }
   return result;
-}
-
-function delegateMatchesSearch(
-  delegate: TallyDelegateListItem,
-  rawFilter: string
-): boolean {
-  const filter = rawFilter.trim().toLowerCase();
-  if (!filter) return true;
-
-  return [
-    delegate.address,
-    delegate.displayName,
-    delegate.knownLabel,
-    delegate.name,
-    delegate.ens,
-  ].some((value) => value?.toLowerCase().includes(filter));
 }
 
 export function useDelegateSearch({
@@ -99,7 +79,8 @@ export function useDelegateSearch({
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshingVisible, setIsRefreshingVisible] = useState(false);
   const [cacheStats, setCacheStats] = useState<DelegateCacheStats>();
-  const [delegateData, setDelegateData] = useState<DelegateData | null>(null);
+  const [delegateData, setDelegateData] =
+    useState<TallyDelegateListResult | null>(null);
 
   const refreshedAddresses = useRef<Set<string>>(new Set());
 
@@ -119,8 +100,7 @@ export function useDelegateSearch({
     setIsLoading(true);
     setError(null);
 
-    getTallyDataClient()
-      .getDelegateList(DEFAULT_MIN_VOTING_POWER)
+    loadDelegateList()
       .then((loaded) => {
         if (cancelled) return;
 
@@ -129,14 +109,7 @@ export function useDelegateSearch({
           setTotalVotingPower(loaded.totalVotingPower);
           setTotalSupply(loaded.totalSupply);
           setSnapshotBlock(0);
-          setCacheStats({
-            totalDelegates: loaded.delegates.length,
-            snapshotBlock: 0,
-            generatedAt: new Date(),
-            age: formatCacheAge(new Date()),
-            totalVotingPower: loaded.totalVotingPower,
-            totalSupply: loaded.totalSupply,
-          });
+          setCacheStats(getDelegateListStats(loaded));
           debug.delegates(
             "SQLite delegate list loaded: %d delegates",
             loaded.delegates.length

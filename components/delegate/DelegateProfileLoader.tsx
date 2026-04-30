@@ -6,9 +6,9 @@ import { DelegateProfile } from "@/components/delegate/DelegateProfile";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  getTallyDataClient,
+  getDelegateProfile,
   type TallyDelegateProfile,
-} from "@/lib/tally-data/client";
+} from "@/lib/delegate-cache";
 
 type DelegateProfileState = {
   address: string;
@@ -32,8 +32,7 @@ export function DelegateProfileLoader({
   useEffect(() => {
     let cancelled = false;
 
-    getTallyDataClient()
-      .getDelegate(address)
+    getDelegateProfile(address)
       .then((nextDelegate) => {
         if (!cancelled) {
           setState({
