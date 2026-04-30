@@ -22,8 +22,7 @@ import {
 } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
-
-import candidatesData from "@/data/election-candidates.json";
+import type { TallyElectionCandidate } from "@/lib/tally-data";
 
 const CandidateVoteCard = dynamic(
   () =>
@@ -58,23 +57,6 @@ interface CandidateSkills {
   javascript: number;
   cyberSecurity: string;
 }
-
-interface CandidateData {
-  name: string;
-  title?: string;
-  address: string;
-  twitter?: string;
-  type: string;
-  representative?: string;
-  motivation: string;
-  experience: string;
-  skills: CandidateSkills;
-  projects: string;
-  country: string;
-  registered_at: string;
-}
-
-const candidates = candidatesData as Record<string, CandidateData>;
 
 function textToElements(text: string): React.ReactElement[] {
   const blocks = text.split(/\n\n+/);
@@ -197,15 +179,13 @@ function SkillBar({
 
 interface ContenderProfileProps {
   address: string;
+  candidate: TallyElectionCandidate | null;
 }
 
 export function ContenderProfile({
   address,
+  candidate,
 }: ContenderProfileProps): React.ReactElement {
-  const candidate = Object.entries(candidates).find(
-    ([key]) => key.toLowerCase() === address.toLowerCase()
-  )?.[1];
-
   if (!candidate) {
     const explorerUrl = getAddressExplorerUrl(address);
     return (
@@ -238,6 +218,7 @@ export function ContenderProfile({
   }
 
   const explorerUrl = getAddressExplorerUrl(candidate.address);
+  const skills = (candidate.skills ?? {}) as Partial<CandidateSkills>;
 
   return (
     <div className="space-y-6">
@@ -303,7 +284,7 @@ export function ContenderProfile({
 
             <div className="inline-flex items-center gap-1.5 text-muted-foreground">
               <MapPin className="h-3.5 w-3.5" />
-              <span>{candidate.country}</span>
+              <span>{candidate.country ?? "Unknown"}</span>
             </div>
 
             {candidate.representative && (
@@ -328,7 +309,7 @@ export function ContenderProfile({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {textToElements(candidate.motivation)}
+                {textToElements(candidate.motivation ?? "")}
               </div>
             </CardContent>
           </Card>
@@ -339,7 +320,7 @@ export function ContenderProfile({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {textToElements(candidate.experience)}
+                {textToElements(candidate.experience ?? "")}
               </div>
             </CardContent>
           </Card>
@@ -351,27 +332,21 @@ export function ContenderProfile({
             <CardContent>
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <SkillBar
-                    label="Solidity"
-                    level={candidate.skills.solidity}
-                  />
-                  <SkillBar label="Rust" level={candidate.skills.rust} />
-                  <SkillBar label="Go" level={candidate.skills.golang} />
-                  <SkillBar
-                    label="JavaScript"
-                    level={candidate.skills.javascript}
-                  />
+                  <SkillBar label="Solidity" level={skills.solidity ?? 0} />
+                  <SkillBar label="Rust" level={skills.rust ?? 0} />
+                  <SkillBar label="Go" level={skills.golang ?? 0} />
+                  <SkillBar label="JavaScript" level={skills.javascript ?? 0} />
                 </div>
 
                 <div className="space-y-2 pt-2">
                   <h4 className="text-sm font-medium">Cybersecurity</h4>
                   <div className="space-y-3">
-                    {textToElements(candidate.skills.cyberSecurity)}
+                    {textToElements(skills.cyberSecurity ?? "")}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-2">
-                  {candidate.skills.canVerifySigning ? (
+                  {skills.canVerifySigning ? (
                     <Badge
                       variant="secondary"
                       className="text-green-500 border-green-500/30 flex items-center gap-1"
@@ -399,7 +374,7 @@ export function ContenderProfile({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {textToElements(candidate.projects)}
+                {textToElements(candidate.projects ?? "")}
               </div>
             </CardContent>
           </Card>

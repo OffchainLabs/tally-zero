@@ -1,11 +1,11 @@
+"use client";
+
 import type { SerializableMemberDetails } from "@gzeoneth/gov-tracker";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
-import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getCandidateName } from "@/lib/election-utils";
-import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower } from "@/lib/format-utils";
+import { useAddressDisplayRecords } from "@/lib/tally-data/client";
 import { cn } from "@/lib/utils";
 
 interface MemberElectionResultsProps {
@@ -15,8 +15,11 @@ interface MemberElectionResultsProps {
 
 export function MemberElectionResults({
   details,
-  electionIndex,
 }: MemberElectionResultsProps): React.ReactElement {
+  const displayRecords = useAddressDisplayRecords(
+    details.nominees.map((nominee) => nominee.address)
+  );
+
   return (
     <div className="space-y-4">
       <div className="grid gap-2 text-sm">
@@ -28,10 +31,9 @@ export function MemberElectionResults({
 
       <div className="space-y-2">
         {details.nominees.map((nominee, index: number) => {
-          const label =
-            getCandidateName(nominee.address) ??
-            getDelegateLabel(nominee.address);
-          const explorerUrl = getAddressExplorerUrl(nominee.address);
+          const label = displayRecords.get(
+            nominee.address.toLowerCase()
+          )?.label;
 
           return (
             <div

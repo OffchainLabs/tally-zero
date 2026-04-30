@@ -33,23 +33,36 @@ export function DataTableColumnHeader<TData, TValue>({
     return <div className={cn(className)}>{title}</div>;
   }
 
+  const sorted = column.getIsSorted();
+  const sortIcon =
+    sorted === "desc" ? (
+      <ArrowDownIcon className="ml-2 h-4 w-4" />
+    ) : sorted === "asc" ? (
+      <ArrowUpIcon className="ml-2 h-4 w-4" />
+    ) : (
+      <CaretSortIcon className="ml-2 h-4 w-4" />
+    );
+
   return (
     <div className={cn("flex items-center space-x-2", className)}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-3 h-8 hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
+        onClick={() => column.toggleSorting(sorted === "asc")}
+      >
+        <span>{title}</span>
+        {sortIcon}
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-8 hover:bg-white/20 dark:hover:bg-white/10 data-[state=open]:bg-white/20 dark:data-[state=open]:bg-white/10 transition-colors"
+            className="h-8 w-8 p-0 hover:bg-white/20 dark:hover:bg-white/10 data-[state=open]:bg-white/20 dark:data-[state=open]:bg-white/10 transition-colors"
           >
-            <span>{title}</span>
-            {column.getIsSorted() === "desc" ? (
-              <ArrowDownIcon className="ml-2 h-4 w-4" />
-            ) : column.getIsSorted() === "asc" ? (
-              <ArrowUpIcon className="ml-2 h-4 w-4" />
-            ) : (
-              <CaretSortIcon className="ml-2 h-4 w-4" />
-            )}
+            <span className="sr-only">Open {title} column menu</span>
+            <CaretSortIcon className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

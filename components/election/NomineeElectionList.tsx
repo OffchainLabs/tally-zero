@@ -1,3 +1,5 @@
+"use client";
+
 import type {
   SerializableMemberDetails,
   SerializableNominee,
@@ -8,9 +10,11 @@ import { AlertCircle, Clock, ShieldX, XCircle } from "lucide-react";
 import Link from "next/link";
 
 import { sortByOrderMap } from "@/lib/collection-utils";
-import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getCandidateName, getCandidateTitle } from "@/lib/election-utils";
 import { formatVotingPower } from "@/lib/format-utils";
+import {
+  useAddressDisplayRecords,
+  type TallyAddressDisplayRecord,
+} from "@/lib/tally-data/client";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase, NomineeSortOrder } from "@/types/election";
 
@@ -26,6 +30,7 @@ interface NomineeElectionListProps {
 function sortNominees(
   nominees: SerializableNominee[],
   sortOrder: NomineeSortOrder,
+  displayRecords: Map<string, TallyAddressDisplayRecord>,
   memberDataMap?: Map<string, { weight: string; rank: number }>,
   randomOrder?: Map<string, number>
 ): SerializableNominee[] {
@@ -34,14 +39,10 @@ function sortNominees(
     case "alphabetical":
       sorted.sort((a, b) => {
         const nameA = (
-          getCandidateName(a.address) ??
-          getDelegateLabel(a.address) ??
-          a.address
+          displayRecords.get(a.address.toLowerCase())?.label ?? a.address
         ).toLowerCase();
         const nameB = (
-          getCandidateName(b.address) ??
-          getDelegateLabel(b.address) ??
-          b.address
+          displayRecords.get(b.address.toLowerCase())?.label ?? b.address
         ).toLowerCase();
         return nameA.localeCompare(nameB);
       });
@@ -84,6 +85,10 @@ export function NomineeElectionList({
   randomOrder,
 }: NomineeElectionListProps): React.ReactElement {
   const { compliantNominees, excludedNominees, quorumThreshold } = details;
+  const displayRecords = useAddressDisplayRecords([
+    ...compliantNominees.map((nominee) => nominee.address),
+    ...excludedNominees.map((nominee) => nominee.address),
+  ]);
   const threshold = formatVotingPower(quorumThreshold.toString());
   const isVetting = phase === "VETTING_PERIOD";
   const isMemberElection =
@@ -124,18 +129,21 @@ export function NomineeElectionList({
   eligibleNominees = sortNominees(
     eligibleNominees,
     sortOrder,
+    displayRecords,
     memberDataMap,
     randomOrder
   );
   nonCompliantNominees = sortNominees(
     nonCompliantNominees,
     sortOrder,
+    displayRecords,
     memberDataMap,
     randomOrder
   );
   const sortedExcludedNominees = sortNominees(
     excludedNominees,
     sortOrder,
+    displayRecords,
     undefined,
     randomOrder
   );
@@ -222,6 +230,7 @@ export function NomineeElectionList({
                   isPendingReview={isVetting}
                   showVoteLink={phase === "MEMBER_ELECTION"}
                   phase={phase}
+                  display={displayRecords.get(nominee.address.toLowerCase())}
                 />
               );
             })}
@@ -243,6 +252,7 @@ export function NomineeElectionList({
                 electionIndex={electionIndex}
                 round={1}
                 isNonCompliant
+                display={displayRecords.get(nominee.address.toLowerCase())}
               />
             ))}
           </div>
@@ -263,6 +273,7 @@ export function NomineeElectionList({
                 electionIndex={electionIndex}
                 round={1}
                 isExcluded
+                display={displayRecords.get(nominee.address.toLowerCase())}
               />
             ))}
           </div>
@@ -290,6 +301,7 @@ function NomineeRow({
   isPendingReview,
   showVoteLink,
   phase,
+  display,
 }: {
   address: string;
   votes: string;
@@ -302,9 +314,10 @@ function NomineeRow({
   isPendingReview?: boolean;
   showVoteLink?: boolean;
   phase?: ElectionPhase;
+  display?: TallyAddressDisplayRecord;
 }): React.ReactElement {
-  const label = getCandidateName(address) ?? getDelegateLabel(address);
-  const title = getCandidateTitle(address);
+  const label = display?.label;
+  const title = display?.title;
 
   return (
     <div

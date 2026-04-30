@@ -15,6 +15,9 @@ export default defineConfig([
     "out/**",
   ]),
   {
+    ignores: [".next/**", ".vercel/**", "out/**", "build/**", "coverage/**"],
+  },
+  {
     extends: [...nextCoreWebVitals],
 
     rules: {
@@ -30,6 +33,13 @@ export default defineConfig([
   },
   {
     files: ["next.config.mjs"],
+
+    rules: {
+      "no-process-env": "off",
+    },
+  },
+  {
+    files: ["app/tally-data/**/route.ts"],
 
     rules: {
       "no-process-env": "off",

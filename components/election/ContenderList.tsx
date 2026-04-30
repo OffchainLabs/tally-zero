@@ -1,3 +1,5 @@
+"use client";
+
 import type {
   SerializableContender,
   SerializableNominee,
@@ -5,13 +7,8 @@ import type {
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
-import { getDelegateLabel } from "@/lib/delegate-cache";
-import {
-  getCandidateName,
-  getCandidateProfileUrl,
-  getCandidateTitle,
-} from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
+import { useAddressDisplayRecords } from "@/lib/tally-data/client";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
 
@@ -24,10 +21,13 @@ interface ContenderListProps {
 
 export function ContenderList({
   contenders,
-  electionIndex,
   nominees,
   quorumThreshold,
 }: ContenderListProps): React.ReactElement {
+  const displayRecords = useAddressDisplayRecords(
+    contenders.map((contender) => contender.address)
+  );
+
   if (contenders.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
@@ -39,10 +39,10 @@ export function ContenderList({
   return (
     <div className="space-y-2">
       {contenders.map((contender, index) => {
-        const candidateName = getCandidateName(contender.address);
-        const label = candidateName ?? getDelegateLabel(contender.address);
-        const title = getCandidateTitle(contender.address);
-        const profileUrl = getCandidateProfileUrl(contender.address);
+        const display = displayRecords.get(contender.address.toLowerCase());
+        const label = display?.label;
+        const title = display?.title;
+        const profileUrl = display?.profileUrl;
         const explorerUrl = getAddressExplorerUrl(contender.address);
         const nomineeData = nominees?.find(
           (n) => n.address.toLowerCase() === contender.address.toLowerCase()

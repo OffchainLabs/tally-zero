@@ -19,11 +19,10 @@ import { utils as ethersUtils } from "ethers";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { getDelegateLabel } from "@/lib/delegate-cache";
-import { getCandidateName } from "@/lib/election-utils";
 import { getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
+import { useAddressDisplayRecord } from "@/lib/tally-data/client";
 
 type PrepareVoteFn = (
   proposalId: string,
@@ -63,10 +62,9 @@ export function ElectionVoteRow({
 }: ElectionVoteRowProps): React.ReactElement {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
-  const label =
-    labelOverride ??
-    getCandidateName(targetAddress) ??
-    getDelegateLabel(targetAddress);
+  const display = useAddressDisplayRecord(targetAddress);
+  const label = labelOverride ?? display?.label;
+  const resolvedProfileUrl = profileUrl ?? display?.profileUrl ?? undefined;
   const explorerUrl = getAddressExplorerUrl(targetAddress);
 
   const voteAmountWei = useMemo(() => {
@@ -146,9 +144,9 @@ export function ElectionVoteRow({
   return (
     <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
       <div className="flex items-center gap-2 min-w-0">
-        {profileUrl ? (
+        {resolvedProfileUrl ? (
           <Link
-            href={profileUrl}
+            href={resolvedProfileUrl}
             className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
           >
             {label ?? shortenAddress(targetAddress)}
@@ -160,7 +158,7 @@ export function ElectionVoteRow({
             {shortenAddress(targetAddress)}
           </span>
         )}
-        {!profileUrl && (
+        {!resolvedProfileUrl && (
           <a
             href={explorerUrl}
             target="_blank"

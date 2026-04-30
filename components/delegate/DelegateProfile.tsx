@@ -19,19 +19,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
-import { getDelegateLabel } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
-import type { TallyDelegate } from "@/types/tally-delegate";
+import type { TallyDelegateProfile } from "@/lib/tally-data";
 
 interface DelegateProfileProps {
   address: string;
-  delegate: TallyDelegate | null;
+  delegate: TallyDelegateProfile | null;
 }
 
 export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
-  const label = getDelegateLabel(address);
   const explorerUrl = getAddressExplorerUrl(address);
 
   if (!delegate) {
@@ -40,7 +38,7 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2">
             <User className="h-6 w-6" />
-            {label || "Delegate"}
+            Delegate
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -60,7 +58,11 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
   }
 
   const { account, statement } = delegate;
-  const displayName = label || account.name || shortenAddress(address);
+  const displayName =
+    delegate.knownLabel ||
+    account.name ||
+    account.ens ||
+    shortenAddress(address);
   const hasStatement = statement.statement.trim().length > 0;
 
   return (

@@ -6,9 +6,13 @@ import { ProposalPage } from "@/components/proposal/ProposalPage";
 import { isIncompleteProposalState } from "@/lib/proposal-utils";
 import { getStaticProposalById } from "@/lib/static-proposal-data";
 
-type ProposalRouteParams = Awaited<
-  PageProps<"/proposal/[proposalId]">["params"]
->;
+type ProposalRouteParams = {
+  proposalId: string;
+};
+
+type ProposalRoutePageProps = {
+  params: Promise<ProposalRouteParams>;
+};
 
 export const metadata: Metadata = {
   title: "Proposal | Arbitrum Governance",
@@ -29,9 +33,7 @@ export async function generateStaticParams(): Promise<ProposalRouteParams[]> {
   return Array.from(proposalIds).map((proposalId) => ({ proposalId }));
 }
 
-export default async function ProposalRoutePage(
-  props: PageProps<"/proposal/[proposalId]">
-) {
+export default async function ProposalRoutePage(props: ProposalRoutePageProps) {
   const { proposalId } = await props.params;
   const staticProposal = getStaticProposalById(proposalId);
   const initialProposal =
