@@ -13,9 +13,10 @@ import { ADDRESSES, ERC20_VOTES_ABI } from "@gzeoneth/gov-tracker";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
-import { getDelegateLabel, getDelegateRankInfo } from "@/lib/delegate-cache";
+import { getDelegateRankInfo } from "@/lib/delegate-cache";
 import { getErrorMessage } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
+import { getTallyDataClient } from "@/lib/tally-data/client";
 
 /** Result from delegate lookup containing voting and delegation info */
 export interface DelegateLookupResult {
@@ -99,8 +100,11 @@ export function useDelegateLookup({
         contract.delegates(address),
       ]);
 
-      // Get delegate label and rank from cache (O(1) lookups)
-      const label = getDelegateLabel(address);
+      // Get delegate label and rank from cache/data source.
+      const displayRecord = (
+        await getTallyDataClient().getAddressDisplayRecords([address])
+      ).get(address.toLowerCase());
+      const label = displayRecord?.label ?? undefined;
       let cacheRank: number | undefined;
       let cacheVotingPower: string | undefined;
 

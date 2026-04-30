@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DelegateCache, DelegateInfo } from "@/types/delegate";
 
-import {
-  getDelegateCacheStats,
-  getDelegateLabel,
-  getTopDelegates,
-} from "./delegate-cache";
+import { getDelegateCacheStats, getTopDelegates } from "./delegate-cache";
 
 // Mock cache data for testing
 const createMockDelegate = (
@@ -33,25 +29,6 @@ const createMockCache = (delegates: DelegateInfo[]): DelegateCache => ({
 });
 
 describe("delegate-cache", () => {
-  describe("getDelegateLabel", () => {
-    it("returns undefined for unknown addresses", () => {
-      expect(
-        getDelegateLabel("0x0000000000000000000000000000000000000001")
-      ).toBeUndefined();
-    });
-
-    it("handles case-insensitive lookup", () => {
-      // This depends on delegate-labels.json content
-      // Just verify it doesn't crash with different case inputs
-      const lowerAddress = "0xabcdef1234567890abcdef1234567890abcdef12";
-      const upperAddress = "0xABCDEF1234567890ABCDEF1234567890ABCDEF12";
-      // Both should return the same result (undefined for unknown)
-      expect(getDelegateLabel(lowerAddress)).toBe(
-        getDelegateLabel(upperAddress)
-      );
-    });
-  });
-
   describe("getDelegateCacheStats", () => {
     it("returns correct stats from cache", () => {
       const delegates = [

@@ -1,32 +1,5 @@
-import candidatesData from "@/data/election-candidates.json";
 import type { ElectionPhase } from "@/types/election";
 import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
-
-const candidateNames = new Map<string, string>();
-const candidateTitles = new Map<string, string>();
-for (const [addr, data] of Object.entries(
-  candidatesData as Record<string, { name: string; title?: string }>
-)) {
-  candidateNames.set(addr.toLowerCase(), data.name);
-  if (data.title) {
-    candidateTitles.set(addr.toLowerCase(), data.title);
-  }
-}
-
-export function getCandidateName(address: string): string | undefined {
-  return candidateNames.get(address.toLowerCase());
-}
-
-export function getCandidateTitle(address: string): string | undefined {
-  return candidateTitles.get(address.toLowerCase());
-}
-
-export function getCandidateProfileUrl(address: string): string | undefined {
-  if (candidateNames.has(address.toLowerCase())) {
-    return `/elections/contender/${address}`;
-  }
-  return undefined;
-}
 
 export function hasNoVotingPower(
   totalVotingPower: bigint | undefined

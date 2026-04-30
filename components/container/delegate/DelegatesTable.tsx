@@ -17,6 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { buildShuffleMap, sortByOrderMap } from "@/lib/collection-utils";
+import {
+  getTallyDataClient,
+  type TallyDelegateSummary,
+} from "@/lib/tally-data/client";
 import type { DelegateInfo } from "@/types/delegate";
 import {
   ColumnFiltersState,
@@ -40,8 +44,28 @@ export interface DelegatesTableProps {
   error: Error | null;
   rpcHealthy: boolean | null;
   minPowerFloor: number;
+  onSearchChange: (value: string) => void;
   onMinPowerChange: (value: string) => void;
   onVisibleRowsChange: (addresses: string[]) => void;
+}
+
+type DelegateWithSummary = DelegateInfo & Partial<TallyDelegateSummary>;
+
+function getRowDelegateSummary(
+  delegate: DelegateInfo
+): TallyDelegateSummary | null {
+  const row = delegate as DelegateWithSummary;
+  if (!row.displayName && !row.name && !row.ens && !row.picture) return null;
+
+  return {
+    address: row.address,
+    ens: row.ens ?? null,
+    name: row.name ?? null,
+    picture: row.picture ?? null,
+    knownLabel: row.knownLabel ?? null,
+    displayName:
+      row.displayName ?? row.knownLabel ?? row.name ?? row.ens ?? null,
+  };
 }
 
 export function DelegatesTable({
@@ -51,6 +75,7 @@ export function DelegatesTable({
   error,
   rpcHealthy,
   minPowerFloor,
+  onSearchChange,
   onMinPowerChange,
   onVisibleRowsChange,
 }: DelegatesTableProps) {
@@ -62,7 +87,11 @@ export function DelegatesTable({
   const prevSortOrderRef = useRef(sortOrder);
   const randomOrderRef = useRef<Map<string, number>>(new Map());
   const randomOrderKeyRef = useRef("");
-  const lastAddressesRef = useRef<string>("");
+  const [searchValue, setSearchValue] = useState("");
+  const [minPowerValue, setMinPowerValue] = useState(String(minPowerFloor));
+  const [delegateSummaries, setDelegateSummaries] = useState<
+    Map<string, TallyDelegateSummary>
+  >(new Map());
   const delegateAddressKey = useMemo(
     () =>
       delegates
@@ -98,6 +127,19 @@ export function DelegatesTable({
     );
   }, [delegateAddressKey, delegates, sortOrder]);
 
+  const rowDelegateSummaries = useMemo(() => {
+    const summaries = new Map<string, TallyDelegateSummary>();
+    for (const delegate of sortedDelegates) {
+      const summary = getRowDelegateSummary(delegate);
+      if (summary) summaries.set(delegate.address.toLowerCase(), summary);
+    }
+    return summaries;
+  }, [sortedDelegates]);
+  const tableDelegateSummaries = useMemo(
+    () => new Map([...rowDelegateSummaries, ...delegateSummaries]),
+    [rowDelegateSummaries, delegateSummaries]
+  );
+
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<DelegateInfo>({
     data: sortedDelegates,
@@ -121,21 +163,54 @@ export function DelegatesTable({
     getFacetedUniqueValues: getFacetedUniqueValues(),
     meta: {
       totalVotingPower,
+      delegateSummaries: tableDelegateSummaries,
     },
   });
 
   const visibleRows = table.getRowModel().rows;
+  const visibleAddressesKey = visibleRows
+    .map((row) => row.original.address)
+    .join(",");
+  const hasActiveFilters =
+    searchValue.length > 0 ||
+    minPowerValue !== String(minPowerFloor) ||
+    columnFilters.length > 0;
+  const showTableShell =
+    !isLoading && !error && (delegates.length > 0 || hasActiveFilters);
 
   useEffect(() => {
-    if (visibleRows.length > 0) {
-      const visibleAddresses = visibleRows.map((row) => row.original.address);
-      const addressesKey = visibleAddresses.join(",");
-      if (lastAddressesRef.current !== addressesKey) {
-        lastAddressesRef.current = addressesKey;
-        onVisibleRowsChange(visibleAddresses);
-      }
+    const visibleAddresses = visibleAddressesKey
+      ? visibleAddressesKey.split(",")
+      : [];
+    onVisibleRowsChange(visibleAddresses);
+  }, [visibleAddressesKey, onVisibleRowsChange]);
+
+  useEffect(() => {
+    const visibleAddresses = visibleAddressesKey
+      ? visibleAddressesKey.split(",")
+      : [];
+
+    if (visibleAddresses.length === 0) {
+      setDelegateSummaries((current) =>
+        current.size === 0 ? current : new Map()
+      );
+      return;
     }
-  }, [visibleRows, onVisibleRowsChange]);
+
+    let cancelled = false;
+    getTallyDataClient()
+      .getDelegateSummaries(visibleAddresses)
+      .then((summaries) => {
+        if (!cancelled) setDelegateSummaries(summaries);
+      })
+      .catch(() => {
+        if (!cancelled) setDelegateSummaries(new Map());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleAddressesKey]);
 
   return (
     <section id="delegates-table">
@@ -143,12 +218,23 @@ export function DelegatesTable({
       <LoadingState show={isLoading} />
       <ErrorMessage error={error} />
 
-      {delegates.length > 0 && !error && (
+      {showTableShell && (
         <div className="space-y-4 overflow-hidden">
           <DelegatesToolbar
             table={table}
             minPowerFloor={minPowerFloor}
-            onMinPowerChange={onMinPowerChange}
+            searchValue={searchValue}
+            minPowerValue={minPowerValue}
+            onSearchChange={(value) => {
+              table.setPageIndex(0);
+              setSearchValue(value);
+              onSearchChange(value);
+            }}
+            onMinPowerChange={(value) => {
+              table.setPageIndex(0);
+              setMinPowerValue(value);
+              onMinPowerChange(value);
+            }}
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
           />
@@ -212,7 +298,7 @@ export function DelegatesTable({
       )}
 
       <EmptyState
-        show={delegates.length === 0 && !isLoading && !error}
+        show={!showTableShell && delegates.length === 0 && !isLoading && !error}
         rpcHealthy={rpcHealthy}
       />
     </section>

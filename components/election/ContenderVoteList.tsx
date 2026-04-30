@@ -1,3 +1,5 @@
+"use client";
+
 import type {
   SerializableContender,
   SerializableNominee,
@@ -7,14 +9,13 @@ import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
 
 import { sortByOrderMap } from "@/lib/collection-utils";
-import { getDelegateLabel } from "@/lib/delegate-cache";
-import {
-  getCandidateName,
-  getCandidateProfileUrl,
-  getCandidateTitle,
-} from "@/lib/election-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
+import {
+  useAddressDisplayRecords,
+  type TallyAddressDisplayRecord,
+} from "@/lib/tally-data/client";
+import type { NomineeSortOrder } from "@/types/election";
 
 import { ContenderQuorumBar } from "./ContenderQuorumBar";
 
@@ -49,12 +50,11 @@ function NomineeSelectionBanner({
   );
 }
 
-import type { NomineeSortOrder } from "@/types/election";
-
 function sortContenders(
   contenders: SerializableContender[],
   nominees: SerializableNominee[],
   sortOrder: NomineeSortOrder,
+  displayRecords: Map<string, TallyAddressDisplayRecord>,
   randomOrder?: Map<string, number>
 ): SerializableContender[] {
   const sorted = [...contenders];
@@ -77,14 +77,10 @@ function sortContenders(
     case "alphabetical":
       sorted.sort((a, b) => {
         const nameA = (
-          getCandidateName(a.address) ??
-          getDelegateLabel(a.address) ??
-          a.address
+          displayRecords.get(a.address.toLowerCase())?.label ?? a.address
         ).toLowerCase();
         const nameB = (
-          getCandidateName(b.address) ??
-          getDelegateLabel(b.address) ??
-          b.address
+          displayRecords.get(b.address.toLowerCase())?.label ?? b.address
         ).toLowerCase();
         return nameA.localeCompare(nameB);
       });
@@ -117,10 +113,14 @@ export function ContenderVoteList({
   sortOrder = "votes",
   randomOrder,
 }: ContenderVoteListProps): React.ReactElement {
+  const displayRecords = useAddressDisplayRecords(
+    contenders.map((contender) => contender.address)
+  );
   const sortedContenders = sortContenders(
     contenders,
     nominees,
     sortOrder,
+    displayRecords,
     randomOrder
   );
 
@@ -139,10 +139,10 @@ export function ContenderVoteList({
       ) : (
         <div className="space-y-2">
           {sortedContenders.map((contender) => {
-            const candidateName = getCandidateName(contender.address);
-            const candidateTitle = getCandidateTitle(contender.address);
-            const label = candidateName ?? getDelegateLabel(contender.address);
-            const profileUrl = getCandidateProfileUrl(contender.address);
+            const display = displayRecords.get(contender.address.toLowerCase());
+            const candidateTitle = display?.title;
+            const label = display?.label;
+            const profileUrl = display?.profileUrl;
             const explorerUrl = getAddressExplorerUrl(contender.address);
             const nomineeData = nominees.find(
               (n) => n.address.toLowerCase() === contender.address.toLowerCase()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { Table } from "@tanstack/react-table";
 import { ArrowDownUp } from "lucide-react";
@@ -23,6 +23,9 @@ export type DelegateSortOrder = "votingPower" | "random";
 interface DelegatesToolbarProps<TData> {
   table: Table<TData>;
   minPowerFloor: number;
+  searchValue: string;
+  minPowerValue: string;
+  onSearchChange: (value: string) => void;
   onMinPowerChange?: (value: string) => void;
   sortOrder: DelegateSortOrder;
   onSortOrderChange: (value: DelegateSortOrder) => void;
@@ -31,38 +34,39 @@ interface DelegatesToolbarProps<TData> {
 export function DelegatesToolbar<TData>({
   table,
   minPowerFloor,
+  searchValue,
+  minPowerValue,
+  onSearchChange,
   onMinPowerChange,
   sortOrder,
   onSortOrderChange,
 }: DelegatesToolbarProps<TData>) {
-  const isFiltered = table.getState().columnFilters.length > 0;
   const minPowerFloorValue = String(minPowerFloor);
-  const [searchValue, setSearchValue] = useState("");
-  const [minPowerValue, setMinPowerValue] = useState(minPowerFloorValue);
+  const isFiltered =
+    table.getState().columnFilters.length > 0 ||
+    searchValue.length > 0 ||
+    minPowerValue !== minPowerFloorValue;
 
   const handleSearchChange = useCallback(
     (value: string) => {
-      setSearchValue(value);
-      table.getColumn("address")?.setFilterValue(value);
+      onSearchChange(value);
     },
-    [table]
+    [onSearchChange]
   );
 
   const handleMinPowerChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const value = event.target.value;
-      setMinPowerValue(value);
       onMinPowerChange?.(value);
     },
     [onMinPowerChange]
   );
 
   const handleReset = useCallback(() => {
-    setSearchValue("");
-    setMinPowerValue(minPowerFloorValue);
+    onSearchChange("");
     table.resetColumnFilters();
     onMinPowerChange?.(minPowerFloorValue);
-  }, [minPowerFloorValue, table, onMinPowerChange]);
+  }, [minPowerFloorValue, table, onMinPowerChange, onSearchChange]);
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -70,7 +74,7 @@ export function DelegatesToolbar<TData>({
         <ToolbarSearch
           value={searchValue}
           onChange={handleSearchChange}
-          placeholder="Search address..."
+          placeholder="Search delegate..."
           className="w-full sm:w-[150px] lg:w-[300px]"
         />
 

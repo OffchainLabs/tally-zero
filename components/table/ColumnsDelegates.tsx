@@ -11,9 +11,9 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 
-import { getDelegateLabel } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
+import type { TallyDelegateSummary } from "@/lib/tally-data";
 import { DelegateInfo } from "@/types/delegate";
 
 declare module "@tanstack/react-table" {
@@ -21,6 +21,7 @@ declare module "@tanstack/react-table" {
   // biome-ignore lint: required for type augmentation
   interface TableMeta<TData> {
     totalVotingPower?: string;
+    delegateSummaries?: Map<string, TallyDelegateSummary>;
   }
 }
 
@@ -45,10 +46,19 @@ export const columns: ColumnDef<DelegateInfo>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Address" />
     ),
-    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+    cell: ({
+      row,
+      table,
+    }: {
+      row: Row<DelegateInfo>;
+      table: Table<DelegateInfo>;
+    }) => {
       const address = row.getValue("address") as string;
       const shortened = shortenAddress(address);
-      const label = getDelegateLabel(address);
+      const summary = table.options.meta?.delegateSummaries?.get(
+        address.toLowerCase()
+      );
+      const label = summary?.displayName;
 
       return (
         <HoverCard>

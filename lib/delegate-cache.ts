@@ -3,7 +3,6 @@
  *
  * The SDK provides cache querying functions. This module handles:
  * - Browser-compatible cache loading (require() instead of fs.readFileSync)
- * - Delegate label lookups (editorial data, not in SDK)
  * - UI-specific stats formatting (age computation)
  */
 
@@ -18,37 +17,10 @@ import {
 
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import type { DelegateCacheStats } from "@/types/delegate";
-import type { DelegateIndex } from "@/types/tally-delegate";
-import delegateIndexData from "@data/delegate-index.json";
-import delegateLabelsData from "@data/delegate-labels.json";
 
 import { debug } from "./debug";
 import { formatCacheAge } from "./format-utils";
 import { getStoredValue } from "./storage-utils";
-
-interface DelegateLabelsConfig {
-  version: number;
-  description: string;
-  delegates: Record<string, string>;
-}
-
-const delegateLabels = delegateLabelsData as DelegateLabelsConfig;
-const delegateIndex = delegateIndexData as DelegateIndex;
-
-const normalizedDelegateLabels = new Map<string, string>();
-for (const [addr, label] of Object.entries(delegateLabels.delegates)) {
-  normalizedDelegateLabels.set(addr.toLowerCase(), label);
-}
-
-/**
- * Returns a display label for a delegate address.
- * Checks curated delegate-labels.json first, then falls back
- * to the name from delegate-index.json (derived from Tally profiles).
- */
-export function getDelegateLabel(address: string): string | undefined {
-  const key = address.toLowerCase();
-  return normalizedDelegateLabels.get(key) ?? delegateIndex[key]?.name;
-}
 
 function getSkipDelegateCacheSetting(): boolean {
   return (

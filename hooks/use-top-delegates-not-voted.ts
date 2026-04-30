@@ -9,9 +9,10 @@ import {
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import { getDelegateLabel, loadDelegateCache } from "@/lib/delegate-cache";
+import { loadDelegateCache } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
+import { getTallyDataClient } from "@/lib/tally-data/client";
 
 export interface DelegateNotVoted {
   address: string;
@@ -66,11 +67,18 @@ export function useTopDelegatesNotVoted({
         { cache, limit }
       );
 
-      const notVoted: DelegateNotVoted[] = sdkResults.map((d) => ({
-        address: d.address,
-        label: getDelegateLabel(d.address),
-        votingPower: d.votingPower,
-      }));
+      const displayRecords =
+        await getTallyDataClient().getAddressDisplayRecords(
+          sdkResults.map((d) => d.address)
+        );
+      const notVoted: DelegateNotVoted[] = sdkResults.map((d) => {
+        const display = displayRecords.get(d.address.toLowerCase());
+        return {
+          address: d.address,
+          label: display?.label ?? undefined,
+          votingPower: d.votingPower,
+        };
+      });
 
       setDelegatesNotVoted(notVoted);
       setAllTopDelegatesVoted(notVoted.length === 0);

@@ -27,6 +27,7 @@ export default function DelegateSearch() {
   const [minPowerFilter, setMinPowerFilter] = useState<string>(
     String(MIN_DELEGATE_POWER_ARB)
   );
+  const [delegateSearchFilter, setDelegateSearchFilter] = useState<string>("");
 
   const { l1Rpc, l2Rpc, isHydrated: rpcSettingsHydrated } = useRpcSettings();
 
@@ -82,6 +83,7 @@ export default function DelegateSearch() {
     enabled: autoStarted && rpcHealthy === true,
     customRpcUrl: customRpc || undefined,
     minVotingPower: minVotingPowerWei,
+    addressFilter: delegateSearchFilter,
   });
 
   // Calculate delegated percentage
@@ -138,6 +140,7 @@ export default function DelegateSearch() {
         error={error}
         rpcHealthy={rpcHealthy}
         minPowerFloor={MIN_DELEGATE_POWER_ARB}
+        onSearchChange={setDelegateSearchFilter}
         onMinPowerChange={setMinPowerFilter}
         onVisibleRowsChange={handleVisibleRowsChange}
       />
