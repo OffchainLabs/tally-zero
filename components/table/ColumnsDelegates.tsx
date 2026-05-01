@@ -70,9 +70,8 @@ export const columns: ColumnDef<DelegateInfo>[] = [
               className="inline-flex max-w-full items-center gap-2 font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {summary?.picture && (
-                // Delegate avatar URLs are third-party/user-supplied, so keep
-                // them as browser-loaded images instead of configuring them as
-                // Next image remotes.
+                // Delegate avatars are mirrored static assets, so a browser
+                // image keeps table rendering simple and lazy-loaded.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={summary.picture}

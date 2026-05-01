@@ -1,6 +1,6 @@
 const DEFAULT_BLOB_URL =
-  "https://tjofhnztd1vo0kie.public.blob.vercel-storage.com/tally-data/tally-zero-delegate-list.sqlite";
-const DB_SIZE_BYTES = 198082560;
+  "https://epodj1k6qull8rb3.public.blob.vercel-storage.com/governance-data/delegates.sqlite";
+const DB_SIZE_BYTES = 197480448;
 const MAX_RANGE_BYTES = 4 * 1024 * 1024;
 
 type ParsedRange =
@@ -17,7 +17,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function getBlobUrl(): string {
-  return process.env.TALLY_DATA_SQLITE_BLOB_URL ?? DEFAULT_BLOB_URL;
+  return (
+    process.env.GOVERNANCE_DATA_SQLITE_BLOB_URL ??
+    process.env.TALLY_DATA_SQLITE_BLOB_URL ??
+    DEFAULT_BLOB_URL
+  );
 }
 
 function headersForResponse(extraHeaders?: HeadersInit): Headers {

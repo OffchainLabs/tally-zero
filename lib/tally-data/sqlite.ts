@@ -20,7 +20,7 @@ import type {
 } from "@/lib/tally-data/types";
 
 const DEFAULT_DB_SCHEMA_VERSION = "delegate-list-v1";
-const DEFAULT_DB_SIZE_BYTES = 198082560;
+const DEFAULT_DB_SIZE_BYTES = 197480448;
 const DEFAULT_DB_URL = "/tally-data/tally-zero.sqlite";
 const DEFAULT_DB_CACHE_BUST = `${DEFAULT_DB_SCHEMA_VERSION}-${DEFAULT_DB_SIZE_BYTES}`;
 const DEFAULT_DB_VIRTUAL_FILENAME = `tally-zero-${DEFAULT_DB_CACHE_BUST}.sqlite`;

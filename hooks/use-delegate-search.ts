@@ -10,7 +10,6 @@ import {
 } from "@gzeoneth/gov-tracker";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
-import { compareBigIntDesc } from "@/lib/collection-utils";
 import { debug } from "@/lib/debug";
 import {
   delegateMatchesSearch,
@@ -180,10 +179,6 @@ export function useDelegateSearch({
             const newPower = powerMap.get(d.address.toLowerCase());
             return newPower ? { ...d, votingPower: newPower } : d;
           });
-
-          updatedDelegates.sort((a, b) =>
-            compareBigIntDesc(a.votingPower, b.votingPower)
-          );
 
           const newDelegateData = {
             ...delegateData,

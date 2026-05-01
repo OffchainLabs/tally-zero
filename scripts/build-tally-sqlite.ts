@@ -34,6 +34,7 @@ const rootDir = process.cwd();
 const outputDir = path.join(rootDir, "public", "tally-data");
 const outputDbPath = path.join(outputDir, "tally-zero.sqlite");
 const manifestPath = path.join(outputDir, "manifest.json");
+const avatarMapPath = path.join(rootDir, "data", "avatar-map.json");
 
 const delegateFiles = [
   "delegates-1.json",
@@ -48,6 +49,11 @@ const DEFAULT_MIN_VOTING_POWER = BigInt("10000000000000000000");
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(fs.readFileSync(path.join(rootDir, relativePath), "utf8"));
+}
+
+function readOptionalJson<T>(filePath: string, fallback: T): T {
+  if (!fs.existsSync(filePath)) return fallback;
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
 }
 
 function sqlValue(value: unknown): string {
@@ -104,7 +110,11 @@ async function main() {
   let delegateSearchCount = 0;
   let delegateSearchSubstringCount = 0;
   let delegateListCount = 0;
+  let delegateListAvatarCount = 0;
   let candidateCount = 0;
+  let delegateAvatarCount = 0;
+  let delegateIndexAvatarCount = 0;
+  const avatarMap = readOptionalJson<Record<string, string>>(avatarMapPath, {});
   const delegateAddresses = new Set<string>();
   const metadataSearchAddresses = new Set<string>();
   const delegateMetadataByAddressLower = new Map<
@@ -210,6 +220,7 @@ begin;
       const addressLower = address.toLowerCase();
       const accountEns = delegate.account.ens?.trim();
       const accountName = delegate.account.name?.trim();
+      const picture = avatarMap[addressLower] ?? delegate.account.picture;
       delegateAddresses.add(addressLower);
       delegateMetadataByAddressLower.set(addressLower, {
         name: accountName || null,
@@ -223,6 +234,9 @@ begin;
       }
       if (BigInt(delegate.votesCount) >= DEFAULT_MIN_VOTING_POWER) {
         delegateListCount += 1;
+        if (picture) {
+          delegateListAvatarCount += 1;
+        }
       }
 
       await writeSql(
@@ -235,7 +249,7 @@ begin;
           sqlValue(delegate.account.name || null),
           sqlValue(delegate.account.bio || null),
           sqlValue(delegate.account.twitter || null),
-          sqlValue(delegate.account.picture),
+          sqlValue(picture),
           sqlValue(delegate.votesCount),
           sqlValue(delegate.delegatorsCount),
           sqlValue(delegate.isPrioritized),
@@ -243,6 +257,9 @@ begin;
           sqlJson(delegate.delegateEligibility),
         ].join(",")});\n`
       );
+      if (picture) {
+        delegateAvatarCount += 1;
+      }
 
       await writeSql(
         sqlite.stdin,
@@ -263,15 +280,22 @@ begin;
   const indexByAddressLower = new Map<string, DelegateIndexEntry>();
   for (const [address, entry] of Object.entries(delegateIndex)) {
     const addressLower = address.toLowerCase();
-    indexByAddressLower.set(addressLower, entry);
+    const entryWithAvatar = {
+      ...entry,
+      picture: avatarMap[addressLower] ?? entry.picture,
+    };
+    indexByAddressLower.set(addressLower, entryWithAvatar);
     await writeSql(
       sqlite.stdin,
       `insert or replace into delegate_index values (${[
         sqlValue(addressLower),
         sqlValue(entry.name),
-        sqlValue(entry.picture),
+        sqlValue(entryWithAvatar.picture),
       ].join(",")});\n`
     );
+    if (entryWithAvatar.picture) {
+      delegateIndexAvatarCount += 1;
+    }
     delegateIndexCount += 1;
   }
 
@@ -374,6 +398,9 @@ where length(d.votes_count) > length('10000000000000000000')
   );\n`
   );
   for (const filename of candidateFiles) {
+    if (!fs.existsSync(path.join(rootDir, "data", filename))) {
+      continue;
+    }
     const candidates = readJson<Record<string, CandidateData>>(
       `data/${filename}`
     );
@@ -437,11 +464,14 @@ vacuum;
         sizeBytes,
         tables: {
           delegates: delegateCount,
+          delegateAvatars: delegateAvatarCount,
           delegateIndex: delegateIndexCount,
+          delegateIndexAvatars: delegateIndexAvatarCount,
           delegateLabels: delegateLabelCount,
           delegateSearch: delegateSearchCount,
           delegateSearchSubstrings: delegateSearchSubstringCount,
           delegateList: delegateListCount,
+          delegateListAvatars: delegateListAvatarCount,
           electionCandidates: candidateCount,
         },
       },
@@ -457,11 +487,14 @@ vacuum;
         manifest: path.relative(rootDir, manifestPath),
         sizeBytes,
         delegates: delegateCount,
+        delegateAvatars: delegateAvatarCount,
         delegateIndex: delegateIndexCount,
+        delegateIndexAvatars: delegateIndexAvatarCount,
         delegateLabels: delegateLabelCount,
         delegateSearch: delegateSearchCount,
         delegateSearchSubstrings: delegateSearchSubstringCount,
         delegateList: delegateListCount,
+        delegateListAvatars: delegateListAvatarCount,
         electionCandidates: candidateCount,
       },
       null,

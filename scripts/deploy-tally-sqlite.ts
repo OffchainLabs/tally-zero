@@ -14,6 +14,7 @@ type Options = {
   pathname?: string;
   environments: string[];
   envName: string;
+  scope: string;
 };
 
 const rootDir = process.cwd();
@@ -46,7 +47,8 @@ function parseArgs(argv: string[]): Options {
     skipBuild: false,
     skipEnv: false,
     environments: ["preview", "production", "development"],
-    envName: "TALLY_DATA_SQLITE_BLOB_URL",
+    envName: "GOVERNANCE_DATA_SQLITE_BLOB_URL",
+    scope: "offchain-labs",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -66,6 +68,8 @@ function parseArgs(argv: string[]): Options {
       options.environments = argv[++index].split(",").map((env) => env.trim());
     } else if (arg === "--env-name") {
       options.envName = argv[++index];
+    } else if (arg === "--scope") {
+      options.scope = argv[++index];
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -91,20 +95,11 @@ function run(command: string, args: string[], options?: { input?: string }) {
     throw new Error(`${printable} exited with status ${result.status}`);
   }
 
-  return result.stdout;
+  return `${result.stdout}\n${result.stderr}`;
 }
 
 function readManifest(): Manifest {
   return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
-}
-
-function defaultPathname(manifest: Manifest): string {
-  const generatedAt = new Date(manifest.generatedAt)
-    .toISOString()
-    .replaceAll("-", "")
-    .replaceAll(":", "")
-    .replace(/\.\d{3}Z$/, "Z");
-  return `tally-data/tally-zero-${generatedAt}-${manifest.sizeBytes}.sqlite`;
 }
 
 function parseBlobUrl(output: string): string {
@@ -170,16 +165,31 @@ function updateVercelEnv(
   envName: string,
   environments: string[],
   blobUrl: string,
+  scope: string,
   dryRun: boolean
 ) {
   for (const environment of environments) {
     if (dryRun) {
       console.log(
-        `$ printf <blob-url> | vercel env update ${envName} ${environment} --yes`
+        `$ printf <blob-url> | vercel env update ${envName} ${environment} --yes --scope ${scope}`
       );
       continue;
     }
-    run("vercel", ["env", "update", envName, environment, "--yes"], {
+    const update = spawnSync(
+      "vercel",
+      ["env", "update", envName, environment, "--yes", "--scope", scope],
+      {
+        cwd: rootDir,
+        encoding: "utf8",
+        input: blobUrl,
+      }
+    );
+    if (update.stdout) process.stdout.write(update.stdout);
+    if (update.stderr) process.stderr.write(update.stderr);
+    if (update.error) throw update.error;
+    if (update.status === 0) continue;
+
+    run("vercel", ["env", "add", envName, environment, "--scope", scope], {
       input: blobUrl,
     });
   }
@@ -210,11 +220,13 @@ function main() {
   }
 
   const manifest = readManifest();
-  const pathname = options.pathname ?? defaultPathname(manifest);
+  const pathname = options.pathname ?? "governance-data/delegates.sqlite";
   const blobArgs = [
     "blob",
     "put",
     path.relative(rootDir, dbPath),
+    "--scope",
+    options.scope,
     "--pathname",
     pathname,
     "--content-type",
@@ -237,6 +249,7 @@ function main() {
       options.envName,
       options.environments,
       blobUrl,
+      options.scope,
       options.dryRun
     );
   }
@@ -249,6 +262,7 @@ function main() {
         sizeBytes: manifest.sizeBytes,
         envName: options.skipEnv ? null : options.envName,
         environments: options.skipEnv ? [] : options.environments,
+        scope: options.scope,
       },
       null,
       2
