@@ -1,8 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useMemo } from "react";
 
 import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  primeAddressDisplayRecordCache,
+  type TallyAddressDisplayRecord,
+} from "@/lib/tally-data/client";
 
 function ElectionSkeleton() {
   return (
@@ -24,6 +29,16 @@ const ElectionContainer = dynamic(
   { ssr: false, loading: () => <ElectionSkeleton /> }
 );
 
-export default function ElectionPageClient() {
+interface ElectionPageClientProps {
+  initialDisplayRecords: TallyAddressDisplayRecord[];
+}
+
+export default function ElectionPageClient({
+  initialDisplayRecords,
+}: ElectionPageClientProps) {
+  useMemo(() => {
+    primeAddressDisplayRecordCache(initialDisplayRecords);
+  }, [initialDisplayRecords]);
+
   return <ElectionContainer />;
 }

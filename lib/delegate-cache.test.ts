@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { DelegateCache, DelegateInfo } from "@/types/delegate";
 
 import {
+  delegateMatchesSearch,
   getDelegateCacheStats,
   getDelegateLabel,
   getTopDelegates,
+  type TallyDelegateListItem,
 } from "./delegate-cache";
 
 // Mock cache data for testing
@@ -41,14 +43,33 @@ describe("delegate-cache", () => {
     });
 
     it("handles case-insensitive lookup", () => {
-      // This depends on delegate-labels.json content
-      // Just verify it doesn't crash with different case inputs
       const lowerAddress = "0xabcdef1234567890abcdef1234567890abcdef12";
       const upperAddress = "0xABCDEF1234567890ABCDEF1234567890ABCDEF12";
-      // Both should return the same result (undefined for unknown)
       expect(getDelegateLabel(lowerAddress)).toBe(
         getDelegateLabel(upperAddress)
       );
+    });
+  });
+
+  describe("delegateMatchesSearch", () => {
+    it("matches delegate display metadata", () => {
+      const delegate: TallyDelegateListItem = {
+        address: "0x1234567890abcdef1234567890abcdef12345678",
+        votingPower: "1000",
+        lastChangeBlock: 100,
+        votesCount: "1000",
+        delegatorsCount: 1,
+        isPrioritized: false,
+        ens: "example.eth",
+        name: "Example Delegate",
+        picture: null,
+        knownLabel: "Known Delegate",
+        displayName: "Known Delegate",
+      };
+
+      expect(delegateMatchesSearch(delegate, "known")).toBe(true);
+      expect(delegateMatchesSearch(delegate, "example.eth")).toBe(true);
+      expect(delegateMatchesSearch(delegate, "nomatch")).toBe(false);
     });
   });
 

@@ -13,7 +13,10 @@ import { ADDRESSES, ERC20_VOTES_ABI } from "@gzeoneth/gov-tracker";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
-import { getDelegateLabel, getDelegateRankInfo } from "@/lib/delegate-cache";
+import {
+  getDelegateDisplayRecord,
+  getDelegateRankInfo,
+} from "@/lib/delegate-cache";
 import { getErrorMessage } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 
@@ -99,8 +102,9 @@ export function useDelegateLookup({
         contract.delegates(address),
       ]);
 
-      // Get delegate label and rank from cache (O(1) lookups)
-      const label = getDelegateLabel(address);
+      // Get delegate label and rank from cache/data source.
+      const label =
+        (await getDelegateDisplayRecord(address))?.label ?? undefined;
       let cacheRank: number | undefined;
       let cacheVotingPower: string | undefined;
 

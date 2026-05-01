@@ -55,3 +55,6 @@ docs/
 delegate-cache.json
 
 .mcp.json
+
+# Generated local/Vercel-hosted data artifacts
+/public/tally-data/

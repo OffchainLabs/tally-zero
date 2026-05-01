@@ -12,6 +12,7 @@ export interface TallyDelegateAccount {
   name: string;
   bio: string;
   twitter: string;
+  picture?: string | null;
 }
 
 export interface TallyDelegateStatement {

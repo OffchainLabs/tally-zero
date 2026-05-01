@@ -3,6 +3,7 @@
 import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { BigNumber } from "ethers";
 import { ExternalLinkIcon } from "lucide-react";
+import Link from "next/link";
 
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import {
@@ -11,7 +12,7 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 
-import { getDelegateLabel } from "@/lib/delegate-cache";
+import type { TallyDelegateSummary } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { DelegateInfo } from "@/types/delegate";
@@ -21,6 +22,7 @@ declare module "@tanstack/react-table" {
   // biome-ignore lint: required for type augmentation
   interface TableMeta<TData> {
     totalVotingPower?: string;
+    delegateSummaries?: Map<string, TallyDelegateSummary>;
   }
 }
 
@@ -45,22 +47,52 @@ export const columns: ColumnDef<DelegateInfo>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Address" />
     ),
-    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+    cell: ({
+      row,
+      table,
+    }: {
+      row: Row<DelegateInfo>;
+      table: Table<DelegateInfo>;
+    }) => {
       const address = row.getValue("address") as string;
       const shortened = shortenAddress(address);
-      const label = getDelegateLabel(address);
+      const summary = table.options.meta?.delegateSummaries?.get(
+        address.toLowerCase()
+      );
+      const label = summary?.displayName;
+      const profileHref = `/delegates/${address.toLowerCase()}`;
 
       return (
         <HoverCard>
           <HoverCardTrigger asChild>
-            <span className="inline-flex items-center gap-2 cursor-default">
-              {label || shortened}
-            </span>
+            <Link
+              href={profileHref}
+              className="inline-flex max-w-full items-center gap-2 font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {summary?.picture && (
+                // Delegate avatars are mirrored static assets, so a browser
+                // image keeps table rendering simple and lazy-loaded.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={summary.picture}
+                  alt=""
+                  className="h-7 w-7 shrink-0 rounded-full bg-muted object-cover"
+                  loading="lazy"
+                />
+              )}
+              <span className="truncate">{label || shortened}</span>
+            </Link>
           </HoverCardTrigger>
           <HoverCardContent className="w-full">
             <div className="space-y-2">
               {label && <p className="text-sm font-semibold">{label}</p>}
               <p className="text-sm font-mono break-all">{address}</p>
+              <Link
+                href={profileHref}
+                className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                View delegate profile
+              </Link>
               <a
                 href={getAddressExplorerUrl(address)}
                 target="_blank"

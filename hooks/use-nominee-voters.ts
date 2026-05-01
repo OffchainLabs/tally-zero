@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import { getDelegateLabel } from "@/lib/delegate-cache";
+import { getDelegateDisplayRecords } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 
@@ -78,7 +78,7 @@ export function useNomineeVoters({
           votes: votes.toString(),
           weight: weightedVotes.toString(),
           weightedVotes: weightedVotes.toString(),
-          label: getDelegateLabel(voterAddr),
+          label: undefined,
         };
       });
 
@@ -107,6 +107,14 @@ export function useNomineeVoters({
         if (aBn.gt(bBn)) return -1;
         return 0;
       });
+
+      const displayRecords = await getDelegateDisplayRecords(
+        sorted.map((voter) => voter.address)
+      );
+      for (const voter of sorted) {
+        voter.label =
+          displayRecords.get(voter.address.toLowerCase())?.label ?? undefined;
+      }
 
       setVoters(sorted);
     } catch (err) {

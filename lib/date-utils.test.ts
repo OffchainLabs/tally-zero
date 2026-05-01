@@ -129,7 +129,15 @@ describe("date-utils", () => {
     it("formats valid timestamp", () => {
       // Dec 25, 2024 00:00:00 UTC
       const result = formatEtaTimestamp("1735084800");
-      expect(result).toMatch(/Dec 25, 2024/);
+      expect(result).toBe(
+        new Date(1735084800 * 1000).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
     });
   });
 

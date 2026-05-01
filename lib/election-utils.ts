@@ -1,32 +1,57 @@
-import candidatesData from "@/data/election-candidates.json";
 import type { ElectionPhase } from "@/types/election";
 import type { SerializableNomineeDetails } from "@gzeoneth/gov-tracker";
 
-const candidateNames = new Map<string, string>();
-const candidateTitles = new Map<string, string>();
-for (const [addr, data] of Object.entries(
-  candidatesData as Record<string, { name: string; title?: string }>
-)) {
-  candidateNames.set(addr.toLowerCase(), data.name);
-  if (data.title) {
-    candidateTitles.set(addr.toLowerCase(), data.title);
-  }
+import {
+  getCachedAddressDisplayRecord,
+  getTallyDataClient,
+  useAddressDisplayRecord,
+  useAddressDisplayRecords,
+} from "./tally-data/client";
+import type {
+  TallyAddressDisplayRecord,
+  TallyCandidateSummary,
+  TallyElectionCandidate,
+} from "./tally-data/types";
+
+export async function getCandidate(
+  address: string
+): Promise<TallyElectionCandidate | null> {
+  return getTallyDataClient().getCandidate(address);
+}
+
+export async function getCandidateSummaries(
+  addresses: string[]
+): Promise<Map<string, TallyCandidateSummary>> {
+  return getTallyDataClient().getCandidateSummaries(addresses);
 }
 
 export function getCandidateName(address: string): string | undefined {
-  return candidateNames.get(address.toLowerCase());
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.label ?? undefined)
+    : undefined;
 }
 
 export function getCandidateTitle(address: string): string | undefined {
-  return candidateTitles.get(address.toLowerCase());
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.title ?? undefined)
+    : undefined;
 }
 
 export function getCandidateProfileUrl(address: string): string | undefined {
-  if (candidateNames.has(address.toLowerCase())) {
-    return `/elections/contender/${address}`;
-  }
-  return undefined;
+  const record = getCachedAddressDisplayRecord(address);
+  return record?.source === "candidate"
+    ? (record.profileUrl ?? undefined)
+    : undefined;
 }
+
+export { useAddressDisplayRecord, useAddressDisplayRecords };
+export type {
+  TallyAddressDisplayRecord,
+  TallyCandidateSummary,
+  TallyElectionCandidate,
+};
 
 export function hasNoVotingPower(
   totalVotingPower: bigint | undefined
