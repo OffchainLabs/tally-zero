@@ -19,9 +19,9 @@ import {
 import { buildShuffleMap, sortByOrderMap } from "@/lib/collection-utils";
 import {
   getDelegateSummaries,
+  type TallyDelegateListItem,
   type TallyDelegateSummary,
-} from "@/lib/delegate-cache";
-import type { DelegateInfo } from "@/types/delegate";
+} from "@/lib/delegate-data";
 import {
   ColumnFiltersState,
   SortingState,
@@ -38,7 +38,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface DelegatesTableProps {
-  delegates: DelegateInfo[];
+  delegates: TallyDelegateListItem[];
   totalVotingPower: string;
   isLoading: boolean;
   error: Error | null;
@@ -49,22 +49,29 @@ export interface DelegatesTableProps {
   onVisibleRowsChange: (addresses: string[]) => void;
 }
 
-type DelegateWithSummary = DelegateInfo & Partial<TallyDelegateSummary>;
-
 function getRowDelegateSummary(
-  delegate: DelegateInfo
+  delegate: TallyDelegateListItem
 ): TallyDelegateSummary | null {
-  const row = delegate as DelegateWithSummary;
-  if (!row.displayName && !row.name && !row.ens && !row.picture) return null;
+  if (
+    !delegate.displayName &&
+    !delegate.name &&
+    !delegate.ens &&
+    !delegate.picture
+  )
+    return null;
 
   return {
-    address: row.address,
-    ens: row.ens ?? null,
-    name: row.name ?? null,
-    picture: row.picture ?? null,
-    knownLabel: row.knownLabel ?? null,
+    address: delegate.address,
+    ens: delegate.ens ?? null,
+    name: delegate.name ?? null,
+    picture: delegate.picture ?? null,
+    knownLabel: delegate.knownLabel ?? null,
     displayName:
-      row.displayName ?? row.knownLabel ?? row.name ?? row.ens ?? null,
+      delegate.displayName ??
+      delegate.knownLabel ??
+      delegate.name ??
+      delegate.ens ??
+      null,
   };
 }
 
@@ -141,7 +148,7 @@ export function DelegatesTable({
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable<DelegateInfo>({
+  const table = useReactTable<TallyDelegateListItem>({
     data: sortedDelegates,
     columns,
     state: {

@@ -19,9 +19,9 @@ A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for
 - **Dual-governor support** — Core Governor (constitutional) and Treasury Governor (funding)
 - **Full lifecycle tracking** — Tracks proposals through all stages: voting → L2 timelock → L1 challenge period → L1 timelock → retryable tickets → final execution
 - **Security Council election support** — View and participate in Security Council member elections
-- **RPC-direct governance data**. Proposals, delegates, lifecycle state, and Snapshot data are fetched directly from the blockchain or from CORS-enabled APIs. The only server-side code is a small first-party proxy used when importing a proposal description from the governance forum (which lacks CORS).
-- **Bundled cache** — Ships with pre-built tracking checkpoints for instant resume without RPC calls
-- **Delegate insights** — Pre-indexed delegate cache with voting power rankings
+- **RPC-direct governance data**. Proposals, delegates, lifecycle state, and Snapshot data are fetched directly from the blockchain or from CORS-enabled APIs. Server-side code is limited to a forum-import proxy and a thin proxy for the SQLite delegate database (see "Data layer" below).
+- **Bundled rank cache** — Ships with a pre-computed gov-tracker delegate rank snapshot for instant lookups without RPC calls
+- **Delegate insights** — Delegate profiles, voting power rankings, and election candidates served from a SQLite-over-HTTP database
 
 ## Tech Stack
 
@@ -33,6 +33,27 @@ A fork of [TallyZero](https://github.com/withtally/tally-zero) purpose-built for
 - @gzeoneth/gov-tracker (proposal lifecycle + delegate indexing)
 - TanStack Table + React Query
 - Radix UI + Shadcn + Tailwind CSS
+- sql.js-httpvfs (browser SQLite over HTTP range requests)
+
+## Data layer
+
+Tally Zero pulls data from three sources, in increasing freshness:
+
+1. **Bundled gov-tracker cache** (`@gzeoneth/gov-tracker/delegate-cache.json`). Pre-computed delegate ranks and snapshot block. Ships with the JS bundle. Used for instant rank lookups without RPC calls.
+2. **SQLite over HTTP** (`/tally-data/tally-zero.sqlite`). A ~200 MB SQLite database hosted on Vercel Blob and queried in the browser via `sql.js-httpvfs`. Only the byte ranges needed for a query are fetched (typically a few hundred KB per page). Used for delegate profiles, election candidates, and address display records.
+3. **On-chain RPC**. Live state. Used for current voting power, vote tallies, and transaction submission.
+
+### Build inputs (not shipped to clients)
+
+- `data/delegates-*.json` (~145 MB). Raw delegate dumps from Tally's API. Read by `pnpm sqlite:build`.
+- `data/avatar-map.json` (gitignored, ~625 KB). Mirrored delegate avatars. Regenerate with `pnpm avatars:upload`. Read by `pnpm sqlite:build`.
+- `data/delegate-index.json`, `data/delegate-labels.json`, `data/election-*-candidates.json`. Additional inputs to the SQLite build.
+
+### Workflows
+
+- `pnpm sqlite:build`. Produces `public/tally-data/tally-zero.sqlite` and `public/tally-data/manifest.json` from the inputs above.
+- `pnpm avatars:upload`. Regenerates `data/avatar-map.json` by mirroring delegate avatars to governance blob storage.
+- `pnpm sqlite:deploy`. Builds (if needed), uploads the SQLite to Vercel Blob, and updates the production env var. Run this when delegate or election data changes.
 
 ## Getting Started
 

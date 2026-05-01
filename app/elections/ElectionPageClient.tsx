@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useState } from "react";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -36,9 +36,10 @@ interface ElectionPageClientProps {
 export default function ElectionPageClient({
   initialDisplayRecords,
 }: ElectionPageClientProps) {
-  useMemo(() => {
+  useState(() => {
     primeAddressDisplayRecordCache(initialDisplayRecords);
-  }, [initialDisplayRecords]);
+    return null;
+  });
 
   return <ElectionContainer />;
 }

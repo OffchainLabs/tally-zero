@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
-import type { TallyDelegateProfile } from "@/lib/delegate-cache";
+import type { TallyDelegateProfile } from "@/lib/delegate-data";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";

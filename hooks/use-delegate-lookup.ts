@@ -13,10 +13,8 @@ import { ADDRESSES, ERC20_VOTES_ABI } from "@gzeoneth/gov-tracker";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
-import {
-  getDelegateDisplayRecord,
-  getDelegateRankInfo,
-} from "@/lib/delegate-cache";
+import { getDelegateDisplayRecord } from "@/lib/delegate-data";
+import { getDelegateRankInfo } from "@/lib/delegate-rank-cache";
 import { getErrorMessage } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 

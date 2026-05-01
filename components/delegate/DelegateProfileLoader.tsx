@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import {
   getDelegateProfile,
   type TallyDelegateProfile,
-} from "@/lib/delegate-cache";
+} from "@/lib/delegate-data";
 
 type DelegateProfileState = {
   address: string;

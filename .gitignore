@@ -58,3 +58,5 @@ delegate-cache.json
 
 # Generated local/Vercel-hosted data artifacts
 /public/tally-data/
+/data/build/
+data/avatar-map.json

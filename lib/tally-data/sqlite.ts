@@ -6,10 +6,12 @@ import {
   type WorkerHttpvfs,
 } from "sql.js-httpvfs";
 
+import { loadManifest } from "@/lib/tally-data/manifest";
 import type {
   TallyAddressDisplayRecord,
   TallyCandidateSummary,
   TallyDataClient,
+  TallyDataManifest,
   TallyDataStats,
   TallyDelegateListItem,
   TallyDelegateListResult,
@@ -19,19 +21,60 @@ import type {
   TallyElectionCandidate,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-list-v1";
-const DEFAULT_DB_SIZE_BYTES = 197480448;
-const DEFAULT_DB_URL = "/tally-data/tally-zero.sqlite";
-const DEFAULT_DB_CACHE_BUST = `${DEFAULT_DB_SCHEMA_VERSION}-${DEFAULT_DB_SIZE_BYTES}`;
-const DEFAULT_DB_VIRTUAL_FILENAME = `tally-zero-${DEFAULT_DB_CACHE_BUST}.sqlite`;
 const DEFAULT_CHUNK_SIZE = 4096;
 const MAX_BATCH_SIZE = 800;
 const DEFAULT_MIN_VOTING_POWER = "10000000000000000000";
 const ARB_TOTAL_SUPPLY = "10000000000000000000000000000";
-const LOCAL_STORAGE_PREFIX = `tally-zero:sqlite:${DEFAULT_DB_SCHEMA_VERSION}:${DEFAULT_DB_SIZE_BYTES}:`;
 const LOCAL_STORAGE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+function getLocalStoragePrefix(manifest: TallyDataManifest): string {
+  return `tally-zero:sqlite:${manifest.schemaVersion}:${manifest.sizeBytes}:`;
+}
+
 let workerPromise: Promise<WorkerHttpvfs> | null = null;
+let localStoragePrefix: string | null = null;
+let localStoragePrefixPromise: Promise<string> | null = null;
+let sweepDone = false;
+
+function sweepStaleLocalStorage(currentPrefix: string): void {
+  if (sweepDone) return;
+  sweepDone = true;
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (
+        key &&
+        key.startsWith("tally-zero:sqlite:") &&
+        !key.startsWith(currentPrefix)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // localStorage is best-effort (private browsing, quota, etc.).
+  }
+}
+
+async function getLocalStoragePrefixAsync(): Promise<string> {
+  if (localStoragePrefix !== null) return localStoragePrefix;
+  localStoragePrefixPromise ??= loadManifest()
+    .then((manifest) => {
+      const prefix = getLocalStoragePrefix(manifest);
+      localStoragePrefix = prefix;
+      sweepStaleLocalStorage(prefix);
+      return prefix;
+    })
+    .catch((err) => {
+      localStoragePrefixPromise = null;
+      throw err;
+    });
+  return localStoragePrefixPromise;
+}
 
 type DelegateRow = {
   id: string;
@@ -86,7 +129,6 @@ type LocalStorageEntry<T> = {
 type StoredDelegateListItem = [
   address: `0x${string}`,
   votingPower: string,
-  lastChangeBlock: number,
   ens: string | null,
   name: string | null,
   picture: string | null,
@@ -101,31 +143,43 @@ type StoredDelegateListResult = {
   ts: string;
 };
 
-function getDatabaseUrl(): string {
-  return DEFAULT_DB_URL;
-}
-
-function getWorker(): Promise<WorkerHttpvfs> {
+async function getWorker(): Promise<WorkerHttpvfs> {
   if (typeof window === "undefined") {
     throw new Error("The Tally data SQLite adapter can only run in a browser.");
   }
 
+  if (workerPromise) return workerPromise;
+
+  const manifest = await loadManifest();
+  // Cache the prefix once the manifest is in hand so synchronous helpers
+  // downstream of getWorker() can read it without re-awaiting.
+  localStoragePrefix = getLocalStoragePrefix(manifest);
+  sweepStaleLocalStorage(localStoragePrefix);
+
+  const cacheBust = manifest.cacheBust;
+  const virtualFilename = `tally-zero-${cacheBust}.sqlite`;
+
   const databaseConfig = {
     from: "inline" as const,
-    virtualFilename: DEFAULT_DB_VIRTUAL_FILENAME,
+    virtualFilename,
     config: {
       serverMode: "full" as const,
       requestChunkSize: DEFAULT_CHUNK_SIZE,
-      cacheBust: DEFAULT_DB_CACHE_BUST,
-      url: getDatabaseUrl(),
+      cacheBust,
+      url: manifest.databaseUrl,
     },
   };
 
-  workerPromise ??= createDbWorker(
+  // Reset workerPromise on init failure so subsequent callers retry instead
+  // of awaiting a permanently-rejected promise.
+  workerPromise = createDbWorker(
     [databaseConfig],
     new URL("sql.js-httpvfs/dist/sqlite.worker.js", import.meta.url).toString(),
     new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url).toString()
-  );
+  ).catch((err) => {
+    workerPromise = null;
+    throw err;
+  });
 
   return workerPromise;
 }
@@ -154,20 +208,21 @@ async function queryRows<T>(sql: string, ...params: unknown[]): Promise<T[]> {
   return (await worker.db.query(sql, params)) as T[];
 }
 
-function getLocalStorageKey(key: string): string {
-  return `${LOCAL_STORAGE_PREFIX}${key}`;
+function getLocalStorageKey(prefix: string, key: string): string {
+  return `${prefix}${key}`;
 }
 
-function readLocalStorage<T>(key: string): T | null {
+function readLocalStorage<T>(prefix: string, key: string): T | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(getLocalStorageKey(key));
+    const fullKey = getLocalStorageKey(prefix, key);
+    const raw = window.localStorage.getItem(fullKey);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as LocalStorageEntry<T>;
     if (Date.now() - parsed.createdAt > LOCAL_STORAGE_MAX_AGE_MS) {
-      window.localStorage.removeItem(getLocalStorageKey(key));
+      window.localStorage.removeItem(fullKey);
       return null;
     }
 
@@ -177,7 +232,7 @@ function readLocalStorage<T>(key: string): T | null {
   }
 }
 
-function writeLocalStorage<T>(key: string, value: T): void {
+function writeLocalStorage<T>(prefix: string, key: string, value: T): void {
   if (typeof window === "undefined") return;
 
   try {
@@ -185,16 +240,20 @@ function writeLocalStorage<T>(key: string, value: T): void {
       createdAt: Date.now(),
       value,
     };
-    window.localStorage.setItem(getLocalStorageKey(key), JSON.stringify(entry));
+    window.localStorage.setItem(
+      getLocalStorageKey(prefix, key),
+      JSON.stringify(entry)
+    );
   } catch {
     // localStorage is best-effort; query results are still usable without it.
   }
 }
 
 function readDelegateListLocalStorage(
+  prefix: string,
   key: string
 ): TallyDelegateListResult | null {
-  const stored = readLocalStorage<StoredDelegateListResult>(key);
+  const stored = readLocalStorage<StoredDelegateListResult>(prefix, key);
   if (!stored) return null;
 
   return {
@@ -202,7 +261,6 @@ function readDelegateListLocalStorage(
       ([
         address,
         votingPower,
-        lastChangeBlock,
         ens,
         name,
         picture,
@@ -212,7 +270,6 @@ function readDelegateListLocalStorage(
       ]) => ({
         address,
         votingPower,
-        lastChangeBlock,
         ens,
         name,
         picture,
@@ -229,14 +286,14 @@ function readDelegateListLocalStorage(
 }
 
 function writeDelegateListLocalStorage(
+  prefix: string,
   key: string,
   result: TallyDelegateListResult
 ): void {
-  writeLocalStorage<StoredDelegateListResult>(key, {
+  writeLocalStorage<StoredDelegateListResult>(prefix, key, {
     d: result.delegates.map((delegate) => [
       delegate.address,
       delegate.votingPower,
-      delegate.lastChangeBlock,
       delegate.ens,
       delegate.name,
       delegate.picture,
@@ -344,7 +401,6 @@ function toDelegateListItem(
     votingPower: row.votes_count,
     delegatorsCount: row.delegators_count,
     isPrioritized: Boolean(row.is_prioritized),
-    lastChangeBlock: 0,
   };
 }
 
@@ -379,8 +435,12 @@ export class SqliteTallyDataClient implements TallyDataClient {
   async getDelegateList(
     minVotingPower = DEFAULT_MIN_VOTING_POWER
   ): Promise<TallyDelegateListResult> {
+    const [prefix, manifest] = await Promise.all([
+      getLocalStoragePrefixAsync(),
+      loadManifest(),
+    ]);
     const cacheKey = `delegate-list:${minVotingPower}`;
-    const cached = readDelegateListLocalStorage(cacheKey);
+    const cached = readDelegateListLocalStorage(prefix, cacheKey);
     if (cached) return cached;
 
     const rows = await queryRows<
@@ -412,22 +472,24 @@ order by d.rank
     const delegates = rows.map(toDelegateListItem);
     const result: TallyDelegateListResult = {
       delegates,
-      totalVotingPower: delegates
-        .reduce(
-          (sum, delegate) => sum + BigInt(delegate.votingPower),
-          BigInt(0)
-        )
-        .toString(),
+      // Sum across every tracked delegate (>=1 ARB), not the filtered view,
+      // so the headline figure does not collapse when the user raises the
+      // display-side minimum power.
+      totalVotingPower: manifest.totalVotingPower,
       totalSupply: ARB_TOTAL_SUPPLY,
     };
 
-    writeDelegateListLocalStorage(cacheKey, result);
+    writeDelegateListLocalStorage(prefix, cacheKey, result);
     return result;
   }
 
   async getDelegate(address: string): Promise<TallyDelegateProfile | null> {
+    const prefix = await getLocalStoragePrefixAsync();
     const cacheKey = `delegate:${normalizeAddress(address)}`;
-    const cached = readLocalStorage<TallyDelegateProfile | null>(cacheKey);
+    const cached = readLocalStorage<TallyDelegateProfile | null>(
+      prefix,
+      cacheKey
+    );
     if (cached) return cached;
 
     const rows = await queryRows<DelegateRow>(
@@ -448,19 +510,21 @@ limit 1
     );
 
     const delegate = rows[0] ? toDelegate(rows[0]) : null;
-    writeLocalStorage(cacheKey, delegate);
+    writeLocalStorage(prefix, cacheKey, delegate);
     return delegate;
   }
 
   async getDelegateSummaries(
     addresses: string[]
   ): Promise<Map<string, TallyDelegateSummary>> {
+    const prefix = await getLocalStoragePrefixAsync();
     const normalized = uniqueNormalizedAddresses(addresses);
     const cachedRows = new Map<string, TallyDelegateSummary>();
     const missing: string[] = [];
 
     for (const address of normalized) {
       const cached = readLocalStorage<TallyDelegateSummary>(
+        prefix,
         `delegate-summary:${address}`
       );
       if (cached) {
@@ -488,7 +552,7 @@ where d.address_lower in (${addressPlaceholders})
     for (const row of fetchedRows) {
       const address = normalizeAddress(row.address);
       cachedRows.set(address, row);
-      writeLocalStorage(`delegate-summary:${address}`, row);
+      writeLocalStorage(prefix, `delegate-summary:${address}`, row);
     }
 
     return cachedRows;
@@ -501,8 +565,12 @@ where d.address_lower in (${addressPlaceholders})
     const normalizedQuery = query.trim().toLowerCase();
     const ftsQuery = toFtsPrefixQuery(normalizedQuery);
     if (!ftsQuery) return [];
+    const prefix = await getLocalStoragePrefixAsync();
     const cacheKey = `delegate-search:${normalizedQuery}:${limit}`;
-    const cached = readLocalStorage<TallyDelegateSearchResult[]>(cacheKey);
+    const cached = readLocalStorage<TallyDelegateSearchResult[]>(
+      prefix,
+      cacheKey
+    );
     if (cached) return cached;
 
     const rows = await queryRows<
@@ -556,7 +624,7 @@ limit ?
         isPrioritized: item.isPrioritized,
       };
     });
-    writeLocalStorage(cacheKey, delegates);
+    writeLocalStorage(prefix, cacheKey, delegates);
     return delegates;
   }
 

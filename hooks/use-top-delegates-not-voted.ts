@@ -9,10 +9,8 @@ import {
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import {
-  getDelegateDisplayRecords,
-  loadDelegateCache,
-} from "@/lib/delegate-cache";
+import { getDelegateDisplayRecords } from "@/lib/delegate-data";
+import { loadDelegateCache } from "@/lib/delegate-rank-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 

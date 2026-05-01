@@ -18,28 +18,13 @@ type Options = {
 };
 
 const rootDir = process.cwd();
-const dbPath = path.join(rootDir, "public", "tally-data", "tally-zero.sqlite");
+const dbPath = path.join(rootDir, "data", "build", "tally-zero.sqlite");
 const manifestPath = path.join(
   rootDir,
   "public",
   "tally-data",
   "manifest.json"
 );
-const routePath = path.join(
-  rootDir,
-  "app",
-  "tally-data",
-  "tally-zero.sqlite",
-  "route.ts"
-);
-const routeTestPath = path.join(
-  rootDir,
-  "app",
-  "tally-data",
-  "tally-zero.sqlite",
-  "route.test.ts"
-);
-const sqliteClientPath = path.join(rootDir, "lib", "tally-data", "sqlite.ts");
 
 function parseArgs(argv: string[]): Options {
   const options: Options = {
@@ -108,57 +93,6 @@ function parseBlobUrl(output: string): string {
     throw new Error("Could not find uploaded Blob URL in vercel output.");
   }
   return match[0].trim();
-}
-
-function replaceOrThrow(
-  filePath: string,
-  pattern: RegExp,
-  replacement: string
-) {
-  const original = fs.readFileSync(filePath, "utf8");
-  const next = original.replace(pattern, replacement);
-  if (next === original) {
-    throw new Error(
-      `No match found while updating ${path.relative(rootDir, filePath)}`
-    );
-  }
-  fs.writeFileSync(filePath, next);
-}
-
-function updateSourceConstants(
-  blobUrl: string,
-  sizeBytes: number,
-  dryRun: boolean
-) {
-  const updates = [
-    path.relative(rootDir, routePath),
-    path.relative(rootDir, routeTestPath),
-    path.relative(rootDir, sqliteClientPath),
-  ];
-
-  console.log(`Updating source constants: ${updates.join(", ")}`);
-  if (dryRun) return;
-
-  replaceOrThrow(
-    routePath,
-    /const DEFAULT_BLOB_URL =\n  "https:\/\/[^"]+";/,
-    `const DEFAULT_BLOB_URL =\n  "${blobUrl}";`
-  );
-  replaceOrThrow(
-    routePath,
-    /const DB_SIZE_BYTES = \d+;/,
-    `const DB_SIZE_BYTES = ${sizeBytes};`
-  );
-  replaceOrThrow(
-    routeTestPath,
-    /const DB_SIZE_BYTES = \d+;/,
-    `const DB_SIZE_BYTES = ${sizeBytes};`
-  );
-  replaceOrThrow(
-    sqliteClientPath,
-    /const DEFAULT_DB_SIZE_BYTES = \d+;/,
-    `const DEFAULT_DB_SIZE_BYTES = ${sizeBytes};`
-  );
 }
 
 function updateVercelEnv(
@@ -243,7 +177,6 @@ function main() {
     blobUrl = parseBlobUrl(run("vercel", blobArgs));
   }
 
-  updateSourceConstants(blobUrl, manifest.sizeBytes, options.dryRun);
   if (!options.skipEnv) {
     updateVercelEnv(
       options.envName,

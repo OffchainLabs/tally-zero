@@ -12,10 +12,12 @@ import {
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 
-import type { TallyDelegateSummary } from "@/lib/delegate-cache";
+import type {
+  TallyDelegateListItem,
+  TallyDelegateSummary,
+} from "@/lib/delegate-data";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
-import { DelegateInfo } from "@/types/delegate";
 
 declare module "@tanstack/react-table" {
   // TData is required for module augmentation but not used in this interface
@@ -26,14 +28,14 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export const columns: ColumnDef<DelegateInfo>[] = [
+export const columns: ColumnDef<TallyDelegateListItem>[] = [
   {
     id: "rank",
     meta: {
       label: "Rank",
     },
     header: "Rank",
-    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+    cell: ({ row }: { row: Row<TallyDelegateListItem> }) => {
       return <span className="font-medium">{row.index + 1}</span>;
     },
     enableSorting: false,
@@ -51,8 +53,8 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       row,
       table,
     }: {
-      row: Row<DelegateInfo>;
-      table: Table<DelegateInfo>;
+      row: Row<TallyDelegateListItem>;
+      table: Table<TallyDelegateListItem>;
     }) => {
       const address = row.getValue("address") as string;
       const shortened = shortenAddress(address);
@@ -116,7 +118,7 @@ export const columns: ColumnDef<DelegateInfo>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Voting Power" />
     ),
-    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+    cell: ({ row }: { row: Row<TallyDelegateListItem> }) => {
       const votingPower = row.getValue("votingPower") as string;
       const formatted = formatVotingPower(votingPower);
 
@@ -150,8 +152,8 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       row,
       table,
     }: {
-      row: Row<DelegateInfo>;
-      table: Table<DelegateInfo>;
+      row: Row<TallyDelegateListItem>;
+      table: Table<TallyDelegateListItem>;
     }) => {
       const votingPower = row.getValue("votingPower") as string;
       const totalVotingPower = table.options.meta?.totalVotingPower;

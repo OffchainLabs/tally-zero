@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import { getDelegateDisplayRecords } from "@/lib/delegate-cache";
+import { getDelegateDisplayRecords } from "@/lib/delegate-data";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 

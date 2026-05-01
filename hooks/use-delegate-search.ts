@@ -17,10 +17,15 @@ import {
   loadDelegateList,
   type TallyDelegateListItem,
   type TallyDelegateListResult,
-} from "@/lib/delegate-cache";
+} from "@/lib/delegate-data";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import type { DelegateCacheStats } from "@/types/delegate";
+
+// Must match `MIN_DELEGATE_POWER_WEI` in components/container/DelegateSearch.tsx
+// (5000 ARB * 10^18). The UI enforces this floor; pushing it into the SQL
+// query keeps the local cache consistent with what the UI accepts.
+const MIN_DELEGATE_POWER_WEI = "5000000000000000000000";
 
 export interface UseDelegateSearchOptions {
   enabled: boolean;
@@ -30,7 +35,7 @@ export interface UseDelegateSearchOptions {
 }
 
 export interface UseDelegateSearchResult {
-  delegates: DelegateInfo[];
+  delegates: TallyDelegateListItem[];
   totalVotingPower: string;
   totalSupply: string;
   error: Error | null;
@@ -41,20 +46,32 @@ export interface UseDelegateSearchResult {
   isRefreshingVisible: boolean;
 }
 
-export function filterDelegates(
-  delegates: DelegateInfo[],
+// `filterDelegates` is generic so callers can apply the same filter logic to
+// either gov-tracker's `DelegateInfo` or our richer `TallyDelegateListItem`
+// shape. Both expose `address` and `votingPower`, which is all the gov-tracker
+// helpers actually read.
+export function filterDelegates<
+  T extends { address: string; votingPower: string },
+>(
+  delegates: T[],
   options: {
     minVotingPower?: string;
     addressFilter?: string;
   }
-): DelegateInfo[] {
+): T[] {
   let result = delegates;
   if (options.minVotingPower) {
-    result = filterDelegatesByMinPower(result, options.minVotingPower);
+    result = filterDelegatesByMinPower(
+      result as unknown as DelegateInfo[],
+      options.minVotingPower
+    ) as unknown as T[];
   }
   const trimmedAddress = options.addressFilter?.trim();
   if (trimmedAddress) {
-    result = filterDelegatesByAddress(result, trimmedAddress);
+    result = filterDelegatesByAddress(
+      result as unknown as DelegateInfo[],
+      trimmedAddress
+    ) as unknown as T[];
   }
   return result;
 }
@@ -70,7 +87,7 @@ export function useDelegateSearch({
     addressFilter ?? ""
   );
 
-  const [delegates, setDelegates] = useState<DelegateInfo[]>([]);
+  const [delegates, setDelegates] = useState<TallyDelegateListItem[]>([]);
   const [totalVotingPower, setTotalVotingPower] = useState<string>("0");
   const [totalSupply, setTotalSupply] = useState<string>("0");
   const [snapshotBlock, setSnapshotBlock] = useState<number>(0);
@@ -99,7 +116,7 @@ export function useDelegateSearch({
     setIsLoading(true);
     setError(null);
 
-    loadDelegateList()
+    loadDelegateList(MIN_DELEGATE_POWER_WEI)
       .then((loaded) => {
         if (cancelled) return;
 
@@ -134,7 +151,7 @@ export function useDelegateSearch({
 
       const baseDelegates = filterDelegates(delegateData.delegates, {
         minVotingPower,
-      }) as TallyDelegateListItem[];
+      });
 
       const trimmedFilter = debouncedAddressFilter.trim();
       if (!trimmedFilter) {
@@ -175,20 +192,28 @@ export function useDelegateSearch({
         }
 
         if (powerMap.size > 0 && delegateData) {
+          // Track the on-chain delta against build-time voting power so the
+          // headline total stays anchored to the manifest's full-set sum
+          // (every delegate >=1 ARB) rather than collapsing to a sum across
+          // the filtered/visible subset.
+          let powerDelta = BigInt(0);
           const updatedDelegates = delegateData.delegates.map((d) => {
             const newPower = powerMap.get(d.address.toLowerCase());
-            return newPower ? { ...d, votingPower: newPower } : d;
+            if (!newPower) return d;
+            powerDelta += BigInt(newPower) - BigInt(d.votingPower);
+            return { ...d, votingPower: newPower };
           });
 
-          const newDelegateData = {
+          const newTotalVotingPower =
+            powerDelta === BigInt(0)
+              ? delegateData.totalVotingPower
+              : (BigInt(delegateData.totalVotingPower) + powerDelta).toString();
+
+          setDelegateData({
             ...delegateData,
             delegates: updatedDelegates,
-          };
-          setDelegateData(newDelegateData);
-
-          const newTotalVotingPower = updatedDelegates
-            .reduce((sum, d) => sum + BigInt(d.votingPower), BigInt(0))
-            .toString();
+            totalVotingPower: newTotalVotingPower,
+          });
           setTotalVotingPower(newTotalVotingPower);
         }
       } catch (err) {

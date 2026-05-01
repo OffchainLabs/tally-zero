@@ -1,6 +1,21 @@
 import type { TallyDelegate } from "@/types/tally-delegate";
 import type { SqliteStats } from "sql.js-httpvfs";
 
+export type TallyDataManifest = {
+  version: number;
+  schemaVersion: string;
+  generatedAt: string;
+  databaseUrl: string;
+  pageSize: number;
+  sizeBytes: number;
+  cacheBust: string;
+  // Sum of voting power across every delegate in `delegate_list` (>=1 ARB).
+  // Pre-computed at build time so the figure is invariant to the user's
+  // display-side `minVotingPower` filter.
+  totalVotingPower: string;
+  tables: Record<string, number>;
+};
+
 export type TallyDelegateProfile = TallyDelegate & {
   knownLabel: string | null;
 };
@@ -23,7 +38,6 @@ export type TallyDelegateSearchResult = TallyDelegateSummary & {
 export type TallyDelegateListItem = TallyDelegateSearchResult & {
   address: `0x${string}`;
   votingPower: string;
-  lastChangeBlock: number;
 };
 
 export type TallyDelegateListResult = {

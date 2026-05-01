@@ -31,10 +31,19 @@ type DelegateSearchMetadata = {
 };
 
 const rootDir = process.cwd();
-const outputDir = path.join(rootDir, "public", "tally-data");
-const outputDbPath = path.join(outputDir, "tally-zero.sqlite");
-const manifestPath = path.join(outputDir, "manifest.json");
+// SQLite lives outside `public/` so the proxy route at
+// `/tally-data/tally-zero.sqlite` is not shadowed by a static file. The
+// manifest stays in `public/` so the client can fetch it via a stable URL
+// and the route handler can `import` it at build time.
+const sqliteOutputDir = path.join(rootDir, "data", "build");
+const outputDbPath = path.join(sqliteOutputDir, "tally-zero.sqlite");
+const manifestDir = path.join(rootDir, "public", "tally-data");
+const manifestPath = path.join(manifestDir, "manifest.json");
 const avatarMapPath = path.join(rootDir, "data", "avatar-map.json");
+
+const SCHEMA_VERSION = "delegate-list-v1";
+const PAGE_SIZE = 4096;
+const DATABASE_URL = "/tally-data/tally-zero.sqlite";
 
 const delegateFiles = [
   "delegates-1.json",
@@ -45,7 +54,11 @@ const candidateFiles = [
   "election-candidates.json",
   "election-5-candidates.json",
 ];
-const DEFAULT_MIN_VOTING_POWER = BigInt("10000000000000000000");
+// 1 ARB. The `delegate_list` table contains every delegate at or above this
+// threshold; the manifest's `totalVotingPower` is summed across the same set
+// so the figure is invariant to the user's display filter.
+const DEFAULT_MIN_VOTING_POWER = BigInt("1000000000000000000");
+const DEFAULT_MIN_VOTING_POWER_STR = DEFAULT_MIN_VOTING_POWER.toString();
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(fs.readFileSync(path.join(rootDir, relativePath), "utf8"));
@@ -90,7 +103,8 @@ async function writeSql(stdin: NodeJS.WritableStream, sql: string) {
 }
 
 async function main() {
-  fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(sqliteOutputDir, { recursive: true });
+  fs.mkdirSync(manifestDir, { recursive: true });
   fs.rmSync(outputDbPath, { force: true });
   fs.rmSync(`${outputDbPath}-journal`, { force: true });
   fs.rmSync(`${outputDbPath}-wal`, { force: true });
@@ -110,11 +124,21 @@ async function main() {
   let delegateSearchCount = 0;
   let delegateSearchSubstringCount = 0;
   let delegateListCount = 0;
+  let totalVotingPower = BigInt(0);
   let delegateListAvatarCount = 0;
   let candidateCount = 0;
   let delegateAvatarCount = 0;
   let delegateIndexAvatarCount = 0;
-  const avatarMap = readOptionalJson<Record<string, string>>(avatarMapPath, {});
+  const avatarMap = (() => {
+    if (!fs.existsSync(avatarMapPath)) {
+      console.warn(
+        `[build-tally-sqlite] data/avatar-map.json not found. Avatars will be missing. ` +
+          `Run \`pnpm avatars:upload\` to regenerate it.`
+      );
+      return {};
+    }
+    return readOptionalJson<Record<string, string>>(avatarMapPath, {});
+  })();
   const delegateAddresses = new Set<string>();
   const metadataSearchAddresses = new Set<string>();
   const delegateMetadataByAddressLower = new Map<
@@ -232,8 +256,10 @@ begin;
       ) {
         metadataSearchAddresses.add(addressLower);
       }
-      if (BigInt(delegate.votesCount) >= DEFAULT_MIN_VOTING_POWER) {
+      const votesCount = BigInt(delegate.votesCount);
+      if (votesCount >= DEFAULT_MIN_VOTING_POWER) {
         delegateListCount += 1;
+        totalVotingPower += votesCount;
         if (picture) {
           delegateListAvatarCount += 1;
         }
@@ -391,10 +417,10 @@ select
   l.label
 from delegates d
 left join delegate_labels l on l.address_lower = d.address_lower
-where length(d.votes_count) > length('10000000000000000000')
+where length(d.votes_count) > length('${DEFAULT_MIN_VOTING_POWER_STR}')
   or (
-    length(d.votes_count) = length('10000000000000000000')
-    and d.votes_count >= '10000000000000000000'
+    length(d.votes_count) = length('${DEFAULT_MIN_VOTING_POWER_STR}')
+    and d.votes_count >= '${DEFAULT_MIN_VOTING_POWER_STR}'
   );\n`
   );
   for (const filename of candidateFiles) {
@@ -453,15 +479,19 @@ vacuum;
   }
 
   const sizeBytes = fs.statSync(outputDbPath).size;
+  const cacheBust = `${SCHEMA_VERSION}-${sizeBytes}`;
   fs.writeFileSync(
     manifestPath,
     `${JSON.stringify(
       {
         version: 1,
+        schemaVersion: SCHEMA_VERSION,
         generatedAt: new Date().toISOString(),
-        databaseUrl: "/tally-data/tally-zero.sqlite",
-        pageSize: 4096,
+        databaseUrl: DATABASE_URL,
+        pageSize: PAGE_SIZE,
         sizeBytes,
+        cacheBust,
+        totalVotingPower: totalVotingPower.toString(),
         tables: {
           delegates: delegateCount,
           delegateAvatars: delegateAvatarCount,
