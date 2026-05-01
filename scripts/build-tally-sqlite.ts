@@ -30,9 +30,32 @@ type DelegateSearchMetadata = {
   ens: string | null;
 };
 
+type VoteHistoryFile = {
+  watermarkBlock: number;
+  generatedAt: string;
+  votes: Array<{
+    governorAddress: string;
+    proposalId: string;
+    voter: string;
+    support: number;
+    weight: string;
+    blockNumber: number;
+  }>;
+};
+
+type ProposalsIndexFile = {
+  watermarkBlock: number;
+  generatedAt: string;
+  proposals: Array<{
+    governorAddress: string;
+    proposalId: string;
+    snapshotBlock: number;
+  }>;
+};
+
 const rootDir = process.cwd();
 const outputDir = path.join(rootDir, "public", "tally-data");
-const outputDbPath = path.join(outputDir, "tally-zero.sqlite");
+const outputDbPath = path.join(outputDir, "db.sqlite");
 const manifestPath = path.join(outputDir, "manifest.json");
 const avatarMapPath = path.join(rootDir, "data", "avatar-map.json");
 
@@ -207,6 +230,28 @@ create table election_candidates (
   projects text,
   country text,
   registered_at text
+);
+
+create table delegate_votes (
+  voter_lower text not null,
+  proposal_id text not null,
+  governor_address text not null,
+  support integer not null,
+  weight text not null,
+  block_number integer not null,
+  primary key (voter_lower, proposal_id, governor_address)
+) without rowid;
+
+create table proposals_index (
+  proposal_id text not null,
+  governor_address text not null,
+  snapshot_block integer not null,
+  primary key (proposal_id, governor_address)
+) without rowid;
+
+create table build_metadata (
+  key text primary key,
+  value text not null
 );
 
 begin;
@@ -429,6 +474,48 @@ where length(d.votes_count) > length('10000000000000000000')
   }
   candidateCount = candidateAddresses.size;
 
+  const votesFile = readJson<VoteHistoryFile>("data/votes.json");
+  const proposalsIndexFile = readJson<ProposalsIndexFile>(
+    "data/proposals-index.json"
+  );
+  const votesWatermarkBlock = Math.min(
+    votesFile.watermarkBlock,
+    proposalsIndexFile.watermarkBlock
+  );
+
+  for (const proposal of proposalsIndexFile.proposals) {
+    await writeSql(
+      sqlite.stdin,
+      `insert or replace into proposals_index values (${[
+        sqlValue(proposal.proposalId),
+        sqlValue(proposal.governorAddress.toLowerCase()),
+        sqlValue(proposal.snapshotBlock),
+      ].join(",")});\n`
+    );
+  }
+
+  for (const vote of votesFile.votes) {
+    await writeSql(
+      sqlite.stdin,
+      `insert or replace into delegate_votes values (${[
+        sqlValue(vote.voter.toLowerCase()),
+        sqlValue(vote.proposalId),
+        sqlValue(vote.governorAddress.toLowerCase()),
+        sqlValue(vote.support),
+        sqlValue(vote.weight),
+        sqlValue(vote.blockNumber),
+      ].join(",")});\n`
+    );
+  }
+
+  await writeSql(
+    sqlite.stdin,
+    `insert or replace into build_metadata values (${[
+      sqlValue("delegate_votes_watermark_block"),
+      sqlValue(String(votesWatermarkBlock)),
+    ].join(",")});\n`
+  );
+
   await writeSql(
     sqlite.stdin,
     `
@@ -440,6 +527,7 @@ create index delegates_prioritized_idx on delegates(is_prioritized, delegators_c
 create index delegate_index_name_idx on delegate_index(name collate nocase);
 create index delegate_list_voting_power_idx on delegate_list(rank, voting_power);
 create index election_candidates_name_idx on election_candidates(name collate nocase);
+create index delegate_votes_voter_idx on delegate_votes(voter_lower);
 
 analyze;
 vacuum;
@@ -459,7 +547,7 @@ vacuum;
       {
         version: 1,
         generatedAt: new Date().toISOString(),
-        databaseUrl: "/tally-data/tally-zero.sqlite",
+        databaseUrl: "/tally-data/db.sqlite",
         pageSize: 4096,
         sizeBytes,
         tables: {
@@ -473,7 +561,10 @@ vacuum;
           delegateList: delegateListCount,
           delegateListAvatars: delegateListAvatarCount,
           electionCandidates: candidateCount,
+          delegateVotes: votesFile.votes.length,
+          proposalsIndex: proposalsIndexFile.proposals.length,
         },
+        delegateVotesWatermarkBlock: votesWatermarkBlock,
       },
       null,
       2
@@ -496,6 +587,9 @@ vacuum;
         delegateList: delegateListCount,
         delegateListAvatars: delegateListAvatarCount,
         electionCandidates: candidateCount,
+        delegateVotes: votesFile.votes.length,
+        proposalsIndex: proposalsIndexFile.proposals.length,
+        delegateVotesWatermarkBlock: votesWatermarkBlock,
       },
       null,
       2

@@ -7,6 +7,7 @@
     "build": "next build",
     "sqlite:build": "tsx scripts/build-tally-sqlite.ts",
     "sqlite:deploy": "tsx scripts/deploy-tally-sqlite.ts",
+    "vote-history:fetch": "tsx scripts/fetch-vote-history.ts",
     "avatars:upload": "tsx scripts/upload-governance-avatars.ts",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",

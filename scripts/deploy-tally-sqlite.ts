@@ -18,7 +18,7 @@ type Options = {
 };
 
 const rootDir = process.cwd();
-const dbPath = path.join(rootDir, "public", "tally-data", "tally-zero.sqlite");
+const dbPath = path.join(rootDir, "public", "tally-data", "db.sqlite");
 const manifestPath = path.join(
   rootDir,
   "public",

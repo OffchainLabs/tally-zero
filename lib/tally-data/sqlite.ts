@@ -16,12 +16,18 @@ import type {
   TallyDelegateProfile,
   TallyDelegateSearchResult,
   TallyDelegateSummary,
+  TallyDelegateVote,
   TallyElectionCandidate,
+  TallyProposalIndexEntry,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-list-v1";
-const DEFAULT_DB_SIZE_BYTES = 197480448;
-const DEFAULT_DB_URL = "/tally-data/tally-zero.sqlite";
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v1";
+const DEFAULT_DB_SIZE_BYTES = 540168192;
+const DEFAULT_DB_URL =
+  // eslint-disable-next-line no-process-env
+  process.env.NODE_ENV === "development"
+    ? "/tally-data/db.sqlite"
+    : "/tally-data/tally-zero.sqlite";
 const DEFAULT_DB_CACHE_BUST = `${DEFAULT_DB_SCHEMA_VERSION}-${DEFAULT_DB_SIZE_BYTES}`;
 const DEFAULT_DB_VIRTUAL_FILENAME = `tally-zero-${DEFAULT_DB_CACHE_BUST}.sqlite`;
 const DEFAULT_CHUNK_SIZE = 4096;
@@ -76,6 +82,24 @@ type CandidateRow = CandidateSummaryRow & {
   projects: string | null;
   country: string | null;
   registered_at: string | null;
+};
+
+type DelegateVoteRow = {
+  proposal_id: string;
+  governor_address: string;
+  support: number;
+  weight: string;
+  block_number: number;
+};
+
+type ProposalIndexRow = {
+  proposal_id: string;
+  governor_address: string;
+  snapshot_block: number;
+};
+
+type BuildMetadataRow = {
+  value: string;
 };
 
 type LocalStorageEntry<T> = {
@@ -345,6 +369,24 @@ function toDelegateListItem(
     delegatorsCount: row.delegators_count,
     isPrioritized: Boolean(row.is_prioritized),
     lastChangeBlock: 0,
+  };
+}
+
+function toDelegateVote(row: DelegateVoteRow): TallyDelegateVote {
+  return {
+    proposalId: row.proposal_id,
+    governorAddress: row.governor_address,
+    support: row.support as 0 | 1 | 2,
+    weight: row.weight,
+    blockNumber: row.block_number,
+  };
+}
+
+function toProposalIndexEntry(row: ProposalIndexRow): TallyProposalIndexEntry {
+  return {
+    proposalId: row.proposal_id,
+    governorAddress: row.governor_address,
+    snapshotBlock: row.snapshot_block,
   };
 }
 
@@ -648,6 +690,55 @@ where address_lower in (${addressPlaceholders})
     }
 
     return records;
+  }
+
+  async getDelegateVotes(address: string): Promise<TallyDelegateVote[]> {
+    const voterLower = normalizeAddress(address);
+    const cacheKey = `delegate-votes:${voterLower}`;
+    const cached = readLocalStorage<TallyDelegateVote[]>(cacheKey);
+    if (cached) return cached;
+
+    const rows = await queryRows<DelegateVoteRow>(
+      `
+select proposal_id, governor_address, support, weight, block_number
+from delegate_votes
+where voter_lower = ?
+`,
+      voterLower
+    );
+
+    const votes = rows.map(toDelegateVote);
+    writeLocalStorage(cacheKey, votes);
+    return votes;
+  }
+
+  async getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
+    const cacheKey = `proposals-index`;
+    const cached = readLocalStorage<TallyProposalIndexEntry[]>(cacheKey);
+    if (cached) return cached;
+
+    const rows = await queryRows<ProposalIndexRow>(
+      `select proposal_id, governor_address, snapshot_block from proposals_index`
+    );
+
+    const entries = rows.map(toProposalIndexEntry);
+    writeLocalStorage(cacheKey, entries);
+    return entries;
+  }
+
+  async getBuildMetadata(key: string): Promise<string | null> {
+    const cacheKey = `build-metadata:${key}`;
+    const cached = readLocalStorage<string | null>(cacheKey);
+    if (cached !== null) return cached;
+
+    const rows = await queryRows<BuildMetadataRow>(
+      `select value from build_metadata where key = ? limit 1`,
+      key
+    );
+
+    const value = rows[0]?.value ?? null;
+    writeLocalStorage(cacheKey, value);
+    return value;
   }
 
   async getStats(): Promise<TallyDataStats> {

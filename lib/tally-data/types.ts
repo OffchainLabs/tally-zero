@@ -54,6 +54,20 @@ export type TallyCandidateSummary = {
   type: string | null;
 };
 
+export type TallyDelegateVote = {
+  proposalId: string;
+  governorAddress: string;
+  support: 0 | 1 | 2;
+  weight: string;
+  blockNumber: number;
+};
+
+export type TallyProposalIndexEntry = {
+  proposalId: string;
+  governorAddress: string;
+  snapshotBlock: number;
+};
+
 export type TallyAddressDisplayRecord = {
   address: string;
   label: string | null;
@@ -89,5 +103,8 @@ export interface TallyDataClient {
   getAddressDisplayRecords(
     addresses: string[]
   ): Promise<Map<string, TallyAddressDisplayRecord>>;
+  getDelegateVotes(address: string): Promise<TallyDelegateVote[]>;
+  getProposalsIndex(): Promise<TallyProposalIndexEntry[]>;
+  getBuildMetadata(key: string): Promise<string | null>;
   getStats(): Promise<TallyDataStats>;
 }

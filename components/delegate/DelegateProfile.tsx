@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
+import { DelegateVotesLoader } from "@/components/delegate/DelegateVotesLoader";
 import { Badge } from "@/components/ui/Badge";
 import {
   Card,
@@ -19,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import type { TallyDelegateProfile } from "@/lib/delegate-cache";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
@@ -144,7 +146,7 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
         </CardContent>
       </Card>
 
-      {/* Stats + Statement */}
+      {/* Stats + Tabs */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Stats cards */}
         <div className="space-y-4">
@@ -160,32 +162,57 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
           />
         </div>
 
-        {/* Statement */}
-        {hasStatement && (
-          <Card variant="glass" className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquareText className="h-5 w-5" />
-                Delegate Statement
-              </CardTitle>
-              {statement.statementSummary && (
-                <CardDescription>{statement.statementSummary}</CardDescription>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm break-words prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground">
-                <ReactMarkdown
-                  rehypePlugins={[
-                    [rehypeSanitize, proposalSanitizeSchema],
-                    rehypeRaw,
-                  ]}
-                >
-                  {statement.statement}
-                </ReactMarkdown>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Tabs: Statement + Past Votes */}
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="statement">
+            <TabsList>
+              <TabsTrigger value="statement">Delegate Statement</TabsTrigger>
+              <TabsTrigger value="votes">Past Votes</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="statement">
+              <Card variant="glass">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquareText className="h-5 w-5" />
+                    Delegate Statement
+                  </CardTitle>
+                  {statement.statementSummary && (
+                    <CardDescription>
+                      {statement.statementSummary}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {hasStatement ? (
+                    <div className="text-sm break-words prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground">
+                      <ReactMarkdown
+                        rehypePlugins={[
+                          [rehypeSanitize, proposalSanitizeSchema],
+                          rehypeRaw,
+                        ]}
+                      >
+                        {statement.statement}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      This delegate has not published a statement.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="votes">
+              <Card variant="glass">
+                <CardContent className="pt-6">
+                  <DelegateVotesLoader address={address} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
