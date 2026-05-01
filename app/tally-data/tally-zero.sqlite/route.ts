@@ -2,6 +2,7 @@ const DEFAULT_BLOB_URL =
   "https://epodj1k6qull8rb3.public.blob.vercel-storage.com/governance-data/delegates.sqlite";
 const DB_SIZE_BYTES = 197480448;
 const MAX_RANGE_BYTES = 4 * 1024 * 1024;
+const UPSTREAM_CACHE_HEADERS = ["etag", "last-modified"] as const;
 
 type ParsedRange =
   | {
@@ -43,6 +44,17 @@ function headersForResponse(extraHeaders?: HeadersInit): Headers {
   return headers;
 }
 
+function getUpstreamCacheHeaders(upstreamHeaders: Headers): Headers {
+  const headers = new Headers();
+
+  for (const headerName of UPSTREAM_CACHE_HEADERS) {
+    const value = upstreamHeaders.get(headerName);
+    if (value) headers.set(headerName, value);
+  }
+
+  return headers;
+}
+
 function rangeNotSatisfiable(): Response {
   return new Response(null, {
     status: 416,
@@ -74,7 +86,21 @@ export function parseRangeHeader(range: string | null): ParsedRange {
   return { isValid: true, header: `bytes=${start}-${end}` };
 }
 
-export function HEAD(): Response {
+export async function HEAD(): Promise<Response> {
+  try {
+    const blobResponse = await fetch(getBlobUrl(), { method: "HEAD" });
+    if (blobResponse.ok) {
+      return new Response(null, {
+        status: 200,
+        headers: headersForResponse(
+          getUpstreamCacheHeaders(blobResponse.headers)
+        ),
+      });
+    }
+  } catch {
+    // Static byte-serving metadata is enough for sql.js-httpvfs to proceed.
+  }
+
   return new Response(null, {
     status: 200,
     headers: headersForResponse(),
@@ -106,7 +132,9 @@ export async function GET(request: Request): Promise<Response> {
     });
   }
 
-  const headers = headersForResponse();
+  const headers = headersForResponse(
+    getUpstreamCacheHeaders(blobResponse.headers)
+  );
   const contentRange = blobResponse.headers.get("content-range");
   const contentLength = blobResponse.headers.get("content-length");
 

@@ -6,8 +6,11 @@ const DB_SIZE_BYTES = 197480448;
 
 describe("tally SQLite route", () => {
   describe("HEAD", () => {
-    it("advertises byte serving metadata", () => {
-      const response = HEAD();
+    it("advertises byte serving metadata", async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockRejectedValueOnce(new Error("offline"));
+      const response = await HEAD();
 
       expect(response.status).toBe(200);
       expect(response.headers.get("accept-ranges")).toBe("bytes");
@@ -16,6 +19,34 @@ describe("tally SQLite route", () => {
       );
       expect(response.headers.get("content-encoding")).toBe("identity");
       expect(response.headers.get("cache-control")).toContain("no-transform");
+
+      fetchMock.mockRestore();
+    });
+
+    it("forwards upstream cache validators", async () => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(null, {
+          status: 200,
+          headers: {
+            etag: '"sqlite-db-v1"',
+            "last-modified": "Thu, 30 Apr 2026 12:50:38 GMT",
+          },
+        })
+      );
+
+      const response = await HEAD();
+
+      expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
+        method: "HEAD",
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("etag")).toBe('"sqlite-db-v1"');
+      expect(response.headers.get("last-modified")).toBe(
+        "Thu, 30 Apr 2026 12:50:38 GMT"
+      );
+      expect(response.headers.get("cache-control")).toContain("immutable");
+
+      fetchMock.mockRestore();
     });
   });
 
@@ -99,6 +130,8 @@ describe("tally SQLite route", () => {
           headers: {
             "content-length": "4",
             "content-range": `bytes 0-3/${DB_SIZE_BYTES}`,
+            etag: '"sqlite-db-v1"',
+            "last-modified": "Thu, 30 Apr 2026 12:50:38 GMT",
           },
         })
       );
@@ -118,6 +151,10 @@ describe("tally SQLite route", () => {
       );
       expect(response.headers.get("content-length")).toBe("4");
       expect(response.headers.get("content-encoding")).toBe("identity");
+      expect(response.headers.get("etag")).toBe('"sqlite-db-v1"');
+      expect(response.headers.get("last-modified")).toBe(
+        "Thu, 30 Apr 2026 12:50:38 GMT"
+      );
 
       fetchMock.mockRestore();
     });
