@@ -30,6 +30,8 @@ import type {
   TallyDelegateListResult,
   TallyDelegateProfile,
   TallyDelegateSummary,
+  TallyDelegateVote,
+  TallyProposalIndexEntry,
 } from "@/lib/tally-data/types";
 import type { DelegateCacheStats } from "@/types/delegate";
 
@@ -197,6 +199,23 @@ export function getDelegatePicture(address: string): string | null {
   return getCachedAddressDisplayRecord(address)?.picture ?? null;
 }
 
+export async function getDelegateVotes(
+  address: string
+): Promise<TallyDelegateVote[]> {
+  return getTallyDataClient().getDelegateVotes(address);
+}
+
+export async function getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
+  return getTallyDataClient().getProposalsIndex();
+}
+
+export async function getDelegateVotesWatermarkBlock(): Promise<number> {
+  const value = await getTallyDataClient().getBuildMetadata(
+    "delegate_votes_watermark_block"
+  );
+  return value ? Number(value) : 0;
+}
+
 export { useAddressDisplayRecord, useAddressDisplayRecords };
 export type {
   TallyAddressDisplayRecord,
@@ -204,4 +223,6 @@ export type {
   TallyDelegateListResult,
   TallyDelegateProfile,
   TallyDelegateSummary,
+  TallyDelegateVote,
+  TallyProposalIndexEntry,
 };

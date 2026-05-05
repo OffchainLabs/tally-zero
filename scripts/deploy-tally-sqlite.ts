@@ -18,7 +18,7 @@ type Options = {
 };
 
 const rootDir = process.cwd();
-const dbPath = path.join(rootDir, "public", "tally-data", "tally-zero.sqlite");
+const dbPath = path.join(rootDir, "public", "tally-data", "db.sqlite");
 const manifestPath = path.join(
   rootDir,
   "public",
@@ -116,13 +116,13 @@ function replaceOrThrow(
   replacement: string
 ) {
   const original = fs.readFileSync(filePath, "utf8");
-  const next = original.replace(pattern, replacement);
-  if (next === original) {
+  if (!pattern.test(original)) {
     throw new Error(
       `No match found while updating ${path.relative(rootDir, filePath)}`
     );
   }
-  fs.writeFileSync(filePath, next);
+  const next = original.replace(pattern, replacement);
+  if (next !== original) fs.writeFileSync(filePath, next);
 }
 
 function updateSourceConstants(
@@ -233,7 +233,10 @@ function main() {
     "application/octet-stream",
     "--cache-control-max-age",
     "31536000",
-    "--force",
+    "--access",
+    "public",
+    "--allow-overwrite",
+    "true",
   ];
 
   let blobUrl = `https://example.invalid/${pathname}`;
