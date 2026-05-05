@@ -59,6 +59,18 @@ export function filterDelegates(
   return result;
 }
 
+export function sortDelegatesByVotingPower<T extends { votingPower: string }>(
+  delegates: T[]
+): T[] {
+  return [...delegates].sort((a, b) => {
+    const aPower = BigInt(a.votingPower);
+    const bPower = BigInt(b.votingPower);
+    if (aPower > bPower) return -1;
+    if (aPower < bPower) return 1;
+    return 0;
+  });
+}
+
 export function useDelegateSearch({
   enabled,
   customRpcUrl,
@@ -137,16 +149,13 @@ export function useDelegateSearch({
       }) as TallyDelegateListItem[];
 
       const trimmedFilter = debouncedAddressFilter.trim();
-      if (!trimmedFilter) {
-        setDelegates(baseDelegates);
-        return;
-      }
+      const filtered = trimmedFilter
+        ? baseDelegates.filter((delegate) =>
+            delegateMatchesSearch(delegate, trimmedFilter)
+          )
+        : baseDelegates;
 
-      setDelegates(
-        baseDelegates.filter((delegate) =>
-          delegateMatchesSearch(delegate, trimmedFilter)
-        )
-      );
+      setDelegates(sortDelegatesByVotingPower(filtered));
     }
 
     filterFromCache();
