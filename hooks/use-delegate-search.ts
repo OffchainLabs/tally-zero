@@ -39,6 +39,7 @@ export interface UseDelegateSearchResult {
   snapshotBlock: number;
   refreshVisibleDelegates: (addresses: string[]) => Promise<void>;
   isRefreshingVisible: boolean;
+  refreshedAddresses: Set<string>;
 }
 
 export function filterDelegates(
@@ -93,7 +94,10 @@ export function useDelegateSearch({
   const [delegateData, setDelegateData] =
     useState<TallyDelegateListResult | null>(null);
 
-  const refreshedAddresses = useRef<Set<string>>(new Set());
+  const refreshedAddressesRef = useRef<Set<string>>(new Set());
+  const [refreshedAddresses, setRefreshedAddresses] = useState<Set<string>>(
+    () => new Set()
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -116,6 +120,8 @@ export function useDelegateSearch({
         if (cancelled) return;
 
         if (loaded) {
+          // SQLite already returns delegates ordered by rank
+          // (voting-power desc), so no resort is needed on load.
           setDelegateData(loaded);
           setTotalVotingPower(loaded.totalVotingPower);
           setTotalSupply(loaded.totalSupply);
@@ -155,7 +161,10 @@ export function useDelegateSearch({
           )
         : baseDelegates;
 
-      setDelegates(sortDelegatesByVotingPower(filtered));
+      // Preserve SQLite's voting-power-desc order. refreshVisibleDelegates
+      // sorts within the refreshed subset's original indices; sorting here
+      // would cause cascading reorders across pages.
+      setDelegates(filtered);
     }
 
     filterFromCache();
@@ -166,7 +175,7 @@ export function useDelegateSearch({
       if (!enabled || !isHydrated || addresses.length === 0) return;
 
       const toRefresh = addresses.filter(
-        (addr) => !refreshedAddresses.current.has(addr.toLowerCase())
+        (addr) => !refreshedAddressesRef.current.has(addr.toLowerCase())
       );
 
       if (toRefresh.length === 0) return;
@@ -177,23 +186,49 @@ export function useDelegateSearch({
         const provider = await createRpcProvider(l2Rpc);
         const powerMap = await queryDelegateVotingPowers(provider, toRefresh);
 
+        const newlyRefreshed: string[] = [];
         for (const addr of toRefresh) {
-          if (powerMap.has(addr.toLowerCase())) {
-            refreshedAddresses.current.add(addr.toLowerCase());
+          const lower = addr.toLowerCase();
+          if (
+            powerMap.has(lower) &&
+            !refreshedAddressesRef.current.has(lower)
+          ) {
+            refreshedAddressesRef.current.add(lower);
+            newlyRefreshed.push(lower);
           }
         }
 
+        if (newlyRefreshed.length > 0) {
+          setRefreshedAddresses((current) => {
+            const next = new Set(current);
+            for (const addr of newlyRefreshed) next.add(addr);
+            return next;
+          });
+        }
+
         if (powerMap.size > 0 && delegateData) {
-          const updatedDelegates = delegateData.delegates.map((d) => {
+          // Update fresh values in place, then sort just the refreshed subset
+          // within its original indices. This reorders only the rows we just
+          // fetched (typically the visible page) using fresh on-chain values
+          // without shifting rows on other pages.
+          const refreshedIndices: number[] = [];
+          const refreshedObjects: TallyDelegateListItem[] = [];
+          const updatedDelegates = delegateData.delegates.map((d, i) => {
             const newPower = powerMap.get(d.address.toLowerCase());
-            return newPower ? { ...d, votingPower: newPower } : d;
+            if (!newPower) return d;
+
+            const updated = { ...d, votingPower: newPower };
+            refreshedIndices.push(i);
+            refreshedObjects.push(updated);
+            return updated;
           });
 
-          const newDelegateData = {
-            ...delegateData,
-            delegates: updatedDelegates,
-          };
-          setDelegateData(newDelegateData);
+          const sortedSubset = sortDelegatesByVotingPower(refreshedObjects);
+          refreshedIndices.forEach((idx, k) => {
+            updatedDelegates[idx] = sortedSubset[k];
+          });
+
+          setDelegateData({ ...delegateData, delegates: updatedDelegates });
 
           const newTotalVotingPower = updatedDelegates
             .reduce((sum, d) => sum + BigInt(d.votingPower), BigInt(0))
@@ -219,5 +254,6 @@ export function useDelegateSearch({
     snapshotBlock,
     refreshVisibleDelegates,
     isRefreshingVisible,
+    refreshedAddresses,
   };
 }

@@ -44,6 +44,7 @@ export interface DelegatesTableProps {
   error: Error | null;
   rpcHealthy: boolean | null;
   minPowerFloor: number;
+  refreshedAddresses: Set<string>;
   onSearchChange: (value: string) => void;
   onMinPowerChange: (value: string) => void;
   onVisibleRowsChange: (addresses: string[]) => void;
@@ -75,6 +76,7 @@ export function DelegatesTable({
   error,
   rpcHealthy,
   minPowerFloor,
+  refreshedAddresses,
   onSearchChange,
   onMinPowerChange,
   onVisibleRowsChange,
@@ -165,6 +167,7 @@ export function DelegatesTable({
     meta: {
       totalVotingPower,
       delegateSummaries: tableDelegateSummaries,
+      refreshedAddresses,
     },
   });
 
@@ -178,6 +181,12 @@ export function DelegatesTable({
     columnFilters.length > 0;
   const showTableShell =
     !isLoading && !error && (delegates.length > 0 || hasActiveFilters);
+
+  // py-5 + h-7 avatar row ≈ 68px; header is 48px (h-12 in TableHead).
+  const ROW_HEIGHT_PX = 68;
+  const HEADER_HEIGHT_PX = 48;
+  const pageSize = table.getState().pagination.pageSize;
+  const minTableHeight = pageSize * ROW_HEIGHT_PX + HEADER_HEIGHT_PX;
 
   useEffect(() => {
     const visibleAddresses = visibleAddressesKey
@@ -240,7 +249,10 @@ export function DelegatesTable({
           />
 
           <div className="relative">
-            <div className="glass rounded-2xl overflow-x-auto scrollbar-thin">
+            <div
+              className="glass rounded-2xl overflow-x-auto scrollbar-thin"
+              style={{ minHeight: minTableHeight }}
+            >
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
@@ -266,6 +278,7 @@ export function DelegatesTable({
                       <TableRow
                         key={row.id}
                         data-state={row.getIsSelected() && "selected"}
+                        style={{ height: ROW_HEIGHT_PX }}
                       >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell key={cell.id}>
