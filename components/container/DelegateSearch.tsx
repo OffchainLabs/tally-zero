@@ -79,6 +79,7 @@ export default function DelegateSearch() {
     cacheStats,
     snapshotBlock,
     refreshVisibleDelegates,
+    refreshedAddresses,
   } = useDelegateSearch({
     enabled: autoStarted && rpcHealthy === true,
     customRpcUrl: customRpc || undefined,
@@ -140,6 +141,7 @@ export default function DelegateSearch() {
         error={error}
         rpcHealthy={rpcHealthy}
         minPowerFloor={MIN_DELEGATE_POWER_ARB}
+        refreshedAddresses={refreshedAddresses}
         onSearchChange={setDelegateSearchFilter}
         onMinPowerChange={setMinPowerFilter}
         onVisibleRowsChange={handleVisibleRowsChange}
