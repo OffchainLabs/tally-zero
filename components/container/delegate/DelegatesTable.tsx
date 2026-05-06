@@ -152,6 +152,9 @@ export function DelegatesTable({
       rowSelection,
       columnFilters,
     },
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: 20 },
+    },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
