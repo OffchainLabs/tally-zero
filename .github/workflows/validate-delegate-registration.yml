@@ -1,0 +1,122 @@
+# Security model: the `issues` trigger fires on attacker-controlled events
+# (anyone can open/edit an issue). Hardening assumptions:
+#   - Issue body, title, and labels are untrusted. Never interpolate them
+#     directly into `run:` or `script:` bodies; pass through `env:` vars or
+#     fetch via the API and treat as data.
+#   - The GITHUB_TOKEN is restricted to read-only at the workflow level.
+#   - Repo-level secrets are scoped to `workflow_dispatch` (privileged
+#     trigger) only. Auto-validation falls back to the script's bundled
+#     public RPC.
+name: Validate Delegate Registration
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue Number"
+        required: true
+        type: string
+  issues:
+    types: [opened, edited]
+
+concurrency:
+  group: validate-delegate-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.issue.labels.*.name, 'delegate-registration')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fetch and parse issue body
+        uses: actions/github-script@v7
+        env:
+          DISPATCH_ISSUE_NUMBER: ${{ inputs.issue_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const dispatchInput = process.env.DISPATCH_ISSUE_NUMBER || '';
+            const issueNumber = dispatchInput
+              ? parseInt(dispatchInput, 10)
+              : context.payload.issue?.number;
+
+            if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setFailed(
+                `Could not resolve issue number ` +
+                `(dispatch input: '${dispatchInput}', ` +
+                `payload: ${context.payload.issue?.number})`
+              );
+              return;
+            }
+
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const HEADING_TO_ID = {
+              'Delegate Address': 'address',
+              'Display Name': 'display-name',
+              'ENS Name': 'ens',
+              'Short Bio': 'bio',
+              'Profile Picture URL': 'picture',
+              'Twitter / X Handle': 'twitter',
+              'Statement Summary': 'statement-summary',
+              'Delegate Statement': 'statement',
+              'Seeking Delegation': 'seeking-delegation',
+              'Confirmations': 'confirmations',
+            };
+
+            const body = issue.body || '';
+            const sections = body.split(/^###\s+/m).slice(1);
+            const submission = {};
+
+            for (const section of sections) {
+              const newlineIdx = section.indexOf('\n');
+              const heading = (newlineIdx === -1 ? section : section.slice(0, newlineIdx)).trim();
+              const value = newlineIdx === -1 ? '' : section.slice(newlineIdx + 1).trim();
+              const id = HEADING_TO_ID[heading];
+              if (!id) continue;
+
+              if (id === 'confirmations') {
+                const checked = [];
+                for (const line of value.split('\n')) {
+                  const match = line.match(/^- \[(.)\]\s+(.+)$/);
+                  if (match && (match[1] === 'X' || match[1] === 'x')) {
+                    checked.push(match[2].trim());
+                  }
+                }
+                submission[id] = checked;
+              } else if (value && value !== '_No response_') {
+                submission[id] = value;
+              }
+            }
+
+            fs.writeFileSync('submission.json', JSON.stringify(submission, null, 2));
+            core.info(`Parsed submission from issue #${issueNumber}:`);
+            core.info(JSON.stringify(submission, null, 2));
+
+      - name: Validate submission
+        env:
+          # Only inject the RPC secret on the privileged manual-dispatch
+          # trigger. Auto-validation runs (issue events) fall back to the
+          # script's bundled public RPC, so issue-triggered runs never
+          # see this secret.
+          ETHEREUM_RPC_URL: ${{ github.event_name == 'workflow_dispatch' && secrets.ETHEREUM_RPC_URL || '' }}
+        run: pnpm exec tsx scripts/validate-delegate-registration.ts submission.json
