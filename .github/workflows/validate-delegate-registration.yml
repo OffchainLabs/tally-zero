@@ -119,6 +119,10 @@ jobs:
 
       - name: Validate submission
         id: validate
+        # Don't fail the job here — the next step needs to run on
+        # validation failure to post a comment. We re-fail the job
+        # explicitly at the end if outcome is 'failure'.
+        continue-on-error: true
         env:
           # Only inject the RPC secret on the privileged manual-dispatch
           # trigger. Auto-validation runs (issue events) fall back to the
@@ -128,7 +132,7 @@ jobs:
         run: pnpm exec tsx scripts/validate-delegate-registration.ts submission.json 2>&1 | tee validation-output.txt
 
       - name: Comment on issue with validation errors
-        if: failure() && steps.validate.outcome == 'failure'
+        if: steps.validate.outcome == 'failure'
         uses: actions/github-script@v9
         env:
           DISPATCH_ISSUE_NUMBER: ${{ inputs.issue_number }}
@@ -181,3 +185,9 @@ jobs:
               issue_number: issueNumber,
               body,
             });
+
+      - name: Fail the job if validation failed
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "Delegate registration validation failed; see prior step output."
+          exit 1
