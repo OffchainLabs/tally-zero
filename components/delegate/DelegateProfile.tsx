@@ -1,18 +1,36 @@
 "use client";
 
+import { ReloadIcon } from "@radix-ui/react-icons";
+import { useAppKit } from "@reown/appkit/react";
 import {
+  CheckCircle2,
   ExternalLink,
   Globe,
   MessageSquareText,
   User,
   Users,
+  Vote,
+  Wallet,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
+import { toast } from "sonner";
+import { type Abi, zeroAddress } from "viem";
+import {
+  useAccount,
+  useChainId,
+  useReadContract,
+  useSimulateContract,
+  useSwitchChain,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 
 import { DelegateVotesLoader } from "@/components/delegate/DelegateVotesLoader";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import {
   Card,
   CardContent,
@@ -21,10 +39,36 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { ARBITRUM_CHAIN_ID, ARB_TOKEN } from "@/config/arbitrum-governance";
+import ERC20VotesABI from "@/data/ERC20Votes_ABI.json";
+import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import type { TallyDelegateProfile } from "@/lib/delegate-cache";
+import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
+
+const ARB_TOKEN_ABI = ERC20VotesABI as Abi;
+
+function isUserRejectedError(error: unknown): boolean {
+  if (!error) return false;
+
+  const message = getErrorMessage(error).toLowerCase();
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
+
+  return (
+    code === "4001" ||
+    code === "ACTION_REJECTED" ||
+    message.includes("user rejected") ||
+    message.includes("user denied") ||
+    message.includes("rejected the request") ||
+    message.includes("request rejected") ||
+    message.includes("denied transaction signature")
+  );
+}
 
 interface DelegateProfileProps {
   address: string;
@@ -160,6 +204,10 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
             label="Delegators"
             value={delegate.delegatorsCount.toLocaleString()}
           />
+          <DelegationCard
+            delegateAddress={address}
+            delegateName={displayName}
+          />
         </div>
 
         {/* Tabs: Statement + Past Votes */}
@@ -215,6 +263,261 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function DelegationCard({
+  delegateAddress,
+  delegateName,
+}: {
+  delegateAddress: string;
+  delegateName: string;
+}) {
+  const { open } = useAppKit();
+  const { address: accountAddress, isConnected } = useAccount();
+  const chainId = useChainId();
+  const {
+    switchChain,
+    isPending: isSwitchingChain,
+    error: switchChainError,
+  } = useSwitchChain();
+  const [trackedTxHash, setTrackedTxHash] = useState<`0x${string}`>();
+
+  const validDelegateAddress = isValidAddress(delegateAddress)
+    ? (delegateAddress as `0x${string}`)
+    : undefined;
+  const accountReadAddress = accountAddress ?? zeroAddress;
+  const isWrongNetwork = isConnected && chainId !== ARBITRUM_CHAIN_ID;
+
+  const { data: rawBalance, isLoading: isLoadingBalance } = useReadContract({
+    address: ARB_TOKEN.address,
+    abi: ARB_TOKEN_ABI,
+    functionName: "balanceOf",
+    args: [accountReadAddress],
+    chainId: ARBITRUM_CHAIN_ID,
+    query: {
+      enabled: isConnected && !!accountAddress,
+    },
+  });
+  const arbBalance = rawBalance as bigint | undefined;
+
+  const {
+    data: rawCurrentDelegate,
+    isLoading: isLoadingCurrentDelegate,
+    refetch: refetchCurrentDelegate,
+  } = useReadContract({
+    address: ARB_TOKEN.address,
+    abi: ARB_TOKEN_ABI,
+    functionName: "delegates",
+    args: [accountReadAddress],
+    chainId: ARBITRUM_CHAIN_ID,
+    query: {
+      enabled: isConnected && !!accountAddress,
+    },
+  });
+  const currentDelegate = rawCurrentDelegate as `0x${string}` | undefined;
+  const isDelegatedToProfile = addressesEqual(
+    currentDelegate,
+    validDelegateAddress
+  );
+
+  const {
+    data: simulateData,
+    error: simulateError,
+    isError: isSimulateError,
+    isFetching: isSimulating,
+  } = useSimulateContract({
+    address: ARB_TOKEN.address,
+    abi: ARB_TOKEN_ABI,
+    functionName: "delegate",
+    args: validDelegateAddress ? [validDelegateAddress] : undefined,
+    account: accountAddress,
+    chainId: ARBITRUM_CHAIN_ID,
+    query: {
+      enabled:
+        isConnected &&
+        !!accountAddress &&
+        !!validDelegateAddress &&
+        !isWrongNetwork &&
+        !isDelegatedToProfile,
+    },
+  });
+
+  const {
+    error: writeError,
+    isPending: isWriting,
+    writeContract,
+  } = useWriteContract();
+
+  const {
+    error: receiptError,
+    isLoading: isConfirming,
+    isSuccess: isConfirmed,
+  } = useWaitForTransactionReceipt({
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: trackedTxHash,
+    onReplaced: ({ reason, transactionReceipt }) => {
+      if (reason === "cancelled") {
+        setTrackedTxHash(undefined);
+        toast.error("Delegation transaction was cancelled.");
+        return;
+      }
+
+      setTrackedTxHash(transactionReceipt.transactionHash);
+      toast(
+        reason === "repriced"
+          ? "Delegation transaction gas fee was updated."
+          : "Delegation transaction was replaced."
+      );
+    },
+  });
+
+  useEffect(() => {
+    if (!isConfirmed || !trackedTxHash) return;
+    toast.success("ARB voting power delegated.");
+    refetchCurrentDelegate();
+  }, [isConfirmed, refetchCurrentDelegate, trackedTxHash]);
+
+  useEffect(() => {
+    if (!isSimulateError || !simulateError || isDelegatedToProfile) return;
+    toast.error(getSimulationErrorMessage(simulateError), {
+      id: "delegate-arb-simulation-error",
+    });
+  }, [isDelegatedToProfile, isSimulateError, simulateError]);
+
+  useEffect(() => {
+    if (!writeError || isUserRejectedError(writeError)) return;
+    toast.error(getErrorMessage(writeError, "delegate ARB voting power"), {
+      id: "delegate-arb-write-error",
+    });
+  }, [writeError]);
+
+  useEffect(() => {
+    if (!receiptError || isUserRejectedError(receiptError)) return;
+    toast.error(getErrorMessage(receiptError, "confirm delegation"), {
+      id: "delegate-arb-receipt-error",
+    });
+  }, [receiptError]);
+
+  useEffect(() => {
+    if (!switchChainError || isUserRejectedError(switchChainError)) return;
+    toast.error(getErrorMessage(switchChainError, "switch network"), {
+      id: "delegate-arb-switch-error",
+    });
+  }, [switchChainError]);
+
+  const delegationStatus = useMemo(() => {
+    if (!isConnected) return "Connect a wallet to delegate ARB voting power.";
+    if (!validDelegateAddress) return "Invalid delegate address.";
+    if (isLoadingCurrentDelegate) return "Checking current delegation.";
+    if (isDelegatedToProfile) {
+      return `Currently delegated to ${delegateName}.`;
+    }
+    if (currentDelegate && !addressesEqual(currentDelegate, zeroAddress)) {
+      return `Currently delegated to ${shortenAddress(currentDelegate)}.`;
+    }
+    return "No active ARB delegate.";
+  }, [
+    currentDelegate,
+    delegateName,
+    isConnected,
+    isDelegatedToProfile,
+    isLoadingCurrentDelegate,
+    validDelegateAddress,
+  ]);
+
+  const isBusy = isWriting || isConfirming || isSimulating || isSwitchingChain;
+  const canDelegate =
+    isConnected &&
+    !isWrongNetwork &&
+    !!simulateData?.request &&
+    !!validDelegateAddress &&
+    !isDelegatedToProfile &&
+    !isBusy;
+
+  function handleDelegate() {
+    if (!simulateData?.request || !canDelegate) return;
+
+    writeContract(simulateData.request, {
+      onSuccess: (hash) => {
+        setTrackedTxHash(hash);
+      },
+      onError: () => {
+        setTrackedTxHash(undefined);
+      },
+    });
+  }
+
+  function handleConnect() {
+    void open({ view: "Connect" });
+  }
+
+  function handleSwitchChain() {
+    switchChain({ chainId: ARBITRUM_CHAIN_ID });
+  }
+
+  return (
+    <Card variant="glass">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Vote className="h-4 w-4 text-muted-foreground" />
+          Delegate ARB
+        </CardTitle>
+        <CardDescription>{delegationStatus}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isConnected && (
+          <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Your balance:{" "}
+            <span className="font-medium text-foreground">
+              {isLoadingBalance || arbBalance === undefined
+                ? "Loading"
+                : `${formatVotingPower(arbBalance)} ARB`}
+            </span>
+          </div>
+        )}
+
+        {!isConnected ? (
+          <Button className="w-full" onClick={handleConnect}>
+            <Wallet className="mr-2 h-4 w-4" />
+            Connect Wallet
+          </Button>
+        ) : isWrongNetwork ? (
+          <Button
+            className="w-full"
+            onClick={handleSwitchChain}
+            disabled={isSwitchingChain}
+          >
+            {isSwitchingChain && (
+              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Switch to Arbitrum
+          </Button>
+        ) : isDelegatedToProfile ? (
+          <Button className="w-full" variant="outline" disabled>
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            Delegated
+          </Button>
+        ) : (
+          <Button
+            className="w-full"
+            onClick={handleDelegate}
+            disabled={!canDelegate}
+          >
+            {isBusy && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+            {isConfirming
+              ? "Confirming"
+              : isWriting
+                ? "Delegating"
+                : "Delegate to this address"}
+          </Button>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Delegation updates voting power only. Your ARB stays in your wallet.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
