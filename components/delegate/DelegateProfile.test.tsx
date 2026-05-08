@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { TallyDelegateProfile } from "@/lib/delegate-cache";
 
-import { DelegateProfile } from "./DelegateProfile";
+import { DelegateProfile, getDelegateDisplayName } from "./DelegateProfile";
 
 const DELEGATE_ADDRESS = "0x1111111111111111111111111111111111111111";
 
@@ -89,6 +89,56 @@ vi.mock("@/components/ui/Tabs", () => ({
 }));
 
 describe("DelegateProfile", () => {
+  describe("getDelegateDisplayName", () => {
+    it("uses known labels before account metadata", () => {
+      const delegate = createDelegate({
+        account: {
+          ens: "ens-name.eth",
+          name: "Account Name",
+        },
+        knownLabel: "Known Label",
+      });
+
+      expect(getDelegateDisplayName(delegate, DELEGATE_ADDRESS)).toBe(
+        "Known Label"
+      );
+    });
+
+    it("falls back to account name, ENS, then shortened address", () => {
+      const namedDelegate = createDelegate({
+        account: {
+          ens: "ens-name.eth",
+          name: "Account Name",
+        },
+        knownLabel: null,
+      });
+      const ensDelegate = createDelegate({
+        account: {
+          ens: "ens-name.eth",
+          name: "",
+        },
+        knownLabel: null,
+      });
+      const addressOnlyDelegate = createDelegate({
+        account: {
+          ens: "",
+          name: "",
+        },
+        knownLabel: null,
+      });
+
+      expect(getDelegateDisplayName(namedDelegate, DELEGATE_ADDRESS)).toBe(
+        "Account Name"
+      );
+      expect(getDelegateDisplayName(ensDelegate, DELEGATE_ADDRESS)).toBe(
+        "ens-name.eth"
+      );
+      expect(
+        getDelegateDisplayName(addressOnlyDelegate, DELEGATE_ADDRESS)
+      ).toBe("0x1111...1111");
+    });
+  });
+
   it("renders an unknown delegate card when no profile data exists", () => {
     const html = renderToStaticMarkup(
       <DelegateProfile address={DELEGATE_ADDRESS} delegate={null} />

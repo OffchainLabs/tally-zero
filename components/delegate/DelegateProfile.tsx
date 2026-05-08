@@ -68,7 +68,7 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
   );
 }
 
-function getDelegateDisplayName(
+export function getDelegateDisplayName(
   delegate: TallyDelegateProfile,
   fallbackAddress: string
 ): string {

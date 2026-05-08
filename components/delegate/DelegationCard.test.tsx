@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 
-import { DelegationCard } from "./DelegationCard";
+import {
+  DelegationCard,
+  getDelegateButtonLabel,
+  getDelegateLinkLabel,
+  isUserRejectedError,
+} from "./DelegationCard";
 
 const DELEGATE_ADDRESS = "0x1111111111111111111111111111111111111111";
 const CONNECTED_ACCOUNT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -347,6 +352,79 @@ describe("DelegationCard", () => {
       isSuccess: false,
     });
     expect(renderCard()).toContain("Confirming");
+  });
+});
+
+describe("DelegationCard helper functions", () => {
+  describe("getDelegateLinkLabel", () => {
+    it("uses stored display record labels before shortened addresses", () => {
+      expect(
+        getDelegateLinkLabel(CURRENT_DELEGATE, {
+          address: CURRENT_DELEGATE,
+          label: "Stored Delegate",
+          picture: null,
+          profileUrl: null,
+          source: "delegate",
+          title: null,
+        })
+      ).toBe("Stored Delegate");
+    });
+
+    it("falls back to a shortened address without a display label", () => {
+      expect(getDelegateLinkLabel(CURRENT_DELEGATE, undefined)).toBe(
+        "0x2222...2222"
+      );
+      expect(
+        getDelegateLinkLabel(CURRENT_DELEGATE, {
+          address: CURRENT_DELEGATE,
+          label: null,
+          picture: null,
+          profileUrl: null,
+          source: "address",
+          title: null,
+        })
+      ).toBe("0x2222...2222");
+    });
+  });
+
+  describe("getDelegateButtonLabel", () => {
+    it("prioritizes confirmation and wallet-write labels", () => {
+      expect(
+        getDelegateButtonLabel({ isConfirming: true, isWriting: true })
+      ).toBe("Confirming");
+      expect(
+        getDelegateButtonLabel({ isConfirming: false, isWriting: true })
+      ).toBe("Delegating");
+      expect(
+        getDelegateButtonLabel({ isConfirming: false, isWriting: false })
+      ).toBe("Delegate to this address");
+    });
+  });
+
+  describe("isUserRejectedError", () => {
+    it("detects user rejection codes", () => {
+      expect(isUserRejectedError({ code: 4001 })).toBe(true);
+      expect(isUserRejectedError({ code: "ACTION_REJECTED" })).toBe(true);
+    });
+
+    it("detects common user rejection messages", () => {
+      expect(isUserRejectedError(new Error("User rejected the request"))).toBe(
+        true
+      );
+      expect(isUserRejectedError("user denied transaction signature")).toBe(
+        true
+      );
+      expect(isUserRejectedError("request rejected")).toBe(true);
+    });
+
+    it("ignores unrelated errors and empty values", () => {
+      expect(isUserRejectedError(null)).toBe(false);
+      expect(isUserRejectedError(undefined)).toBe(false);
+      expect(isUserRejectedError(new Error("RPC unavailable"))).toBe(false);
+      expect(
+        isUserRejectedError({ code: -32000, message: "execution reverted" })
+      ).toBe(false);
+    });
   });
 });
 

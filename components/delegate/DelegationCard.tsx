@@ -311,7 +311,7 @@ function useArbDelegation({
 
 type DelegationState = ReturnType<typeof useArbDelegation>;
 
-function getDelegateLinkLabel(
+export function getDelegateLinkLabel(
   address: string,
   displayRecord: TallyAddressDisplayRecord | undefined
 ): string {
@@ -406,16 +406,19 @@ function ZeroBalanceDelegationNotice() {
   );
 }
 
-function getDelegateButtonLabel({
+export function getDelegateButtonLabel({
   isConfirming,
   isWriting,
-}: Pick<DelegationState, "isConfirming" | "isWriting">): string {
+}: {
+  isConfirming: boolean;
+  isWriting: boolean;
+}): string {
   if (isConfirming) return "Confirming";
   if (isWriting) return "Delegating";
   return "Delegate to this address";
 }
 
-function isUserRejectedError(error: unknown): boolean {
+export function isUserRejectedError(error: unknown): boolean {
   if (!error) return false;
 
   const message = getErrorMessage(error).toLowerCase();
