@@ -3,6 +3,8 @@
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useAppKit } from "@reown/appkit/react";
 import { CheckCircle2, Vote, Wallet } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type Abi, zeroAddress } from "viem";
@@ -28,6 +30,10 @@ import {
 import { ARBITRUM_CHAIN_ID, ARB_TOKEN } from "@/config/arbitrum-governance";
 import ERC20VotesABI from "@/data/ERC20Votes_ABI.json";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
+import {
+  type TallyAddressDisplayRecord,
+  useAddressDisplayRecord,
+} from "@/lib/delegate-cache";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
@@ -117,6 +123,14 @@ function useArbDelegation({
     currentDelegate,
     validDelegateAddress
   );
+  const currentDelegateDisplayRecord = useAddressDisplayRecord(
+    currentDelegate && !addressesEqual(currentDelegate, zeroAddress)
+      ? currentDelegate
+      : ""
+  );
+  const currentDelegateLabel = currentDelegate
+    ? getDelegateLinkLabel(currentDelegate, currentDelegateDisplayRecord)
+    : "";
 
   const {
     data: simulateData,
@@ -208,14 +222,31 @@ function useArbDelegation({
     if (!validDelegateAddress) return "Invalid delegate address.";
     if (isLoadingCurrentDelegate) return "Checking current delegation.";
     if (isDelegatedToProfile) {
-      return `Currently delegated to ${delegateName}.`;
+      return (
+        <>
+          Currently delegated to{" "}
+          <DelegateProfileLink address={validDelegateAddress}>
+            {delegateName}
+          </DelegateProfileLink>
+          .
+        </>
+      );
     }
     if (currentDelegate && !addressesEqual(currentDelegate, zeroAddress)) {
-      return `Currently delegated to ${shortenAddress(currentDelegate)}.`;
+      return (
+        <>
+          Currently delegated to{" "}
+          <DelegateProfileLink address={currentDelegate}>
+            {currentDelegateLabel}
+          </DelegateProfileLink>
+          .
+        </>
+      );
     }
     return "No active ARB delegate.";
   }, [
     currentDelegate,
+    currentDelegateLabel,
     delegateName,
     isConnected,
     isDelegatedToProfile,
@@ -275,6 +306,27 @@ function useArbDelegation({
 }
 
 type DelegationState = ReturnType<typeof useArbDelegation>;
+
+function getDelegateLinkLabel(
+  address: string,
+  displayRecord: TallyAddressDisplayRecord | undefined
+): string {
+  return displayRecord?.label || shortenAddress(address);
+}
+
+function DelegateProfileLink({
+  address,
+  children,
+}: {
+  address: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link href={`/delegates/${address.toLowerCase()}`} className="underline">
+      {children}
+    </Link>
+  );
+}
 
 function DelegateBalance({ balanceLabel }: { balanceLabel: string }) {
   return (
