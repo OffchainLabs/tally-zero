@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { type Abi, zeroAddress } from "viem";
 import {
   useAccount,
+  useBalance,
   useChainId,
   useReadContract,
   useSimulateContract,
@@ -289,17 +290,15 @@ function DelegationCard({
   const accountReadAddress = accountAddress ?? zeroAddress;
   const isWrongNetwork = isConnected && chainId !== ARBITRUM_CHAIN_ID;
 
-  const { data: rawBalance, isLoading: isLoadingBalance } = useReadContract({
-    address: ARB_TOKEN.address,
-    abi: ARB_TOKEN_ABI,
-    functionName: "balanceOf",
-    args: [accountReadAddress],
+  const { data: balanceData, isLoading: isLoadingBalance } = useBalance({
+    address: accountAddress,
+    token: ARB_TOKEN.address,
     chainId: ARBITRUM_CHAIN_ID,
     query: {
       enabled: isConnected && !!accountAddress,
     },
   });
-  const arbBalance = rawBalance as bigint | undefined;
+  const arbBalance = balanceData?.value;
 
   const {
     data: rawCurrentDelegate,
