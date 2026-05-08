@@ -9,6 +9,7 @@ import { Fragment, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { PayloadView, type CalldataOverrides } from "@components/payload";
+import { ProposalDelegateVotes } from "@components/proposal/ProposalDelegateVotes";
 import ProposalStages from "@components/proposal/ProposalStages";
 import ProposalStagesError from "@components/proposal/ProposalStagesError";
 import { Badge } from "@components/ui/Badge";
@@ -184,6 +185,26 @@ function ProposalTabsContent({
           </div>
         </TabsContent>
       )}
+
+      <TabsContent
+        forceMount={mountedTabs.has("voters") ? true : undefined}
+        value="voters"
+        className="flex-1 min-h-0 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
+      >
+        <div
+          className={cn(
+            "overflow-y-auto glass-subtle backdrop-blur rounded-lg p-4",
+            maxHeight
+          )}
+        >
+          <ProposalDelegateVotes
+            proposalId={proposal.id}
+            governorAddress={proposal.contractAddress}
+            startBlock={Number(proposal.startBlock)}
+            endBlock={Number(proposal.endBlock)}
+          />
+        </div>
+      </TabsContent>
     </>
   );
 }
@@ -219,6 +240,7 @@ function TabsNavigation({ showStagesTab }: TabsNavigationProps) {
       <TabsTrigger value="description">Description</TabsTrigger>
       <TabsTrigger value="payload">Payload</TabsTrigger>
       {showStagesTab && <TabsTrigger value="stages">Lifecycle</TabsTrigger>}
+      <TabsTrigger value="voters">Voters</TabsTrigger>
     </TabsList>
   );
 }
@@ -296,7 +318,12 @@ export default function VoteModel({
   }, [activeTab, normalizedDefaultTab, visitedTabs]);
 
   const handleTabChange = (tab: string) => {
-    if (tab !== "description" && tab !== "payload" && tab !== "stages") {
+    if (
+      tab !== "description" &&
+      tab !== "payload" &&
+      tab !== "stages" &&
+      tab !== "voters"
+    ) {
       return;
     }
 

@@ -62,6 +62,14 @@ export type TallyDelegateVote = {
   blockNumber: number;
 };
 
+export type TallyProposalDelegateVote = TallyDelegateVote & {
+  voter: string;
+};
+
+export type TallyProposalVoter = TallyProposalDelegateVote & {
+  display: TallyAddressDisplayRecord;
+};
+
 export type TallyProposalIndexEntry = {
   proposalId: string;
   governorAddress: string;
@@ -104,6 +112,10 @@ export interface TallyDataClient {
     addresses: string[]
   ): Promise<Map<string, TallyAddressDisplayRecord>>;
   getDelegateVotes(address: string): Promise<TallyDelegateVote[]>;
+  getProposalVotes(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalVoter[]>;
   getProposalsIndex(): Promise<TallyProposalIndexEntry[]>;
   getBuildMetadata(key: string): Promise<string | null>;
   getStats(): Promise<TallyDataStats>;

@@ -528,6 +528,7 @@ create index delegate_index_name_idx on delegate_index(name collate nocase);
 create index delegate_list_voting_power_idx on delegate_list(rank, voting_power);
 create index election_candidates_name_idx on election_candidates(name collate nocase);
 create index delegate_votes_voter_idx on delegate_votes(voter_lower);
+create index delegate_votes_proposal_idx on delegate_votes(proposal_id, governor_address);
 
 analyze;
 vacuum;

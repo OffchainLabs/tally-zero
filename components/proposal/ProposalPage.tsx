@@ -73,6 +73,7 @@ export function ProposalPage({
   const isLoading =
     !proposal && (isLiveLoading || (shouldFetchLiveProposal && !liveError));
   const error = proposal ? null : liveError;
+
   useEffect(() => {
     if (!proposal) return;
 

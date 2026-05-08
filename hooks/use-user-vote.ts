@@ -4,18 +4,40 @@ import { useQuery } from "@tanstack/react-query";
 import { ethers } from "ethers";
 
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
+import { getDelegateVotes } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
+import type { TallyDelegateVote } from "@/lib/tally-data/types";
+import { VOTE_CAST_ABI } from "@/lib/vote-cast-abi";
 
 export interface UserVoteReceipt {
   support: number;
   weight: string;
 }
 
-const VOTE_CAST_ABI = [
-  "event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason)",
-  "event VoteCastWithParams(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason, bytes params)",
-];
+export function findCachedUserVote({
+  votes,
+  proposalId,
+  governorAddress,
+}: {
+  votes: readonly TallyDelegateVote[];
+  proposalId: string;
+  governorAddress: string;
+}): UserVoteReceipt | null {
+  const governorLower = governorAddress.toLowerCase();
+  const vote = votes.find(
+    (record) =>
+      record.proposalId === proposalId &&
+      record.governorAddress.toLowerCase() === governorLower
+  );
+
+  if (!vote) return null;
+
+  return {
+    support: vote.support,
+    weight: vote.weight,
+  };
+}
 
 export function useUserVote({
   proposalId,
@@ -41,6 +63,17 @@ export function useUserVote({
     queryFn: async () => {
       if (!voter) return null;
       try {
+        try {
+          const cachedVote = findCachedUserVote({
+            votes: await getDelegateVotes(voter),
+            proposalId,
+            governorAddress,
+          });
+          if (cachedVote) return cachedVote;
+        } catch {
+          // Fall back to RPC logs if the local vote index cannot be read.
+        }
+
         const provider = await createRpcProvider(l2Rpc);
         const contract = new ethers.Contract(
           governorAddress,

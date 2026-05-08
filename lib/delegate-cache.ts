@@ -31,7 +31,9 @@ import type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoter,
 } from "@/lib/tally-data/types";
 import type { DelegateCacheStats } from "@/types/delegate";
 
@@ -205,6 +207,13 @@ export async function getDelegateVotes(
   return getTallyDataClient().getDelegateVotes(address);
 }
 
+export async function getProposalVotes(
+  proposalId: string,
+  governorAddress: string
+): Promise<TallyProposalVoter[]> {
+  return getTallyDataClient().getProposalVotes(proposalId, governorAddress);
+}
+
 export async function getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
   return getTallyDataClient().getProposalsIndex();
 }
@@ -224,5 +233,7 @@ export type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoter,
 };

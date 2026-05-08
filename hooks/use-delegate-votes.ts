@@ -11,12 +11,8 @@ import {
 } from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
+import { VOTE_CAST_ABI } from "@/lib/vote-cast-abi";
 import { ARBITRUM_GOVERNORS } from "@config/arbitrum-governance";
-
-const VOTE_CAST_ABI = [
-  "event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason)",
-  "event VoteCastWithParams(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason, bytes params)",
-];
 
 const RPC_DELTA_CHUNK_SIZE = 10_000_000;
 

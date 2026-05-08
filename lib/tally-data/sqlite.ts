@@ -18,11 +18,13 @@ import type {
   TallyDelegateSummary,
   TallyDelegateVote,
   TallyElectionCandidate,
+  TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoter,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v1";
-const DEFAULT_DB_SIZE_BYTES = 540168192;
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v2";
+const DEFAULT_DB_SIZE_BYTES = 701026304;
 const DEFAULT_DB_URL =
   // eslint-disable-next-line no-process-env
   process.env.NODE_ENV === "development"
@@ -90,6 +92,19 @@ type DelegateVoteRow = {
   support: number;
   weight: string;
   block_number: number;
+};
+
+type ProposalDelegateVoteRow = DelegateVoteRow & {
+  voter_lower: string;
+};
+
+type ProposalVoterRow = ProposalDelegateVoteRow & {
+  delegate_ens: string | null;
+  delegate_name: string | null;
+  delegate_picture: string | null;
+  delegate_known_label: string | null;
+  candidate_name: string | null;
+  candidate_title: string | null;
 };
 
 type ProposalIndexRow = {
@@ -379,6 +394,62 @@ function toDelegateVote(row: DelegateVoteRow): TallyDelegateVote {
     support: row.support as 0 | 1 | 2,
     weight: row.weight,
     blockNumber: row.block_number,
+  };
+}
+
+function toProposalDelegateVote(
+  row: ProposalDelegateVoteRow
+): TallyProposalDelegateVote {
+  return {
+    voter: row.voter_lower,
+    ...toDelegateVote(row),
+  };
+}
+
+function toProposalVoterDisplay(
+  row: ProposalVoterRow
+): TallyAddressDisplayRecord {
+  const address = row.voter_lower;
+
+  if (row.candidate_name) {
+    return {
+      address,
+      label: row.candidate_name,
+      title: row.candidate_title,
+      picture: null,
+      profileUrl: `/elections/contender/${address}`,
+      source: "candidate",
+    };
+  }
+
+  const delegateLabel =
+    row.delegate_known_label ?? row.delegate_name ?? row.delegate_ens ?? null;
+
+  if (delegateLabel || row.delegate_picture) {
+    return {
+      address,
+      label: delegateLabel,
+      title: null,
+      picture: row.delegate_picture,
+      profileUrl: null,
+      source: "delegate",
+    };
+  }
+
+  return {
+    address,
+    label: null,
+    title: null,
+    picture: null,
+    profileUrl: null,
+    source: "address",
+  };
+}
+
+function toProposalVoter(row: ProposalVoterRow): TallyProposalVoter {
+  return {
+    ...toProposalDelegateVote(row),
+    display: toProposalVoterDisplay(row),
   };
 }
 
@@ -710,6 +781,46 @@ where voter_lower = ?
     const votes = rows.map(toDelegateVote);
     writeLocalStorage(cacheKey, votes);
     return votes;
+  }
+
+  async getProposalVotes(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalVoter[]> {
+    const governorLower = normalizeAddress(governorAddress);
+    const cacheKey = `proposal-voters:${proposalId}:${governorLower}`;
+    const cached = readLocalStorage<TallyProposalVoter[]>(cacheKey);
+    if (cached) return cached;
+
+    const rows = await queryRows<ProposalVoterRow>(
+      `
+select
+  v.voter_lower,
+  v.proposal_id,
+  v.governor_address,
+  v.support,
+  v.weight,
+  v.block_number,
+  d.ens as delegate_ens,
+  d.name as delegate_name,
+  d.picture as delegate_picture,
+  l.label as delegate_known_label,
+  c.name as candidate_name,
+  c.title as candidate_title
+from delegate_votes v
+left join delegates d on d.address_lower = v.voter_lower
+left join delegate_labels l on l.address_lower = v.voter_lower
+left join election_candidates c on c.address_lower = v.voter_lower
+where v.proposal_id = ? and v.governor_address = ?
+order by length(v.weight) desc, v.weight desc
+`,
+      proposalId,
+      governorLower
+    );
+
+    const voters = rows.map(toProposalVoter);
+    writeLocalStorage(cacheKey, voters);
+    return voters;
   }
 
   async getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
