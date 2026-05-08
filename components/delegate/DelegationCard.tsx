@@ -103,6 +103,7 @@ function useArbDelegation({
     },
   });
   const arbBalance = balanceData?.value;
+  const hasZeroArbBalance = arbBalance === BigInt(0);
 
   const {
     data: rawCurrentDelegate,
@@ -150,7 +151,8 @@ function useArbDelegation({
         !!accountAddress &&
         !!validDelegateAddress &&
         !isWrongNetwork &&
-        !isDelegatedToProfile,
+        !isDelegatedToProfile &&
+        !hasZeroArbBalance,
     },
   });
 
@@ -265,6 +267,7 @@ function useArbDelegation({
     !!simulateData?.request &&
     !!validDelegateAddress &&
     !isDelegatedToProfile &&
+    !hasZeroArbBalance &&
     !isBusy;
 
   function delegate() {
@@ -300,6 +303,7 @@ function useArbDelegation({
     isSwitchingChain,
     isWriting,
     isWrongNetwork,
+    hasZeroArbBalance,
     status,
     switchToArbitrum,
   };
@@ -375,6 +379,10 @@ function DelegationActionButton({
     );
   }
 
+  if (delegation.hasZeroArbBalance) {
+    return <ZeroBalanceDelegationNotice />;
+  }
+
   return (
     <Button
       className="w-full"
@@ -386,6 +394,15 @@ function DelegationActionButton({
       )}
       {getDelegateButtonLabel(delegation)}
     </Button>
+  );
+}
+
+function ZeroBalanceDelegationNotice() {
+  return (
+    <p className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      Get some ARB tokens if you want to participate in governance and delegate
+      your voting power.
+    </p>
   );
 }
 
