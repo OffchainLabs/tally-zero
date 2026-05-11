@@ -14,9 +14,11 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import {
+  PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
   useProposalDelegateVotes,
   type ProposalDelegateVotesResult,
   type ProposalVoter,
+  type ProposalVoteSupportKey,
 } from "@/hooks/use-proposal-delegate-votes";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
@@ -25,13 +27,9 @@ import { cn } from "@/lib/utils";
 interface ProposalDelegateVotesProps {
   proposalId: string;
   governorAddress: string;
-  startBlock?: number;
-  endBlock?: number;
 }
 
-type SupportKey = "for" | "against" | "abstain";
-
-const PAGE_SIZE = 20;
+type SupportKey = ProposalVoteSupportKey;
 
 const SECTIONS: Array<{
   key: SupportKey;
@@ -66,26 +64,59 @@ const SECTIONS: Array<{
 export function ProposalDelegateVotes({
   proposalId,
   governorAddress,
-  startBlock,
-  endBlock,
 }: ProposalDelegateVotesProps) {
-  const { data, isLoading, error } = useProposalDelegateVotes({
-    proposalId,
-    governorAddress,
-    startBlock,
-    endBlock,
-  });
-
+  const [activeSupport, setActiveSupport] = useState<SupportKey>("for");
+  const [loadedSupports, setLoadedSupports] = useState<Set<SupportKey>>(
+    () => new Set<SupportKey>(["for"])
+  );
   const [visibleCounts, setVisibleCounts] = useState<
     Record<SupportKey, number>
   >({
-    for: PAGE_SIZE,
-    against: PAGE_SIZE,
-    abstain: PAGE_SIZE,
+    for: PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+    against: PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+    abstain: PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
   });
 
-  const loadMore = (key: SupportKey) =>
-    setVisibleCounts((prev) => ({ ...prev, [key]: prev[key] + PAGE_SIZE }));
+  const {
+    data,
+    isLoading,
+    error,
+    isSyncing,
+    syncError,
+    supportLoading,
+    supportFetching,
+  } = useProposalDelegateVotes({
+    proposalId,
+    governorAddress,
+    activeSupport,
+    visibleCounts,
+    enabledSupports: loadedSupports,
+  });
+
+  const handleSupportChange = (value: string) => {
+    if (!isSupportKey(value)) return;
+
+    setActiveSupport(value);
+    setLoadedSupports((prev) => {
+      if (prev.has(value)) return prev;
+      const next = new Set(prev);
+      next.add(value);
+      return next;
+    });
+  };
+
+  const loadMore = (key: SupportKey) => {
+    setLoadedSupports((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setVisibleCounts((prev) => ({
+      ...prev,
+      [key]: prev[key] + PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+    }));
+  };
 
   if (isLoading) return <LoadingSkeleton />;
 
@@ -100,7 +131,11 @@ export function ProposalDelegateVotes({
   if (!data) return null;
 
   return (
-    <Tabs defaultValue="for" className="w-full">
+    <Tabs
+      value={activeSupport}
+      onValueChange={handleSupportChange}
+      className="w-full"
+    >
       <TabsList className="w-full justify-start">
         {SECTIONS.map((section) => (
           <TabsTrigger
@@ -113,25 +148,54 @@ export function ProposalDelegateVotes({
               {section.label}
             </span>
             <span className="text-xs text-muted-foreground">
-              ({data[section.key].length})
+              ({getTotalCount(data, section.key)})
             </span>
           </TabsTrigger>
         ))}
       </TabsList>
+
+      {(isSyncing || syncError) && (
+        <p
+          className={cn(
+            "mt-3 text-xs",
+            syncError ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {syncError
+            ? `Showing cached voters. Latest vote sync failed: ${syncError.message}`
+            : "Syncing latest votes..."}
+        </p>
+      )}
 
       {SECTIONS.map((section) => (
         <TabsContent key={section.key} value={section.key} className="mt-4">
           <SupportPanel
             label={section.label}
             voters={data[section.key]}
+            totalCount={getTotalCount(data, section.key)}
             totalWeight={getTotalWeight(data, section.key)}
             visibleCount={visibleCounts[section.key]}
+            isLoading={supportLoading[section.key]}
+            isFetching={supportFetching[section.key]}
             onLoadMore={() => loadMore(section.key)}
           />
         </TabsContent>
       ))}
     </Tabs>
   );
+}
+
+function isSupportKey(value: string): value is SupportKey {
+  return value === "for" || value === "against" || value === "abstain";
+}
+
+function getTotalCount(
+  data: ProposalDelegateVotesResult,
+  key: SupportKey
+): number {
+  if (key === "for") return data.totals.forCount;
+  if (key === "against") return data.totals.againstCount;
+  return data.totals.abstainCount;
 }
 
 function getTotalWeight(
@@ -146,22 +210,38 @@ function getTotalWeight(
 interface SupportPanelProps {
   label: string;
   voters: ProposalVoter[];
+  totalCount: number;
   totalWeight: string;
   visibleCount: number;
+  isLoading: boolean;
+  isFetching: boolean;
   onLoadMore: () => void;
 }
 
 function SupportPanel({
   label,
   voters,
+  totalCount,
   totalWeight,
   visibleCount,
+  isLoading,
+  isFetching,
   onLoadMore,
 }: SupportPanelProps) {
   const visible = voters.slice(0, visibleCount);
-  const remaining = voters.length - visible.length;
+  const remaining = Math.max(0, totalCount - visible.length);
+  const targetVisibleCount = Math.min(visibleCount, totalCount);
+  const skeletonCount =
+    isFetching && visible.length > 0
+      ? Math.min(
+          PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+          Math.max(0, targetVisibleCount - visible.length)
+        )
+      : 0;
 
-  if (voters.length === 0) {
+  if (isLoading && visible.length === 0) return <PanelSkeleton />;
+
+  if (totalCount === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         No {label.toLowerCase()} votes yet
@@ -173,7 +253,7 @@ function SupportPanel({
     <div>
       <header className="mb-2 flex items-center justify-between border-b border-border/40 pb-2 text-xs text-muted-foreground">
         <span>
-          {voters.length} voter{voters.length === 1 ? "" : "s"}
+          {totalCount} voter{totalCount === 1 ? "" : "s"}
         </span>
         <span className="tabular-nums">
           {formatVotingPower(totalWeight)} ARB
@@ -184,9 +264,12 @@ function SupportPanel({
         {visible.map((voter) => (
           <VoterRow key={voter.voter} voter={voter} />
         ))}
+        {Array.from({ length: skeletonCount }).map((_, i) => (
+          <VoterRowSkeleton key={`loading-${i}`} />
+        ))}
       </ul>
 
-      {remaining > 0 && (
+      {remaining > 0 && skeletonCount === 0 && (
         <div className="mt-3 flex justify-center">
           <Button variant="ghost" size="sm" onClick={onLoadMore}>
             Load more ({remaining} remaining)
@@ -248,17 +331,29 @@ function LoadingSkeleton() {
           <Skeleton key={i} className="h-9 w-24" />
         ))}
       </div>
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2.5">
-              <Skeleton className="h-6 w-6 rounded-full" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-            <Skeleton className="h-3 w-16" />
-          </div>
-        ))}
-      </div>
+      <PanelSkeleton />
     </div>
+  );
+}
+
+function PanelSkeleton() {
+  return (
+    <ul className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <VoterRowSkeleton key={i} />
+      ))}
+    </ul>
+  );
+}
+
+function VoterRowSkeleton() {
+  return (
+    <li className="flex items-center justify-between py-2">
+      <div className="flex items-center gap-2.5">
+        <Skeleton className="h-6 w-6 rounded-full" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <Skeleton className="h-3 w-16" />
+    </li>
   );
 }

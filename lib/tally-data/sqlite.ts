@@ -20,11 +20,13 @@ import type {
   TallyElectionCandidate,
   TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoteSummary,
+  TallyProposalVoteSupport,
   TallyProposalVoter,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v2";
-const DEFAULT_DB_SIZE_BYTES = 701026304;
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v5";
+const DEFAULT_DB_SIZE_BYTES = 877690880;
 const DEFAULT_DB_URL =
   // eslint-disable-next-line no-process-env
   process.env.NODE_ENV === "development"
@@ -111,6 +113,18 @@ type ProposalIndexRow = {
   proposal_id: string;
   governor_address: string;
   snapshot_block: number;
+  state: string | null;
+};
+
+type ProposalVoteSummaryRow = {
+  support: number;
+  voter_count: number;
+  weight_total: string;
+};
+
+type ProposalVoteWeightRow = {
+  support: number;
+  weight: string;
 };
 
 type BuildMetadataRow = {
@@ -458,7 +472,76 @@ function toProposalIndexEntry(row: ProposalIndexRow): TallyProposalIndexEntry {
     proposalId: row.proposal_id,
     governorAddress: row.governor_address,
     snapshotBlock: row.snapshot_block,
+    state: row.state,
   };
+}
+
+function emptyProposalVoteSummary(): TallyProposalVoteSummary {
+  return {
+    for: { voterCount: 0, weight: "0" },
+    against: { voterCount: 0, weight: "0" },
+    abstain: { voterCount: 0, weight: "0" },
+    totalCount: 0,
+  };
+}
+
+function toProposalVoteSummary(
+  rows: ProposalVoteSummaryRow[]
+): TallyProposalVoteSummary {
+  const summary = emptyProposalVoteSummary();
+
+  for (const row of rows) {
+    const value = {
+      voterCount: row.voter_count,
+      weight: row.weight_total,
+    };
+
+    if (row.support === 1) summary.for = value;
+    if (row.support === 0) summary.against = value;
+    if (row.support === 2) summary.abstain = value;
+  }
+
+  summary.totalCount =
+    summary.for.voterCount +
+    summary.against.voterCount +
+    summary.abstain.voterCount;
+
+  return summary;
+}
+
+function computeProposalVoteSummaryFromRows(
+  voters: ProposalVoteWeightRow[]
+): TallyProposalVoteSummary {
+  const summary = emptyProposalVoteSummary();
+
+  for (const voter of voters) {
+    const bucket =
+      voter.support === 1
+        ? summary.for
+        : voter.support === 0
+          ? summary.against
+          : summary.abstain;
+
+    bucket.voterCount += 1;
+    bucket.weight = (BigInt(bucket.weight) + BigInt(voter.weight)).toString();
+    summary.totalCount += 1;
+  }
+
+  return summary;
+}
+
+function isMissingTableError(err: unknown, tableName: string): boolean {
+  return (
+    err instanceof Error &&
+    err.message.toLowerCase().includes(`no such table: ${tableName}`)
+  );
+}
+
+function isMissingColumnError(err: unknown, columnName: string): boolean {
+  return (
+    err instanceof Error &&
+    err.message.toLowerCase().includes(`no such column: ${columnName}`)
+  );
 }
 
 function toCandidate(row: CandidateRow): TallyElectionCandidate {
@@ -823,18 +906,159 @@ order by length(v.weight) desc, v.weight desc
     return voters;
   }
 
+  async getProposalVoteSummary(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalVoteSummary> {
+    const governorLower = normalizeAddress(governorAddress);
+    const cacheKey = `proposal-vote-summary:${proposalId}:${governorLower}`;
+    const cached = readLocalStorage<TallyProposalVoteSummary>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const rows = await queryRows<ProposalVoteSummaryRow>(
+        `
+select support, voter_count, weight_total
+from proposal_vote_summary
+where proposal_id = ? and governor_address = ?
+`,
+        proposalId,
+        governorLower
+      );
+
+      const summary = toProposalVoteSummary(rows);
+      writeLocalStorage(cacheKey, summary);
+      return summary;
+    } catch (err) {
+      if (!isMissingTableError(err, "proposal_vote_summary")) throw err;
+
+      const rows = await queryRows<ProposalVoteWeightRow>(
+        `
+select support, weight
+from delegate_votes
+where proposal_id = ? and governor_address = ?
+`,
+        proposalId,
+        governorLower
+      );
+      const summary = computeProposalVoteSummaryFromRows(rows);
+      writeLocalStorage(cacheKey, summary);
+      return summary;
+    }
+  }
+
+  async getProposalVotersPage(
+    proposalId: string,
+    governorAddress: string,
+    support: TallyProposalVoteSupport,
+    offset: number,
+    limit: number
+  ): Promise<TallyProposalVoter[]> {
+    const governorLower = normalizeAddress(governorAddress);
+    const safeOffset = Math.max(0, Math.trunc(offset));
+    const safeLimit = Math.max(0, Math.trunc(limit));
+    const cacheKey = `proposal-voters-page:${proposalId}:${governorLower}:${support}:${safeOffset}:${safeLimit}`;
+    const cached = readLocalStorage<TallyProposalVoter[]>(cacheKey);
+    if (cached) return cached;
+    if (safeLimit === 0) return [];
+
+    const rows = await queryRows<ProposalVoterRow>(
+      `
+select
+  v.voter_lower,
+  v.proposal_id,
+  v.governor_address,
+  v.support,
+  v.weight,
+  v.block_number,
+  d.ens as delegate_ens,
+  d.name as delegate_name,
+  d.picture as delegate_picture,
+  l.label as delegate_known_label,
+  c.name as candidate_name,
+  c.title as candidate_title
+from delegate_votes v
+left join delegates d on d.address_lower = v.voter_lower
+left join delegate_labels l on l.address_lower = v.voter_lower
+left join election_candidates c on c.address_lower = v.voter_lower
+where v.proposal_id = ? and v.governor_address = ? and v.support = ?
+order by length(v.weight) desc, v.weight desc
+limit ? offset ?
+`,
+      proposalId,
+      governorLower,
+      support,
+      safeLimit,
+      safeOffset
+    );
+
+    const voters = rows.map(toProposalVoter);
+    writeLocalStorage(cacheKey, voters);
+    return voters;
+  }
+
   async getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
     const cacheKey = `proposals-index`;
     const cached = readLocalStorage<TallyProposalIndexEntry[]>(cacheKey);
     if (cached) return cached;
 
-    const rows = await queryRows<ProposalIndexRow>(
-      `select proposal_id, governor_address, snapshot_block from proposals_index`
-    );
+    let rows: ProposalIndexRow[];
+    try {
+      rows = await queryRows<ProposalIndexRow>(
+        `select proposal_id, governor_address, snapshot_block, state from proposals_index`
+      );
+    } catch (err) {
+      if (!isMissingColumnError(err, "state")) throw err;
+
+      rows = await queryRows<ProposalIndexRow>(
+        `select proposal_id, governor_address, snapshot_block, null as state from proposals_index`
+      );
+    }
 
     const entries = rows.map(toProposalIndexEntry);
     writeLocalStorage(cacheKey, entries);
     return entries;
+  }
+
+  async getProposalIndexEntry(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalIndexEntry | null> {
+    const governorLower = normalizeAddress(governorAddress);
+    const cacheKey = `proposal-index-entry:${proposalId}:${governorLower}`;
+    const cached = readLocalStorage<TallyProposalIndexEntry | null>(cacheKey);
+    if (cached) return cached;
+
+    let rows: ProposalIndexRow[];
+    try {
+      rows = await queryRows<ProposalIndexRow>(
+        `
+select proposal_id, governor_address, snapshot_block, state
+from proposals_index
+where proposal_id = ? and governor_address = ?
+limit 1
+`,
+        proposalId,
+        governorLower
+      );
+    } catch (err) {
+      if (!isMissingColumnError(err, "state")) throw err;
+
+      rows = await queryRows<ProposalIndexRow>(
+        `
+select proposal_id, governor_address, snapshot_block, null as state
+from proposals_index
+where proposal_id = ? and governor_address = ?
+limit 1
+`,
+        proposalId,
+        governorLower
+      );
+    }
+
+    const entry = rows[0] ? toProposalIndexEntry(rows[0]) : null;
+    writeLocalStorage(cacheKey, entry);
+    return entry;
   }
 
   async getBuildMetadata(key: string): Promise<string | null> {

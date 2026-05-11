@@ -1,15 +1,16 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { PayloadView, type CalldataOverrides } from "@components/payload";
-import { ProposalDelegateVotes } from "@components/proposal/ProposalDelegateVotes";
 import ProposalStages from "@components/proposal/ProposalStages";
 import ProposalStagesError from "@components/proposal/ProposalStagesError";
 import { Badge } from "@components/ui/Badge";
@@ -28,12 +29,27 @@ import {
 import { ErrorBoundary } from "@components/ui/ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/Tabs";
 
+import {
+  prefetchProposalDelegateVotesCache,
+  PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+} from "@/hooks/use-proposal-delegate-votes";
 import { type ProposalTab } from "@/lib/proposal-url";
 import { isArbitrumGovernor } from "@config/governors";
 import { proposalSchema } from "@config/schema";
 import { useNerdMode } from "@context/NerdModeContext";
 import { useL1Block } from "@hooks/use-l1-block";
 import { cn } from "@lib/utils";
+
+const ProposalDelegateVotes = dynamic(
+  () =>
+    import("@components/proposal/ProposalDelegateVotes").then(
+      (mod) => mod.ProposalDelegateVotes
+    ),
+  {
+    ssr: false,
+    loading: () => <ProposalDelegateVotesLoading />,
+  }
+);
 
 interface StateValue {
   value: string;
@@ -200,8 +216,6 @@ function ProposalTabsContent({
           <ProposalDelegateVotes
             proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
-            startBlock={Number(proposal.startBlock)}
-            endBlock={Number(proposal.endBlock)}
           />
         </div>
       </TabsContent>
@@ -232,15 +246,25 @@ function ProposalHeader({ stateValue }: ProposalHeaderProps) {
 
 interface TabsNavigationProps {
   showStagesTab: boolean;
+  onVotersIntent?: () => void;
 }
 
-function TabsNavigation({ showStagesTab }: TabsNavigationProps) {
+function TabsNavigation({
+  showStagesTab,
+  onVotersIntent,
+}: TabsNavigationProps) {
   return (
     <TabsList className="flex-shrink-0 w-full justify-start">
       <TabsTrigger value="description">Description</TabsTrigger>
       <TabsTrigger value="payload">Payload</TabsTrigger>
       {showStagesTab && <TabsTrigger value="stages">Lifecycle</TabsTrigger>}
-      <TabsTrigger value="voters">Voters</TabsTrigger>
+      <TabsTrigger
+        value="voters"
+        onMouseEnter={onVotersIntent}
+        onFocus={onVotersIntent}
+      >
+        Voters
+      </TabsTrigger>
     </TabsList>
   );
 }
@@ -252,6 +276,27 @@ function PlainDescriptionWrapper({
   asChild?: boolean;
 }) {
   return <Fragment>{children}</Fragment>;
+}
+
+function ProposalDelegateVotesLoading() {
+  return (
+    <div className="space-y-3 py-2">
+      <div className="flex gap-2">
+        <div className="h-9 w-20 rounded-md bg-muted/60" />
+        <div className="h-9 w-24 rounded-md bg-muted/60" />
+        <div className="h-9 w-24 rounded-md bg-muted/60" />
+      </div>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="flex items-center justify-between py-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-6 w-6 rounded-full bg-muted/60" />
+            <div className="h-4 w-32 rounded bg-muted/60" />
+          </div>
+          <div className="h-3 w-16 rounded bg-muted/60" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function VoteModel({
@@ -281,6 +326,7 @@ export default function VoteModel({
   const showStagesTab = isArbitrumGovernor(proposal.contractAddress);
   const { nerdMode } = useNerdMode();
   const { currentL1Block } = useL1Block();
+  const queryClient = useQueryClient();
   const isControlled = onTabChange !== undefined;
   const normalizedDefaultTab = useMemo(() => {
     if (defaultTab === "stages" && !showStagesTab) return "description";
@@ -341,6 +387,42 @@ export default function VoteModel({
     onTabChange?.(tab);
   };
 
+  const prefetchVoters = useCallback(() => {
+    prefetchProposalDelegateVotesCache(queryClient, {
+      proposalId: proposal.id,
+      governorAddress: proposal.contractAddress,
+      support: "for",
+      limit: PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
+    });
+  }, [proposal.contractAddress, proposal.id, queryClient]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (activeTab === "voters") {
+      prefetchVoters();
+      return;
+    }
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number }
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(prefetchVoters, {
+        timeout: 2000,
+      });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(prefetchVoters, 800);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTab, prefetchVoters]);
+
   const tabsContentProps = {
     mountedTabs,
     proposal,
@@ -365,7 +447,10 @@ export default function VoteModel({
           onValueChange={handleTabChange}
           className="flex flex-col"
         >
-          <TabsNavigation showStagesTab={showStagesTab} />
+          <TabsNavigation
+            showStagesTab={showStagesTab}
+            onVotersIntent={prefetchVoters}
+          />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight=""
@@ -390,7 +475,10 @@ export default function VoteModel({
           onValueChange={handleTabChange}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsNavigation showStagesTab={showStagesTab} />
+          <TabsNavigation
+            showStagesTab={showStagesTab}
+            onVotersIntent={prefetchVoters}
+          />
           <ProposalTabsContent
             {...tabsContentProps}
             maxHeight="max-h-[60vh]"
@@ -414,7 +502,10 @@ export default function VoteModel({
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col"
       >
-        <TabsNavigation showStagesTab={showStagesTab} />
+        <TabsNavigation
+          showStagesTab={showStagesTab}
+          onVotersIntent={prefetchVoters}
+        />
         <ProposalTabsContent
           {...tabsContentProps}
           maxHeight="max-h-[50vh]"

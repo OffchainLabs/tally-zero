@@ -50,7 +50,23 @@ type ProposalsIndexFile = {
     governorAddress: string;
     proposalId: string;
     snapshotBlock: number;
+    state?: string | number | null;
   }>;
+};
+
+type ProposalVoteSummary = {
+  proposalId: string;
+  governorAddress: string;
+  support: number;
+  voterCount: number;
+  weightTotal: bigint;
+};
+
+type ProposalVoteSummarySource = {
+  proposalId: string;
+  governorAddress: string;
+  support: number;
+  weight: string;
 };
 
 const rootDir = process.cwd();
@@ -69,6 +85,16 @@ const candidateFiles = [
   "election-5-candidates.json",
 ];
 const DEFAULT_MIN_VOTING_POWER = BigInt("10000000000000000000");
+const VALID_PROPOSAL_STATES = [
+  "Pending",
+  "Active",
+  "Canceled",
+  "Defeated",
+  "Succeeded",
+  "Queued",
+  "Expired",
+  "Executed",
+] as const;
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(fs.readFileSync(path.join(rootDir, relativePath), "utf8"));
@@ -106,6 +132,18 @@ function toSearchSubstringTerms(values: Array<string | null | undefined>) {
   return Array.from(terms).join(" ");
 }
 
+function normalizeProposalState(
+  state: string | number | null | undefined
+): string | null {
+  if (state === undefined || state === null) return null;
+
+  const normalized = String(state).toLowerCase();
+  return (
+    VALID_PROPOSAL_STATES.find((value) => value.toLowerCase() === normalized) ??
+    null
+  );
+}
+
 async function writeSql(stdin: NodeJS.WritableStream, sql: string) {
   if (!stdin.write(sql)) {
     await once(stdin, "drain");
@@ -137,6 +175,7 @@ async function main() {
   let candidateCount = 0;
   let delegateAvatarCount = 0;
   let delegateIndexAvatarCount = 0;
+  let proposalVoteSummaryCount = 0;
   const avatarMap = readOptionalJson<Record<string, string>>(avatarMapPath, {});
   const delegateAddresses = new Set<string>();
   const metadataSearchAddresses = new Set<string>();
@@ -242,10 +281,20 @@ create table delegate_votes (
   primary key (voter_lower, proposal_id, governor_address)
 ) without rowid;
 
+create table proposal_vote_summary (
+  proposal_id text not null,
+  governor_address text not null,
+  support integer not null,
+  voter_count integer not null,
+  weight_total text not null,
+  primary key (proposal_id, governor_address, support)
+) without rowid;
+
 create table proposals_index (
   proposal_id text not null,
   governor_address text not null,
   snapshot_block integer not null,
+  state text,
   primary key (proposal_id, governor_address)
 ) without rowid;
 
@@ -484,28 +533,83 @@ where length(d.votes_count) > length('10000000000000000000')
   );
 
   for (const proposal of proposalsIndexFile.proposals) {
+    const governorAddress = proposal.governorAddress.toLowerCase();
+    const proposalState = normalizeProposalState(proposal.state);
+
     await writeSql(
       sqlite.stdin,
       `insert or replace into proposals_index values (${[
         sqlValue(proposal.proposalId),
-        sqlValue(proposal.governorAddress.toLowerCase()),
+        sqlValue(governorAddress),
         sqlValue(proposal.snapshotBlock),
+        sqlValue(proposalState),
       ].join(",")});\n`
     );
   }
 
+  const proposalVoteSummary = new Map<string, ProposalVoteSummary>();
+  const proposalVoteSummarySources = new Map<
+    string,
+    ProposalVoteSummarySource
+  >();
   for (const vote of votesFile.votes) {
+    const governorAddress = vote.governorAddress.toLowerCase();
+    proposalVoteSummarySources.set(
+      [vote.voter.toLowerCase(), vote.proposalId, governorAddress].join(":"),
+      {
+        proposalId: vote.proposalId,
+        governorAddress,
+        support: vote.support,
+        weight: vote.weight,
+      }
+    );
+
     await writeSql(
       sqlite.stdin,
       `insert or replace into delegate_votes values (${[
         sqlValue(vote.voter.toLowerCase()),
         sqlValue(vote.proposalId),
-        sqlValue(vote.governorAddress.toLowerCase()),
+        sqlValue(governorAddress),
         sqlValue(vote.support),
         sqlValue(vote.weight),
         sqlValue(vote.blockNumber),
       ].join(",")});\n`
     );
+  }
+
+  for (const vote of proposalVoteSummarySources.values()) {
+    const summaryKey = [
+      vote.proposalId,
+      vote.governorAddress,
+      String(vote.support),
+    ].join(":");
+    const summary = proposalVoteSummary.get(summaryKey);
+    if (summary) {
+      summary.voterCount += 1;
+      summary.weightTotal += BigInt(vote.weight);
+    } else {
+      proposalVoteSummary.set(summaryKey, {
+        proposalId: vote.proposalId,
+        governorAddress: vote.governorAddress,
+        support: vote.support,
+        voterCount: 1,
+        weightTotal: BigInt(vote.weight),
+      });
+    }
+  }
+
+  for (const summary of proposalVoteSummary.values()) {
+    await writeSql(
+      sqlite.stdin,
+      `insert or replace into proposal_vote_summary values (${[
+        sqlValue(summary.proposalId),
+        sqlValue(summary.governorAddress),
+        sqlValue(summary.support),
+        sqlValue(summary.voterCount),
+        sqlValue(summary.weightTotal.toString()),
+      ].join(",")});\n`
+    );
+    proposalVoteSummaryCount += 1;
   }
 
   await writeSql(
@@ -529,6 +633,7 @@ create index delegate_list_voting_power_idx on delegate_list(rank, voting_power)
 create index election_candidates_name_idx on election_candidates(name collate nocase);
 create index delegate_votes_voter_idx on delegate_votes(voter_lower);
 create index delegate_votes_proposal_idx on delegate_votes(proposal_id, governor_address);
+create index delegate_votes_proposal_support_weight_idx on delegate_votes(proposal_id, governor_address, support, length(weight) desc, weight desc);
 
 analyze;
 vacuum;
@@ -563,6 +668,7 @@ vacuum;
           delegateListAvatars: delegateListAvatarCount,
           electionCandidates: candidateCount,
           delegateVotes: votesFile.votes.length,
+          proposalVoteSummary: proposalVoteSummaryCount,
           proposalsIndex: proposalsIndexFile.proposals.length,
         },
         delegateVotesWatermarkBlock: votesWatermarkBlock,
@@ -589,6 +695,7 @@ vacuum;
         delegateListAvatars: delegateListAvatarCount,
         electionCandidates: candidateCount,
         delegateVotes: votesFile.votes.length,
+        proposalVoteSummary: proposalVoteSummaryCount,
         proposalsIndex: proposalsIndexFile.proposals.length,
         delegateVotesWatermarkBlock: votesWatermarkBlock,
       },

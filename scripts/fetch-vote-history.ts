@@ -8,6 +8,7 @@ import {
   ARBITRUM_RPC_URL,
 } from "@config/arbitrum-governance";
 import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
+import { getStateName } from "@lib/state-utils";
 
 const VOTE_CAST_WITH_PARAMS_ABI = [
   "event VoteCastWithParams(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason, bytes params)",
@@ -36,6 +37,12 @@ interface ProposalIndexEntry {
   governorAddress: string;
   proposalId: string;
   snapshotBlock: number;
+  state: string;
+}
+
+function toStateNumber(state: unknown): number {
+  if (ethers.BigNumber.isBigNumber(state)) return state.toNumber();
+  return Number(state);
 }
 
 function isLimitError(err: unknown): boolean {
@@ -146,10 +153,15 @@ async function main() {
       for (const event of proposalEvents) {
         const args = event.args;
         if (!args || args.proposalId === undefined) continue;
+        const proposalId = args.proposalId.toString();
+        const proposalState = getStateName(
+          toStateNumber(await governorContract.state(proposalId))
+        );
         allProposals.push({
           governorAddress: governorAddressLower,
-          proposalId: args.proposalId.toString(),
+          proposalId,
           snapshotBlock: Number(args.startBlock.toString()),
+          state: proposalState,
         });
         governorProposals += 1;
       }
