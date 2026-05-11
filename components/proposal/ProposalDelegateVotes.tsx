@@ -37,6 +37,7 @@ const SECTIONS: Array<{
   icon: LucideIcon;
   textClass: string;
   dotClass: string;
+  activeClass: string;
 }> = [
   {
     key: "for",
@@ -44,6 +45,8 @@ const SECTIONS: Array<{
     icon: ThumbsUp,
     textClass: VOTE_COLORS.for.text,
     dotClass: VOTE_COLORS.for.dot,
+    activeClass:
+      "border-emerald-500/40 !bg-emerald-500/10 ring-1 ring-emerald-500/25 dark:!bg-emerald-400/10",
   },
   {
     key: "against",
@@ -51,6 +54,8 @@ const SECTIONS: Array<{
     icon: ThumbsDown,
     textClass: VOTE_COLORS.against.text,
     dotClass: VOTE_COLORS.against.dot,
+    activeClass:
+      "border-rose-500/40 !bg-rose-500/10 ring-1 ring-rose-500/25 dark:!bg-rose-400/10",
   },
   {
     key: "abstain",
@@ -58,6 +63,7 @@ const SECTIONS: Array<{
     icon: Minus,
     textClass: VOTE_COLORS.abstain.text,
     dotClass: VOTE_COLORS.abstain.dot,
+    activeClass: "border-border !bg-muted/70 ring-1 ring-border/70",
   },
 ];
 
@@ -137,21 +143,47 @@ export function ProposalDelegateVotes({
       className="w-full"
     >
       <TabsList className="w-full justify-start">
-        {SECTIONS.map((section) => (
-          <TabsTrigger
-            key={section.key}
-            value={section.key}
-            className="gap-1.5"
-          >
-            <section.icon className={cn("h-3.5 w-3.5", section.textClass)} />
-            <span className={cn("font-medium", section.textClass)}>
-              {section.label}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              ({getTotalCount(data, section.key)})
-            </span>
-          </TabsTrigger>
-        ))}
+        {SECTIONS.map((section) => {
+          const isActive = activeSupport === section.key;
+
+          return (
+            <TabsTrigger
+              key={section.key}
+              value={section.key}
+              className={cn(
+                "gap-1.5 border border-transparent",
+                isActive && section.activeClass
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full opacity-0 transition-opacity",
+                  section.dotClass,
+                  isActive && "opacity-100"
+                )}
+              />
+              <section.icon className={cn("h-3.5 w-3.5", section.textClass)} />
+              <span
+                className={cn(
+                  "font-medium",
+                  section.textClass,
+                  isActive && section.key === "abstain" && "!text-foreground"
+                )}
+              >
+                {section.label}
+              </span>
+              <span
+                className={cn(
+                  "text-xs text-muted-foreground",
+                  isActive && "font-medium !text-foreground"
+                )}
+              >
+                ({getTotalCount(data, section.key)})
+              </span>
+            </TabsTrigger>
+          );
+        })}
       </TabsList>
 
       {(isSyncing || syncError) && (
