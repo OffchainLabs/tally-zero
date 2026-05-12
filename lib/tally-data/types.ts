@@ -89,6 +89,8 @@ export type TallyProposalIndexEntry = {
   governorAddress: string;
   snapshotBlock: number;
   state: string | null;
+  proposer: string | null;
+  description: string | null;
 };
 
 export type TallyAddressDisplayRecord = {

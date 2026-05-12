@@ -10,12 +10,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  extractProposalsFromBundledCache,
-  getBundledCacheWatermarks,
-} from "@/lib/bundled-cache-loader";
+import { findByAddress } from "@/lib/address-utils";
 import { buildLookupMap } from "@/lib/collection-utils";
 import { debug } from "@/lib/debug";
+import { getDelegateVotesWatermarkBlock } from "@/lib/delegate-cache";
 import {
   parseProposals,
   refreshProposalStates,
@@ -29,10 +27,19 @@ import {
   subscribeToVoteUpdates,
   type VoteUpdate,
 } from "@/lib/proposal-tracker-manager";
-import { isIncompleteProposalState } from "@/lib/proposal-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import { ParsedProposal } from "@/types/proposal";
+import { getTallyDataClient } from "@/lib/tally-data/client";
+import type {
+  TallyProposalIndexEntry,
+  TallyProposalVoteSummary,
+} from "@/lib/tally-data/types";
+import type {
+  ParsedProposal,
+  ProposalStateName,
+  ProposalVotes,
+} from "@/types/proposal";
 import {
+  ARBITRUM_CHAIN_ID,
   ARBITRUM_GOVERNORS,
   ARBITRUM_RPC_URL,
 } from "@config/arbitrum-governance";
@@ -41,6 +48,24 @@ import { useRpcProvider } from "./use-rpc-provider";
 
 /** Default block range for chunked RPC queries */
 const DEFAULT_BLOCK_RANGE = 10000000;
+const UNKNOWN_PROPOSER = "0x0000000000000000000000000000000000000000";
+
+const VALID_PROPOSAL_STATES: ProposalStateName[] = [
+  "Pending",
+  "Active",
+  "Canceled",
+  "Defeated",
+  "Succeeded",
+  "Queued",
+  "Expired",
+  "Executed",
+];
+
+const RPC_REFRESH_STATES = new Set<ProposalStateName>([
+  "Active",
+  "Pending",
+  "Unknown",
+]);
 
 /** Query key factory for proposal searches */
 export const proposalKeys = {
@@ -53,6 +78,146 @@ export const proposalKeys = {
 interface ProposalSearchData {
   proposals: ParsedProposal[];
   cacheInfo: CacheHitInfo;
+}
+
+function proposalIdentityKey(
+  proposalId: string,
+  governorAddress: string
+): string {
+  return `${proposalId}:${governorAddress.toLowerCase()}`;
+}
+
+function proposalKey(proposal: ParsedProposal): string {
+  return proposalIdentityKey(proposal.id, proposal.contractAddress);
+}
+
+function normalizeProposalState(
+  state: string | null | undefined
+): ProposalStateName {
+  const normalized = state?.toLowerCase();
+  const match = VALID_PROPOSAL_STATES.find(
+    (value) => value.toLowerCase() === normalized
+  );
+
+  return match ?? "Unknown";
+}
+
+function voteSummaryToProposalVotes(
+  summary: TallyProposalVoteSummary | null
+): ProposalVotes | undefined {
+  if (!summary || summary.totalCount === 0) return undefined;
+
+  return {
+    forVotes: summary.for.weight,
+    againstVotes: summary.against.weight,
+    abstainVotes: summary.abstain.weight,
+    quorum: undefined,
+  };
+}
+
+function proposalFromSqliteIndexEntry(
+  entry: TallyProposalIndexEntry,
+  voteSummary: TallyProposalVoteSummary | null
+): ParsedProposal {
+  const governor = findByAddress(ARBITRUM_GOVERNORS, entry.governorAddress);
+
+  return {
+    id: entry.proposalId,
+    contractAddress: entry.governorAddress as ParsedProposal["contractAddress"],
+    proposer: entry.proposer ?? UNKNOWN_PROPOSER,
+    targets: [],
+    values: [],
+    signatures: [],
+    calldatas: [],
+    startBlock: String(entry.snapshotBlock),
+    endBlock: "0",
+    description: entry.description ?? `Proposal ${entry.proposalId}`,
+    networkId: String(ARBITRUM_CHAIN_ID),
+    state: normalizeProposalState(entry.state),
+    governorName: governor?.name ?? "Unknown",
+    votes: voteSummaryToProposalVotes(voteSummary),
+  };
+}
+
+function isPlaceholderProposal(proposal: ParsedProposal): boolean {
+  const description = proposal.description.trim();
+
+  return (
+    (!description || description === `Proposal ${proposal.id}`) &&
+    (proposal.proposer === UNKNOWN_PROPOSER || proposal.proposer === "Unknown")
+  );
+}
+
+function mergeProposal(
+  existing: ParsedProposal,
+  incoming: ParsedProposal
+): ParsedProposal {
+  const incomingIsPlaceholder = isPlaceholderProposal(incoming);
+  const existingIsPlaceholder = isPlaceholderProposal(existing);
+  const state = incoming.state === "Unknown" ? existing.state : incoming.state;
+
+  if (incomingIsPlaceholder && !existingIsPlaceholder) {
+    return {
+      ...existing,
+      state,
+      votes: existing.votes ?? incoming.votes,
+      governorName: existing.governorName || incoming.governorName,
+      startBlock:
+        existing.startBlock !== "0" ? existing.startBlock : incoming.startBlock,
+      endBlock:
+        existing.endBlock !== "0" ? existing.endBlock : incoming.endBlock,
+    };
+  }
+
+  if (!incomingIsPlaceholder && existingIsPlaceholder) {
+    return {
+      ...incoming,
+      votes: incoming.votes ?? existing.votes,
+      state,
+    };
+  }
+
+  return {
+    ...incoming,
+    votes: incoming.votes ?? existing.votes,
+    state,
+    stages: incoming.stages ?? existing.stages,
+    timelockLink: incoming.timelockLink ?? existing.timelockLink,
+  };
+}
+
+function upsertProposal(
+  proposalsByKey: Map<string, ParsedProposal>,
+  proposal: ParsedProposal
+): void {
+  const key = proposalKey(proposal);
+  const existing = proposalsByKey.get(key);
+
+  proposalsByKey.set(
+    key,
+    existing ? mergeProposal(existing, proposal) : proposal
+  );
+}
+
+async function loadSqliteProposalIndexProposals(): Promise<ParsedProposal[]> {
+  try {
+    const client = getTallyDataClient();
+    const entries = await client.getProposalsIndex();
+    const voteSummaries = await Promise.all(
+      entries.map((entry) =>
+        client
+          .getProposalVoteSummary(entry.proposalId, entry.governorAddress)
+          .catch(() => null)
+      )
+    );
+
+    return entries.map((entry, index) =>
+      proposalFromSqliteIndexEntry(entry, voteSummaries[index])
+    );
+  } catch (error) {
+    debug.search("failed to load SQLite proposals index: %O", error);
+    return [];
+  }
 }
 
 /**
@@ -92,64 +257,54 @@ export function useMultiGovernorSearch({
       setProgress(5);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const [
-        { proposals: cachedProposals, incompleteProposalIds },
-        watermarks,
-      ] = await Promise.all([
-        extractProposalsFromBundledCache(),
-        getBundledCacheWatermarks(),
+      const [sqliteIndexProposals, sqliteWatermarkBlock] = await Promise.all([
+        loadSqliteProposalIndexProposals(),
+        getDelegateVotesWatermarkBlock().catch(() => 0),
       ]);
 
       setProgress(10);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const allProposals: ParsedProposal[] = [...cachedProposals];
-      const cachedCount = cachedProposals.length;
-      let cacheWatermarkBlock =
-        watermarks?.watermarks.constitutionalGovernor ?? 0;
+      const proposalsByKey = new Map<string, ParsedProposal>();
+      for (const proposal of sqliteIndexProposals) {
+        upsertProposal(proposalsByKey, proposal);
+      }
+
+      const cachedCount = proposalsByKey.size;
 
       debug.search(
-        "extracted %d proposals from cache (%d incomplete)",
+        "loaded %d proposals from SQLite index (watermark block %d)",
         cachedCount,
-        incompleteProposalIds.size
+        sqliteWatermarkBlock
       );
 
-      if (incompleteProposalIds.size > 0) {
-        const activeProposals = allProposals.filter((p) =>
-          incompleteProposalIds.has(p.id)
-        );
+      const proposalsNeedingRefresh = Array.from(
+        proposalsByKey.values()
+      ).filter((proposal) => RPC_REFRESH_STATES.has(proposal.state));
+
+      if (proposalsNeedingRefresh.length > 0) {
         debug.search(
-          "refreshing %d incomplete proposals",
-          activeProposals.length
+          "refreshing %d active/pending/unknown proposals from RPC",
+          proposalsNeedingRefresh.length
         );
 
         const refreshed = await refreshProposalStates(
           provider,
-          activeProposals
+          proposalsNeedingRefresh
         );
 
-        const refreshedMap = buildLookupMap(refreshed, (p) => p.id);
-        for (let i = 0; i < allProposals.length; i++) {
-          const updated = refreshedMap.get(allProposals[i].id);
-          if (updated) {
-            allProposals[i] = updated;
-          }
+        for (const proposal of refreshed) {
+          upsertProposal(proposalsByKey, proposal);
         }
       }
 
       setProgress(30);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      if (watermarks) {
-        debug.search(
-          "bundled cache watermark at L2 block %d",
-          cacheWatermarkBlock
-        );
-      }
-
-      const rpcStartBlock = watermarks
-        ? Math.max(cacheWatermarkBlock + 1, userStartBlock)
-        : userStartBlock;
+      const rpcStartBlock =
+        sqliteWatermarkBlock > 0
+          ? Math.max(sqliteWatermarkBlock + 1, userStartBlock)
+          : userStartBlock;
 
       let freshCount = 0;
 
@@ -179,18 +334,15 @@ export function useMultiGovernorSearch({
         const allRawProposals = searchResults.flat();
         if (allRawProposals.length > 0) {
           const parsed = await parseProposals(provider, allRawProposals);
-          const existingIds = new Set(allProposals.map((p) => p.id));
           for (const p of parsed) {
-            if (!existingIds.has(p.id)) {
-              allProposals.push(p);
-              freshCount++;
-            }
+            upsertProposal(proposalsByKey, p);
+            freshCount++;
           }
         }
       } else {
         debug.search(
           "skipping RPC search - watermark %d covers search range",
-          cacheWatermarkBlock
+          sqliteWatermarkBlock
         );
         setProgress(80);
       }
@@ -200,10 +352,10 @@ export function useMultiGovernorSearch({
       setProgress(100);
 
       return {
-        proposals: sortProposals(allProposals),
+        proposals: sortProposals(Array.from(proposalsByKey.values())),
         cacheInfo: {
           loaded: cachedCount > 0,
-          snapshotBlock: cacheWatermarkBlock,
+          snapshotBlock: sqliteWatermarkBlock,
           cacheStartBlock: 0,
           cachedCount,
           freshCount,
@@ -261,21 +413,21 @@ export function useMultiGovernorSearch({
   }, [queryClient, rpcUrl, daysToSearch, blockRange]);
 
   // When the proposals page remounts with cached query data, the queryFn does not rerun because
-  // staleTime is Infinity. Refresh incomplete proposals in the background so queued
-  // or pending proposals can advance without forcing a full RPC re-search.
+  // staleTime is Infinity. Refresh active proposals in the background so live vote tallies
+  // advance without forcing a full RPC re-search.
   useEffect(() => {
     if (!enabled || !providerReady || isFetching || !data) return;
 
-    const incompleteProposals = data.proposals.filter((proposal) =>
-      isIncompleteProposalState(proposal.state)
+    const proposalsNeedingRefresh = data.proposals.filter((proposal) =>
+      RPC_REFRESH_STATES.has(proposal.state)
     );
 
-    if (incompleteProposals.length === 0) {
+    if (proposalsNeedingRefresh.length === 0) {
       lastIncompleteRefreshKeyRef.current = null;
       return;
     }
 
-    const refreshKey = incompleteProposals
+    const refreshKey = proposalsNeedingRefresh
       .map(
         (proposal) =>
           `${proposal.id}:${proposal.contractAddress.toLowerCase()}:${proposal.state.toLowerCase()}`
@@ -295,7 +447,7 @@ export function useMultiGovernorSearch({
         const provider = await createRpcProvider(rpcUrl);
         const refreshed = await refreshProposalStates(
           provider,
-          incompleteProposals
+          proposalsNeedingRefresh
         );
 
         if (cancelled) return;

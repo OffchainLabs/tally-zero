@@ -69,10 +69,6 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     tab: "stages",
   });
 
-  if (!proposal.creationTxHash) {
-    return <span className="text-xs text-muted-foreground">-</span>;
-  }
-
   if (!shouldTrackLifecycle) {
     return (
       <Link

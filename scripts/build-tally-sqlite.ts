@@ -51,6 +51,8 @@ type ProposalsIndexFile = {
     proposalId: string;
     snapshotBlock: number;
     state?: string | number | null;
+    proposer?: string | null;
+    description?: string | null;
   }>;
 };
 
@@ -300,6 +302,8 @@ create table proposals_index (
   governor_address text not null,
   snapshot_block integer not null,
   state text,
+  proposer text,
+  description text,
   primary key (proposal_id, governor_address)
 ) without rowid;
 
@@ -540,6 +544,10 @@ where length(d.votes_count) > length('10000000000000000000')
     for (const proposal of proposalsIndexFile.proposals) {
       const governorAddress = proposal.governorAddress.toLowerCase();
       const proposalState = normalizeProposalState(proposal.state);
+      const proposer = proposal.proposer
+        ? proposal.proposer.toLowerCase()
+        : null;
+      const description = proposal.description ?? null;
 
       await writeSql(
         sqlite.stdin,
@@ -548,6 +556,8 @@ where length(d.votes_count) > length('10000000000000000000')
           sqlValue(governorAddress),
           sqlValue(proposal.snapshotBlock),
           sqlValue(proposalState),
+          sqlValue(proposer),
+          sqlValue(description),
         ].join(",")});\n`
       );
     }

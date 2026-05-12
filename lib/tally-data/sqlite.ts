@@ -25,8 +25,8 @@ import type {
   TallyProposalVoter,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v5";
-const DEFAULT_DB_SIZE_BYTES = 878346240;
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v6";
+const DEFAULT_DB_SIZE_BYTES = 879992832;
 const DEFAULT_DB_URL =
   // eslint-disable-next-line no-process-env
   process.env.NODE_ENV === "development"
@@ -114,6 +114,8 @@ type ProposalIndexRow = {
   governor_address: string;
   snapshot_block: number;
   state: string | null;
+  proposer: string | null;
+  description: string | null;
 };
 
 type ProposalVoteSummaryRow = {
@@ -473,6 +475,8 @@ function toProposalIndexEntry(row: ProposalIndexRow): TallyProposalIndexEntry {
     governorAddress: row.governor_address,
     snapshotBlock: row.snapshot_block,
     state: row.state,
+    proposer: row.proposer,
+    description: row.description,
   };
 }
 
@@ -1005,13 +1009,19 @@ limit ? offset ?
     let rows: ProposalIndexRow[];
     try {
       rows = await queryRows<ProposalIndexRow>(
-        `select proposal_id, governor_address, snapshot_block, state from proposals_index`
+        `select proposal_id, governor_address, snapshot_block, state, proposer, description from proposals_index`
       );
     } catch (err) {
-      if (!isMissingColumnError(err, "state")) throw err;
+      if (
+        !isMissingColumnError(err, "state") &&
+        !isMissingColumnError(err, "proposer") &&
+        !isMissingColumnError(err, "description")
+      ) {
+        throw err;
+      }
 
       rows = await queryRows<ProposalIndexRow>(
-        `select proposal_id, governor_address, snapshot_block, null as state from proposals_index`
+        `select proposal_id, governor_address, snapshot_block, null as state, null as proposer, null as description from proposals_index`
       );
     }
 
@@ -1033,7 +1043,7 @@ limit ? offset ?
     try {
       rows = await queryRows<ProposalIndexRow>(
         `
-select proposal_id, governor_address, snapshot_block, state
+select proposal_id, governor_address, snapshot_block, state, proposer, description
 from proposals_index
 where proposal_id = ? and governor_address = ?
 limit 1
@@ -1042,11 +1052,17 @@ limit 1
         governorLower
       );
     } catch (err) {
-      if (!isMissingColumnError(err, "state")) throw err;
+      if (
+        !isMissingColumnError(err, "state") &&
+        !isMissingColumnError(err, "proposer") &&
+        !isMissingColumnError(err, "description")
+      ) {
+        throw err;
+      }
 
       rows = await queryRows<ProposalIndexRow>(
         `
-select proposal_id, governor_address, snapshot_block, null as state
+select proposal_id, governor_address, snapshot_block, null as state, null as proposer, null as description
 from proposals_index
 where proposal_id = ? and governor_address = ?
 limit 1
