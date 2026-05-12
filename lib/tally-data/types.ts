@@ -68,6 +68,43 @@ export type TallyCandidateSummary = {
   type: string | null;
 };
 
+export type TallyDelegateVote = {
+  proposalId: string;
+  governorAddress: string;
+  support: 0 | 1 | 2;
+  weight: string;
+  blockNumber: number;
+};
+
+export type TallyProposalDelegateVote = TallyDelegateVote & {
+  voter: string;
+};
+
+export type TallyProposalVoter = TallyProposalDelegateVote & {
+  display: TallyAddressDisplayRecord;
+};
+
+export type TallyProposalVoteSupport = 0 | 1 | 2;
+
+export type TallyProposalSupportSummary = {
+  voterCount: number;
+  weight: string;
+};
+
+export type TallyProposalVoteSummary = {
+  for: TallyProposalSupportSummary;
+  against: TallyProposalSupportSummary;
+  abstain: TallyProposalSupportSummary;
+  totalCount: number;
+};
+
+export type TallyProposalIndexEntry = {
+  proposalId: string;
+  governorAddress: string;
+  snapshotBlock: number;
+  state: string | null;
+};
+
 export type TallyAddressDisplayRecord = {
   address: string;
   label: string | null;
@@ -103,5 +140,27 @@ export interface TallyDataClient {
   getAddressDisplayRecords(
     addresses: string[]
   ): Promise<Map<string, TallyAddressDisplayRecord>>;
+  getDelegateVotes(address: string): Promise<TallyDelegateVote[]>;
+  getProposalVotes(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalVoter[]>;
+  getProposalVoteSummary(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalVoteSummary>;
+  getProposalVotersPage(
+    proposalId: string,
+    governorAddress: string,
+    support: TallyProposalVoteSupport,
+    offset: number,
+    limit: number
+  ): Promise<TallyProposalVoter[]>;
+  getProposalsIndex(): Promise<TallyProposalIndexEntry[]>;
+  getProposalIndexEntry(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<TallyProposalIndexEntry | null>;
+  getBuildMetadata(key: string): Promise<string | null>;
   getStats(): Promise<TallyDataStats>;
 }

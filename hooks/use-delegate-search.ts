@@ -44,6 +44,7 @@ export interface UseDelegateSearchResult {
   snapshotBlock: number;
   refreshVisibleDelegates: (addresses: string[]) => Promise<void>;
   isRefreshingVisible: boolean;
+  refreshedAddresses: Set<string>;
 }
 
 // `filterDelegates` is generic so callers can apply the same filter logic to
@@ -76,6 +77,18 @@ export function filterDelegates<
   return result;
 }
 
+export function sortDelegatesByVotingPower<T extends { votingPower: string }>(
+  delegates: T[]
+): T[] {
+  return [...delegates].sort((a, b) => {
+    const aPower = BigInt(a.votingPower);
+    const bPower = BigInt(b.votingPower);
+    if (aPower > bPower) return -1;
+    if (aPower < bPower) return 1;
+    return 0;
+  });
+}
+
 export function useDelegateSearch({
   enabled,
   customRpcUrl,
@@ -98,7 +111,10 @@ export function useDelegateSearch({
   const [delegateData, setDelegateData] =
     useState<TallyDelegateListResult | null>(null);
 
-  const refreshedAddresses = useRef<Set<string>>(new Set());
+  const refreshedAddressesRef = useRef<Set<string>>(new Set());
+  const [refreshedAddresses, setRefreshedAddresses] = useState<Set<string>>(
+    () => new Set()
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -121,6 +137,8 @@ export function useDelegateSearch({
         if (cancelled) return;
 
         if (loaded) {
+          // SQLite already returns delegates ordered by rank
+          // (voting-power desc), so no resort is needed on load.
           setDelegateData(loaded);
           setTotalVotingPower(loaded.totalVotingPower);
           setTotalSupply(loaded.totalSupply);
@@ -154,16 +172,16 @@ export function useDelegateSearch({
       });
 
       const trimmedFilter = debouncedAddressFilter.trim();
-      if (!trimmedFilter) {
-        setDelegates(baseDelegates);
-        return;
-      }
+      const filtered = trimmedFilter
+        ? baseDelegates.filter((delegate) =>
+            delegateMatchesSearch(delegate, trimmedFilter)
+          )
+        : baseDelegates;
 
-      setDelegates(
-        baseDelegates.filter((delegate) =>
-          delegateMatchesSearch(delegate, trimmedFilter)
-        )
-      );
+      // Preserve SQLite's voting-power-desc order. refreshVisibleDelegates
+      // sorts within the refreshed subset's original indices; sorting here
+      // would cause cascading reorders across pages.
+      setDelegates(filtered);
     }
 
     filterFromCache();
@@ -174,7 +192,7 @@ export function useDelegateSearch({
       if (!enabled || !isHydrated || addresses.length === 0) return;
 
       const toRefresh = addresses.filter(
-        (addr) => !refreshedAddresses.current.has(addr.toLowerCase())
+        (addr) => !refreshedAddressesRef.current.has(addr.toLowerCase())
       );
 
       if (toRefresh.length === 0) return;
@@ -185,23 +203,53 @@ export function useDelegateSearch({
         const provider = await createRpcProvider(l2Rpc);
         const powerMap = await queryDelegateVotingPowers(provider, toRefresh);
 
+        const newlyRefreshed: string[] = [];
         for (const addr of toRefresh) {
-          if (powerMap.has(addr.toLowerCase())) {
-            refreshedAddresses.current.add(addr.toLowerCase());
+          const lower = addr.toLowerCase();
+          if (
+            powerMap.has(lower) &&
+            !refreshedAddressesRef.current.has(lower)
+          ) {
+            refreshedAddressesRef.current.add(lower);
+            newlyRefreshed.push(lower);
           }
         }
 
+        if (newlyRefreshed.length > 0) {
+          setRefreshedAddresses((current) => {
+            const next = new Set(current);
+            for (const addr of newlyRefreshed) next.add(addr);
+            return next;
+          });
+        }
+
         if (powerMap.size > 0 && delegateData) {
+          // Update fresh values in place, then sort just the refreshed subset
+          // within its original indices. This reorders only the rows we just
+          // fetched (typically the visible page) using fresh on-chain values
+          // without shifting rows on other pages.
+          //
           // Track the on-chain delta against build-time voting power so the
           // headline total stays anchored to the manifest's full-set sum
           // (every delegate >=1 ARB) rather than collapsing to a sum across
           // the filtered/visible subset.
           let powerDelta = BigInt(0);
-          const updatedDelegates = delegateData.delegates.map((d) => {
+          const refreshedIndices: number[] = [];
+          const refreshedObjects: TallyDelegateListItem[] = [];
+          const updatedDelegates = delegateData.delegates.map((d, i) => {
             const newPower = powerMap.get(d.address.toLowerCase());
             if (!newPower) return d;
+
             powerDelta += BigInt(newPower) - BigInt(d.votingPower);
-            return { ...d, votingPower: newPower };
+            const updated = { ...d, votingPower: newPower };
+            refreshedIndices.push(i);
+            refreshedObjects.push(updated);
+            return updated;
+          });
+
+          const sortedSubset = sortDelegatesByVotingPower(refreshedObjects);
+          refreshedIndices.forEach((idx, k) => {
+            updatedDelegates[idx] = sortedSubset[k];
           });
 
           const newTotalVotingPower =
@@ -235,5 +283,6 @@ export function useDelegateSearch({
     snapshotBlock,
     refreshVisibleDelegates,
     isRefreshingVisible,
+    refreshedAddresses,
   };
 }

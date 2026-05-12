@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import type { DelegateInfo } from "@/types/delegate";
 
-import { filterDelegates } from "./use-delegate-search";
+import {
+  filterDelegates,
+  sortDelegatesByVotingPower,
+} from "./use-delegate-search";
 
 // Test fixtures
 const mockDelegates: DelegateInfo[] = [
@@ -166,5 +169,99 @@ describe("filterDelegates", () => {
       });
       expect(result.length).toBe(0);
     });
+  });
+});
+
+describe("sortDelegatesByVotingPower", () => {
+  it("sorts by voting power descending", () => {
+    const shuffled: DelegateInfo[] = [
+      mockDelegates[3], // 50
+      mockDelegates[0], // 1000
+      mockDelegates[4], // 0
+      mockDelegates[2], // 100
+      mockDelegates[1], // 500
+    ];
+    const result = sortDelegatesByVotingPower(shuffled);
+    expect(result.map((d) => d.votingPower)).toEqual([
+      "1000000000000000000000",
+      "500000000000000000000",
+      "100000000000000000000",
+      "50000000000000000000",
+      "0",
+    ]);
+  });
+
+  it("compares numerically, not lexicographically", () => {
+    // Lexicographic sort would put "9..." (19 digits) before "10..." (22 digits).
+    const delegates: DelegateInfo[] = [
+      {
+        address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        votingPower: "9000000000000000000", // 9 tokens (19 chars)
+        lastChangeBlock: 1,
+      },
+      {
+        address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        votingPower: "1000000000000000000000", // 1000 tokens (22 chars)
+        lastChangeBlock: 2,
+      },
+    ];
+    const result = sortDelegatesByVotingPower(delegates);
+    expect(result[0].votingPower).toBe("1000000000000000000000");
+    expect(result[1].votingPower).toBe("9000000000000000000");
+  });
+
+  it("does not mutate the input array", () => {
+    const input = [...mockDelegates];
+    const snapshot = [...input];
+    sortDelegatesByVotingPower(input);
+    expect(input).toEqual(snapshot);
+  });
+
+  it("returns empty array for empty input", () => {
+    expect(sortDelegatesByVotingPower([])).toEqual([]);
+  });
+
+  it("handles equal voting powers without dropping entries", () => {
+    const delegates: DelegateInfo[] = [
+      {
+        address: "0x1111111111111111111111111111111111111111",
+        votingPower: "100",
+        lastChangeBlock: 1,
+      },
+      {
+        address: "0x2222222222222222222222222222222222222222",
+        votingPower: "100",
+        lastChangeBlock: 2,
+      },
+      {
+        address: "0x3333333333333333333333333333333333333333",
+        votingPower: "200",
+        lastChangeBlock: 3,
+      },
+    ];
+    const result = sortDelegatesByVotingPower(delegates);
+    expect(result).toHaveLength(3);
+    expect(result[0].votingPower).toBe("200");
+  });
+
+  it("re-sorts after voting powers are mutated (post-refresh regression)", () => {
+    // Simulates refreshVisibleDelegates updating votingPower in place: an
+    // initially top-ranked delegate drops to the bottom after a refresh, so
+    // the original input order is no longer voting-power-descending.
+    const refreshed: DelegateInfo[] = [
+      { ...mockDelegates[0], votingPower: "1" }, // was 1000, now 1
+      mockDelegates[1], // 500
+      mockDelegates[2], // 100
+      mockDelegates[3], // 50
+      mockDelegates[4], // 0
+    ];
+    const result = sortDelegatesByVotingPower(refreshed);
+    expect(result.map((d) => d.votingPower)).toEqual([
+      "500000000000000000000",
+      "100000000000000000000",
+      "50000000000000000000",
+      "1",
+      "0",
+    ]);
   });
 });

@@ -167,7 +167,10 @@ function main() {
     "application/octet-stream",
     "--cache-control-max-age",
     "31536000",
-    "--force",
+    "--access",
+    "public",
+    "--allow-overwrite",
+    "true",
   ];
 
   let blobUrl = `https://example.invalid/${pathname}`;

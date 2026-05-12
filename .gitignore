@@ -53,6 +53,8 @@ docs/
 .vscode/
 
 delegate-cache.json
+/data/votes.json
+/data/proposals-index.json
 
 .mcp.json
 
