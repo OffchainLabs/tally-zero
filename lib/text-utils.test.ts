@@ -65,6 +65,17 @@ describe("text-utils", () => {
       const result = stripMarkdownAndHtml(input);
       expect(result).toBe("Bold and italic with ");
     });
+
+    it("unescapes backslash-escaped markdown brackets", () => {
+      expect(
+        stripMarkdownAndHtml(
+          "\\[Constitutional\\] AIP: Amended Release of Frozen ETH"
+        )
+      ).toBe("[Constitutional] AIP: Amended Release of Frozen ETH");
+      expect(stripMarkdownAndHtml("[Constitutional\\] AIP")).toBe(
+        "[Constitutional] AIP"
+      );
+    });
   });
 
   describe("truncateText", () => {
