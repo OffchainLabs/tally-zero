@@ -71,7 +71,8 @@ type ProposalVoteSummarySource = {
 
 const rootDir = process.cwd();
 const outputDir = path.join(rootDir, "public", "tally-data");
-const outputDbPath = path.join(outputDir, "db.sqlite");
+const outputDbFilename = "db.sqlite";
+const outputDbPath = path.join(outputDir, outputDbFilename);
 const manifestPath = path.join(outputDir, "manifest.json");
 const avatarMapPath = path.join(rootDir, "data", "avatar-map.json");
 
@@ -152,42 +153,46 @@ async function writeSql(stdin: NodeJS.WritableStream, sql: string) {
 
 async function main() {
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.rmSync(outputDbPath, { force: true });
-  fs.rmSync(`${outputDbPath}-journal`, { force: true });
-  fs.rmSync(`${outputDbPath}-wal`, { force: true });
-  fs.rmSync(`${outputDbPath}-shm`, { force: true });
+  // Build away from the production-facing path so failed builds preserve it.
+  const temporaryOutputDir = fs.mkdtempSync(path.join(outputDir, ".db-build-"));
+  const temporaryDbPath = path.join(temporaryOutputDir, outputDbFilename);
+  let sqlite: ReturnType<typeof spawn> | null = null;
 
-  const sqlite = spawn("sqlite3", [outputDbPath], {
-    stdio: ["pipe", "inherit", "inherit"],
-  });
+  try {
+    sqlite = spawn("sqlite3", [temporaryDbPath], {
+      stdio: ["pipe", "inherit", "inherit"],
+    });
 
-  if (!sqlite.stdin) {
-    throw new Error("sqlite3 stdin was not available");
-  }
+    if (!sqlite.stdin) {
+      throw new Error("sqlite3 stdin was not available");
+    }
 
-  let delegateCount = 0;
-  let delegateIndexCount = 0;
-  let delegateLabelCount = 0;
-  let delegateSearchCount = 0;
-  let delegateSearchSubstringCount = 0;
-  let delegateListCount = 0;
-  let delegateListAvatarCount = 0;
-  let candidateCount = 0;
-  let delegateAvatarCount = 0;
-  let delegateIndexAvatarCount = 0;
-  let proposalVoteSummaryCount = 0;
-  const avatarMap = readOptionalJson<Record<string, string>>(avatarMapPath, {});
-  const delegateAddresses = new Set<string>();
-  const metadataSearchAddresses = new Set<string>();
-  const delegateMetadataByAddressLower = new Map<
-    string,
-    DelegateSearchMetadata
-  >();
-  const candidateAddresses = new Set<string>();
+    let delegateCount = 0;
+    let delegateIndexCount = 0;
+    let delegateLabelCount = 0;
+    let delegateSearchCount = 0;
+    let delegateSearchSubstringCount = 0;
+    let delegateListCount = 0;
+    let delegateListAvatarCount = 0;
+    let candidateCount = 0;
+    let delegateAvatarCount = 0;
+    let delegateIndexAvatarCount = 0;
+    let proposalVoteSummaryCount = 0;
+    const avatarMap = readOptionalJson<Record<string, string>>(
+      avatarMapPath,
+      {}
+    );
+    const delegateAddresses = new Set<string>();
+    const metadataSearchAddresses = new Set<string>();
+    const delegateMetadataByAddressLower = new Map<
+      string,
+      DelegateSearchMetadata
+    >();
+    const candidateAddresses = new Set<string>();
 
-  await writeSql(
-    sqlite.stdin,
-    `
+    await writeSql(
+      sqlite.stdin,
+      `
 pragma journal_mode = delete;
 pragma page_size = 4096;
 pragma synchronous = off;
@@ -305,161 +310,161 @@ create table build_metadata (
 
 begin;
 `
-  );
+    );
 
-  for (const filename of delegateFiles) {
-    const delegates = readJson<TallyDelegate[]>(`data/${filename}`);
-    for (const delegate of delegates) {
-      const address = delegate.account.address;
-      const addressLower = address.toLowerCase();
-      const accountEns = delegate.account.ens?.trim();
-      const accountName = delegate.account.name?.trim();
-      const picture = avatarMap[addressLower] ?? delegate.account.picture;
-      delegateAddresses.add(addressLower);
-      delegateMetadataByAddressLower.set(addressLower, {
-        name: accountName || null,
-        ens: accountEns || null,
-      });
-      if (
-        accountName ||
-        (accountEns && !accountEns.toLowerCase().startsWith("0x"))
-      ) {
-        metadataSearchAddresses.add(addressLower);
-      }
-      if (BigInt(delegate.votesCount) >= DEFAULT_MIN_VOTING_POWER) {
-        delegateListCount += 1;
-        if (picture) {
-          delegateListAvatarCount += 1;
+    for (const filename of delegateFiles) {
+      const delegates = readJson<TallyDelegate[]>(`data/${filename}`);
+      for (const delegate of delegates) {
+        const address = delegate.account.address;
+        const addressLower = address.toLowerCase();
+        const accountEns = delegate.account.ens?.trim();
+        const accountName = delegate.account.name?.trim();
+        const picture = avatarMap[addressLower] ?? delegate.account.picture;
+        delegateAddresses.add(addressLower);
+        delegateMetadataByAddressLower.set(addressLower, {
+          name: accountName || null,
+          ens: accountEns || null,
+        });
+        if (
+          accountName ||
+          (accountEns && !accountEns.toLowerCase().startsWith("0x"))
+        ) {
+          metadataSearchAddresses.add(addressLower);
         }
-      }
+        if (BigInt(delegate.votesCount) >= DEFAULT_MIN_VOTING_POWER) {
+          delegateListCount += 1;
+          if (picture) {
+            delegateListAvatarCount += 1;
+          }
+        }
 
+        await writeSql(
+          sqlite.stdin,
+          `insert or replace into delegates values (${[
+            sqlValue(addressLower),
+            sqlValue(delegate.id),
+            sqlValue(address),
+            sqlValue(delegate.account.ens || null),
+            sqlValue(delegate.account.name || null),
+            sqlValue(delegate.account.bio || null),
+            sqlValue(delegate.account.twitter || null),
+            sqlValue(picture),
+            sqlValue(delegate.votesCount),
+            sqlValue(delegate.delegatorsCount),
+            sqlValue(delegate.isPrioritized),
+            sqlJson(delegate.labels),
+            sqlJson(delegate.delegateEligibility),
+          ].join(",")});\n`
+        );
+        if (picture) {
+          delegateAvatarCount += 1;
+        }
+
+        await writeSql(
+          sqlite.stdin,
+          `insert or replace into delegate_statements values (${[
+            sqlValue(addressLower),
+            sqlValue(delegate.statement.statement || null),
+            sqlValue(delegate.statement.statementSummary || null),
+            sqlValue(delegate.statement.isSeekingDelegation),
+          ].join(",")});\n`
+        );
+        delegateCount += 1;
+      }
+    }
+
+    const delegateIndex = readJson<Record<string, DelegateIndexEntry>>(
+      "data/delegate-index.json"
+    );
+    const indexByAddressLower = new Map<string, DelegateIndexEntry>();
+    for (const [address, entry] of Object.entries(delegateIndex)) {
+      const addressLower = address.toLowerCase();
+      const entryWithAvatar = {
+        ...entry,
+        picture: avatarMap[addressLower] ?? entry.picture,
+      };
+      indexByAddressLower.set(addressLower, entryWithAvatar);
       await writeSql(
         sqlite.stdin,
-        `insert or replace into delegates values (${[
+        `insert or replace into delegate_index values (${[
           sqlValue(addressLower),
-          sqlValue(delegate.id),
-          sqlValue(address),
-          sqlValue(delegate.account.ens || null),
-          sqlValue(delegate.account.name || null),
-          sqlValue(delegate.account.bio || null),
-          sqlValue(delegate.account.twitter || null),
-          sqlValue(picture),
-          sqlValue(delegate.votesCount),
-          sqlValue(delegate.delegatorsCount),
-          sqlValue(delegate.isPrioritized),
-          sqlJson(delegate.labels),
-          sqlJson(delegate.delegateEligibility),
+          sqlValue(entry.name),
+          sqlValue(entryWithAvatar.picture),
         ].join(",")});\n`
       );
-      if (picture) {
-        delegateAvatarCount += 1;
+      if (entryWithAvatar.picture) {
+        delegateIndexAvatarCount += 1;
       }
+      delegateIndexCount += 1;
+    }
 
+    const delegateLabels = readJson<{
+      delegates: Record<string, string>;
+    }>("data/delegate-labels.json");
+    for (const [address, label] of Object.entries(delegateLabels.delegates)) {
       await writeSql(
         sqlite.stdin,
-        `insert or replace into delegate_statements values (${[
-          sqlValue(addressLower),
-          sqlValue(delegate.statement.statement || null),
-          sqlValue(delegate.statement.statementSummary || null),
-          sqlValue(delegate.statement.isSeekingDelegation),
+        `insert or replace into delegate_labels values (${[
+          sqlValue(address.toLowerCase()),
+          sqlValue(label),
         ].join(",")});\n`
       );
-      delegateCount += 1;
+      delegateLabelCount += 1;
     }
-  }
 
-  const delegateIndex = readJson<Record<string, DelegateIndexEntry>>(
-    "data/delegate-index.json"
-  );
-  const indexByAddressLower = new Map<string, DelegateIndexEntry>();
-  for (const [address, entry] of Object.entries(delegateIndex)) {
-    const addressLower = address.toLowerCase();
-    const entryWithAvatar = {
-      ...entry,
-      picture: avatarMap[addressLower] ?? entry.picture,
-    };
-    indexByAddressLower.set(addressLower, entryWithAvatar);
-    await writeSql(
-      sqlite.stdin,
-      `insert or replace into delegate_index values (${[
-        sqlValue(addressLower),
-        sqlValue(entry.name),
-        sqlValue(entryWithAvatar.picture),
-      ].join(",")});\n`
+    const labelByAddressLower = new Map(
+      Object.entries(delegateLabels.delegates).map(([address, label]) => [
+        address.toLowerCase(),
+        label,
+      ])
     );
-    if (entryWithAvatar.picture) {
-      delegateIndexAvatarCount += 1;
-    }
-    delegateIndexCount += 1;
-  }
+    const searchAddresses = new Set([
+      ...metadataSearchAddresses,
+      ...indexByAddressLower.keys(),
+      ...labelByAddressLower.keys(),
+    ]);
+    for (const addressLower of searchAddresses) {
+      if (!delegateAddresses.has(addressLower)) continue;
 
-  const delegateLabels = readJson<{
-    delegates: Record<string, string>;
-  }>("data/delegate-labels.json");
-  for (const [address, label] of Object.entries(delegateLabels.delegates)) {
-    await writeSql(
-      sqlite.stdin,
-      `insert or replace into delegate_labels values (${[
-        sqlValue(address.toLowerCase()),
-        sqlValue(label),
-      ].join(",")});\n`
-    );
-    delegateLabelCount += 1;
-  }
-
-  const labelByAddressLower = new Map(
-    Object.entries(delegateLabels.delegates).map(([address, label]) => [
-      address.toLowerCase(),
-      label,
-    ])
-  );
-  const searchAddresses = new Set([
-    ...metadataSearchAddresses,
-    ...indexByAddressLower.keys(),
-    ...labelByAddressLower.keys(),
-  ]);
-  for (const addressLower of searchAddresses) {
-    if (!delegateAddresses.has(addressLower)) continue;
-
-    const entry = indexByAddressLower.get(addressLower);
-    const metadata = delegateMetadataByAddressLower.get(addressLower);
-    const label = labelByAddressLower.get(addressLower) ?? null;
-    await writeSql(
-      sqlite.stdin,
-      `insert into delegate_search (address_lower, address, name, ens, label)
+      const entry = indexByAddressLower.get(addressLower);
+      const metadata = delegateMetadataByAddressLower.get(addressLower);
+      const label = labelByAddressLower.get(addressLower) ?? null;
+      await writeSql(
+        sqlite.stdin,
+        `insert into delegate_search (address_lower, address, name, ens, label)
 select ${[
-        sqlValue(addressLower),
-        "address",
-        `coalesce(${sqlValue(entry?.name ?? null)}, name)`,
-        "ens",
-        sqlValue(label),
-      ].join(",")}
+          sqlValue(addressLower),
+          "address",
+          `coalesce(${sqlValue(entry?.name ?? null)}, name)`,
+          "ens",
+          sqlValue(label),
+        ].join(",")}
 from delegates
 where address_lower = ${sqlValue(addressLower)};\n`
-    );
-
-    const substringTerms = toSearchSubstringTerms([
-      entry?.name ?? metadata?.name,
-      metadata?.ens,
-      label,
-    ]);
-    if (substringTerms) {
-      await writeSql(
-        sqlite.stdin,
-        `insert into delegate_search_substrings (address_lower, terms) values (${[
-          sqlValue(addressLower),
-          sqlValue(substringTerms),
-        ].join(",")});\n`
       );
-      delegateSearchSubstringCount += 1;
+
+      const substringTerms = toSearchSubstringTerms([
+        entry?.name ?? metadata?.name,
+        metadata?.ens,
+        label,
+      ]);
+      if (substringTerms) {
+        await writeSql(
+          sqlite.stdin,
+          `insert into delegate_search_substrings (address_lower, terms) values (${[
+            sqlValue(addressLower),
+            sqlValue(substringTerms),
+          ].join(",")});\n`
+        );
+        delegateSearchSubstringCount += 1;
+      }
+
+      delegateSearchCount += 1;
     }
 
-    delegateSearchCount += 1;
-  }
-
-  await writeSql(
-    sqlite.stdin,
-    `
+    await writeSql(
+      sqlite.stdin,
+      `
 insert into delegate_list (
   rank,
   address_lower,
@@ -490,139 +495,139 @@ where length(d.votes_count) > length('10000000000000000000')
     length(d.votes_count) = length('10000000000000000000')
     and d.votes_count >= '10000000000000000000'
   );\n`
-  );
-  for (const filename of candidateFiles) {
-    if (!fs.existsSync(path.join(rootDir, "data", filename))) {
-      continue;
-    }
-    const candidates = readJson<Record<string, CandidateData>>(
-      `data/${filename}`
     );
-    for (const [key, candidate] of Object.entries(candidates)) {
-      const address = candidate.address ?? key;
-      candidateAddresses.add(address.toLowerCase());
+    for (const filename of candidateFiles) {
+      if (!fs.existsSync(path.join(rootDir, "data", filename))) {
+        continue;
+      }
+      const candidates = readJson<Record<string, CandidateData>>(
+        `data/${filename}`
+      );
+      for (const [key, candidate] of Object.entries(candidates)) {
+        const address = candidate.address ?? key;
+        candidateAddresses.add(address.toLowerCase());
+        await writeSql(
+          sqlite.stdin,
+          `insert or replace into election_candidates values (${[
+            sqlValue(address.toLowerCase()),
+            sqlValue(address),
+            sqlValue(candidate.name ?? ""),
+            sqlValue(candidate.title ?? null),
+            sqlValue(candidate.twitter ?? null),
+            sqlValue(candidate.type ?? null),
+            sqlValue(candidate.representative ?? null),
+            sqlValue(candidate.motivation ?? null),
+            sqlValue(candidate.experience ?? null),
+            sqlJson(candidate.skills ?? null),
+            sqlValue(candidate.projects ?? null),
+            sqlValue(candidate.country ?? null),
+            sqlValue(candidate.registered_at ?? null),
+          ].join(",")});\n`
+        );
+      }
+    }
+    candidateCount = candidateAddresses.size;
+
+    const votesFile = readJson<VoteHistoryFile>("data/votes.json");
+    const proposalsIndexFile = readJson<ProposalsIndexFile>(
+      "data/proposals-index.json"
+    );
+    const votesWatermarkBlock = Math.min(
+      votesFile.watermarkBlock,
+      proposalsIndexFile.watermarkBlock
+    );
+
+    for (const proposal of proposalsIndexFile.proposals) {
+      const governorAddress = proposal.governorAddress.toLowerCase();
+      const proposalState = normalizeProposalState(proposal.state);
+
       await writeSql(
         sqlite.stdin,
-        `insert or replace into election_candidates values (${[
-          sqlValue(address.toLowerCase()),
-          sqlValue(address),
-          sqlValue(candidate.name ?? ""),
-          sqlValue(candidate.title ?? null),
-          sqlValue(candidate.twitter ?? null),
-          sqlValue(candidate.type ?? null),
-          sqlValue(candidate.representative ?? null),
-          sqlValue(candidate.motivation ?? null),
-          sqlValue(candidate.experience ?? null),
-          sqlJson(candidate.skills ?? null),
-          sqlValue(candidate.projects ?? null),
-          sqlValue(candidate.country ?? null),
-          sqlValue(candidate.registered_at ?? null),
+        `insert or replace into proposals_index values (${[
+          sqlValue(proposal.proposalId),
+          sqlValue(governorAddress),
+          sqlValue(proposal.snapshotBlock),
+          sqlValue(proposalState),
         ].join(",")});\n`
       );
     }
-  }
-  candidateCount = candidateAddresses.size;
 
-  const votesFile = readJson<VoteHistoryFile>("data/votes.json");
-  const proposalsIndexFile = readJson<ProposalsIndexFile>(
-    "data/proposals-index.json"
-  );
-  const votesWatermarkBlock = Math.min(
-    votesFile.watermarkBlock,
-    proposalsIndexFile.watermarkBlock
-  );
+    const proposalVoteSummary = new Map<string, ProposalVoteSummary>();
+    const proposalVoteSummarySources = new Map<
+      string,
+      ProposalVoteSummarySource
+    >();
+    for (const vote of votesFile.votes) {
+      const governorAddress = vote.governorAddress.toLowerCase();
+      proposalVoteSummarySources.set(
+        [vote.voter.toLowerCase(), vote.proposalId, governorAddress].join(":"),
+        {
+          proposalId: vote.proposalId,
+          governorAddress,
+          support: vote.support,
+          weight: vote.weight,
+        }
+      );
 
-  for (const proposal of proposalsIndexFile.proposals) {
-    const governorAddress = proposal.governorAddress.toLowerCase();
-    const proposalState = normalizeProposalState(proposal.state);
-
-    await writeSql(
-      sqlite.stdin,
-      `insert or replace into proposals_index values (${[
-        sqlValue(proposal.proposalId),
-        sqlValue(governorAddress),
-        sqlValue(proposal.snapshotBlock),
-        sqlValue(proposalState),
-      ].join(",")});\n`
-    );
-  }
-
-  const proposalVoteSummary = new Map<string, ProposalVoteSummary>();
-  const proposalVoteSummarySources = new Map<
-    string,
-    ProposalVoteSummarySource
-  >();
-  for (const vote of votesFile.votes) {
-    const governorAddress = vote.governorAddress.toLowerCase();
-    proposalVoteSummarySources.set(
-      [vote.voter.toLowerCase(), vote.proposalId, governorAddress].join(":"),
-      {
-        proposalId: vote.proposalId,
-        governorAddress,
-        support: vote.support,
-        weight: vote.weight,
-      }
-    );
-
-    await writeSql(
-      sqlite.stdin,
-      `insert or replace into delegate_votes values (${[
-        sqlValue(vote.voter.toLowerCase()),
-        sqlValue(vote.proposalId),
-        sqlValue(governorAddress),
-        sqlValue(vote.support),
-        sqlValue(vote.weight),
-        sqlValue(vote.blockNumber),
-      ].join(",")});\n`
-    );
-  }
-
-  for (const vote of proposalVoteSummarySources.values()) {
-    const summaryKey = [
-      vote.proposalId,
-      vote.governorAddress,
-      String(vote.support),
-    ].join(":");
-    const summary = proposalVoteSummary.get(summaryKey);
-    if (summary) {
-      summary.voterCount += 1;
-      summary.weightTotal += BigInt(vote.weight);
-    } else {
-      proposalVoteSummary.set(summaryKey, {
-        proposalId: vote.proposalId,
-        governorAddress: vote.governorAddress,
-        support: vote.support,
-        voterCount: 1,
-        weightTotal: BigInt(vote.weight),
-      });
+      await writeSql(
+        sqlite.stdin,
+        `insert or replace into delegate_votes values (${[
+          sqlValue(vote.voter.toLowerCase()),
+          sqlValue(vote.proposalId),
+          sqlValue(governorAddress),
+          sqlValue(vote.support),
+          sqlValue(vote.weight),
+          sqlValue(vote.blockNumber),
+        ].join(",")});\n`
+      );
     }
-  }
 
-  for (const summary of proposalVoteSummary.values()) {
+    for (const vote of proposalVoteSummarySources.values()) {
+      const summaryKey = [
+        vote.proposalId,
+        vote.governorAddress,
+        String(vote.support),
+      ].join(":");
+      const summary = proposalVoteSummary.get(summaryKey);
+      if (summary) {
+        summary.voterCount += 1;
+        summary.weightTotal += BigInt(vote.weight);
+      } else {
+        proposalVoteSummary.set(summaryKey, {
+          proposalId: vote.proposalId,
+          governorAddress: vote.governorAddress,
+          support: vote.support,
+          voterCount: 1,
+          weightTotal: BigInt(vote.weight),
+        });
+      }
+    }
+
+    for (const summary of proposalVoteSummary.values()) {
+      await writeSql(
+        sqlite.stdin,
+        `insert or replace into proposal_vote_summary values (${[
+          sqlValue(summary.proposalId),
+          sqlValue(summary.governorAddress),
+          sqlValue(summary.support),
+          sqlValue(summary.voterCount),
+          sqlValue(summary.weightTotal.toString()),
+        ].join(",")});\n`
+      );
+      proposalVoteSummaryCount += 1;
+    }
+
     await writeSql(
       sqlite.stdin,
-      `insert or replace into proposal_vote_summary values (${[
-        sqlValue(summary.proposalId),
-        sqlValue(summary.governorAddress),
-        sqlValue(summary.support),
-        sqlValue(summary.voterCount),
-        sqlValue(summary.weightTotal.toString()),
+      `insert or replace into build_metadata values (${[
+        sqlValue("delegate_votes_watermark_block"),
+        sqlValue(String(votesWatermarkBlock)),
       ].join(",")});\n`
     );
-    proposalVoteSummaryCount += 1;
-  }
 
-  await writeSql(
-    sqlite.stdin,
-    `insert or replace into build_metadata values (${[
-      sqlValue("delegate_votes_watermark_block"),
-      sqlValue(String(votesWatermarkBlock)),
-    ].join(",")});\n`
-  );
-
-  await writeSql(
-    sqlite.stdin,
-    `
+    await writeSql(
+      sqlite.stdin,
+      `
 commit;
 
 create index delegates_name_idx on delegates(name collate nocase);
@@ -638,25 +643,54 @@ create index delegate_votes_proposal_support_weight_idx on delegate_votes(propos
 analyze;
 vacuum;
 `
-  );
-  sqlite.stdin.end();
+    );
+    sqlite.stdin.end();
 
-  const [code] = await once(sqlite, "exit");
-  if (code !== 0) {
-    throw new Error(`sqlite3 exited with code ${code}`);
-  }
+    const [code] = await once(sqlite, "exit");
+    if (code !== 0) {
+      throw new Error(`sqlite3 exited with code ${code}`);
+    }
 
-  const sizeBytes = fs.statSync(outputDbPath).size;
-  fs.writeFileSync(
-    manifestPath,
-    `${JSON.stringify(
-      {
-        version: 1,
-        generatedAt: new Date().toISOString(),
-        databaseUrl: "/tally-data/db.sqlite",
-        pageSize: 4096,
-        sizeBytes,
-        tables: {
+    const sizeBytes = fs.statSync(temporaryDbPath).size;
+    fs.renameSync(temporaryDbPath, outputDbPath);
+
+    fs.writeFileSync(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          generatedAt: new Date().toISOString(),
+          databaseUrl: "/tally-data/db.sqlite",
+          pageSize: 4096,
+          sizeBytes,
+          tables: {
+            delegates: delegateCount,
+            delegateAvatars: delegateAvatarCount,
+            delegateIndex: delegateIndexCount,
+            delegateIndexAvatars: delegateIndexAvatarCount,
+            delegateLabels: delegateLabelCount,
+            delegateSearch: delegateSearchCount,
+            delegateSearchSubstrings: delegateSearchSubstringCount,
+            delegateList: delegateListCount,
+            delegateListAvatars: delegateListAvatarCount,
+            electionCandidates: candidateCount,
+            delegateVotes: votesFile.votes.length,
+            proposalVoteSummary: proposalVoteSummaryCount,
+            proposalsIndex: proposalsIndexFile.proposals.length,
+          },
+          delegateVotesWatermarkBlock: votesWatermarkBlock,
+        },
+        null,
+        2
+      )}\n`
+    );
+
+    console.log(
+      JSON.stringify(
+        {
+          database: path.relative(rootDir, outputDbPath),
+          manifest: path.relative(rootDir, manifestPath),
+          sizeBytes,
           delegates: delegateCount,
           delegateAvatars: delegateAvatarCount,
           delegateIndex: delegateIndexCount,
@@ -670,39 +704,19 @@ vacuum;
           delegateVotes: votesFile.votes.length,
           proposalVoteSummary: proposalVoteSummaryCount,
           proposalsIndex: proposalsIndexFile.proposals.length,
+          delegateVotesWatermarkBlock: votesWatermarkBlock,
         },
-        delegateVotesWatermarkBlock: votesWatermarkBlock,
-      },
-      null,
-      2
-    )}\n`
-  );
-
-  console.log(
-    JSON.stringify(
-      {
-        database: path.relative(rootDir, outputDbPath),
-        manifest: path.relative(rootDir, manifestPath),
-        sizeBytes,
-        delegates: delegateCount,
-        delegateAvatars: delegateAvatarCount,
-        delegateIndex: delegateIndexCount,
-        delegateIndexAvatars: delegateIndexAvatarCount,
-        delegateLabels: delegateLabelCount,
-        delegateSearch: delegateSearchCount,
-        delegateSearchSubstrings: delegateSearchSubstringCount,
-        delegateList: delegateListCount,
-        delegateListAvatars: delegateListAvatarCount,
-        electionCandidates: candidateCount,
-        delegateVotes: votesFile.votes.length,
-        proposalVoteSummary: proposalVoteSummaryCount,
-        proposalsIndex: proposalsIndexFile.proposals.length,
-        delegateVotesWatermarkBlock: votesWatermarkBlock,
-      },
-      null,
-      2
-    )
-  );
+        null,
+        2
+      )
+    );
+  } finally {
+    if (sqlite && sqlite.exitCode === null && !sqlite.killed) {
+      sqlite.stdin?.destroy();
+      sqlite.kill();
+    }
+    fs.rmSync(temporaryOutputDir, { force: true, recursive: true });
+  }
 }
 
 main().catch((error) => {
