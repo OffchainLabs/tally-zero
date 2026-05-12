@@ -6,8 +6,11 @@
 export function stripMarkdownAndHtml(text: string): string {
   // Remove HTML tags first
   const withoutHtml = text.replace(/<[^>]*>/g, "");
+  // Unescape markdown backslash escapes (e.g., \[ \] \*) so the escape
+  // character itself does not leak through to the rendered title.
+  const unescaped = withoutHtml.replace(/\\([!-/:-@[-`{-~])/g, "$1");
   // Remove markdown syntax
-  return withoutHtml.replace(/(\[.*?\]\(.*?\)|[*_`#>])/g, "");
+  return unescaped.replace(/(\[.*?\]\(.*?\)|[*_`#>])/g, "");
 }
 
 function normalizeProposalTitleLine(line: string): string {
