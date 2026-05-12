@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,7 +29,7 @@ import { VOTE_SUPPORT, prepareCastVote } from "@gzeoneth/gov-tracker";
 
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
 import { useProposalVotingPower } from "@/hooks/use-proposal-voting-power";
-import { useUserVote } from "@/hooks/use-user-vote";
+import { useUserVote, type UserVoteReceipt } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { proposalSchema, voteSchema } from "@config/schema";
 import { getSimulationErrorMessage } from "@lib/error-utils";
@@ -80,6 +80,32 @@ export default function VoteForm({
     voter: address,
     enabled: hasRecordedVote,
   });
+  const userVoteIdentity = useMemo(
+    () =>
+      `${proposal.id}:${governorAddress.toLowerCase()}:${
+        address?.toLowerCase() ?? ""
+      }`,
+    [address, governorAddress, proposal.id]
+  );
+  const [lastKnownUserVote, setLastKnownUserVote] = useState<{
+    identity: string;
+    vote: UserVoteReceipt;
+  } | null>(null);
+  useEffect(() => {
+    if (!userVote) return;
+
+    setLastKnownUserVote({
+      identity: userVoteIdentity,
+      vote: userVote,
+    });
+  }, [userVote, userVoteIdentity]);
+
+  const displayedUserVote =
+    userVote ??
+    (lastKnownUserVote?.identity === userVoteIdentity
+      ? lastKnownUserVote.vote
+      : null);
+  const isUserVoteLoading = isLoadingUserVote && !displayedUserVote;
 
   const voteTransaction = useMemo(() => {
     if (!selectedVote) return undefined;
@@ -168,17 +194,19 @@ export default function VoteForm({
               </VoteInfoRow>
               {hasRecordedVote && (
                 <>
-                  <VoteInfoRow label="Your vote" isLoading={isLoadingUserVote}>
-                    {userVote ? (
-                      <VoteSupportLabel support={userVote.support} />
+                  <VoteInfoRow label="Your vote" isLoading={isUserVoteLoading}>
+                    {displayedUserVote ? (
+                      <VoteSupportLabel support={displayedUserVote.support} />
                     ) : null}
                   </VoteInfoRow>
                   <VoteInfoRow
                     label="Voting power spent"
-                    isLoading={isLoadingUserVote}
+                    isLoading={isUserVoteLoading}
                   >
-                    {userVote ? (
-                      <span>{formatVotingPower(userVote.weight)} ARB</span>
+                    {displayedUserVote ? (
+                      <span>
+                        {formatVotingPower(displayedUserVote.weight)} ARB
+                      </span>
                     ) : null}
                   </VoteInfoRow>
                 </>

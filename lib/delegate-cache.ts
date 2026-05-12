@@ -31,7 +31,11 @@ import type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoteSummary,
+  TallyProposalVoteSupport,
+  TallyProposalVoter,
 } from "@/lib/tally-data/types";
 import type { DelegateCacheStats } from "@/types/delegate";
 
@@ -205,8 +209,51 @@ export async function getDelegateVotes(
   return getTallyDataClient().getDelegateVotes(address);
 }
 
+export async function getProposalVotes(
+  proposalId: string,
+  governorAddress: string
+): Promise<TallyProposalVoter[]> {
+  return getTallyDataClient().getProposalVotes(proposalId, governorAddress);
+}
+
+export async function getProposalVoteSummary(
+  proposalId: string,
+  governorAddress: string
+): Promise<TallyProposalVoteSummary> {
+  return getTallyDataClient().getProposalVoteSummary(
+    proposalId,
+    governorAddress
+  );
+}
+
+export async function getProposalVotersPage(
+  proposalId: string,
+  governorAddress: string,
+  support: TallyProposalVoteSupport,
+  offset: number,
+  limit: number
+): Promise<TallyProposalVoter[]> {
+  return getTallyDataClient().getProposalVotersPage(
+    proposalId,
+    governorAddress,
+    support,
+    offset,
+    limit
+  );
+}
+
 export async function getProposalsIndex(): Promise<TallyProposalIndexEntry[]> {
   return getTallyDataClient().getProposalsIndex();
+}
+
+export async function getProposalIndexEntry(
+  proposalId: string,
+  governorAddress: string
+): Promise<TallyProposalIndexEntry | null> {
+  return getTallyDataClient().getProposalIndexEntry(
+    proposalId,
+    governorAddress
+  );
 }
 
 export async function getDelegateVotesWatermarkBlock(): Promise<number> {
@@ -224,5 +271,9 @@ export type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyProposalDelegateVote,
   TallyProposalIndexEntry,
+  TallyProposalVoteSummary,
+  TallyProposalVoteSupport,
+  TallyProposalVoter,
 };
