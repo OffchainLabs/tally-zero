@@ -1,6 +1,6 @@
 const DEFAULT_BLOB_URL =
   "https://epodj1k6qull8rb3.public.blob.vercel-storage.com/governance-data/delegates.sqlite";
-const DB_SIZE_BYTES = 540168192;
+const DB_SIZE_BYTES = 877690880;
 const MAX_RANGE_BYTES = 4 * 1024 * 1024;
 const UPSTREAM_CACHE_HEADERS = ["etag", "last-modified"] as const;
 
