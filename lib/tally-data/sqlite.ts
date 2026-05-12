@@ -1,5 +1,6 @@
 "use client";
 
+import type { TrackingCheckpoint } from "@gzeoneth/gov-tracker";
 import {
   createDbWorker,
   type SqliteStats,
@@ -25,8 +26,8 @@ import type {
   TallyProposalVoter,
 } from "@/lib/tally-data/types";
 
-const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v5";
-const DEFAULT_DB_SIZE_BYTES = 878346240;
+const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v7";
+const DEFAULT_DB_SIZE_BYTES = 882110464;
 const DEFAULT_DB_URL =
   // eslint-disable-next-line no-process-env
   process.env.NODE_ENV === "development"
@@ -114,6 +115,8 @@ type ProposalIndexRow = {
   governor_address: string;
   snapshot_block: number;
   state: string | null;
+  proposer: string | null;
+  description: string | null;
 };
 
 type ProposalVoteSummaryRow = {
@@ -125,6 +128,10 @@ type ProposalVoteSummaryRow = {
 type ProposalVoteWeightRow = {
   support: number;
   weight: string;
+};
+
+type ProposalCheckpointRow = {
+  checkpoint_json: string;
 };
 
 type BuildMetadataRow = {
@@ -473,6 +480,8 @@ function toProposalIndexEntry(row: ProposalIndexRow): TallyProposalIndexEntry {
     governorAddress: row.governor_address,
     snapshotBlock: row.snapshot_block,
     state: row.state,
+    proposer: row.proposer,
+    description: row.description,
   };
 }
 
@@ -1005,13 +1014,19 @@ limit ? offset ?
     let rows: ProposalIndexRow[];
     try {
       rows = await queryRows<ProposalIndexRow>(
-        `select proposal_id, governor_address, snapshot_block, state from proposals_index`
+        `select proposal_id, governor_address, snapshot_block, state, proposer, description from proposals_index`
       );
     } catch (err) {
-      if (!isMissingColumnError(err, "state")) throw err;
+      if (
+        !isMissingColumnError(err, "state") &&
+        !isMissingColumnError(err, "proposer") &&
+        !isMissingColumnError(err, "description")
+      ) {
+        throw err;
+      }
 
       rows = await queryRows<ProposalIndexRow>(
-        `select proposal_id, governor_address, snapshot_block, null as state from proposals_index`
+        `select proposal_id, governor_address, snapshot_block, null as state, null as proposer, null as description from proposals_index`
       );
     }
 
@@ -1033,7 +1048,7 @@ limit ? offset ?
     try {
       rows = await queryRows<ProposalIndexRow>(
         `
-select proposal_id, governor_address, snapshot_block, state
+select proposal_id, governor_address, snapshot_block, state, proposer, description
 from proposals_index
 where proposal_id = ? and governor_address = ?
 limit 1
@@ -1042,11 +1057,17 @@ limit 1
         governorLower
       );
     } catch (err) {
-      if (!isMissingColumnError(err, "state")) throw err;
+      if (
+        !isMissingColumnError(err, "state") &&
+        !isMissingColumnError(err, "proposer") &&
+        !isMissingColumnError(err, "description")
+      ) {
+        throw err;
+      }
 
       rows = await queryRows<ProposalIndexRow>(
         `
-select proposal_id, governor_address, snapshot_block, null as state
+select proposal_id, governor_address, snapshot_block, null as state, null as proposer, null as description
 from proposals_index
 where proposal_id = ? and governor_address = ?
 limit 1
@@ -1059,6 +1080,33 @@ limit 1
     const entry = rows[0] ? toProposalIndexEntry(rows[0]) : null;
     writeLocalStorage(cacheKey, entry);
     return entry;
+  }
+
+  async getProposalCheckpoint(
+    txHash: string
+  ): Promise<TrackingCheckpoint | null> {
+    const normalized = txHash.toLowerCase();
+    const cacheKey = `proposal-checkpoint:${normalized}`;
+    const cached = readLocalStorage<TrackingCheckpoint | null>(cacheKey);
+    if (cached !== null) return cached;
+
+    try {
+      const rows = await queryRows<ProposalCheckpointRow>(
+        `select checkpoint_json from proposal_checkpoints where tx_hash = ? limit 1`,
+        normalized
+      );
+      const checkpoint = rows[0]
+        ? (parseJson<TrackingCheckpoint | null>(
+            rows[0].checkpoint_json,
+            null
+          ) ?? null)
+        : null;
+      writeLocalStorage(cacheKey, checkpoint);
+      return checkpoint;
+    } catch (err) {
+      if (isMissingTableError(err, "proposal_checkpoints")) return null;
+      throw err;
+    }
   }
 
   async getBuildMetadata(key: string): Promise<string | null> {

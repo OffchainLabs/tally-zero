@@ -48,6 +48,8 @@ interface ProposalIndexEntry {
   proposalId: string;
   snapshotBlock: number;
   state?: string;
+  proposer?: string;
+  description?: string;
 }
 
 interface VoteHistoryFile {
@@ -131,6 +133,59 @@ async function queryRangeAdaptive<T>(
   return [];
 }
 
+async function backfillProposalMetadata(
+  provider: ethers.providers.Provider,
+  proposalsByKey: Map<string, ProposalIndexEntry>,
+  endBlock: number
+): Promise<void> {
+  for (const governor of ARBITRUM_GOVERNORS) {
+    const governorAddressLower = governor.address.toLowerCase();
+    const missingForGovernor = Array.from(proposalsByKey.values()).filter(
+      (proposal) =>
+        proposal.governorAddress === governorAddressLower &&
+        (!proposal.proposer || !proposal.description)
+    );
+    if (missingForGovernor.length === 0) continue;
+
+    console.log(
+      `  [${governor.name}] scanning 0-${endBlock} for ${missingForGovernor.length} missing proposals`
+    );
+
+    const governorContract = new ethers.Contract(
+      governor.address,
+      OZGovernor_ABI,
+      provider
+    );
+    const filter = governorContract.filters.ProposalCreated();
+
+    for (let from = 0; from <= endBlock; from += INITIAL_BLOCK_RANGE) {
+      const to = Math.min(from + INITIAL_BLOCK_RANGE - 1, endBlock);
+      const events = await queryRangeAdaptive(
+        from,
+        to,
+        (f, t) => governorContract.queryFilter(filter, f, t),
+        "ProposalCreated (backfill)"
+      );
+
+      for (const event of events) {
+        const args = event.args;
+        if (!args || args.proposalId === undefined) continue;
+        const proposalId = args.proposalId.toString();
+        const entry = proposalsByKey.get(
+          proposalKey({ governorAddress: governorAddressLower, proposalId })
+        );
+        if (!entry) continue;
+        if (!entry.proposer && typeof args.proposer === "string") {
+          entry.proposer = args.proposer.toLowerCase();
+        }
+        if (!entry.description && typeof args.description === "string") {
+          entry.description = args.description;
+        }
+      }
+    }
+  }
+}
+
 async function main() {
   const provider = new ethers.providers.JsonRpcProvider(ARBITRUM_RPC_URL);
   const watermark = await provider.getBlockNumber();
@@ -158,6 +213,20 @@ async function main() {
   const allProposalsByKey = new Map<string, ProposalIndexEntry>();
   for (const proposal of existingProposalsFile?.proposals ?? []) {
     allProposalsByKey.set(proposalKey(proposal), proposal);
+  }
+
+  const proposalsNeedingBackfill = Array.from(
+    allProposalsByKey.values()
+  ).filter((proposal) => !proposal.proposer || !proposal.description);
+  if (proposalsNeedingBackfill.length > 0) {
+    console.log(
+      `\nbackfilling proposer/description for ${proposalsNeedingBackfill.length} existing proposals`
+    );
+    await backfillProposalMetadata(
+      provider,
+      allProposalsByKey,
+      previousProposalsWatermark > 0 ? previousProposalsWatermark : watermark
+    );
   }
 
   for (const governor of ARBITRUM_GOVERNORS) {
@@ -231,6 +300,14 @@ async function main() {
             proposalId,
             snapshotBlock: Number(args.startBlock.toString()),
             state: proposalState,
+            proposer:
+              typeof args.proposer === "string"
+                ? args.proposer.toLowerCase()
+                : undefined,
+            description:
+              typeof args.description === "string"
+                ? args.description
+                : undefined,
           };
           allProposalsByKey.set(proposalKey(entry), entry);
           governorNewProposals += 1;

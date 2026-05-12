@@ -127,7 +127,7 @@ export function AdvancedTab({
       {/* Skip Bundled Cache */}
       <SettingsToggle
         label="Skip Bundled Cache"
-        description="Bypass bundled stage checkpoints and discover fresh data via RPC"
+        description="Bypass bundled stage checkpoints; use the SQLite proposal index and RPC"
         enabled={skipBundledCache}
         onToggle={() => setSkipBundledCache(!skipBundledCache)}
       />

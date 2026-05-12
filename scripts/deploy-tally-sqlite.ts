@@ -12,9 +12,17 @@ type Options = {
   skipBuild: boolean;
   skipEnv: boolean;
   pathname?: string;
+  pathnamesByEnv: Record<string, string>;
   environments: string[];
   envName: string;
   scope: string;
+  sourcePrimary?: string;
+};
+
+const DEFAULT_PATHNAMES: Record<string, string> = {
+  production: "governance-data/delegates.sqlite",
+  preview: "governance-data/delegates-preview.sqlite",
+  development: "governance-data/delegates-development.sqlite",
 };
 
 const rootDir = process.cwd();
@@ -46,6 +54,7 @@ function parseArgs(argv: string[]): Options {
     dryRun: false,
     skipBuild: false,
     skipEnv: false,
+    pathnamesByEnv: {},
     environments: ["preview", "production", "development"],
     envName: "GOVERNANCE_DATA_SQLITE_BLOB_URL",
     scope: "offchain-labs",
@@ -64,18 +73,34 @@ function parseArgs(argv: string[]): Options {
       options.skipEnv = true;
     } else if (arg === "--pathname") {
       options.pathname = argv[++index];
+    } else if (arg.startsWith("--pathname-")) {
+      const env = arg.slice("--pathname-".length);
+      options.pathnamesByEnv[env] = argv[++index];
     } else if (arg === "--env") {
       options.environments = argv[++index].split(",").map((env) => env.trim());
     } else if (arg === "--env-name") {
       options.envName = argv[++index];
     } else if (arg === "--scope") {
       options.scope = argv[++index];
+    } else if (arg === "--source-primary") {
+      options.sourcePrimary = argv[++index];
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
 
   return options;
+}
+
+function resolvePathnameForEnv(env: string, options: Options): string {
+  if (options.pathname) return options.pathname;
+  const explicit = options.pathnamesByEnv[env];
+  if (explicit) return explicit;
+  const fallback = DEFAULT_PATHNAMES[env];
+  if (fallback) return fallback;
+  throw new Error(
+    `No pathname configured for env "${env}". Pass --pathname-${env} <path>.`
+  );
 }
 
 function run(command: string, args: string[], options?: { input?: string }) {
@@ -126,7 +151,7 @@ function replaceOrThrow(
 }
 
 function updateSourceConstants(
-  blobUrl: string,
+  blobUrl: string | null,
   sizeBytes: number,
   dryRun: boolean
 ) {
@@ -136,14 +161,24 @@ function updateSourceConstants(
     path.relative(rootDir, sqliteClientPath),
   ];
 
-  console.log(`Updating source constants: ${updates.join(", ")}`);
+  if (blobUrl) {
+    console.log(
+      `Updating source constants (URL + size): ${updates.join(", ")}`
+    );
+  } else {
+    console.log(
+      `Updating source constants (size only, DEFAULT_BLOB_URL preserved): ${updates.join(", ")}`
+    );
+  }
   if (dryRun) return;
 
-  replaceOrThrow(
-    routePath,
-    /const DEFAULT_BLOB_URL =\n  "https:\/\/[^"]+";/,
-    `const DEFAULT_BLOB_URL =\n  "${blobUrl}";`
-  );
+  if (blobUrl) {
+    replaceOrThrow(
+      routePath,
+      /const DEFAULT_BLOB_URL =\n  "https:\/\/[^"]+";/,
+      `const DEFAULT_BLOB_URL =\n  "${blobUrl}";`
+    );
+  }
   replaceOrThrow(
     routePath,
     /const DB_SIZE_BYTES = \d+;/,
@@ -163,15 +198,14 @@ function updateSourceConstants(
 
 function updateVercelEnv(
   envName: string,
-  environments: string[],
-  blobUrl: string,
+  uploads: Array<{ env: string; blobUrl: string }>,
   scope: string,
   dryRun: boolean
 ) {
-  for (const environment of environments) {
+  for (const { env: environment, blobUrl } of uploads) {
     if (dryRun) {
       console.log(
-        `$ printf <blob-url> | vercel env update ${envName} ${environment} --yes --scope ${scope}`
+        `$ printf ${blobUrl} | vercel env update ${envName} ${environment} --yes --scope ${scope}`
       );
       continue;
     }
@@ -220,48 +254,69 @@ function main() {
   }
 
   const manifest = readManifest();
-  const pathname = options.pathname ?? "governance-data/delegates.sqlite";
-  const blobArgs = [
-    "blob",
-    "put",
-    path.relative(rootDir, dbPath),
-    "--scope",
-    options.scope,
-    "--pathname",
-    pathname,
-    "--content-type",
-    "application/octet-stream",
-    "--cache-control-max-age",
-    "31536000",
-    "--access",
-    "public",
-    "--allow-overwrite",
-    "true",
-  ];
+  const uploads: Array<{ env: string; pathname: string; blobUrl: string }> = [];
 
-  let blobUrl = `https://example.invalid/${pathname}`;
-  if (options.dryRun) {
-    console.log(`$ vercel ${blobArgs.join(" ")}`);
-  } else {
-    blobUrl = parseBlobUrl(run("vercel", blobArgs));
+  for (const env of options.environments) {
+    const pathname = resolvePathnameForEnv(env, options);
+    const blobArgs = [
+      "blob",
+      "put",
+      path.relative(rootDir, dbPath),
+      "--scope",
+      options.scope,
+      "--pathname",
+      pathname,
+      "--content-type",
+      "application/octet-stream",
+      "--cache-control-max-age",
+      "31536000",
+      "--access",
+      "public",
+      "--allow-overwrite",
+      "true",
+    ];
+
+    let blobUrl = `https://example.invalid/${pathname}`;
+    if (options.dryRun) {
+      console.log(`# upload for env=${env}`);
+      console.log(`$ vercel ${blobArgs.join(" ")}`);
+    } else {
+      blobUrl = parseBlobUrl(run("vercel", blobArgs));
+    }
+    uploads.push({ env, pathname, blobUrl });
   }
 
-  updateSourceConstants(blobUrl, manifest.sizeBytes, options.dryRun);
-  if (!options.skipEnv) {
-    updateVercelEnv(
-      options.envName,
-      options.environments,
-      blobUrl,
-      options.scope,
-      options.dryRun
+  const productionUpload = uploads.find(
+    (upload) => upload.env === "production"
+  );
+  const explicitPrimary = options.sourcePrimary
+    ? uploads.find((upload) => upload.env === options.sourcePrimary)
+    : undefined;
+  if (options.sourcePrimary && !explicitPrimary) {
+    throw new Error(
+      `--source-primary "${options.sourcePrimary}" was not in the deployed envs.`
     );
+  }
+
+  // DEFAULT_BLOB_URL is the production fallback baked into source. Only rewrite
+  // it when production is part of this deploy (or the caller explicitly opts in
+  // via --source-primary). Preview-only deploys must not move it.
+  const urlSource = explicitPrimary ?? productionUpload ?? null;
+  updateSourceConstants(
+    urlSource ? urlSource.blobUrl : null,
+    manifest.sizeBytes,
+    options.dryRun
+  );
+
+  if (!options.skipEnv) {
+    updateVercelEnv(options.envName, uploads, options.scope, options.dryRun);
   }
 
   console.log(
     JSON.stringify(
       {
-        blobUrl,
-        pathname,
+        uploads,
+        defaultBlobUrlUpdatedFromEnv: urlSource?.env ?? null,
         sizeBytes: manifest.sizeBytes,
         envName: options.skipEnv ? null : options.envName,
         environments: options.skipEnv ? [] : options.environments,
