@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { GET, HEAD, parseRangeHeader } from "./route";
 
-const DB_SIZE_BYTES = 878346240;
+const DB_SIZE_BYTES = 879992832;
 
 describe("tally SQLite route", () => {
   describe("HEAD", () => {
