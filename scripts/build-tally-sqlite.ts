@@ -1,9 +1,26 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import type { TallyDelegate } from "@/types/tally-delegate";
+
+const cjsRequire = createRequire(import.meta.url);
+
+type GovernorCheckpointInput = {
+  type: "governor";
+  governorAddress: string;
+  proposalId: string;
+  creationTxHash: string;
+};
+
+type BundledCheckpoint = {
+  input?: { type?: string } & Partial<GovernorCheckpointInput>;
+  [key: string]: unknown;
+};
+
+type BundledCacheJson = Record<string, BundledCheckpoint>;
 
 type DelegateIndexEntry = {
   name: string;
@@ -180,6 +197,7 @@ async function main() {
     let delegateAvatarCount = 0;
     let delegateIndexAvatarCount = 0;
     let proposalVoteSummaryCount = 0;
+    let proposalCheckpointCount = 0;
     const avatarMap = readOptionalJson<Record<string, string>>(
       avatarMapPath,
       {}
@@ -305,6 +323,13 @@ create table proposals_index (
   proposer text,
   description text,
   primary key (proposal_id, governor_address)
+) without rowid;
+
+create table proposal_checkpoints (
+  tx_hash text primary key,
+  governor_address text not null,
+  proposal_id text not null,
+  checkpoint_json text not null
 ) without rowid;
 
 create table build_metadata (
@@ -562,6 +587,39 @@ where length(d.votes_count) > length('10000000000000000000')
       );
     }
 
+    const bundledCachePath = cjsRequire.resolve(
+      "@gzeoneth/gov-tracker/bundled-cache.json"
+    );
+    const bundledCache = JSON.parse(
+      fs.readFileSync(bundledCachePath, "utf8")
+    ) as BundledCacheJson;
+    for (const [key, checkpoint] of Object.entries(bundledCache)) {
+      if (!key.startsWith("tx:")) continue;
+      const input = checkpoint.input;
+      if (
+        !input ||
+        input.type !== "governor" ||
+        !input.creationTxHash ||
+        !input.governorAddress ||
+        !input.proposalId
+      ) {
+        continue;
+      }
+
+      const txHash = input.creationTxHash.toLowerCase();
+      const governorAddress = input.governorAddress.toLowerCase();
+      await writeSql(
+        sqlite.stdin,
+        `insert or replace into proposal_checkpoints values (${[
+          sqlValue(txHash),
+          sqlValue(governorAddress),
+          sqlValue(input.proposalId),
+          sqlJson(checkpoint),
+        ].join(",")});\n`
+      );
+      proposalCheckpointCount += 1;
+    }
+
     const proposalVoteSummary = new Map<string, ProposalVoteSummary>();
     const proposalVoteSummarySources = new Map<
       string,
@@ -649,6 +707,7 @@ create index election_candidates_name_idx on election_candidates(name collate no
 create index delegate_votes_voter_idx on delegate_votes(voter_lower);
 create index delegate_votes_proposal_idx on delegate_votes(proposal_id, governor_address);
 create index delegate_votes_proposal_support_weight_idx on delegate_votes(proposal_id, governor_address, support, length(weight) desc, weight desc);
+create index proposal_checkpoints_proposal_idx on proposal_checkpoints(proposal_id, governor_address);
 
 analyze;
 vacuum;
@@ -687,6 +746,7 @@ vacuum;
             delegateVotes: votesFile.votes.length,
             proposalVoteSummary: proposalVoteSummaryCount,
             proposalsIndex: proposalsIndexFile.proposals.length,
+            proposalCheckpoints: proposalCheckpointCount,
           },
           delegateVotesWatermarkBlock: votesWatermarkBlock,
         },
@@ -714,6 +774,7 @@ vacuum;
           delegateVotes: votesFile.votes.length,
           proposalVoteSummary: proposalVoteSummaryCount,
           proposalsIndex: proposalsIndexFile.proposals.length,
+          proposalCheckpoints: proposalCheckpointCount,
           delegateVotesWatermarkBlock: votesWatermarkBlock,
         },
         null,

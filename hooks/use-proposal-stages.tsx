@@ -1,7 +1,6 @@
 "use client";
 
 import { getGovernorByAddress } from "@/config/governors";
-import { initializeBundledCache } from "@/lib/bundled-cache-loader";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getCacheAdapter, trimCachedStages } from "@/lib/gov-tracker-cache";
 import {
@@ -9,6 +8,7 @@ import {
   trackerManager,
   type TrackingSession,
 } from "@/lib/proposal-tracker-manager";
+import { seedProposalCheckpointFromSqlite } from "@/lib/sqlite-checkpoint-seed";
 import {
   createProposalTracker,
   getAllStageMetadata,
@@ -149,9 +149,9 @@ export function useProposalStages({
         // Get cache adapter for zero-RPC resume
         const cache = getCacheAdapter();
 
-        // Initialize cache with gov-tracker's bundled cache on first run
-        // This eliminates the need for initial RPC discovery calls
-        await initializeBundledCache(cache);
+        // Seed this proposal's checkpoint from SQLite so gov-tracker can resume
+        // from the last recorded stage instead of starting RPC discovery from zero.
+        await seedProposalCheckpointFromSqlite(cache, creationTxHash);
 
         // Create tracker using gov-tracker package with cache for resume
         // Gov-tracker handles checkpoint loading/saving automatically
