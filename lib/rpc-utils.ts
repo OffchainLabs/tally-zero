@@ -78,6 +78,135 @@ export function getOrCreateProvider(
   return provider;
 }
 
+/** Cache for chunked providers, keyed by `${url}|${chunkSize}` */
+const chunkedProviderCache = new Map<string, CachedProvider>();
+
+async function resolveBlockTag(
+  provider: ethers.providers.StaticJsonRpcProvider,
+  tag: ethers.providers.BlockTag
+): Promise<number> {
+  if (typeof tag === "number") return tag;
+  if (typeof tag === "string") {
+    if (
+      tag === "latest" ||
+      tag === "pending" ||
+      tag === "safe" ||
+      tag === "finalized"
+    ) {
+      return provider.getBlockNumber();
+    }
+    if (tag === "earliest") return 0;
+    return tag.startsWith("0x") ? parseInt(tag, 16) : parseInt(tag, 10);
+  }
+  // BigNumber-like
+  const maybeBn = tag as { toNumber?: () => number };
+  if (typeof maybeBn.toNumber === "function") return maybeBn.toNumber();
+  return provider.getBlockNumber();
+}
+
+/**
+ * Patches a provider's getLogs to auto-chunk requests that exceed `chunkSize`.
+ *
+ * Some RPCs (e.g. drpc.org free tier) reject `eth_getLogs` over 10k blocks.
+ * The Arbitrum SDK's EventFetcher queries L1 assertion logs without chunking,
+ * which trips that limit and breaks L2_TO_L1_MESSAGE tracking. Wrapping the
+ * provider intercepts those calls transparently.
+ */
+function applyChunkedGetLogs(
+  provider: ethers.providers.StaticJsonRpcProvider,
+  chunkSize: number
+): ethers.providers.StaticJsonRpcProvider {
+  const originalGetLogs = provider.getLogs.bind(provider);
+
+  provider.getLogs = async function (
+    filter: Parameters<ethers.providers.StaticJsonRpcProvider["getLogs"]>[0]
+  ): Promise<ethers.providers.Log[]> {
+    const resolved = (await filter) as ethers.providers.Filter & {
+      blockHash?: string;
+    };
+
+    // FilterByBlockHash variant doesn't have a range, pass through
+    if (resolved.blockHash) {
+      return originalGetLogs(resolved);
+    }
+
+    const { fromBlock, toBlock } = resolved;
+    if (fromBlock === undefined || fromBlock === null) {
+      return originalGetLogs(resolved);
+    }
+
+    const [fromNum, toNum] = await Promise.all([
+      resolveBlockTag(provider, fromBlock),
+      resolveBlockTag(provider, toBlock ?? "latest"),
+    ]);
+
+    if (toNum < fromNum) return [];
+    if (toNum - fromNum + 1 <= chunkSize) {
+      return originalGetLogs({
+        ...resolved,
+        fromBlock: fromNum,
+        toBlock: toNum,
+      });
+    }
+
+    const logs: ethers.providers.Log[] = [];
+    for (let start = fromNum; start <= toNum; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, toNum);
+      const chunk = await originalGetLogs({
+        ...resolved,
+        fromBlock: start,
+        toBlock: end,
+      });
+      logs.push(...chunk);
+    }
+    return logs;
+  };
+
+  return provider;
+}
+
+function evictLruFromCache(cache: Map<string, CachedProvider>): void {
+  if (isEvicting) return;
+  if (cache.size <= MAX_PROVIDER_CACHE_SIZE) return;
+
+  isEvicting = true;
+  try {
+    const entries = Array.from(cache.entries()).sort(
+      ([, a], [, b]) => a.lastUsed - b.lastUsed
+    );
+    const toEvict = entries.slice(0, cache.size - MAX_PROVIDER_CACHE_SIZE);
+    for (const [key] of toEvict) {
+      if (cache.has(key)) cache.delete(key);
+    }
+  } finally {
+    isEvicting = false;
+  }
+}
+
+/**
+ * Gets or creates a provider whose `getLogs` auto-chunks requests by `chunkSize`.
+ * Use this when passing providers to libraries (e.g. @arbitrum/sdk) that don't
+ * chunk their own log queries.
+ */
+export function getOrCreateChunkedProvider(
+  rpcUrl: string,
+  chunkSize: number
+): ethers.providers.StaticJsonRpcProvider {
+  const key = `${rpcUrl}|${chunkSize}`;
+  const cached = chunkedProviderCache.get(key);
+  if (cached) {
+    cached.lastUsed = Date.now();
+    return cached.provider;
+  }
+
+  const provider = new ethers.providers.StaticJsonRpcProvider(rpcUrl);
+  applyChunkedGetLogs(provider, chunkSize);
+
+  evictLruFromCache(chunkedProviderCache);
+  chunkedProviderCache.set(key, { provider, lastUsed: Date.now() });
+  return provider;
+}
+
 /**
  * Creates and initializes an RPC provider with ready state validation.
  * Caches providers by URL to avoid creating multiple instances.

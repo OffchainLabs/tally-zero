@@ -381,13 +381,13 @@ function OperationHeader({
         <div>
           <span className="text-muted-foreground">Operation ID:</span>
           <p className="font-mono truncate" title={operation.operationId}>
-            {truncateMiddle(operation.operationId, 6, 4)}
+            {operation.operationId}
           </p>
         </div>
         <div>
           <span className="text-muted-foreground">Target:</span>
           <p className="font-mono truncate" title={operation.target}>
-            {shortenAddress(operation.target)}
+            {operation.target}
           </p>
         </div>
         <div>

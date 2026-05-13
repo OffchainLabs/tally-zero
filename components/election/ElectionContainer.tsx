@@ -237,6 +237,7 @@ export function ElectionContainer(): React.ReactElement {
             stages={selectedElection?.stages}
             status={selectedElection ? status : null}
             electionIndex={selectedElection?.electionIndex}
+            memberExecuteTxHash={selectedElection?.memberExecuteTxHash}
           />
         )}
 

@@ -6,6 +6,7 @@
  */
 
 import { isValidTxHash } from "@/lib/address-utils";
+import { initializeBundledCache } from "@/lib/bundled-cache-loader";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getCacheAdapter } from "@/lib/gov-tracker-cache";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
@@ -13,7 +14,10 @@ import { createProposalTracker } from "@/lib/stage-tracker";
 import type { ProposalStage } from "@/types/proposal-stage";
 import {
   findCallScheduledByTxHash,
+  isCheckpointComplete,
+  txHashCacheKey,
   type CallScheduledData,
+  type TrackingCheckpoint,
   type TrackingProgress,
 } from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
@@ -39,6 +43,12 @@ export interface TimelockTrackingResult {
   operationInfo: TimelockOperationInfo;
   stages: ProposalStage[];
   error?: string;
+}
+
+interface CachedTimelockOperation {
+  operation: TimelockOperationInfo;
+  stages: ProposalStage[];
+  isComplete: boolean;
 }
 
 /** Options for configuring timelock operation tracking */
@@ -79,6 +89,132 @@ interface UseTimelockOperationResult {
   refetch: () => void;
 }
 
+function stringifyBigNumberish(
+  value: string | number | bigint | { toString(): string } | null | undefined,
+  fallback: string
+): string {
+  if (value === null || value === undefined) return fallback;
+  return value.toString();
+}
+
+function getCachedOperationIdKey(operationId: string): string {
+  return operationId.toLowerCase();
+}
+
+function getScheduledDataFromStage(
+  stage: ProposalStage | undefined,
+  operationId: string
+): Partial<CallScheduledData> | undefined {
+  const stageData = stage?.data as { callScheduledData?: unknown } | undefined;
+  const scheduledData = stageData?.callScheduledData;
+  if (!Array.isArray(scheduledData)) return undefined;
+
+  return scheduledData.find((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const maybeOperationId = (entry as Partial<CallScheduledData>).operationId;
+    return (
+      typeof maybeOperationId === "string" &&
+      maybeOperationId.toLowerCase() === operationId.toLowerCase()
+    );
+  }) as Partial<CallScheduledData> | undefined;
+}
+
+function buildOperationFromCheckpoint(
+  checkpoint: TrackingCheckpoint,
+  requestedTxHash: string
+): CachedTimelockOperation | null {
+  if (checkpoint.input.type !== "timelock") return null;
+
+  const stages = checkpoint.cachedData?.completedStages ?? [];
+  const l2TimelockStage = stages.find((stage) => stage.type === "L2_TIMELOCK");
+  if (!l2TimelockStage && !checkpoint.input.timelockAddress) return null;
+
+  const scheduledData = getScheduledDataFromStage(
+    l2TimelockStage,
+    checkpoint.input.operationId
+  );
+
+  const scheduledTx =
+    l2TimelockStage?.transactions?.find(
+      (tx) => tx.description === "queued" || tx.description === "scheduled"
+    ) ?? l2TimelockStage?.transactions?.[0];
+
+  const scheduledTxHash =
+    scheduledData?.txHash ??
+    checkpoint.input.scheduledTxHash ??
+    requestedTxHash;
+  const blockNumber =
+    scheduledData?.blockNumber ?? scheduledTx?.blockNumber ?? 0;
+
+  return {
+    operation: {
+      operationId: checkpoint.input.operationId,
+      target: scheduledData?.target ?? "",
+      value: stringifyBigNumberish(scheduledData?.value, "0"),
+      data: scheduledData?.data ?? "0x",
+      predecessor: scheduledData?.predecessor ?? ethers.constants.HashZero,
+      delay: stringifyBigNumberish(scheduledData?.delay, "0"),
+      txHash: scheduledTxHash,
+      blockNumber,
+      timestamp: scheduledTx?.timestamp ?? 0,
+      timelockAddress:
+        scheduledData?.timelockAddress ?? checkpoint.input.timelockAddress,
+    },
+    stages,
+    isComplete: isCheckpointComplete(checkpoint),
+  };
+}
+
+async function loadCachedTimelockOperationsForTx(
+  txHash: string
+): Promise<CachedTimelockOperation[]> {
+  const cache = getCacheAdapter();
+  await initializeBundledCache(cache);
+
+  const baseKey = txHashCacheKey(txHash);
+  const operationKeys = Array.from(await cache.keys(`${baseKey}:op:`));
+
+  const cachedOperations = await Promise.all(
+    operationKeys.map(async (key) => {
+      const checkpoint = await cache.get<TrackingCheckpoint>(key);
+      return checkpoint
+        ? buildOperationFromCheckpoint(checkpoint, txHash)
+        : null;
+    })
+  );
+
+  const operationsById = new Map<string, CachedTimelockOperation>();
+  for (const cached of cachedOperations) {
+    if (!cached) continue;
+    operationsById.set(
+      getCachedOperationIdKey(cached.operation.operationId),
+      cached
+    );
+  }
+
+  const baseCheckpoint = await cache.get<TrackingCheckpoint>(baseKey);
+  const linkedTimelockKey = baseCheckpoint?.metadata?.timelockOpKey;
+  if (
+    linkedTimelockKey &&
+    linkedTimelockKey.startsWith(`${baseKey}:op:`) &&
+    !operationsById.has(linkedTimelockKey.slice(`${baseKey}:op:`.length))
+  ) {
+    const linkedCheckpoint =
+      await cache.get<TrackingCheckpoint>(linkedTimelockKey);
+    const cached = linkedCheckpoint
+      ? buildOperationFromCheckpoint(linkedCheckpoint, txHash)
+      : null;
+    if (cached) {
+      operationsById.set(
+        getCachedOperationIdKey(cached.operation.operationId),
+        cached
+      );
+    }
+  }
+
+  return Array.from(operationsById.values());
+}
+
 /**
  * Hook for tracking timelock operations from a transaction
  * Uses gov-tracker package for lifecycle tracking
@@ -115,6 +251,29 @@ export function useTimelockOperation({
 
   const isMounted = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cachedOperationsRef = useRef<Map<string, CachedTimelockOperation>>(
+    new Map()
+  );
+
+  const applyCachedOperation = useCallback(
+    (operation: TimelockOperationInfo): boolean => {
+      const cached = cachedOperationsRef.current.get(
+        getCachedOperationIdKey(operation.operationId)
+      );
+      if (!cached) return false;
+
+      const timelockResult: TimelockTrackingResult = {
+        operationInfo: operation,
+        stages: cached.stages,
+      };
+
+      setStages(cached.stages);
+      setResult(timelockResult);
+      setError(null);
+      return true;
+    },
+    []
+  );
 
   // Parse transaction to find CallScheduled events using gov-tracker
   const parseTransaction = useCallback(async () => {
@@ -131,8 +290,38 @@ export function useTimelockOperation({
     setSelectedOperation(null);
     setStages([]);
     setResult(null);
+    cachedOperationsRef.current = new Map();
 
     try {
+      let cachedOperations: CachedTimelockOperation[] = [];
+      try {
+        cachedOperations = await loadCachedTimelockOperationsForTx(txHash);
+      } catch {
+        // Cache is an optimization; live receipt parsing remains the fallback.
+      }
+
+      if (!isMounted.current) return;
+
+      if (cachedOperations.length > 0) {
+        cachedOperationsRef.current = new Map(
+          cachedOperations.map((cached) => [
+            getCachedOperationIdKey(cached.operation.operationId),
+            cached,
+          ])
+        );
+
+        const ops = cachedOperations.map((cached) => cached.operation);
+        setOperations(ops);
+
+        if (ops.length === 1) {
+          setSelectedOperation(ops[0]);
+          applyCachedOperation(ops[0]);
+        }
+
+        setIsParsing(false);
+        return;
+      }
+
       const l2Provider = getOrCreateProvider(effectiveL2RpcUrl);
 
       // Use gov-tracker's discovery function
@@ -197,12 +386,22 @@ export function useTimelockOperation({
       setError(getErrorMessage(err, "parse transaction"));
       setIsParsing(false);
     }
-  }, [txHash, enabled, rpcHydrated, effectiveL2RpcUrl]);
+  }, [txHash, enabled, rpcHydrated, effectiveL2RpcUrl, applyCachedOperation]);
 
   // Track selected operation using gov-tracker
   const trackOperation = useCallback(
-    async (_forceRefresh: boolean = false) => {
+    async (forceRefresh: boolean = false) => {
       if (!selectedOperation || !enabled || !rpcHydrated) return;
+
+      const cached = cachedOperationsRef.current.get(
+        getCachedOperationIdKey(selectedOperation.operationId)
+      );
+      if (!forceRefresh && cached?.isComplete) {
+        applyCachedOperation(selectedOperation);
+        setIsLoading(false);
+        setIsTracking(false);
+        return;
+      }
 
       // Abort any existing tracking
       if (abortControllerRef.current) {
@@ -215,8 +414,10 @@ export function useTimelockOperation({
       setIsTracking(true);
       setIsLoading(true);
       setError(null);
-      setStages([]);
-      setResult(null);
+      if (!applyCachedOperation(selectedOperation)) {
+        setStages([]);
+        setResult(null);
+      }
 
       try {
         // Get cache adapter for checkpoint persistence
@@ -290,22 +491,28 @@ export function useTimelockOperation({
       effectiveL2RpcUrl,
       l1ChunkSize,
       l2ChunkSize,
+      applyCachedOperation,
     ]
   );
 
   // Select an operation and start tracking
-  const selectOperation = useCallback((operation: TimelockOperationInfo) => {
-    // Abort any in-flight tracking before selecting new operation
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    // Reset states before setting new operation to avoid showing stale data
-    setStages([]);
-    setResult(null);
-    setError(null);
-    setSelectedOperation(operation);
-  }, []);
+  const selectOperation = useCallback(
+    (operation: TimelockOperationInfo) => {
+      // Abort any in-flight tracking before selecting new operation
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      // Reset states before setting new operation to avoid showing stale data
+      if (!applyCachedOperation(operation)) {
+        setStages([]);
+        setResult(null);
+      }
+      setError(null);
+      setSelectedOperation(operation);
+    },
+    [applyCachedOperation]
+  );
 
   // Deselect the current operation to go back to the list
   const deselectOperation = useCallback(() => {

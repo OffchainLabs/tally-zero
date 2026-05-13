@@ -9,6 +9,7 @@ import {
   getElectionCount,
   getMemberElectionDetails,
   getNomineeElectionDetails,
+  MAINNET_ELECTION_CONFIG,
   serializeMemberDetails,
   serializeNomineeDetails,
   type ElectionConfig,
@@ -50,6 +51,7 @@ import {
   ARBITRUM_RPC_URL,
   ETHEREUM_RPC_URL,
 } from "@config/arbitrum-governance";
+import { ethers } from "ethers";
 
 export type { UseElectionStatusOptions, UseElectionStatusResult };
 
@@ -71,6 +73,8 @@ export const electionKeys = {
 const EMPTY_NOMINEE_MAP: Record<number, NomineeElectionDetails> = {};
 const EMPTY_MEMBER_MAP: Record<number, MemberElectionDetails> = {};
 const VOTING_PHASE_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const PROPOSAL_EXECUTED_TOPIC = ethers.utils.id("ProposalExecuted(uint256)");
+const FALLBACK_EXECUTION_SEARCH_BLOCKS = 10_000_000;
 
 // ---------------------------------------------------------------------------
 // Non-hook helpers
@@ -526,7 +530,13 @@ async function fetchDefault(
   );
   const completedIndices = new Set(
     cached.elections
-      .filter((e) => e.phase === "COMPLETED")
+      .filter(
+        (e) =>
+          e.phase === "COMPLETED" &&
+          // Completed cached elections without execution txs still need either
+          // a proposal ID for direct event lookup or a fresh live status fetch.
+          (hasElectionTimelockTx(e) || e.memberProposalId)
+      )
       .map((e) => e.electionIndex)
   );
   const indicesToFetch = Array.from(
@@ -551,6 +561,10 @@ async function fetchDefault(
   ]);
 
   const merged = mergeResults(cached, liveResults);
+  merged.elections = preventPhaseRegression(merged.elections);
+  // getElectionStatus() is lightweight and does not include stage tx hashes.
+  // Newly executed elections only need the member execute tx for timelock links.
+  await hydrateMissingElectionExecutionTxs(l2Provider, merged);
 
   return {
     status,
@@ -559,6 +573,187 @@ async function fetchDefault(
     memberDetailsMap: merged.memberDetails,
     latestL1Block,
   };
+}
+
+function hasElectionTimelockTx(election: ElectionProposalStatus): boolean {
+  const l2TimelockStage = election.stages?.find(
+    (stage) => stage.type === "L2_TIMELOCK"
+  );
+  const memberElectionStage = election.stages?.find(
+    (stage) => stage.type === "MEMBER_ELECTION"
+  );
+
+  return Boolean(
+    election.memberExecuteTxHash ||
+    l2TimelockStage?.transactions?.length ||
+    memberElectionStage?.transactions?.some(
+      (tx) => tx.description === "executed"
+    )
+  );
+}
+
+function needsElectionExecutionTxTracking(
+  election: ElectionProposalStatus
+): boolean {
+  return (
+    (election.phase === "PENDING_EXECUTION" ||
+      election.phase === "COMPLETED") &&
+    !hasElectionTimelockTx(election)
+  );
+}
+
+async function hydrateMissingElectionExecutionTxs(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  data: CachedElectionData
+): Promise<void> {
+  const missingExecutionTxElections = data.elections.filter(
+    needsElectionExecutionTxTracking
+  );
+  if (missingExecutionTxElections.length === 0) return;
+
+  debug.app(
+    "Hydrating %d election(s) missing execution tx data",
+    missingExecutionTxElections.length
+  );
+
+  const hydratedResults = await Promise.all(
+    missingExecutionTxElections.map(async (election) => {
+      try {
+        const status = await withFallbackMemberExecuteTx(l2Provider, election);
+        return { status };
+      } catch (err) {
+        debug.app(
+          "Failed to hydrate election %d execution tx data: %O",
+          election.electionIndex,
+          err
+        );
+        return null;
+      }
+    })
+  );
+
+  for (const result of hydratedResults) {
+    if (!result) continue;
+
+    const { status } = result;
+    const existingIdx = data.elections.findIndex(
+      (election) => election.electionIndex === status.electionIndex
+    );
+    if (existingIdx === -1) continue;
+
+    data.elections[existingIdx] = {
+      ...data.elections[existingIdx],
+      ...status,
+    };
+  }
+}
+
+async function withFallbackMemberExecuteTx(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  election: ElectionProposalStatus
+): Promise<ElectionProposalStatus> {
+  if (!election.memberProposalId) return election;
+
+  const executeTx = await findMemberExecuteTx(l2Provider, election).catch(
+    (err) => {
+      debug.app(
+        "Failed fallback member execute tx lookup for election %d: %O",
+        election.electionIndex,
+        err
+      );
+      return null;
+    }
+  );
+
+  if (!executeTx) return election;
+
+  return {
+    ...election,
+    memberExecuteTxHash: executeTx.hash,
+    stages: addMemberExecuteTxToStages(election, executeTx),
+  };
+}
+
+function addMemberExecuteTxToStages(
+  election: ElectionProposalStatus,
+  tx: { hash: string; blockNumber: number }
+): ElectionProposalStatus["stages"] {
+  if (!election.stages) return election.stages;
+
+  return election.stages.map((stage) => {
+    if (stage.type !== "MEMBER_ELECTION") return stage;
+    if (stage.transactions?.some((stageTx) => stageTx.hash === tx.hash)) {
+      return stage;
+    }
+
+    return {
+      ...stage,
+      transactions: [
+        ...(stage.transactions ?? []),
+        {
+          hash: tx.hash,
+          blockNumber: tx.blockNumber,
+          chain: "arb1",
+          chainId: MAINNET_ELECTION_CONFIG.chainId,
+          description: "executed",
+        },
+      ],
+    };
+  });
+}
+
+function getMemberExecuteSearchStartBlock(
+  election: ElectionProposalStatus,
+  currentBlock: number
+): number {
+  const stageTxBlocks =
+    election.stages?.flatMap(
+      (stage) =>
+        stage.transactions
+          ?.map((tx) => tx.blockNumber)
+          .filter((blockNumber): blockNumber is number => !!blockNumber) ?? []
+    ) ?? [];
+
+  const latestKnownStageBlock =
+    stageTxBlocks.length > 0 ? Math.max(...stageTxBlocks) : null;
+
+  return Math.max(
+    0,
+    latestKnownStageBlock ?? currentBlock - FALLBACK_EXECUTION_SEARCH_BLOCKS
+  );
+}
+
+async function findMemberExecuteTx(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  election: ElectionProposalStatus
+): Promise<{ hash: string; blockNumber: number } | null> {
+  if (!election.memberProposalId) return null;
+
+  const currentBlock = await l2Provider.getBlockNumber();
+  const fromBlock = getMemberExecuteSearchStartBlock(election, currentBlock);
+  const expectedProposalId = ethers.BigNumber.from(election.memberProposalId);
+
+  const logs = await l2Provider.getLogs({
+    address: MAINNET_ELECTION_CONFIG.memberGovernorAddress,
+    topics: [PROPOSAL_EXECUTED_TOPIC],
+    fromBlock,
+    toBlock: currentBlock,
+  });
+
+  const matchingLog = logs.find((log) => {
+    try {
+      return ethers.BigNumber.from(log.data).eq(expectedProposalId);
+    } catch {
+      return false;
+    }
+  });
+
+  return matchingLog
+    ? {
+        hash: matchingLog.transactionHash,
+        blockNumber: matchingLog.blockNumber,
+      }
+    : null;
 }
 
 async function fetchWithOverrides(

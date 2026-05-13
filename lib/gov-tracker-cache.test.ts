@@ -16,17 +16,26 @@ import {
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
+  const setItem = (key: string, value: string) => {
+    store[key] = value;
+  };
+
   return {
     getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value;
-    }),
+    setItem: vi.fn(setItem),
     removeItem: vi.fn((key: string) => {
       delete store[key];
     }),
     clear: vi.fn(() => {
       store = {};
     }),
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
+    get length() {
+      return Object.keys(store).length;
+    },
+    resetSetItem: () => {
+      localStorageMock.setItem.mockImplementation(setItem);
+    },
   };
 })();
 
@@ -79,6 +88,7 @@ const createVotingActiveStage = (
 describe("gov-tracker-cache", () => {
   beforeEach(() => {
     localStorageMock.clear();
+    localStorageMock.resetSetItem();
     vi.clearAllMocks();
   });
 
@@ -91,6 +101,19 @@ describe("gov-tracker-cache", () => {
       const adapter1 = getCacheAdapter();
       const adapter2 = getCacheAdapter();
       expect(adapter1).toBe(adapter2);
+    });
+
+    it("does not throw when localStorage quota is exceeded", async () => {
+      const adapter = getCacheAdapter();
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error(
+          "Failed to execute 'setItem' on 'Storage': quota exceeded"
+        );
+      });
+
+      await expect(
+        adapter.set("tx:0xabc:op:0xdef", { large: "checkpoint" })
+      ).resolves.toBeUndefined();
     });
   });
 
