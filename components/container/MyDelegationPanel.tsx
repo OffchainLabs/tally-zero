@@ -18,6 +18,7 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { MyDelegatorsList } from "@/components/container/MyDelegatorsList";
 import {
   getDelegateButtonLabel,
   getDelegateLinkLabel,
@@ -470,6 +471,10 @@ export function MyDelegationPanel() {
             )}
         </CardContent>
       </Card>
+
+      {isConnected && accountAddress && (
+        <MyDelegatorsList delegateAddress={accountAddress} />
+      )}
     </div>
   );
 }
