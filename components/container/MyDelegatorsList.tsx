@@ -51,7 +51,8 @@ export function MyDelegatorsList({ delegateAddress }: MyDelegatorsListProps) {
         {delegateAddress && isPending && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ReloadIcon className="h-4 w-4 animate-spin" />
-            Scanning DelegateChanged events. This can take a few seconds.
+            Scanning DelegateChanged events. This can take a little while for
+            addresses with long histories.
           </div>
         )}
 

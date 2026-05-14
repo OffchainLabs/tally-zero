@@ -2,6 +2,7 @@
 
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useAppKit } from "@reown/appkit/react";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, UserCheck, Vote, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -36,6 +37,8 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { ARBITRUM_CHAIN_ID, ARB_TOKEN } from "@/config/arbitrum-governance";
 import ERC20VotesABI from "@/data/ERC20Votes_ABI.json";
+import { myDelegatorsQueryKey } from "@/hooks/use-my-delegators";
+import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { useAddressDisplayRecord } from "@/lib/delegate-cache";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
@@ -53,8 +56,44 @@ const GET_VOTES_ABI = [
   },
 ] as const satisfies Abi;
 
+type RefetchFn = () => unknown;
+
+export function refreshMyDelegationData({
+  accountAddress,
+  l2Rpc,
+  queryClient,
+  refetchCurrentDelegate,
+  refetchVotingPower,
+}: {
+  accountAddress: string | undefined;
+  l2Rpc: string;
+  queryClient: Pick<QueryClient, "invalidateQueries">;
+  refetchCurrentDelegate: RefetchFn;
+  refetchVotingPower: RefetchFn;
+}): void {
+  const refreshes = [
+    Promise.resolve(refetchCurrentDelegate()),
+    Promise.resolve(refetchVotingPower()),
+  ];
+
+  if (accountAddress) {
+    refreshes.push(
+      Promise.resolve(
+        queryClient.invalidateQueries({
+          queryKey: myDelegatorsQueryKey(accountAddress, l2Rpc),
+          exact: true,
+        })
+      )
+    );
+  }
+
+  void Promise.allSettled(refreshes);
+}
+
 export function MyDelegationPanel() {
   const { open } = useAppKit();
+  const queryClient = useQueryClient();
+  const { l2Rpc } = useRpcSettings();
   const { address: accountAddress, isConnected } = useAccount();
   const chainId = useChainId();
   const {
@@ -85,6 +124,7 @@ export function MyDelegationPanel() {
     data: votingPower,
     isPending: isVotingPowerPending,
     isError: isVotingPowerError,
+    refetch: refetchVotingPower,
   } = useReadContract({
     address: ARB_TOKEN.address,
     abi: GET_VOTES_ABI,
@@ -193,8 +233,23 @@ export function MyDelegationPanel() {
   useEffect(() => {
     if (!isConfirmed || !trackedTxHash) return;
     toast.success("ARB voting power delegated.");
-    refetchCurrentDelegate();
-  }, [isConfirmed, refetchCurrentDelegate, trackedTxHash]);
+    refreshMyDelegationData({
+      accountAddress,
+      l2Rpc,
+      queryClient,
+      refetchCurrentDelegate,
+      refetchVotingPower,
+    });
+    setTrackedTxHash(undefined);
+  }, [
+    accountAddress,
+    isConfirmed,
+    l2Rpc,
+    queryClient,
+    refetchCurrentDelegate,
+    refetchVotingPower,
+    trackedTxHash,
+  ]);
 
   useEffect(() => {
     if (!isSimulateError || !simulateError) return;
