@@ -8,18 +8,16 @@ export const metadata = {
 
 export default function DelegatesPage() {
   return (
-    <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
-      <div className="container flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">Delegates</h1>
-          <p className="text-muted-foreground">
-            View voting power distribution across ArbitrumDAO delegates
-          </p>
-        </div>
-        <Suspense fallback={<DelegateSearchSkeleton />}>
-          <DelegateSearch />
-        </Suspense>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight">Delegates</h1>
+        <p className="text-muted-foreground">
+          View voting power distribution across ArbitrumDAO delegates
+        </p>
       </div>
+      <Suspense fallback={<DelegateSearchSkeleton />}>
+        <DelegateSearch />
+      </Suspense>
     </div>
   );
 }
