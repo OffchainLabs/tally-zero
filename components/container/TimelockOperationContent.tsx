@@ -377,29 +377,30 @@ function OperationHeader({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-xs">
+      <div className="space-y-2 text-xs">
+        {/* Operation id and target each render on their own row with
+            `break-all` so the full hex value stays visible (wrapping if
+            needed) instead of being end-truncated by a 2-column grid. */}
         <div>
           <span className="text-muted-foreground">Operation ID:</span>
-          <p className="font-mono truncate" title={operation.operationId}>
-            {operation.operationId}
-          </p>
+          <p className="font-mono break-all">{operation.operationId}</p>
         </div>
         <div>
           <span className="text-muted-foreground">Target:</span>
-          <p className="font-mono truncate" title={operation.target}>
-            {operation.target}
-          </p>
+          <p className="font-mono break-all">{operation.target}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground">Delay:</span>
-          <p>{formatDelay(parseInt(operation.delay))}</p>
-        </div>
-        {operation.timestamp > 0 && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="text-muted-foreground">Scheduled At:</span>
-            <p>{new Date(operation.timestamp * 1000).toLocaleString()}</p>
+            <span className="text-muted-foreground">Delay:</span>
+            <p>{formatDelay(parseInt(operation.delay))}</p>
           </div>
-        )}
+          {operation.timestamp > 0 && (
+            <div>
+              <span className="text-muted-foreground">Scheduled At:</span>
+              <p>{new Date(operation.timestamp * 1000).toLocaleString()}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

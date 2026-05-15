@@ -45,7 +45,7 @@ export interface TimelockTrackingResult {
   error?: string;
 }
 
-interface CachedTimelockOperation {
+export interface CachedTimelockOperation {
   operation: TimelockOperationInfo;
   stages: ProposalStage[];
   isComplete: boolean;
@@ -119,7 +119,7 @@ function getScheduledDataFromStage(
   }) as Partial<CallScheduledData> | undefined;
 }
 
-function buildOperationFromCheckpoint(
+export function buildOperationFromCheckpoint(
   checkpoint: TrackingCheckpoint,
   requestedTxHash: string
 ): CachedTimelockOperation | null {
@@ -143,22 +143,38 @@ function buildOperationFromCheckpoint(
     scheduledData?.txHash ??
     checkpoint.input.scheduledTxHash ??
     requestedTxHash;
+  const timelockAddress =
+    scheduledData?.timelockAddress ?? checkpoint.input.timelockAddress;
+
+  // The OperationHeader UI renders these fields verbatim. If a cached
+  // checkpoint is missing the on-chain payload we'd otherwise show
+  // `target=""` / `delay=0s` as if they were real — drop the entry so the
+  // live-receipt fallback path runs instead.
+  if (
+    !scheduledData ||
+    !scheduledData.target ||
+    scheduledData.delay === undefined ||
+    scheduledData.delay === null ||
+    !timelockAddress
+  ) {
+    return null;
+  }
+
   const blockNumber =
-    scheduledData?.blockNumber ?? scheduledTx?.blockNumber ?? 0;
+    scheduledData.blockNumber ?? scheduledTx?.blockNumber ?? 0;
 
   return {
     operation: {
       operationId: checkpoint.input.operationId,
-      target: scheduledData?.target ?? "",
-      value: stringifyBigNumberish(scheduledData?.value, "0"),
-      data: scheduledData?.data ?? "0x",
-      predecessor: scheduledData?.predecessor ?? ethers.constants.HashZero,
-      delay: stringifyBigNumberish(scheduledData?.delay, "0"),
+      target: scheduledData.target,
+      value: stringifyBigNumberish(scheduledData.value, "0"),
+      data: scheduledData.data ?? "0x",
+      predecessor: scheduledData.predecessor ?? ethers.constants.HashZero,
+      delay: stringifyBigNumberish(scheduledData.delay, "0"),
       txHash: scheduledTxHash,
       blockNumber,
       timestamp: scheduledTx?.timestamp ?? 0,
-      timelockAddress:
-        scheduledData?.timelockAddress ?? checkpoint.input.timelockAddress,
+      timelockAddress,
     },
     stages,
     isComplete: isCheckpointComplete(checkpoint),
@@ -194,21 +210,24 @@ async function loadCachedTimelockOperationsForTx(
 
   const baseCheckpoint = await cache.get<TrackingCheckpoint>(baseKey);
   const linkedTimelockKey = baseCheckpoint?.metadata?.timelockOpKey;
-  if (
-    linkedTimelockKey &&
-    linkedTimelockKey.startsWith(`${baseKey}:op:`) &&
-    !operationsById.has(linkedTimelockKey.slice(`${baseKey}:op:`.length))
-  ) {
-    const linkedCheckpoint =
-      await cache.get<TrackingCheckpoint>(linkedTimelockKey);
-    const cached = linkedCheckpoint
-      ? buildOperationFromCheckpoint(linkedCheckpoint, txHash)
-      : null;
-    if (cached) {
-      operationsById.set(
-        getCachedOperationIdKey(cached.operation.operationId),
-        cached
-      );
+  if (linkedTimelockKey && linkedTimelockKey.startsWith(`${baseKey}:op:`)) {
+    // Normalise via the same operationId helper used to key `operationsById`,
+    // otherwise a mixed-case linked key would slip past the dedup check.
+    const linkedOperationId = getCachedOperationIdKey(
+      linkedTimelockKey.slice(`${baseKey}:op:`.length)
+    );
+    if (!operationsById.has(linkedOperationId)) {
+      const linkedCheckpoint =
+        await cache.get<TrackingCheckpoint>(linkedTimelockKey);
+      const cached = linkedCheckpoint
+        ? buildOperationFromCheckpoint(linkedCheckpoint, txHash)
+        : null;
+      if (cached) {
+        operationsById.set(
+          getCachedOperationIdKey(cached.operation.operationId),
+          cached
+        );
+      }
     }
   }
 

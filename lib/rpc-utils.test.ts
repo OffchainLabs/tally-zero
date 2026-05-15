@@ -2,15 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   batchQueryWithRateLimit,
   createRpcProvider,
+  getOrCreateChunkedProvider,
   queryWithRetry,
 } from "./rpc-utils";
 
 // Mock ethers to avoid real network calls
 vi.mock("ethers", () => {
   function mockProviderFactory(this: Record<string, unknown>, url: string) {
+    const inner = vi.fn().mockResolvedValue([]);
     this.ready = Promise.resolve();
     this.getBlockNumber = vi.fn().mockResolvedValue(12345);
     this.getNetwork = vi.fn().mockResolvedValue({ chainId: 42161 });
+    this.getLogs = inner;
+    // `applyChunkedGetLogs` reassigns `provider.getLogs`. Expose the original
+    // vi.fn so tests can still inspect/configure the underlying RPC calls.
+    this._innerGetLogs = inner;
     this._url = url;
   }
   return {
@@ -269,6 +275,147 @@ describe("rpc-utils", () => {
 
       const results = await resultPromise;
       expect(results).toEqual([0, 1, 2, 3, 4, 5]);
+    });
+  });
+
+  describe("getOrCreateChunkedProvider", () => {
+    interface ChunkableProvider {
+      getLogs: (filter: unknown) => Promise<unknown[]>;
+      getBlockNumber: ReturnType<typeof vi.fn>;
+      _innerGetLogs: ReturnType<typeof vi.fn>;
+    }
+
+    function setup(url: string, chunkSize: number) {
+      const provider = getOrCreateChunkedProvider(
+        url,
+        chunkSize
+      ) as unknown as ChunkableProvider;
+      // `applyChunkedGetLogs` replaces `provider.getLogs` with a chunking
+      // wrapper that delegates to the original bound vi.fn. The mock exposes
+      // that vi.fn via `_innerGetLogs` so we can assert on call args directly.
+      const inner = provider._innerGetLogs;
+      inner.mockReset();
+      inner.mockResolvedValue([]);
+      return { provider, inner };
+    }
+
+    it("splits a wide block range into chunks of `chunkSize` and aggregates", async () => {
+      const { provider, inner } = setup("https://chunktest-1.example.com", 100);
+      // Each chunk returns a single log so we can assert ordering by count.
+      inner.mockResolvedValueOnce([{ blockNumber: 50 }]);
+      inner.mockResolvedValueOnce([{ blockNumber: 150 }]);
+      inner.mockResolvedValueOnce([{ blockNumber: 250 }]);
+      inner.mockResolvedValueOnce([{ blockNumber: 350 }]);
+
+      const logs = await provider.getLogs({ fromBlock: 0, toBlock: 399 });
+
+      expect(inner).toHaveBeenCalledTimes(4);
+      expect(inner.mock.calls[0][0]).toMatchObject({
+        fromBlock: 0,
+        toBlock: 99,
+      });
+      expect(inner.mock.calls[1][0]).toMatchObject({
+        fromBlock: 100,
+        toBlock: 199,
+      });
+      expect(inner.mock.calls[2][0]).toMatchObject({
+        fromBlock: 200,
+        toBlock: 299,
+      });
+      expect(inner.mock.calls[3][0]).toMatchObject({
+        fromBlock: 300,
+        toBlock: 399,
+      });
+      expect(logs).toEqual([
+        { blockNumber: 50 },
+        { blockNumber: 150 },
+        { blockNumber: 250 },
+        { blockNumber: 350 },
+      ]);
+    });
+
+    it("passes ranges within chunkSize through in a single call", async () => {
+      const { provider, inner } = setup(
+        "https://chunktest-2.example.com",
+        1000
+      );
+      inner.mockResolvedValueOnce([]);
+
+      await provider.getLogs({ fromBlock: 100, toBlock: 200 });
+
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(inner.mock.calls[0][0]).toMatchObject({
+        fromBlock: 100,
+        toBlock: 200,
+      });
+    });
+
+    it("short-circuits when `toBlock` is before `fromBlock`", async () => {
+      const { provider, inner } = setup("https://chunktest-3.example.com", 100);
+
+      const logs = await provider.getLogs({ fromBlock: 500, toBlock: 400 });
+
+      expect(logs).toEqual([]);
+      expect(inner).not.toHaveBeenCalled();
+    });
+
+    it("resolves the `latest` tag once per chunked invocation", async () => {
+      const { provider, inner } = setup("https://chunktest-4.example.com", 100);
+      provider.getBlockNumber.mockResolvedValue(250);
+      inner.mockResolvedValue([]);
+
+      await provider.getLogs({ fromBlock: 0, toBlock: "latest" });
+
+      // The wrapper resolves "latest" alongside the numeric fromBlock; with
+      // the recent-block cache in place each top-level call resolves "latest"
+      // at most once.
+      expect(provider.getBlockNumber).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(3);
+      expect(inner.mock.calls[0][0]).toMatchObject({
+        fromBlock: 0,
+        toBlock: 99,
+      });
+      expect(inner.mock.calls[2][0]).toMatchObject({
+        fromBlock: 200,
+        toBlock: 250,
+      });
+    });
+
+    it("passes blockHash-style filters straight through without chunking", async () => {
+      const { provider, inner } = setup("https://chunktest-5.example.com", 100);
+      inner.mockResolvedValue([]);
+
+      await provider.getLogs({ blockHash: "0xabc" } as unknown as {
+        fromBlock: number;
+        toBlock: number;
+      });
+
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(inner.mock.calls[0][0]).toEqual({ blockHash: "0xabc" });
+    });
+
+    it("returns the same instance for the same (url, chunkSize) tuple", () => {
+      const a = getOrCreateChunkedProvider(
+        "https://chunktest-6.example.com",
+        100
+      );
+      const b = getOrCreateChunkedProvider(
+        "https://chunktest-6.example.com",
+        100
+      );
+      expect(a).toBe(b);
+    });
+
+    it("returns a different instance for a different chunkSize", () => {
+      const a = getOrCreateChunkedProvider(
+        "https://chunktest-7.example.com",
+        100
+      );
+      const b = getOrCreateChunkedProvider(
+        "https://chunktest-7.example.com",
+        200
+      );
+      expect(a).not.toBe(b);
     });
   });
 });

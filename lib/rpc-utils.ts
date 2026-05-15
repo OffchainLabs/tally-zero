@@ -22,36 +22,34 @@ const providerCache = new Map<string, CachedProvider>();
 let isEvicting = false;
 
 /**
- * Evicts least recently used providers when cache exceeds max size.
- * Keeps the cache bounded to prevent memory leaks.
- * Uses a guard flag to prevent race conditions from concurrent calls.
+ * Evicts least recently used providers when a provider cache exceeds the max
+ * size. Shared between the plain and chunked provider caches.
  */
-function evictLruProviders(): void {
+function evictLruFromCache(cache: Map<string, CachedProvider>): void {
   if (isEvicting) return;
-  if (providerCache.size <= MAX_PROVIDER_CACHE_SIZE) return;
+  if (cache.size <= MAX_PROVIDER_CACHE_SIZE) return;
 
   isEvicting = true;
   try {
     // Sort entries by lastUsed timestamp (oldest first)
-    const entries = Array.from(providerCache.entries()).sort(
+    const entries = Array.from(cache.entries()).sort(
       ([, a], [, b]) => a.lastUsed - b.lastUsed
     );
 
-    // Evict oldest entries until we're under the limit
-    const toEvict = entries.slice(
-      0,
-      providerCache.size - MAX_PROVIDER_CACHE_SIZE
-    );
-    for (const [url] of toEvict) {
-      // Double-check still exists (could be deleted by concurrent cache operations)
-      if (providerCache.has(url)) {
-        debug.rpc("evicting LRU provider: %s", url);
-        providerCache.delete(url);
+    const toEvict = entries.slice(0, cache.size - MAX_PROVIDER_CACHE_SIZE);
+    for (const [key] of toEvict) {
+      if (cache.has(key)) {
+        debug.rpc("evicting LRU provider: %s", key);
+        cache.delete(key);
       }
     }
   } finally {
     isEvicting = false;
   }
+}
+
+function evictLruProviders(): void {
+  evictLruFromCache(providerCache);
 }
 
 /**
@@ -81,6 +79,35 @@ export function getOrCreateProvider(
 /** Cache for chunked providers, keyed by `${url}|${chunkSize}` */
 const chunkedProviderCache = new Map<string, CachedProvider>();
 
+/** TTL for caching the resolved block number for tags like "latest". */
+const LATEST_BLOCK_CACHE_MS = 1000;
+
+interface LatestBlockEntry {
+  blockNumber: number;
+  expiresAt: number;
+}
+
+const latestBlockCache = new WeakMap<
+  ethers.providers.StaticJsonRpcProvider,
+  LatestBlockEntry
+>();
+
+async function getLatestBlockNumber(
+  provider: ethers.providers.StaticJsonRpcProvider
+): Promise<number> {
+  const now = Date.now();
+  const cached = latestBlockCache.get(provider);
+  if (cached && cached.expiresAt > now) {
+    return cached.blockNumber;
+  }
+  const blockNumber = await provider.getBlockNumber();
+  latestBlockCache.set(provider, {
+    blockNumber,
+    expiresAt: now + LATEST_BLOCK_CACHE_MS,
+  });
+  return blockNumber;
+}
+
 async function resolveBlockTag(
   provider: ethers.providers.StaticJsonRpcProvider,
   tag: ethers.providers.BlockTag
@@ -93,7 +120,10 @@ async function resolveBlockTag(
       tag === "safe" ||
       tag === "finalized"
     ) {
-      return provider.getBlockNumber();
+      // A single chunked `getLogs` resolves both `fromBlock` and `toBlock` in
+      // parallel and may also race other in-flight chunk operations against
+      // the same provider; cache briefly so we make one RPC call per burst.
+      return getLatestBlockNumber(provider);
     }
     if (tag === "earliest") return 0;
     return tag.startsWith("0x") ? parseInt(tag, 16) : parseInt(tag, 10);
@@ -101,7 +131,7 @@ async function resolveBlockTag(
   // BigNumber-like
   const maybeBn = tag as { toNumber?: () => number };
   if (typeof maybeBn.toNumber === "function") return maybeBn.toNumber();
-  return provider.getBlockNumber();
+  return getLatestBlockNumber(provider);
 }
 
 /**
@@ -163,24 +193,6 @@ function applyChunkedGetLogs(
   };
 
   return provider;
-}
-
-function evictLruFromCache(cache: Map<string, CachedProvider>): void {
-  if (isEvicting) return;
-  if (cache.size <= MAX_PROVIDER_CACHE_SIZE) return;
-
-  isEvicting = true;
-  try {
-    const entries = Array.from(cache.entries()).sort(
-      ([, a], [, b]) => a.lastUsed - b.lastUsed
-    );
-    const toEvict = entries.slice(0, cache.size - MAX_PROVIDER_CACHE_SIZE);
-    for (const [key] of toEvict) {
-      if (cache.has(key)) cache.delete(key);
-    }
-  } finally {
-    isEvicting = false;
-  }
 }
 
 /**

@@ -153,19 +153,58 @@ function getStorageKeys(storage: Storage): string[] {
   return keys;
 }
 
+interface PrunableEntry {
+  key: string;
+  size: number;
+  // Higher = more recently tracked. Falls back to the original cached `size`
+  // ordering when parsing fails so behavior degrades gracefully.
+  recencyScore: number;
+}
+
+function readRecencyScore(raw: string): number {
+  try {
+    const parsed = JSON.parse(raw) as {
+      metadata?: { lastTrackedAt?: number };
+      createdAt?: number;
+    };
+    if (typeof parsed?.metadata?.lastTrackedAt === "number") {
+      return parsed.metadata.lastTrackedAt;
+    }
+    if (typeof parsed?.createdAt === "number") {
+      return parsed.createdAt;
+    }
+  } catch {
+    // Fall through to the sentinel below.
+  }
+  return -1;
+}
+
 function pruneCheckpointEntriesForRetry(
   storage: Storage,
   prefix: string,
   incomingFullKey: string,
   incomingLength: number
 ): number {
-  const entries = getStorageKeys(storage)
-    .filter((key) => key.startsWith(prefix))
-    .map((key) => ({
+  const entries: PrunableEntry[] = [];
+  for (const key of getStorageKeys(storage)) {
+    if (!key.startsWith(prefix)) continue;
+    const value = storage.getItem(key);
+    if (value === null) continue;
+    entries.push({
       key,
-      size: storage.getItem(key)?.length ?? 0,
-    }))
-    .sort((a, b) => b.size - a.size);
+      size: value.length,
+      recencyScore: readRecencyScore(value),
+    });
+  }
+  // Oldest first. Unparseable entries (recencyScore === -1) are evicted before
+  // anything dated, since they're cache poison anyway.
+  entries.sort((a, b) => {
+    if (a.recencyScore !== b.recencyScore) {
+      return a.recencyScore - b.recencyScore;
+    }
+    // Same age: prefer evicting the larger entry to maximise reclaim per drop.
+    return b.size - a.size;
+  });
 
   let removed = 0;
   let reclaimed = 0;
