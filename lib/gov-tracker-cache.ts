@@ -11,7 +11,6 @@ import {
   extractTimelockLinkFromStages,
   getVotingDataFromStages,
   isCheckpointComplete,
-  LocalStorageCache,
   trimFromStage,
   txHashCacheKey,
   type CacheAdapter,
@@ -24,19 +23,226 @@ import { debug } from "./debug";
 // Re-export txHashCacheKey for external use
 export { txHashCacheKey };
 
+class BestEffortLocalStorageCache implements CacheAdapter {
+  constructor(private readonly prefix: string) {}
+
+  private fullKey(key: string): string {
+    return `${this.prefix}${key}`;
+  }
+
+  private getStorage(): Storage | null {
+    if (typeof globalThis === "undefined") return null;
+    return typeof globalThis.localStorage !== "undefined"
+      ? globalThis.localStorage
+      : null;
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    const storage = this.getStorage();
+    if (!storage) return null;
+
+    const data = storage.getItem(this.fullKey(key));
+    if (data === null) return null;
+
+    try {
+      return JSON.parse(data) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    const storage = this.getStorage();
+    if (!storage) return;
+
+    const fullKey = this.fullKey(key);
+    const serialized = JSON.stringify(value);
+
+    try {
+      storage.setItem(fullKey, serialized);
+      return;
+    } catch (err) {
+      if (!isStorageQuotaError(err)) {
+        debug.cache("checkpoint cache write skipped for %s: %O", key, err);
+        return;
+      }
+    }
+
+    const removedCount = pruneCheckpointEntriesForRetry(
+      storage,
+      this.prefix,
+      fullKey,
+      serialized.length
+    );
+
+    try {
+      storage.setItem(fullKey, serialized);
+    } catch (err) {
+      debug.cache(
+        "checkpoint cache quota exceeded for %s (%d KiB, pruned %d entries); continuing without persisting",
+        key,
+        Math.ceil(serialized.length / 1024),
+        removedCount
+      );
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    const storage = this.getStorage();
+    if (!storage) return;
+    storage.removeItem(this.fullKey(key));
+  }
+
+  async clear(): Promise<void> {
+    const storage = this.getStorage();
+    if (!storage) return;
+
+    for (const key of getStorageKeys(storage)) {
+      if (key.startsWith(this.prefix)) {
+        storage.removeItem(key);
+      }
+    }
+  }
+
+  async has(key: string): Promise<boolean> {
+    const storage = this.getStorage();
+    if (!storage) return false;
+    return storage.getItem(this.fullKey(key)) !== null;
+  }
+
+  async keys(prefix?: string): Promise<string[]> {
+    const storage = this.getStorage();
+    if (!storage) return [];
+
+    const keys: string[] = [];
+    for (const fullKey of getStorageKeys(storage)) {
+      if (!fullKey.startsWith(this.prefix)) continue;
+      const key = fullKey.slice(this.prefix.length);
+      if (!prefix || key.startsWith(prefix)) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  }
+}
+
+function isStorageQuotaError(err: unknown): boolean {
+  if (typeof DOMException !== "undefined" && err instanceof DOMException) {
+    return (
+      err.name === "QuotaExceededError" ||
+      err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err.code === 22 ||
+      err.code === 1014
+    );
+  }
+
+  if (err instanceof Error) {
+    const message = err.message.toLowerCase();
+    return message.includes("quota") || message.includes("exceeded");
+  }
+
+  return false;
+}
+
+function getStorageKeys(storage: Storage): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+interface PrunableEntry {
+  key: string;
+  size: number;
+  // Higher = more recently tracked. Falls back to the original cached `size`
+  // ordering when parsing fails so behavior degrades gracefully.
+  recencyScore: number;
+}
+
+function readRecencyScore(raw: string): number {
+  try {
+    const parsed = JSON.parse(raw) as {
+      metadata?: { lastTrackedAt?: number };
+      createdAt?: number;
+    };
+    if (typeof parsed?.metadata?.lastTrackedAt === "number") {
+      return parsed.metadata.lastTrackedAt;
+    }
+    if (typeof parsed?.createdAt === "number") {
+      return parsed.createdAt;
+    }
+  } catch {
+    // Fall through to the sentinel below.
+  }
+  return -1;
+}
+
+function pruneCheckpointEntriesForRetry(
+  storage: Storage,
+  prefix: string,
+  incomingFullKey: string,
+  incomingLength: number
+): number {
+  const entries: PrunableEntry[] = [];
+  for (const key of getStorageKeys(storage)) {
+    if (!key.startsWith(prefix)) continue;
+    const value = storage.getItem(key);
+    if (value === null) continue;
+    entries.push({
+      key,
+      size: value.length,
+      recencyScore: readRecencyScore(value),
+    });
+  }
+  // Oldest first. Unparseable entries (recencyScore === -1) are evicted before
+  // anything dated, since they're cache poison anyway.
+  entries.sort((a, b) => {
+    if (a.recencyScore !== b.recencyScore) {
+      return a.recencyScore - b.recencyScore;
+    }
+    // Same age: prefer evicting the larger entry to maximise reclaim per drop.
+    return b.size - a.size;
+  });
+
+  let removed = 0;
+  let reclaimed = 0;
+  const target = Math.max(incomingLength, 512 * 1024);
+
+  if (storage.getItem(incomingFullKey) !== null) {
+    reclaimed += storage.getItem(incomingFullKey)?.length ?? 0;
+    storage.removeItem(incomingFullKey);
+    removed++;
+  }
+
+  for (const entry of entries) {
+    if (reclaimed >= target) break;
+    if (entry.key === incomingFullKey) continue;
+    storage.removeItem(entry.key);
+    reclaimed += entry.size;
+    removed++;
+  }
+
+  return removed;
+}
+
 /**
- * Singleton LocalStorageCache instance with TallyZero's prefix
+ * Singleton cache adapter instance with TallyZero's prefix.
  */
-let cacheInstance: LocalStorageCache | null = null;
+let cacheInstance: CacheAdapter | null = null;
 
 /**
  * Get the shared cache adapter instance
  *
- * Uses gov-tracker's LocalStorageCache with TallyZero's checkpoint prefix.
+ * Uses localStorage with TallyZero's checkpoint prefix.
+ * Writes are best-effort so browser quota issues do not break tracking UI.
  */
-export function getCacheAdapter(): LocalStorageCache {
+export function getCacheAdapter(): CacheAdapter {
   if (!cacheInstance) {
-    cacheInstance = new LocalStorageCache(STORAGE_KEYS.CHECKPOINT_CACHE_PREFIX);
+    cacheInstance = new BestEffortLocalStorageCache(
+      STORAGE_KEYS.CHECKPOINT_CACHE_PREFIX
+    );
   }
   return cacheInstance;
 }

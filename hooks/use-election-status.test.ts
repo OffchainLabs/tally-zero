@@ -10,7 +10,10 @@ import type {
   NomineeElectionDetails,
 } from "@/lib/election-status/types";
 
-import { electionKeys } from "./use-election-status";
+import {
+  electionKeys,
+  getMemberExecuteSearchStartBlock,
+} from "./use-election-status";
 
 // ---------------------------------------------------------------------------
 // Mock gov-tracker (used by the fetch functions under test)
@@ -52,6 +55,10 @@ vi.mock("@/lib/gov-tracker-cache", () => ({
 }));
 vi.mock("@/lib/rpc-utils", () => ({
   getOrCreateProvider: vi.fn((url: string) => ({ url })),
+  getOrCreateChunkedProvider: vi.fn((url: string) => ({ url })),
+  batchQueryWithRateLimit: vi.fn(async <T>(queries: Array<() => Promise<T>>) =>
+    Promise.all(queries.map((q) => q()))
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -489,5 +496,107 @@ describe("derived state logic", () => {
         !data.elections.some((e) => e.electionIndex === selectedIndex);
       expect(shouldTrack).toBe(false);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMemberExecuteSearchStartBlock
+// ---------------------------------------------------------------------------
+
+describe("getMemberExecuteSearchStartBlock", () => {
+  const currentBlock = 300_000_000;
+  const FALLBACK = 10_000_000;
+
+  it("prefers the latest stage tx block when available", () => {
+    const election = createElection({
+      electionIndex: 0,
+      stages: [
+        {
+          type: "CREATE_ELECTION",
+          status: "COMPLETED",
+          chain: "arb1",
+          chainId: 42161,
+          transactions: [
+            {
+              hash: "0xa",
+              blockNumber: 100_000,
+              chain: "arb1",
+              chainId: 42161,
+              logIndex: 0,
+            },
+            {
+              hash: "0xb",
+              blockNumber: 200_000,
+              chain: "arb1",
+              chainId: 42161,
+              logIndex: 0,
+            },
+          ],
+        },
+      ],
+    } as unknown as Partial<ElectionProposalStatus> & {
+      electionIndex: number;
+    });
+
+    const fromBlock = getMemberExecuteSearchStartBlock(
+      election,
+      currentBlock,
+      50_000 // proposalSnapshot estimate, deliberately smaller than stage txs
+    );
+    expect(fromBlock).toBe(200_000);
+  });
+
+  it("falls back to the proposalSnapshot estimate when stages have no blocks", () => {
+    const election = createElection({ electionIndex: 0, stages: [] });
+    const fromBlock = getMemberExecuteSearchStartBlock(
+      election,
+      currentBlock,
+      123_456_789
+    );
+    expect(fromBlock).toBe(123_456_789);
+  });
+
+  it("ignores stage tx blocks that are 0 or undefined", () => {
+    const election = createElection({
+      electionIndex: 0,
+      stages: [
+        {
+          type: "CREATE_ELECTION",
+          status: "COMPLETED",
+          chain: "arb1",
+          chainId: 42161,
+          transactions: [
+            {
+              hash: "0xa",
+              blockNumber: 0,
+              chain: "arb1",
+              chainId: 42161,
+              logIndex: 0,
+            },
+          ],
+        },
+      ],
+    } as unknown as Partial<ElectionProposalStatus> & {
+      electionIndex: number;
+    });
+
+    const fromBlock = getMemberExecuteSearchStartBlock(
+      election,
+      currentBlock,
+      42
+    );
+    expect(fromBlock).toBe(42);
+  });
+
+  it("uses the fixed fallback when neither stage txs nor a snapshot are available", () => {
+    const election = createElection({ electionIndex: 0, stages: [] });
+    const fromBlock = getMemberExecuteSearchStartBlock(election, currentBlock);
+    expect(fromBlock).toBe(currentBlock - FALLBACK);
+  });
+
+  it("clamps the result to 0 when the candidate would go negative", () => {
+    const election = createElection({ electionIndex: 0, stages: [] });
+    const fromBlock = getMemberExecuteSearchStartBlock(election, 500);
+    expect(fromBlock).toBe(0);
   });
 });

@@ -9,6 +9,7 @@ import {
   getElectionCount,
   getMemberElectionDetails,
   getNomineeElectionDetails,
+  MAINNET_ELECTION_CONFIG,
   serializeMemberDetails,
   serializeNomineeDetails,
   type ElectionConfig,
@@ -45,11 +46,19 @@ import type {
   UseElectionStatusResult,
 } from "@/lib/election-status/types";
 import { getCacheAdapter } from "@/lib/gov-tracker-cache";
-import { getOrCreateProvider } from "@/lib/rpc-utils";
+import { batchQueryWithRateLimit, getOrCreateProvider } from "@/lib/rpc-utils";
 import {
   ARBITRUM_RPC_URL,
   ETHEREUM_RPC_URL,
 } from "@config/arbitrum-governance";
+import {
+  createPublicClient,
+  http,
+  type Abi,
+  type AbiEvent,
+  type PublicClient,
+} from "viem";
+import { arbitrum } from "viem/chains";
 
 export type { UseElectionStatusOptions, UseElectionStatusResult };
 
@@ -71,6 +80,34 @@ export const electionKeys = {
 const EMPTY_NOMINEE_MAP: Record<number, NomineeElectionDetails> = {};
 const EMPTY_MEMBER_MAP: Record<number, MemberElectionDetails> = {};
 const VOTING_PHASE_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const FALLBACK_EXECUTION_SEARCH_BLOCKS = 10_000_000;
+// Conservative upper bound on Arbitrum L2 blocks per L1 block. Steady-state is
+// ~48 (250ms L2 vs 12s L1); over-estimating widens the search range backwards,
+// which is the safe direction — under-estimating could skip past the snapshot.
+const L2_BLOCKS_PER_L1_BLOCK = 60;
+// Maximum L2 ProposalExecuted log queries to run concurrently when hydrating
+// historical SC elections. Each query can fan out further via the chunked
+// provider, so keep concurrency tight to avoid rate limits.
+const HYDRATION_CONCURRENCY = 3;
+// Minimal ABI for proposalSnapshot — viem's readContract decodes uint256
+// straight into a bigint, so the call site never touches ethers BigNumber.
+const PROPOSAL_SNAPSHOT_ABI = [
+  {
+    type: "function",
+    name: "proposalSnapshot",
+    stateMutability: "view",
+    inputs: [{ name: "proposalId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const satisfies Abi;
+// proposalId is not indexed, so we filter client-side after fetching. Using
+// the event ABI lets viem compute the topic and decode `args.proposalId`
+// without us having to keccak256 or BigInt the raw log data.
+const PROPOSAL_EXECUTED_EVENT = {
+  type: "event",
+  name: "ProposalExecuted",
+  inputs: [{ name: "proposalId", type: "uint256", indexed: false }],
+} as const satisfies AbiEvent;
 
 // ---------------------------------------------------------------------------
 // Non-hook helpers
@@ -526,7 +563,13 @@ async function fetchDefault(
   );
   const completedIndices = new Set(
     cached.elections
-      .filter((e) => e.phase === "COMPLETED")
+      .filter(
+        (e) =>
+          e.phase === "COMPLETED" &&
+          // Completed cached elections without execution txs still need either
+          // a proposal ID for direct event lookup or a fresh live status fetch.
+          (hasElectionTimelockTx(e) || e.memberProposalId)
+      )
       .map((e) => e.electionIndex)
   );
   const indicesToFetch = Array.from(
@@ -551,14 +594,311 @@ async function fetchDefault(
   ]);
 
   const merged = mergeResults(cached, liveResults);
+  // First pass: correct phases before hydration so we don't try to hydrate
+  // elections whose live phase has been rolled back to a pre-execution state.
+  merged.elections = preventPhaseRegression(merged.elections);
+  // getElectionStatus() is lightweight and does not include stage tx hashes.
+  // Newly executed elections only need the member execute tx for timelock links.
+  // Use a viem PublicClient with manual chunking so wide ProposalExecuted log
+  // queries don't trip free-tier RPC range limits.
+  const l2ChunkSize = chunkingConfig?.l2ChunkSize ?? 10_000_000;
+  const l2Client = createL2PublicClient(l2Url);
+  await hydrateMissingElectionExecutionTxs(
+    l2Provider,
+    l2Client,
+    l2ChunkSize,
+    merged
+  );
 
   return {
     status,
+    // Second pass: hydration mutates election.stages, which can in turn lower
+    // the inferred phase, so re-apply the no-regression rule.
     elections: preventPhaseRegression(merged.elections),
     nomineeDetailsMap: merged.nomineeDetails,
     memberDetailsMap: merged.memberDetails,
     latestL1Block,
   };
+}
+
+function createL2PublicClient(l2Url: string): PublicClient {
+  return createPublicClient({
+    chain: arbitrum,
+    transport: http(l2Url, { retryCount: 2, retryDelay: 1000 }),
+  });
+}
+
+function hasElectionTimelockTx(election: ElectionProposalStatus): boolean {
+  const l2TimelockStage = election.stages?.find(
+    (stage) => stage.type === "L2_TIMELOCK"
+  );
+  const memberElectionStage = election.stages?.find(
+    (stage) => stage.type === "MEMBER_ELECTION"
+  );
+
+  return Boolean(
+    election.memberExecuteTxHash ||
+    l2TimelockStage?.transactions?.length ||
+    memberElectionStage?.transactions?.some(
+      (tx) => tx.description === "executed"
+    )
+  );
+}
+
+function needsElectionExecutionTxTracking(
+  election: ElectionProposalStatus
+): boolean {
+  return (
+    (election.phase === "PENDING_EXECUTION" ||
+      election.phase === "COMPLETED") &&
+    !hasElectionTimelockTx(election) &&
+    // No memberProposalId means findMemberExecuteTx has nothing to match
+    // against, so the hydration would no-op. Skip the slot entirely.
+    !!election.memberProposalId
+  );
+}
+
+async function hydrateMissingElectionExecutionTxs(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  l2Client: PublicClient,
+  l2ChunkSize: number,
+  data: CachedElectionData
+): Promise<void> {
+  const missingExecutionTxElections = data.elections.filter(
+    needsElectionExecutionTxTracking
+  );
+  if (missingExecutionTxElections.length === 0) return;
+
+  debug.app(
+    "Hydrating %d election(s) missing execution tx data",
+    missingExecutionTxElections.length
+  );
+
+  const hydrationQueries = missingExecutionTxElections.map(
+    (election) => async () => {
+      try {
+        return await withFallbackMemberExecuteTx(
+          l2Provider,
+          l2Client,
+          l2ChunkSize,
+          election
+        );
+      } catch (err) {
+        debug.app(
+          "Failed to hydrate election %d execution tx data: %O",
+          election.electionIndex,
+          err
+        );
+        return null;
+      }
+    }
+  );
+
+  // Bounded concurrency: each hydration may fan out further via chunked
+  // getLogs, so keep concurrent in-flight queries small.
+  const hydratedResults = await batchQueryWithRateLimit(
+    hydrationQueries,
+    HYDRATION_CONCURRENCY,
+    0
+  );
+
+  for (const status of hydratedResults) {
+    if (!status) continue;
+
+    const existingIdx = data.elections.findIndex(
+      (election) => election.electionIndex === status.electionIndex
+    );
+    if (existingIdx === -1) continue;
+
+    data.elections[existingIdx] = {
+      ...data.elections[existingIdx],
+      ...status,
+    };
+  }
+}
+
+async function withFallbackMemberExecuteTx(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  l2Client: PublicClient,
+  l2ChunkSize: number,
+  election: ElectionProposalStatus
+): Promise<ElectionProposalStatus> {
+  if (!election.memberProposalId) return election;
+
+  const executeTx = await findMemberExecuteTx(
+    l2Provider,
+    l2Client,
+    l2ChunkSize,
+    election
+  ).catch((err) => {
+    debug.app(
+      "Failed fallback member execute tx lookup for election %d: %O",
+      election.electionIndex,
+      err
+    );
+    return null;
+  });
+
+  if (!executeTx) return election;
+
+  return {
+    ...election,
+    memberExecuteTxHash: executeTx.hash,
+    stages: addMemberExecuteTxToStages(election, executeTx),
+  };
+}
+
+function addMemberExecuteTxToStages(
+  election: ElectionProposalStatus,
+  tx: { hash: string; blockNumber: number }
+): ElectionProposalStatus["stages"] {
+  if (!election.stages) return election.stages;
+
+  return election.stages.map((stage) => {
+    if (stage.type !== "MEMBER_ELECTION") return stage;
+    if (stage.transactions?.some((stageTx) => stageTx.hash === tx.hash)) {
+      return stage;
+    }
+
+    return {
+      ...stage,
+      transactions: [
+        ...(stage.transactions ?? []),
+        {
+          hash: tx.hash,
+          blockNumber: tx.blockNumber,
+          chain: "arb1",
+          chainId: MAINNET_ELECTION_CONFIG.chainId,
+          description: "executed",
+        },
+      ],
+    };
+  });
+}
+
+export function getMemberExecuteSearchStartBlock(
+  election: ElectionProposalStatus,
+  currentBlock: number,
+  proposalSnapshotL2Block?: number | null
+): number {
+  const stageTxBlocks =
+    election.stages?.flatMap(
+      (stage) =>
+        stage.transactions
+          ?.map((tx) => tx.blockNumber)
+          .filter((blockNumber): blockNumber is number => !!blockNumber) ?? []
+    ) ?? [];
+
+  const latestKnownStageBlock =
+    stageTxBlocks.length > 0 ? Math.max(...stageTxBlocks) : null;
+
+  // Prefer the most precise lower bound available, in this order:
+  //   1. The latest block from already-tracked stage txs (we know the execute
+  //      tx happened at or after the most recent stage).
+  //   2. The L2 block estimate at proposalSnapshot (cheap on-chain read,
+  //      always older than the execute tx).
+  //   3. The fixed FALLBACK window, as a last resort.
+  const candidate =
+    latestKnownStageBlock ??
+    proposalSnapshotL2Block ??
+    currentBlock - FALLBACK_EXECUTION_SEARCH_BLOCKS;
+
+  return Math.max(0, candidate);
+}
+
+/**
+ * Estimate the L2 block at proposal creation.
+ *
+ * `proposalSnapshot(id)` on an Arbitrum L2 governor returns the **L1 Ethereum**
+ * block number used for vote snapshotting (Solidity's `block.number` resolves
+ * to the L1 block on Arbitrum). We convert that into an approximate L2 block
+ * via the steady-state L2/L1 block ratio. Over-estimating the ratio is the
+ * safe direction — the result is used as a `getLogs` lower bound, so a wider
+ * range only means slightly more chunks, never a missed log.
+ *
+ * The L1-block lookup still goes through the ethers L2 provider because
+ * `getL1BlockFromL2` predates this file's viem migration; the snapshot read
+ * and current L2 block come from the viem `PublicClient`.
+ */
+async function getProposalSnapshotL2Block(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  l2Client: PublicClient,
+  memberProposalId: string
+): Promise<number | null> {
+  try {
+    const [snapshotL1Block, currentL1Block, currentL2Block] = await Promise.all(
+      [
+        l2Client.readContract({
+          address:
+            MAINNET_ELECTION_CONFIG.memberGovernorAddress as `0x${string}`,
+          abi: PROPOSAL_SNAPSHOT_ABI,
+          functionName: "proposalSnapshot",
+          args: [BigInt(memberProposalId)],
+        }),
+        getL1BlockFromL2(l2Provider),
+        l2Client.getBlockNumber(),
+      ]
+    );
+
+    if (!currentL1Block) return null;
+    const snapshotL1 = Number(snapshotL1Block);
+    if (snapshotL1 <= 0 || snapshotL1 >= currentL1Block) return null;
+
+    const l1ElapsedBlocks = currentL1Block - snapshotL1;
+    const l2ElapsedBlocks = l1ElapsedBlocks * L2_BLOCKS_PER_L1_BLOCK;
+    return Math.max(0, Number(currentL2Block) - l2ElapsedBlocks);
+  } catch (err) {
+    debug.app("proposalSnapshot lookup failed: %O", err);
+    return null;
+  }
+}
+
+async function findMemberExecuteTx(
+  l2Provider: ReturnType<typeof getOrCreateProvider>,
+  l2Client: PublicClient,
+  l2ChunkSize: number,
+  election: ElectionProposalStatus
+): Promise<{ hash: string; blockNumber: number } | null> {
+  if (!election.memberProposalId) return null;
+
+  const [currentBlockBig, snapshotL2Block] = await Promise.all([
+    l2Client.getBlockNumber(),
+    getProposalSnapshotL2Block(l2Provider, l2Client, election.memberProposalId),
+  ]);
+  const currentBlock = Number(currentBlockBig);
+  const fromBlock = getMemberExecuteSearchStartBlock(
+    election,
+    currentBlock,
+    snapshotL2Block
+  );
+  const expectedProposalId = BigInt(election.memberProposalId);
+
+  const memberGovernor =
+    MAINNET_ELECTION_CONFIG.memberGovernorAddress as `0x${string}`;
+  // viem `getLogs` doesn't auto-chunk like the wrapped ethers provider, so
+  // walk the range in chunks ourselves to respect free-tier RPC limits.
+  const chunkSize = Math.max(1, Math.floor(l2ChunkSize));
+
+  for (let from = fromBlock; from <= currentBlock; from += chunkSize) {
+    const to = Math.min(from + chunkSize - 1, currentBlock);
+    const logs = await l2Client.getLogs({
+      address: memberGovernor,
+      event: PROPOSAL_EXECUTED_EVENT,
+      fromBlock: BigInt(from),
+      toBlock: BigInt(to),
+    });
+
+    for (const log of logs) {
+      if (log.args.proposalId === expectedProposalId) {
+        return {
+          hash: log.transactionHash,
+          blockNumber: Number(log.blockNumber),
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 async function fetchWithOverrides(

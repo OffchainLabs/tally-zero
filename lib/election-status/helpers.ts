@@ -196,7 +196,10 @@ export function mergeResults(
       (e) => e.electionIndex === result.index
     );
     if (existingIdx !== -1) {
-      elections[existingIdx] = result.status;
+      elections[existingIdx] = {
+        ...elections[existingIdx],
+        ...result.status,
+      };
     } else {
       elections.push(result.status);
     }

@@ -16,17 +16,26 @@ import {
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
+  const setItem = (key: string, value: string) => {
+    store[key] = value;
+  };
+
   return {
     getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value;
-    }),
+    setItem: vi.fn(setItem),
     removeItem: vi.fn((key: string) => {
       delete store[key];
     }),
     clear: vi.fn(() => {
       store = {};
     }),
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
+    get length() {
+      return Object.keys(store).length;
+    },
+    resetSetItem: () => {
+      localStorageMock.setItem.mockImplementation(setItem);
+    },
   };
 })();
 
@@ -79,6 +88,7 @@ const createVotingActiveStage = (
 describe("gov-tracker-cache", () => {
   beforeEach(() => {
     localStorageMock.clear();
+    localStorageMock.resetSetItem();
     vi.clearAllMocks();
   });
 
@@ -91,6 +101,94 @@ describe("gov-tracker-cache", () => {
       const adapter1 = getCacheAdapter();
       const adapter2 = getCacheAdapter();
       expect(adapter1).toBe(adapter2);
+    });
+
+    it("does not throw when localStorage quota is exceeded", async () => {
+      const adapter = getCacheAdapter();
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error(
+          "Failed to execute 'setItem' on 'Storage': quota exceeded"
+        );
+      });
+
+      await expect(
+        adapter.set("tx:0xabc:op:0xdef", { large: "checkpoint" })
+      ).resolves.toBeUndefined();
+    });
+
+    describe("quota-pressure pruning", () => {
+      // Mirrors STORAGE_KEYS.CHECKPOINT_CACHE_PREFIX so seeded entries match
+      // the implementation's `startsWith(prefix)` scan.
+      const PREFIX = "tally-zero-checkpoint-";
+
+      function makeCheckpoint(lastTrackedAt: number): string {
+        return JSON.stringify({
+          version: 1,
+          createdAt: lastTrackedAt,
+          input: { type: "timelock" },
+          metadata: { errorCount: 0, lastTrackedAt },
+        });
+      }
+
+      // The implementation prunes until it reclaims `max(incomingLength, 512KB)`,
+      // so even tiny test entries can all be evicted. We assert ordering by
+      // capturing the `removeItem` call sequence rather than which entries
+      // happen to survive a full sweep.
+      async function pruneAndCaptureRemovals(): Promise<string[]> {
+        const adapter = getCacheAdapter();
+        // Trip exactly one quota error on the first setItem; subsequent
+        // setItem calls fall back to the default (store-backed) impl.
+        localStorageMock.setItem.mockImplementationOnce(() => {
+          throw new Error("quota exceeded");
+        });
+        // Reset call history so we only see removals from this prune cycle.
+        localStorageMock.removeItem.mockClear();
+
+        await adapter.set("tx:incoming", { fresh: true });
+        return localStorageMock.removeItem.mock.calls.map(
+          (call) => call[0] as string
+        );
+      }
+
+      it("evicts the oldest checkpoint first when retrying after a quota error", async () => {
+        const oldest = makeCheckpoint(1_000);
+        const middle = makeCheckpoint(2_000);
+        const newest = makeCheckpoint(3_000);
+        localStorageMock.setItem(`${PREFIX}tx:oldest`, oldest);
+        localStorageMock.setItem(`${PREFIX}tx:middle`, middle);
+        localStorageMock.setItem(`${PREFIX}tx:newest`, newest);
+
+        const removedKeys = await pruneAndCaptureRemovals();
+
+        // The first key removed (after any pre-existing slot for the incoming
+        // key, which here has none) must be the oldest checkpoint.
+        const datedRemovals = removedKeys.filter((k) =>
+          k.startsWith(`${PREFIX}tx:`)
+        );
+        expect(datedRemovals[0]).toBe(`${PREFIX}tx:oldest`);
+        // Newest must be removed strictly after middle and oldest.
+        const newestIdx = datedRemovals.indexOf(`${PREFIX}tx:newest`);
+        const middleIdx = datedRemovals.indexOf(`${PREFIX}tx:middle`);
+        const oldestIdx = datedRemovals.indexOf(`${PREFIX}tx:oldest`);
+        expect(oldestIdx).toBeLessThan(middleIdx);
+        expect(middleIdx).toBeLessThan(newestIdx);
+      });
+
+      it("prefers evicting unparseable entries before dated ones", async () => {
+        const dated = makeCheckpoint(5_000);
+        localStorageMock.setItem(`${PREFIX}tx:dated`, dated);
+        // A non-JSON value should score as the most-stale (-1) and be evicted
+        // before the dated entry.
+        localStorageMock.setItem(`${PREFIX}tx:garbage`, "not-json{");
+
+        const removedKeys = await pruneAndCaptureRemovals();
+
+        const garbageIdx = removedKeys.indexOf(`${PREFIX}tx:garbage`);
+        const datedIdx = removedKeys.indexOf(`${PREFIX}tx:dated`);
+        expect(garbageIdx).toBeGreaterThanOrEqual(0);
+        expect(datedIdx).toBeGreaterThanOrEqual(0);
+        expect(garbageIdx).toBeLessThan(datedIdx);
+      });
     });
   });
 

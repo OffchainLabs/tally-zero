@@ -38,6 +38,7 @@ interface ElectionPhaseTimelineProps {
   stages?: TrackedStage[];
   status?: ElectionStatus | null;
   electionIndex?: number;
+  memberExecuteTxHash?: string;
   className?: string;
 }
 
@@ -49,22 +50,49 @@ interface PhaseTransaction {
 
 function getTransactionsForPhase(
   phase: ElectionPhase,
-  stages?: TrackedStage[]
+  stages?: TrackedStage[],
+  memberExecuteTxHash?: string,
+  fallbackChainId?: number
 ): PhaseTransaction[] {
-  if (!stages) return [];
   const stageTypes = PHASE_TO_STAGE_TYPES[phase];
   if (!stageTypes.length) return [];
 
-  // For PENDING_EXECUTION, only show the final execution transaction (L2_TIMELOCK)
-  // Security Council elections execute on L2, so we only need the L2 timelock execution
+  // The member governor execute tx schedules the L2 timelock operation, so it
+  // belongs to the Pending Execution phase even before full timelock tracking.
   if (phase === "PENDING_EXECUTION") {
-    const l2TimelockStage = stages.find((s) => s.type === "L2_TIMELOCK");
+    const l2TimelockStage = stages?.find((s) => s.type === "L2_TIMELOCK");
     if (l2TimelockStage?.transactions?.length) {
-      const tx = l2TimelockStage.transactions[0];
+      const tx =
+        l2TimelockStage.transactions.find(
+          (t) => t.description === "queued" || t.description === "scheduled"
+        ) ?? l2TimelockStage.transactions[0];
       return [{ hash: tx.hash, chainId: tx.chainId, timestamp: tx.timestamp }];
     }
+
+    const memberElectionStage = stages?.find(
+      (s) => s.type === "MEMBER_ELECTION"
+    );
+    const memberExecutedTx = memberElectionStage?.transactions?.find(
+      (t) => t.description === "executed"
+    );
+    if (memberExecutedTx) {
+      return [
+        {
+          hash: memberExecutedTx.hash,
+          chainId: memberExecutedTx.chainId,
+          timestamp: memberExecutedTx.timestamp,
+        },
+      ];
+    }
+
+    if (memberExecuteTxHash && fallbackChainId) {
+      return [{ hash: memberExecuteTxHash, chainId: fallbackChainId }];
+    }
+
     return [];
   }
+
+  if (!stages) return [];
 
   const transactions: PhaseTransaction[] = [];
   for (const stage of stages) {
@@ -158,11 +186,30 @@ function getPhaseIndex(phase: ElectionPhase): number {
   return TIMELINE_PHASES.indexOf(phase);
 }
 
-function getL2TimelockTxHash(stages?: TrackedStage[]): string | null {
-  if (!stages) return null;
-  const l2TimelockStage = stages.find((s) => s.type === "L2_TIMELOCK");
-  if (!l2TimelockStage?.transactions?.length) return null;
-  return l2TimelockStage.transactions[0].hash;
+function getL2TimelockTxHash(
+  stages?: TrackedStage[],
+  memberExecuteTxHash?: string
+): string | null {
+  // We need the schedule tx (where CallScheduled is emitted), not the
+  // L2 timelock execute tx (CallExecuted, 3 days later) — otherwise the
+  // timelock modal opens with a tx that has no CallScheduled events and
+  // surfaces "No operations found".
+  const l2TimelockStage = stages?.find((s) => s.type === "L2_TIMELOCK");
+  const queuedTx = l2TimelockStage?.transactions?.find(
+    (t) => t.description === "queued" || t.description === "scheduled"
+  );
+  if (queuedTx) return queuedTx.hash;
+
+  // For Security Council elections, the member governor execute tx is the
+  // same transaction that schedules the L2 timelock op.
+  const memberElectionStage = stages?.find((s) => s.type === "MEMBER_ELECTION");
+  const memberExecutedTx = memberElectionStage?.transactions?.find(
+    (t) => t.description === "executed"
+  );
+  if (memberExecutedTx) return memberExecutedTx.hash;
+  if (memberExecuteTxHash) return memberExecuteTxHash;
+
+  return null;
 }
 
 interface PhaseEta {
@@ -225,13 +272,14 @@ export function ElectionPhaseTimeline({
   stages,
   status,
   electionIndex,
+  memberExecuteTxHash,
   className,
 }: ElectionPhaseTimelineProps): React.ReactElement {
   const { openTimelock } = useDeepLink();
   const { l2Rpc } = useRpcSettings();
   const { nomineeGovernorAddress, chainId } = useElectionContracts();
   const currentIndex = getPhaseIndex(currentPhase);
-  const timelockTxHash = getL2TimelockTxHash(stages);
+  const timelockTxHash = getL2TimelockTxHash(stages, memberExecuteTxHash);
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
 
@@ -340,6 +388,8 @@ export function ElectionPhaseTimeline({
                 <PhaseTransactionLinks
                   phase={phase}
                   stages={stages}
+                  memberExecuteTxHash={memberExecuteTxHash}
+                  chainId={chainId}
                   fetchedTimestamps={fetchedTimestamps}
                 />
               </div>
@@ -348,12 +398,14 @@ export function ElectionPhaseTimeline({
         })}
       </div>
 
-      {currentPhase === "COMPLETED" && (
+      {(currentPhase === "COMPLETED" || timelockTxHash) && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-green-500">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="font-medium">Election Completed</span>
-          </div>
+          {currentPhase === "COMPLETED" && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-green-500">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Election Completed</span>
+            </div>
+          )}
           {timelockTxHash && (
             <Button
               variant="outline"
@@ -390,13 +442,22 @@ function formatTxDate(timestamp?: number): string | null {
 function PhaseTransactionLinks({
   phase,
   stages,
+  memberExecuteTxHash,
+  chainId,
   fetchedTimestamps,
 }: {
   phase: ElectionPhase;
   stages?: TrackedStage[];
+  memberExecuteTxHash?: string;
+  chainId: number;
   fetchedTimestamps?: Map<string, number>;
 }): React.ReactElement | null {
-  const transactions = getTransactionsForPhase(phase, stages);
+  const transactions = getTransactionsForPhase(
+    phase,
+    stages,
+    memberExecuteTxHash,
+    chainId
+  );
   if (transactions.length === 0) return null;
 
   return (

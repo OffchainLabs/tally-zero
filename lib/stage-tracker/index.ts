@@ -19,6 +19,7 @@ import {
   DEFAULT_CHUNKING_CONFIG,
   ETHEREUM_RPC_URL,
 } from "@/config/arbitrum-governance";
+import { getOrCreateChunkedProvider } from "@/lib/rpc-utils";
 import type { ProposalTrackingResult } from "@/types/proposal-stage";
 
 // Re-export getAllStageMetadata from gov-tracker
@@ -54,9 +55,21 @@ export function createProposalTracker(
     ...userChunkingConfig,
   };
 
+  // Wrap providers so eth_getLogs auto-chunks. The Arbitrum SDK's EventFetcher
+  // queries L1 assertion logs without chunking, which exceeds drpc.org's
+  // free-tier 10k block range and breaks L2_TO_L1_MESSAGE tracking.
+  const l1Provider = getOrCreateChunkedProvider(
+    l1RpcUrl,
+    chunkingConfig.l1ChunkSize
+  );
+  const l2Provider = getOrCreateChunkedProvider(
+    l2RpcUrl,
+    chunkingConfig.l2ChunkSize
+  );
+
   return createGovTracker({
-    l2Provider: l2RpcUrl,
-    l1Provider: l1RpcUrl,
+    l2Provider,
+    l1Provider,
     chunkingConfig,
     cache,
     ...restOptions,
