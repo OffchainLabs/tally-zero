@@ -2,6 +2,7 @@
 
 import { Settings } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -32,6 +33,11 @@ import {
 } from "./settings";
 
 export function SettingsSheet() {
+  const searchParams = useSearchParams();
+  const isDevMode = Array.from(searchParams.entries()).some(
+    ([key, value]) => key.toLowerCase() === "devmode" && value === "true"
+  );
+
   const { theme, setTheme } = useTheme();
   const { isOpen, activeTab, openSettings, closeSettings, setActiveTab } =
     useSettingsSheet();
@@ -145,6 +151,10 @@ export function SettingsSheet() {
   const cacheStats = useMemo(() => getCacheStats(), [cacheRefreshKey]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const totalStorage = useMemo(() => getTotalStorageUsage(), [cacheRefreshKey]);
+
+  if (!isDevMode) {
+    return null;
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>

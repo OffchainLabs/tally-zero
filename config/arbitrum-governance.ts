@@ -4,13 +4,16 @@
  * Contains addresses for all governance-related contracts on Arbitrum and Ethereum mainnet
  */
 
+import { env } from "@/env";
 import type { ChunkingConfig } from "@/types/proposal-stage";
 import { ADDRESSES } from "@gzeoneth/gov-tracker";
 
 export const ARBITRUM_CHAIN_ID = 42161;
 
 /** Default Arbitrum One RPC URL */
-export const ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc";
+export const ARBITRUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
+  ? `https://arb-mainnet.g.alchemy.com/v2/${env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+  : "https://arb1.arbitrum.io/rpc";
 
 /** Default Arbitrum Nova RPC URL */
 export const ARBITRUM_NOVA_RPC_URL = "https://nova.arbitrum.io/rpc";
