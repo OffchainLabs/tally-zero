@@ -109,12 +109,6 @@ export const columns: ColumnDef<DelegateInfo>[] = [
             <div className="space-y-2">
               {label && <p className="text-sm font-semibold">{label}</p>}
               <p className="text-sm font-mono break-all">{address}</p>
-              <Link
-                href={profileHref}
-                className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View delegate profile
-              </Link>
               <a
                 href={getAddressExplorerUrl(address)}
                 target="_blank"
