@@ -212,7 +212,7 @@ function ProposalPageContent({
             {proposal.governorName && (
               <GovernorBadge governorName={proposal.governorName} />
             )}
-            <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-muted-foreground dark:bg-white/5">
+            <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-muted-foreground dark:bg-white/5 break-all">
               {proposal.id}
             </code>
           </div>

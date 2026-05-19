@@ -1,10 +1,9 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { DeepLinkHandler } from "@/components/container/DeepLinkHandler";
-import RpcStatus from "@/components/container/RpcStatus";
 import { columns } from "@/components/table/ColumnsProposals";
 import { DataTable } from "@/components/table/DataTable";
 import { Progress } from "@/components/ui/Progress";
@@ -13,6 +12,7 @@ import { DEFAULT_FORM_VALUES } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useMultiGovernorSearch } from "@/hooks/use-multi-governor-search";
+import { useRpcHealth } from "@/hooks/use-rpc-health";
 import { useRpcHealthOrchestration } from "@/hooks/use-rpc-health-orchestration";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 
@@ -47,6 +47,20 @@ export default function Search() {
 
   const { autoStarted, rpcHealthy, handleRpcHealthChecked } =
     useRpcHealthOrchestration();
+
+  const { summary: rpcHealthSummary } = useRpcHealth({
+    customUrls: customRpcUrls,
+    autoCheck: rpcSettingsHydrated,
+  });
+
+  useEffect(() => {
+    if (rpcHealthSummary) {
+      handleRpcHealthChecked(
+        rpcHealthSummary.allHealthy,
+        rpcHealthSummary.requiredHealthy
+      );
+    }
+  }, [rpcHealthSummary, handleRpcHealthChecked]);
 
   const { proposals, progress, error, isProviderReady, cacheInfo } =
     useMultiGovernorSearch({
@@ -192,12 +206,6 @@ export default function Search() {
           </>
         )}
       </section>
-
-      <RpcStatus
-        customUrls={customRpcUrls}
-        onHealthChecked={handleRpcHealthChecked}
-        autoCheck={rpcSettingsHydrated}
-      />
     </div>
   );
 }

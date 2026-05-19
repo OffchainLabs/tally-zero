@@ -123,7 +123,6 @@ export default function DelegateSearch() {
           delegateCount={delegates.length}
           totalVotingPower={totalVotingPower}
           totalSupply={totalSupply}
-          delegatedPercentage={delegatedPercentage}
         />
       )}
 

@@ -44,7 +44,7 @@ const features = [
     title: "Transparency",
     description:
       "All governance actions happen onchain. The Security Council publishes transparency reports for every action taken.",
-    href: "/timelock",
+    href: undefined,
   },
 ];
 
