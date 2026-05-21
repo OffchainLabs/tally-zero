@@ -2,7 +2,6 @@
 
 import { ColumnDef, Row } from "@tanstack/react-table";
 
-import { ProposerCell } from "@components/container/ProposerCell";
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
 import { VoteDistributionBarCompact } from "@components/proposal/stages/VoteDistributionBarCompact";
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
@@ -21,21 +20,6 @@ import { sumVoteCounts } from "@/lib/vote-utils";
 import { ParsedProposal } from "@/types/proposal";
 
 export const columns: ColumnDef<ParsedProposal>[] = [
-  {
-    accessorKey: "proposer",
-    meta: {
-      label: "Proposer",
-    },
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Proposer" />
-    ),
-    cell: ({ row }) => (
-      <div className="flex space-x-2 shrink-0">
-        <ProposerCell proposer={row.getValue("proposer")} />
-      </div>
-    ),
-    size: 140,
-  },
   {
     accessorKey: "description",
     meta: {

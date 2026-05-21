@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -60,7 +60,7 @@ export default function VoteForm({
     resolver: zodResolver(voteSchema),
   });
 
-  const selectedVote = form.watch("vote");
+  const selectedVote = useWatch({ control: form.control, name: "vote" });
   const governorAddress = proposal.contractAddress as `0x${string}`;
   const isPageVariant = variant === "page";
   const isActiveProposal = isActiveProposalState(proposal.state);
@@ -91,14 +91,16 @@ export default function VoteForm({
     identity: string;
     vote: UserVoteReceipt;
   } | null>(null);
-  useEffect(() => {
-    if (!userVote) return;
-
+  if (
+    userVote &&
+    (lastKnownUserVote?.identity !== userVoteIdentity ||
+      lastKnownUserVote.vote !== userVote)
+  ) {
     setLastKnownUserVote({
       identity: userVoteIdentity,
       vote: userVote,
     });
-  }, [userVote, userVoteIdentity]);
+  }
 
   const displayedUserVote =
     userVote ??

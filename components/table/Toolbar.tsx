@@ -8,7 +8,6 @@ import { Table } from "@tanstack/react-table";
 
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
-import { DataTableViewOptions } from "@components/table/ViewOptions";
 import { Button } from "@components/ui/Button";
 
 interface DataTableToolbarProps<TData> {
@@ -53,9 +52,6 @@ export function DataTableToolbar<TData>({
             New Proposal
           </Link>
         </Button>
-        <div className="hidden sm:block">
-          <DataTableViewOptions table={table} />
-        </div>
       </div>
     </div>
   );
