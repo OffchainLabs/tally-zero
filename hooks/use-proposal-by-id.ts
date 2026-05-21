@@ -5,7 +5,10 @@
  * Searches all governors and used for deep linking
  */
 
-import { queryProposalCreatedEvents } from "@gzeoneth/gov-tracker";
+import {
+  queryProposalCreatedEvents,
+  type ProposalData,
+} from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
@@ -25,6 +28,18 @@ import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 // governor contract and its ProposalCreated events live on L2 Arbitrum. Search
 // a recent L2 block window instead of the L1 snapshot block.
 const L2_CREATION_SEARCH_WINDOW_BLOCKS = 10_000_000;
+
+const PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID: Record<
+  number,
+  Record<string, string>
+> = {
+  [ARBITRUM_CHAIN_ID]: {
+    "86654545843645364200491220873325841239317939837732580673532485559601859962180":
+      "0x0424b564ec9b6e181b618da10f42f304263e858498ec7b0521a74d10d9843b6b",
+    "71236395575275509514809232906539225896862899916501711888027988560774655719183":
+      "0x5d76ab672426aafeeb88bb67212388d3425598bf06ff490aed9b7550d72bd00c",
+  },
+};
 
 /** Options for configuring proposal lookup */
 interface UseProposalByIdOptions {
@@ -48,6 +63,62 @@ interface UseProposalByIdResult {
   error: Error | null;
   /** Function to manually refetch */
   refetch: () => void;
+}
+
+function getKnownProposalCreationTxHash(
+  chainId: number,
+  proposalId: string
+): string | undefined {
+  return PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID[chainId]?.[proposalId];
+}
+
+async function findProposalCreatedEventByTxHash({
+  provider,
+  contract,
+  governorAddress,
+  proposalId,
+  txHash,
+}: {
+  provider: ethers.providers.Provider;
+  contract: ethers.Contract;
+  governorAddress: string;
+  proposalId: string;
+  txHash: string;
+}): Promise<ProposalData | null> {
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt) return null;
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== governorAddress.toLowerCase()) continue;
+
+    try {
+      const parsed = contract.interface.parseLog({
+        topics: log.topics as string[],
+        data: log.data,
+      });
+
+      if (parsed.name !== "ProposalCreated") continue;
+      if (parsed.args.proposalId.toString() !== proposalId) continue;
+
+      return {
+        proposalId,
+        proposer: parsed.args.proposer,
+        targets: parsed.args.targets,
+        values: parsed.args[3],
+        signatures: parsed.args.signatures,
+        calldatas: parsed.args.calldatas,
+        startBlock: parsed.args.startBlock,
+        endBlock: parsed.args.endBlock,
+        description: parsed.args.description,
+        creationBlock: log.blockNumber,
+        creationTxHash: log.transactionHash,
+      };
+    } catch {
+      // Ignore unrelated governor logs in the same transaction receipt.
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -122,20 +193,37 @@ export function useProposalById({
               ]);
 
             const snapshotBlock = proposalSnapshot.toNumber();
-            const currentL2Block = await provider.getBlockNumber();
-            const searchFromBlock = Math.max(
-              currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
-              0
+            const knownCreationTxHash = getKnownProposalCreationTxHash(
+              ARBITRUM_CHAIN_ID,
+              proposalId
             );
-            const creationEvents = await queryProposalCreatedEvents(
-              provider,
-              governor.address,
-              searchFromBlock,
-              currentL2Block
-            );
-            const matchingEvent = creationEvents.find(
-              (event) => event.proposalId === proposalId
-            );
+            let matchingEvent = knownCreationTxHash
+              ? await findProposalCreatedEventByTxHash({
+                  provider,
+                  contract,
+                  governorAddress: governor.address,
+                  proposalId,
+                  txHash: knownCreationTxHash,
+                })
+              : null;
+
+            if (!matchingEvent) {
+              const currentL2Block = await provider.getBlockNumber();
+              const searchFromBlock = Math.max(
+                currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
+                0
+              );
+              const creationEvents = await queryProposalCreatedEvents(
+                provider,
+                governor.address,
+                searchFromBlock,
+                currentL2Block
+              );
+              matchingEvent =
+                creationEvents.find(
+                  (event) => event.proposalId === proposalId
+                ) ?? null;
+            }
 
             if (!matchingEvent) {
               // Proposal exists but we couldn't find the creation event
