@@ -5,7 +5,10 @@
  * Searches all governors and used for deep linking
  */
 
-import { queryProposalCreatedEvents } from "@gzeoneth/gov-tracker";
+import {
+  queryProposalCreatedEvents,
+  type ProposalData,
+} from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
@@ -16,7 +19,7 @@ import {
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { getStateName } from "@/lib/state-utils";
-import { formatVotes } from "@/lib/vote-utils";
+import { formatVotes, type RawVotes } from "@/lib/vote-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 
@@ -25,6 +28,18 @@ import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 // governor contract and its ProposalCreated events live on L2 Arbitrum. Search
 // a recent L2 block window instead of the L1 snapshot block.
 const L2_CREATION_SEARCH_WINDOW_BLOCKS = 10_000_000;
+
+const PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID: Record<
+  number,
+  Record<string, string>
+> = {
+  [ARBITRUM_CHAIN_ID]: {
+    "86654545843645364200491220873325841239317939837732580673532485559601859962180":
+      "0x0424b564ec9b6e181b618da10f42f304263e858498ec7b0521a74d10d9843b6b",
+    "71236395575275509514809232906539225896862899916501711888027988560774655719183":
+      "0x5d76ab672426aafeeb88bb67212388d3425598bf06ff490aed9b7550d72bd00c",
+  },
+};
 
 /** Options for configuring proposal lookup */
 interface UseProposalByIdOptions {
@@ -48,6 +63,273 @@ interface UseProposalByIdResult {
   error: Error | null;
   /** Function to manually refetch */
   refetch: () => void;
+}
+
+type ArbitrumGovernor = (typeof ARBITRUM_GOVERNORS)[number];
+
+interface ProposalContractData {
+  proposalState: number;
+  votes: RawVotes;
+  snapshotBlock: number;
+  proposalDeadline: ethers.BigNumber;
+}
+
+interface BuildProposalBaseOptions {
+  governor: ArbitrumGovernor;
+  proposalId: string;
+  proposalState: number;
+  votes: RawVotes;
+}
+
+function getKnownProposalCreationTxHash(
+  chainId: number,
+  proposalId: string
+): string | undefined {
+  return PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID[chainId]?.[proposalId];
+}
+
+async function findProposalCreatedEventByTxHash({
+  provider,
+  contract,
+  governorAddress,
+  proposalId,
+  txHash,
+}: {
+  provider: ethers.providers.Provider;
+  contract: ethers.Contract;
+  governorAddress: string;
+  proposalId: string;
+  txHash: string;
+}): Promise<ProposalData | null> {
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt) return null;
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== governorAddress.toLowerCase()) continue;
+
+    try {
+      const parsed = contract.interface.parseLog({
+        topics: log.topics as string[],
+        data: log.data,
+      });
+
+      if (parsed.name !== "ProposalCreated") continue;
+      if (parsed.args.proposalId.toString() !== proposalId) continue;
+
+      return {
+        proposalId,
+        proposer: parsed.args.proposer,
+        targets: parsed.args.targets,
+        values: parsed.args[3],
+        signatures: parsed.args.signatures,
+        calldatas: parsed.args.calldatas,
+        startBlock: parsed.args.startBlock,
+        endBlock: parsed.args.endBlock,
+        description: parsed.args.description,
+        creationBlock: log.blockNumber,
+        creationTxHash: log.transactionHash,
+      };
+    } catch {
+      // Ignore unrelated governor logs in the same transaction receipt.
+    }
+  }
+
+  return null;
+}
+
+async function findProposalCreatedEvent({
+  provider,
+  contract,
+  governorAddress,
+  proposalId,
+}: {
+  provider: ethers.providers.Provider;
+  contract: ethers.Contract;
+  governorAddress: string;
+  proposalId: string;
+}): Promise<ProposalData | null> {
+  const knownCreationTxHash = getKnownProposalCreationTxHash(
+    ARBITRUM_CHAIN_ID,
+    proposalId
+  );
+
+  if (knownCreationTxHash) {
+    const knownTxEvent = await findProposalCreatedEventByTxHash({
+      provider,
+      contract,
+      governorAddress,
+      proposalId,
+      txHash: knownCreationTxHash,
+    });
+
+    if (knownTxEvent) return knownTxEvent;
+  }
+
+  const currentL2Block = await provider.getBlockNumber();
+  const searchFromBlock = Math.max(
+    currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
+    0
+  );
+  const creationEvents = await queryProposalCreatedEvents(
+    provider,
+    governorAddress,
+    searchFromBlock,
+    currentL2Block
+  );
+
+  return (
+    creationEvents.find((event) => event.proposalId === proposalId) ?? null
+  );
+}
+
+async function fetchProposalContractData(
+  contract: ethers.Contract,
+  proposalId: string
+): Promise<ProposalContractData> {
+  const proposalState = await contract.state(proposalId);
+  const [votes, proposalSnapshot, proposalDeadline] = await Promise.all([
+    contract.proposalVotes(proposalId),
+    contract.proposalSnapshot(proposalId),
+    contract.proposalDeadline(proposalId),
+  ]);
+
+  return {
+    proposalState,
+    votes,
+    snapshotBlock: proposalSnapshot.toNumber(),
+    proposalDeadline,
+  };
+}
+
+async function fetchQuorum(
+  contract: ethers.Contract,
+  blockNumber: number | ethers.BigNumber
+): Promise<string | undefined> {
+  try {
+    const quorumBN = await contract.quorum(blockNumber);
+    return quorumBN.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function buildMinimalProposal({
+  governor,
+  proposalId,
+  proposalState,
+  votes,
+  snapshotBlock,
+  proposalDeadline,
+  quorum,
+}: BuildProposalBaseOptions & {
+  snapshotBlock: number;
+  proposalDeadline: ethers.BigNumber;
+  quorum: string | undefined;
+}): ParsedProposal {
+  return {
+    id: proposalId,
+    contractAddress: governor.address,
+    proposer: "Unknown",
+    targets: [],
+    values: [],
+    signatures: [],
+    calldatas: [],
+    startBlock: snapshotBlock.toString(),
+    endBlock: proposalDeadline.toString(),
+    description: `Proposal ${proposalId}`,
+    networkId: String(ARBITRUM_CHAIN_ID),
+    state: getStateName(proposalState),
+    governorName: governor.name,
+    votes: formatVotes(votes, quorum),
+  };
+}
+
+function buildProposalFromEvent({
+  governor,
+  proposalId,
+  proposalState,
+  votes,
+  creationEvent,
+  quorum,
+}: BuildProposalBaseOptions & {
+  creationEvent: ProposalData;
+  quorum: string | undefined;
+}): ParsedProposal {
+  return {
+    id: proposalId,
+    contractAddress: governor.address,
+    proposer: creationEvent.proposer,
+    targets: creationEvent.targets,
+    values: creationEvent.values.map((v) => v.toString()),
+    signatures: creationEvent.signatures,
+    calldatas: creationEvent.calldatas,
+    startBlock: creationEvent.startBlock.toString(),
+    endBlock: creationEvent.endBlock.toString(),
+    description: creationEvent.description,
+    networkId: String(ARBITRUM_CHAIN_ID),
+    state: getStateName(proposalState),
+    governorName: governor.name,
+    creationTxHash: creationEvent.creationTxHash,
+    votes: formatVotes(votes, quorum),
+  };
+}
+
+async function fetchProposalFromGovernor({
+  provider,
+  governor,
+  proposalId,
+}: {
+  provider: ethers.providers.Provider;
+  governor: ArbitrumGovernor;
+  proposalId: string;
+}): Promise<ParsedProposal> {
+  const contract = new ethers.Contract(
+    governor.address,
+    OZGovernor_ABI,
+    provider
+  );
+  const { proposalState, votes, snapshotBlock, proposalDeadline } =
+    await fetchProposalContractData(contract, proposalId);
+  const creationEvent = await findProposalCreatedEvent({
+    provider,
+    contract,
+    governorAddress: governor.address,
+    proposalId,
+  });
+
+  if (!creationEvent) {
+    const quorum = await fetchQuorum(contract, snapshotBlock);
+    return buildMinimalProposal({
+      governor,
+      proposalId,
+      proposalState,
+      votes,
+      snapshotBlock,
+      proposalDeadline,
+      quorum,
+    });
+  }
+
+  const quorum = await fetchQuorum(contract, creationEvent.startBlock);
+  return buildProposalFromEvent({
+    governor,
+    proposalId,
+    proposalState,
+    votes,
+    creationEvent,
+    quorum,
+  });
+}
+
+function getGovernorsToSearch(
+  governorAddress: string | null | undefined
+): readonly ArbitrumGovernor[] {
+  if (!governorAddress) return ARBITRUM_GOVERNORS;
+
+  const normalizedAddress = governorAddress.toLowerCase();
+  return ARBITRUM_GOVERNORS.filter(
+    (governor) => governor.address.toLowerCase() === normalizedAddress
+  );
 }
 
 /**
@@ -92,111 +374,18 @@ export function useProposalById({
       try {
         const provider = await createRpcProvider(l2Rpc);
 
-        const governorsToSearch = governorAddress
-          ? ARBITRUM_GOVERNORS.filter(
-              (governor) =>
-                governor.address.toLowerCase() === governorAddress.toLowerCase()
-            )
-          : ARBITRUM_GOVERNORS;
+        const governorsToSearch = getGovernorsToSearch(governorAddress);
 
         // Try each governor until we find the proposal
         for (const governor of governorsToSearch) {
           if (cancelled) return;
 
           try {
-            const contract = new ethers.Contract(
-              governor.address,
-              OZGovernor_ABI,
-              provider
-            );
-
-            // Try to get the proposal state - this will throw if it doesn't exist
-            const proposalState = await contract.state(proposalId);
-
-            // If we get here, the proposal exists in this governor
-            const [votes, proposalSnapshot, proposalDeadline] =
-              await Promise.all([
-                contract.proposalVotes(proposalId),
-                contract.proposalSnapshot(proposalId),
-                contract.proposalDeadline(proposalId),
-              ]);
-
-            const snapshotBlock = proposalSnapshot.toNumber();
-            const currentL2Block = await provider.getBlockNumber();
-            const searchFromBlock = Math.max(
-              currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
-              0
-            );
-            const creationEvents = await queryProposalCreatedEvents(
+            const parsedProposal = await fetchProposalFromGovernor({
               provider,
-              governor.address,
-              searchFromBlock,
-              currentL2Block
-            );
-            const matchingEvent = creationEvents.find(
-              (event) => event.proposalId === proposalId
-            );
-
-            if (!matchingEvent) {
-              // Proposal exists but we couldn't find the creation event
-              // Create a minimal proposal object
-              let quorum: string | undefined;
-              try {
-                const quorumBN = await contract.quorum(snapshotBlock);
-                quorum = quorumBN.toString();
-              } catch {
-                // Quorum fetch can fail
-              }
-
-              const parsedProposal: ParsedProposal = {
-                id: proposalId,
-                contractAddress: governor.address,
-                proposer: "Unknown",
-                targets: [],
-                values: [],
-                signatures: [],
-                calldatas: [],
-                startBlock: snapshotBlock.toString(),
-                endBlock: proposalDeadline.toString(),
-                description: `Proposal ${proposalId}`,
-                networkId: String(ARBITRUM_CHAIN_ID),
-                state: getStateName(proposalState),
-                governorName: governor.name,
-                votes: formatVotes(votes, quorum),
-              };
-
-              if (!cancelled) {
-                setProposal(parsedProposal);
-                setIsLoading(false);
-              }
-              return;
-            }
-
-            let quorum: string | undefined;
-            try {
-              const quorumBN = await contract.quorum(matchingEvent.startBlock);
-              quorum = quorumBN.toString();
-            } catch {
-              // Quorum fetch can fail
-            }
-
-            const parsedProposal: ParsedProposal = {
-              id: proposalId,
-              contractAddress: governor.address,
-              proposer: matchingEvent.proposer,
-              targets: matchingEvent.targets,
-              values: matchingEvent.values.map((v) => v.toString()),
-              signatures: matchingEvent.signatures,
-              calldatas: matchingEvent.calldatas,
-              startBlock: matchingEvent.startBlock.toString(),
-              endBlock: matchingEvent.endBlock.toString(),
-              description: matchingEvent.description,
-              networkId: String(ARBITRUM_CHAIN_ID),
-              state: getStateName(proposalState),
-              governorName: governor.name,
-              creationTxHash: matchingEvent.creationTxHash,
-              votes: formatVotes(votes, quorum),
-            };
+              governor,
+              proposalId,
+            });
 
             if (!cancelled) {
               setProposal(parsedProposal);
