@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
 import { type CalldataOverrides } from "@/components/payload";
+import { ProposalCancelCard } from "@/components/proposal/ProposalCancelCard";
 import { ProposalPageError } from "@/components/proposal/ProposalPageError";
 import { ProposalPageSkeleton } from "@/components/proposal/ProposalPageSkeleton";
 import { ProposalVoteCard } from "@/components/proposal/ProposalVoteCard";
@@ -61,6 +62,7 @@ export function ProposalPage({
     proposal: fetchedProposal,
     isLoading: isLiveLoading,
     error: liveError,
+    refetch: refetchLiveProposal,
   } = useProposalById({
     proposalId,
     governorAddress,
@@ -145,6 +147,7 @@ export function ProposalPage({
             proposal={proposal}
             activeTab={activeTab}
             onTabChange={handleTabChange}
+            onProposalCanceled={refetchLiveProposal}
           />
         )}
       </div>
@@ -156,10 +159,12 @@ function ProposalPageContent({
   proposal,
   activeTab,
   onTabChange,
+  onProposalCanceled,
 }: {
   proposal: NonNullable<ReturnType<typeof useProposalById>["proposal"]>;
   activeTab: ProposalTab;
   onTabChange: (tab: ProposalTab) => void;
+  onProposalCanceled: () => void;
 }) {
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
@@ -201,7 +206,6 @@ function ProposalPageContent({
   }
 
   const title = truncateText(extractProposalTitle(proposal.description), 140);
-  const isActiveProposal = proposal.state.toLowerCase() === "active";
   const hasCalldataOverrides = Object.keys(calldataOverrides).length > 0;
 
   return (
@@ -227,6 +231,10 @@ function ProposalPageContent({
           <ProposalVoteSummaryCard
             governorAddress={proposal.contractAddress}
             votes={proposal.votes}
+          />
+          <ProposalCancelCard
+            proposal={parsedProposal.data}
+            onCanceled={onProposalCanceled}
           />
           <ProposalVoteCard
             proposal={parsedProposal.data}
