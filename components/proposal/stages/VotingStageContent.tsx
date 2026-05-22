@@ -56,8 +56,8 @@ export const VotingStageContent = memo(function VotingStageContent({
 }: VotingStageContentProps) {
   const votingData = getVotingData(stage);
   const votesTowardQuorum = sumVoteCounts(
-    String(votingData?.forVotes ?? "0"),
-    String(votingData?.abstainVotes ?? "0")
+    String(votingData?.forVotesRaw ?? "0"),
+    String(votingData?.abstainVotesRaw ?? "0")
   );
 
   return (
@@ -115,19 +115,19 @@ export const VotingStageContent = memo(function VotingStageContent({
         governorAddress={governorAddress}
       />
 
-      {Boolean(votingData?.quorum) && (
+      {Boolean(votingData?.quorumRaw) && (
         <QuorumProgressBar
           current={votesTowardQuorum}
-          required={String(votingData?.quorum)}
+          required={String(votingData?.quorumRaw)}
           reached={Boolean(votingData?.quorumReached)}
         />
       )}
 
-      {Boolean(votingData?.forVotes) && (
+      {Boolean(votingData?.forVotesRaw) && (
         <VoteDistributionBar
-          forVotes={String(votingData?.forVotes)}
-          againstVotes={String(votingData?.againstVotes ?? "0")}
-          abstainVotes={String(votingData?.abstainVotes ?? "0")}
+          forVotes={String(votingData?.forVotesRaw)}
+          againstVotes={String(votingData?.againstVotesRaw ?? "0")}
+          abstainVotes={String(votingData?.abstainVotesRaw ?? "0")}
         />
       )}
 
