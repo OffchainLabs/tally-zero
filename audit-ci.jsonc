@@ -2,5 +2,12 @@
   "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
   // Fail on moderate and above
   "moderate": true,
-  "allowlist": [],
+  "allowlist": [
+    // https://github.com/advisories/GHSA-w5hq-g745-h8pq
+    // uuid missing buffer bounds check in v3/v5/v6 when caller provides a buf argument.
+    // Our transitive consumers (jayson, @metamask/utils) only call uuid.v4() without a buf argument, so the unchecked code path is not reached.
+    // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>uuid (8.3.2)
+    // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@metamask/sdk>@metamask/providers>@metamask/rpc-errors>@metamask/utils>uuid (9.0.1)
+    "GHSA-w5hq-g745-h8pq",
+  ],
 }
