@@ -87,8 +87,10 @@ export function ProposalPage({
       activeTab === "description"
         ? requestedTab === null
         : requestedTab === activeTab;
+    const isGovIdCanonical =
+      requestedGovId?.toLowerCase() === canonicalGovId.toLowerCase();
 
-    if (requestedGovId !== canonicalGovId || !isTabCanonical) {
+    if (!isGovIdCanonical || !isTabCanonical) {
       router.replace(canonicalUrl, { scroll: false });
     }
   }, [activeTab, proposal, requestedGovId, requestedTab, router]);
