@@ -84,11 +84,11 @@ describe("ProposalCancelCard", () => {
     resetMocks();
   });
 
-  it("renders a connect prompt for pending proposals with a known proposer", () => {
+  it("does not render a connect prompt for pending proposals when wallet is unconnected", () => {
     const html = renderCard();
 
-    expect(html).toContain("Proposal Cancellation");
-    expect(html).toContain("Connect Wallet");
+    expect(html).not.toContain("Proposal Cancellation");
+    expect(html).not.toContain("Connect Wallet");
     expect(mocks.useSimulateContract).toHaveBeenCalledWith(
       expect.objectContaining({
         query: { enabled: false },
