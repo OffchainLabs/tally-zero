@@ -5,7 +5,7 @@ import { useAppKit } from "@reown/appkit/react";
 import { CheckCircle2, CircleX, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { keccak256, stringToBytes, type Abi, type Hex } from "viem";
+import { type Abi } from "viem";
 import {
   useAccount,
   useChainId,
@@ -29,9 +29,14 @@ import {
 } from "@/components/ui/Dialog";
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { proposalSchema } from "@/config/schema";
-import { addressesEqual, isValidAddress } from "@/lib/address-utils";
-import { getErrorMessage } from "@/lib/error-utils";
-import { isArbitrumGovernor } from "@config/governors";
+import { isValidAddress } from "@/lib/address-utils";
+import {
+  getErrorMessage,
+  getProposalCancelSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
+import { buildCancelArgs } from "@/lib/proposal-cancel-utils";
+import { getProposalCancelVisibility } from "@/lib/proposal-cancel-visibility";
 
 const GOVERNOR_CANCEL_ABI = [
   {
@@ -50,19 +55,9 @@ const GOVERNOR_CANCEL_ABI = [
 
 type ProposalForCancellation = ReturnType<typeof proposalSchema.parse>;
 
-type ProposalCancelVisibility = "hidden" | "connect" | "cancel";
-
 interface ProposalCancelCardProps {
   proposal: ProposalForCancellation;
   onCanceled?: () => void;
-}
-
-interface ProposalCancelVisibilityInput {
-  accountAddress: string | undefined;
-  governorAddress: string;
-  isConnected: boolean;
-  proposer: string;
-  state: string;
 }
 
 interface ProposalCancelButtonLabelInput {
@@ -346,21 +341,6 @@ export function ProposalCancelCard({
   );
 }
 
-export function getProposalCancelVisibility({
-  accountAddress,
-  governorAddress,
-  isConnected,
-  proposer,
-  state,
-}: ProposalCancelVisibilityInput): ProposalCancelVisibility {
-  if (state.toLowerCase() !== "pending") return "hidden";
-  if (!isValidAddress(proposer)) return "hidden";
-  if (!isArbitrumGovernor(governorAddress)) return "hidden";
-  if (!isConnected || !accountAddress) return "connect";
-  if (!addressesEqual(accountAddress, proposer)) return "hidden";
-  return "cancel";
-}
-
 export function getProposalCancelButtonLabel({
   isConfirmed,
   isConfirming,
@@ -374,94 +354,4 @@ export function getProposalCancelButtonLabel({
   if (isSwitchingChain) return "Switching";
   if (isSimulating) return "Checking";
   return "Cancel Proposal";
-}
-
-export function getProposalCancelSimulationErrorMessage(
-  error: unknown
-): string {
-  if (!error) return "Unable to prepare cancellation transaction.";
-
-  const errorMessage = getErrorMessage(error);
-  const normalized = errorMessage.toLowerCase();
-
-  if (normalized.includes("only proposer")) {
-    return "Only the proposal creator can cancel this proposal.";
-  }
-
-  if (
-    normalized.includes("too late to cancel") ||
-    normalized.includes("proposal not pending") ||
-    normalized.includes("pending")
-  ) {
-    return "Proposal cancellation is only available before voting starts.";
-  }
-
-  if (
-    normalized.includes("unknown proposal") ||
-    normalized.includes("nonexistent proposal")
-  ) {
-    return "Proposal data does not match the on-chain proposal. Cannot cancel.";
-  }
-
-  const reasonMatch =
-    errorMessage.match(/reason="([^"]+)"/) ??
-    errorMessage.match(/reverted with reason string '([^']+)'/) ??
-    errorMessage.match(/reverted with the following reason:\s*\n?([^\n]+)/i) ??
-    errorMessage.match(/reverted:\s*([^\n]+)/i);
-  if (reasonMatch?.[1]) {
-    return `Transaction would fail: ${reasonMatch[1].trim()}`;
-  }
-
-  return "Unable to prepare cancellation transaction.";
-}
-
-export type CancelArgs = readonly [
-  readonly `0x${string}`[],
-  readonly bigint[],
-  readonly `0x${string}`[],
-  `0x${string}`,
-];
-
-export function buildCancelArgs(
-  proposal: ProposalForCancellation
-): CancelArgs | null {
-  if (proposal.targets.length === 0) return null;
-  if (proposal.targets.length !== proposal.values.length) return null;
-  if (proposal.targets.length !== proposal.calldatas.length) return null;
-  if (!proposal.targets.every(isValidAddress)) return null;
-  if (!proposal.calldatas.every(isHexString)) return null;
-
-  try {
-    const targets = proposal.targets as readonly `0x${string}`[];
-    const values = proposal.values.map((v) => BigInt(v));
-    const calldatas = proposal.calldatas as readonly `0x${string}`[];
-    const descriptionHash = keccak256(stringToBytes(proposal.description));
-    return [targets, values, calldatas, descriptionHash] as const;
-  } catch {
-    return null;
-  }
-}
-
-function isHexString(value: string): value is Hex {
-  return /^0x[0-9a-fA-F]*$/.test(value);
-}
-
-export function isUserRejectedError(error: unknown): boolean {
-  if (!error) return false;
-
-  const message = getErrorMessage(error).toLowerCase();
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code: unknown }).code)
-      : "";
-
-  return (
-    code === "4001" ||
-    code === "ACTION_REJECTED" ||
-    message.includes("user rejected") ||
-    message.includes("user denied") ||
-    message.includes("rejected the request") ||
-    message.includes("request rejected") ||
-    message.includes("denied transaction signature")
-  );
 }

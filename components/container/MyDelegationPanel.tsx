@@ -23,7 +23,6 @@ import { MyDelegatorsList } from "@/components/container/MyDelegatorsList";
 import {
   getDelegateButtonLabel,
   getDelegateLinkLabel,
-  isUserRejectedError,
 } from "@/components/delegate/DelegationCard";
 import { Button } from "@/components/ui/Button";
 import {
@@ -41,7 +40,11 @@ import { myDelegatorsQueryKey } from "@/hooks/use-my-delegators";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { addressesEqual, isValidAddress } from "@/lib/address-utils";
 import { useAddressDisplayRecord } from "@/lib/delegate-cache";
-import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
 const ARB_TOKEN_ABI = ERC20VotesABI as Abi;

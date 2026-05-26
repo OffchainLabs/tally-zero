@@ -34,7 +34,11 @@ import {
   type TallyAddressDisplayRecord,
   useAddressDisplayRecord,
 } from "@/lib/delegate-cache";
-import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
 const ARB_TOKEN_ABI = ERC20VotesABI as Abi;
@@ -416,24 +420,4 @@ export function getDelegateButtonLabel({
   if (isConfirming) return "Confirming";
   if (isWriting) return "Delegating";
   return "Delegate to this address";
-}
-
-export function isUserRejectedError(error: unknown): boolean {
-  if (!error) return false;
-
-  const message = getErrorMessage(error).toLowerCase();
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code: unknown }).code)
-      : "";
-
-  return (
-    code === "4001" ||
-    code === "ACTION_REJECTED" ||
-    message.includes("user rejected") ||
-    message.includes("user denied") ||
-    message.includes("rejected the request") ||
-    message.includes("request rejected") ||
-    message.includes("denied transaction signature")
-  );
 }
