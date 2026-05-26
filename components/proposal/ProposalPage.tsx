@@ -134,22 +134,28 @@ export function ProposalPage({
       });
 
       if (nextUrl !== currentUrl) {
-        router.replace(nextUrl, { scroll: false });
-        console.log(
-          "[debug] hrefAfter router.replace (sync)",
-          window.location.href
-        );
-        setTimeout(() => {
+        try {
+          window.history.replaceState(null, "", nextUrl);
           console.log(
-            "[debug] hrefAfter router.replace (50ms)",
+            "[debug] hrefAfter raw replaceState",
             window.location.href
           );
-        }, 50);
-        setTimeout(() => {
+        } catch (e) {
+          console.log("[debug] raw replaceState error", e);
+        }
+
+        try {
+          router.replace(nextUrl, { scroll: false });
           console.log(
-            "[debug] hrefAfter router.replace (500ms)",
+            "[debug] hrefAfter router.replace (sync)",
             window.location.href
           );
+        } catch (e) {
+          console.log("[debug] router.replace error", e);
+        }
+
+        setTimeout(() => {
+          console.log("[debug] hrefAfter both (500ms)", window.location.href);
         }, 500);
       }
     },
