@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
@@ -38,16 +38,28 @@ export function ProposalPage({
   initialProposal?: ParsedProposal | null;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const requestedGovId = searchParams.get("govId");
-  const requestedTab = searchParams.get("tab");
   const governorAddress = useMemo(
     () => parseGovernorId(requestedGovId),
     [requestedGovId]
   );
-  const activeTab = normalizeProposalTab(requestedTab) ?? "description";
+  const [activeTab, setActiveTab] = useState<ProposalTab>(() => {
+    if (typeof window === "undefined") return "description";
+    const params = new URLSearchParams(window.location.search);
+    return normalizeProposalTab(params.get("tab")) ?? "description";
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const next = normalizeProposalTab(params.get("tab")) ?? "description";
+      setActiveTab(next);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   const stableInitialProposal = useMemo(() => {
     if (!initialProposal) return null;
 
@@ -95,24 +107,15 @@ export function ProposalPage({
     const isGovIdCanonical =
       liveGovId?.toLowerCase() === canonicalGovId.toLowerCase();
 
-    console.log("[debug] canonicalize useEffect fired", {
-      liveGovId,
-      liveTabRaw,
-      canonicalUrl,
-      willReplace: !isGovIdCanonical || !isTabCanonical,
-    });
-
     if (!isGovIdCanonical || !isTabCanonical) {
+      window.history.replaceState(null, "", canonicalUrl);
       router.replace(canonicalUrl, { scroll: false });
     }
   }, [proposal, router]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
-      console.log("[debug] ProposalPage.handleTabChange called with", {
-        tab,
-        hasProposal: !!proposal,
-      });
+      setActiveTab(tab);
       if (!proposal) return;
 
       const nextUrl = buildProposalPath({
@@ -120,46 +123,11 @@ export function ProposalPage({
         governorAddress: proposal.contractAddress,
         tab,
       });
-      const currentQuery = searchParams.toString();
-      const currentUrl = currentQuery
-        ? `${pathname}?${currentQuery}`
-        : pathname;
 
-      console.log("[debug] handleTabChange comparison", {
-        nextUrl,
-        currentUrl,
-        equal: nextUrl === currentUrl,
-        willReplace: nextUrl !== currentUrl,
-        hrefBefore: window.location.href,
-      });
-
-      if (nextUrl !== currentUrl) {
-        try {
-          window.history.replaceState(null, "", nextUrl);
-          console.log(
-            "[debug] hrefAfter raw replaceState",
-            window.location.href
-          );
-        } catch (e) {
-          console.log("[debug] raw replaceState error", e);
-        }
-
-        try {
-          router.replace(nextUrl, { scroll: false });
-          console.log(
-            "[debug] hrefAfter router.replace (sync)",
-            window.location.href
-          );
-        } catch (e) {
-          console.log("[debug] router.replace error", e);
-        }
-
-        setTimeout(() => {
-          console.log("[debug] hrefAfter both (500ms)", window.location.href);
-        }, 500);
-      }
+      window.history.replaceState(null, "", nextUrl);
+      router.replace(nextUrl, { scroll: false });
     },
-    [pathname, proposal, router, searchParams]
+    [proposal, router]
   );
 
   return (
