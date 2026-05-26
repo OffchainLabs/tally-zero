@@ -75,25 +75,30 @@ export function ProposalPage({
   const error = proposal ? null : liveError;
 
   useEffect(() => {
-    if (!proposal) return;
+    if (!proposal || typeof window === "undefined") return;
+
+    const liveParams = new URLSearchParams(window.location.search);
+    const liveGovId = liveParams.get("govId");
+    const liveTabRaw = liveParams.get("tab");
+    const liveActiveTab = normalizeProposalTab(liveTabRaw) ?? "description";
 
     const canonicalGovId = buildGovernorId(proposal.contractAddress);
     const canonicalUrl = buildProposalPath({
       proposalId: proposal.id,
       governorAddress: proposal.contractAddress,
-      tab: activeTab,
+      tab: liveActiveTab,
     });
     const isTabCanonical =
-      activeTab === "description"
-        ? requestedTab === null
-        : requestedTab === activeTab;
+      liveActiveTab === "description"
+        ? liveTabRaw === null
+        : liveTabRaw === liveActiveTab;
     const isGovIdCanonical =
-      requestedGovId?.toLowerCase() === canonicalGovId.toLowerCase();
+      liveGovId?.toLowerCase() === canonicalGovId.toLowerCase();
 
     if (!isGovIdCanonical || !isTabCanonical) {
       router.replace(canonicalUrl, { scroll: false });
     }
-  }, [activeTab, proposal, requestedGovId, requestedTab, router]);
+  }, [proposal, router]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
