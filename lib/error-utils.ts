@@ -109,3 +109,77 @@ export function getSimulationErrorMessage(error: unknown): string {
 
   return "Unable to prepare vote transaction.";
 }
+
+/**
+ * Extracts a user-friendly message from a proposal-cancel simulation error.
+ * Maps common OZ Governor revert reasons for `cancel(...)` to readable text.
+ *
+ * @param error - The simulation error from useSimulateContract on the cancel call
+ * @returns A user-friendly error message
+ */
+export function getProposalCancelSimulationErrorMessage(
+  error: unknown
+): string {
+  if (!error) return "Unable to prepare cancellation transaction.";
+
+  const errorMessage = getErrorMessage(error);
+  const normalized = errorMessage.toLowerCase();
+
+  if (normalized.includes("only proposer")) {
+    return "Only the proposal creator can cancel this proposal.";
+  }
+
+  if (
+    normalized.includes("too late to cancel") ||
+    normalized.includes("proposal not pending") ||
+    normalized.includes("pending")
+  ) {
+    return "Proposal cancellation is only available before voting starts.";
+  }
+
+  if (
+    normalized.includes("unknown proposal") ||
+    normalized.includes("nonexistent proposal")
+  ) {
+    return "Proposal data does not match the on-chain proposal. Cannot cancel.";
+  }
+
+  const reasonMatch =
+    errorMessage.match(/reason="([^"]+)"/) ??
+    errorMessage.match(/reverted with reason string '([^']+)'/) ??
+    errorMessage.match(/reverted with the following reason:\s*\n?([^\n]+)/i) ??
+    errorMessage.match(/reverted:\s*([^\n]+)/i);
+  if (reasonMatch?.[1]) {
+    return `Transaction would fail: ${reasonMatch[1].trim()}`;
+  }
+
+  return "Unable to prepare cancellation transaction.";
+}
+
+/**
+ * Detects wallet/provider errors that mean the user rejected the request
+ * (MetaMask 4001, viem ACTION_REJECTED, common wallet error strings).
+ * Use this to suppress error toasts for intentional cancellations.
+ *
+ * @param error - An error from wagmi/viem wallet interactions
+ * @returns true if the error represents a user-initiated rejection
+ */
+export function isUserRejectedError(error: unknown): boolean {
+  if (!error) return false;
+
+  const message = getErrorMessage(error).toLowerCase();
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
+
+  return (
+    code === "4001" ||
+    code === "ACTION_REJECTED" ||
+    message.includes("user rejected") ||
+    message.includes("user denied") ||
+    message.includes("rejected the request") ||
+    message.includes("request rejected") ||
+    message.includes("denied transaction signature")
+  );
+}

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getErrorMessage, toError } from "./error-utils";
+import {
+  getErrorMessage,
+  getProposalCancelSimulationErrorMessage,
+  isUserRejectedError,
+  toError,
+} from "./error-utils";
 
 describe("error-utils", () => {
   describe("toError", () => {
@@ -95,6 +100,68 @@ describe("error-utils", () => {
         "actual error"
       );
       expect(getErrorMessage("string error", "context")).toBe("string error");
+    });
+  });
+
+  describe("getProposalCancelSimulationErrorMessage", () => {
+    it("returns cancellation-specific simulation errors", () => {
+      expect(
+        getProposalCancelSimulationErrorMessage(
+          new Error("execution reverted: only proposer")
+        )
+      ).toBe("Only the proposal creator can cancel this proposal.");
+      expect(
+        getProposalCancelSimulationErrorMessage(
+          new Error("execution reverted: proposal not pending")
+        )
+      ).toBe("Proposal cancellation is only available before voting starts.");
+      expect(
+        getProposalCancelSimulationErrorMessage(
+          new Error("Governor: too late to cancel")
+        )
+      ).toBe("Proposal cancellation is only available before voting starts.");
+      expect(
+        getProposalCancelSimulationErrorMessage(
+          new Error("Governor: unknown proposal id")
+        )
+      ).toBe(
+        "Proposal data does not match the on-chain proposal. Cannot cancel."
+      );
+    });
+
+    it("falls back to a generic message when no error is provided", () => {
+      expect(getProposalCancelSimulationErrorMessage(undefined)).toBe(
+        "Unable to prepare cancellation transaction."
+      );
+      expect(getProposalCancelSimulationErrorMessage(null)).toBe(
+        "Unable to prepare cancellation transaction."
+      );
+    });
+  });
+
+  describe("isUserRejectedError", () => {
+    it("detects user rejection codes", () => {
+      expect(isUserRejectedError({ code: 4001 })).toBe(true);
+      expect(isUserRejectedError({ code: "ACTION_REJECTED" })).toBe(true);
+    });
+
+    it("detects common user rejection messages", () => {
+      expect(isUserRejectedError(new Error("User rejected the request"))).toBe(
+        true
+      );
+      expect(isUserRejectedError("user denied transaction signature")).toBe(
+        true
+      );
+      expect(isUserRejectedError("request rejected")).toBe(true);
+    });
+
+    it("ignores unrelated errors and empty values", () => {
+      expect(isUserRejectedError(null)).toBe(false);
+      expect(isUserRejectedError(undefined)).toBe(false);
+      expect(isUserRejectedError(new Error("RPC unavailable"))).toBe(false);
+      expect(
+        isUserRejectedError({ code: -32000, message: "execution reverted" })
+      ).toBe(false);
     });
   });
 });
