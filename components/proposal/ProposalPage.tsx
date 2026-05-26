@@ -95,6 +95,13 @@ export function ProposalPage({
     const isGovIdCanonical =
       liveGovId?.toLowerCase() === canonicalGovId.toLowerCase();
 
+    console.log("[debug] canonicalize useEffect fired", {
+      liveGovId,
+      liveTabRaw,
+      canonicalUrl,
+      willReplace: !isGovIdCanonical || !isTabCanonical,
+    });
+
     if (!isGovIdCanonical || !isTabCanonical) {
       router.replace(canonicalUrl, { scroll: false });
     }
@@ -123,10 +130,27 @@ export function ProposalPage({
         currentUrl,
         equal: nextUrl === currentUrl,
         willReplace: nextUrl !== currentUrl,
+        hrefBefore: window.location.href,
       });
 
       if (nextUrl !== currentUrl) {
         router.replace(nextUrl, { scroll: false });
+        console.log(
+          "[debug] hrefAfter router.replace (sync)",
+          window.location.href
+        );
+        setTimeout(() => {
+          console.log(
+            "[debug] hrefAfter router.replace (50ms)",
+            window.location.href
+          );
+        }, 50);
+        setTimeout(() => {
+          console.log(
+            "[debug] hrefAfter router.replace (500ms)",
+            window.location.href
+          );
+        }, 500);
       }
     },
     [pathname, proposal, router, searchParams]
