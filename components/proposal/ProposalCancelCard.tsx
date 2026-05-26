@@ -237,6 +237,10 @@ export function ProposalCancelCard({
     });
   }
 
+  if (!isConnected) {
+    return null;
+  }
+
   return (
     <Card
       variant="glass"
