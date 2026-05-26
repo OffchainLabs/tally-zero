@@ -364,12 +364,18 @@ export default function VoteModel({
   }, [activeTab, normalizedDefaultTab, visitedTabs]);
 
   const handleTabChange = (tab: string) => {
+    console.log("[debug] VoteModel.handleTabChange called with", {
+      tab,
+      isControlled,
+      hasOnTabChange: !!onTabChange,
+    });
     if (
       tab !== "description" &&
       tab !== "payload" &&
       tab !== "stages" &&
       tab !== "voters"
     ) {
+      console.log("[debug] VoteModel.handleTabChange bailed: invalid tab", tab);
       return;
     }
 

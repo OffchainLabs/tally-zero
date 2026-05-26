@@ -102,6 +102,10 @@ export function ProposalPage({
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
+      console.log("[debug] ProposalPage.handleTabChange called with", {
+        tab,
+        hasProposal: !!proposal,
+      });
       if (!proposal) return;
 
       const nextUrl = buildProposalPath({
@@ -113,6 +117,13 @@ export function ProposalPage({
       const currentUrl = currentQuery
         ? `${pathname}?${currentQuery}`
         : pathname;
+
+      console.log("[debug] handleTabChange comparison", {
+        nextUrl,
+        currentUrl,
+        equal: nextUrl === currentUrl,
+        willReplace: nextUrl !== currentUrl,
+      });
 
       if (nextUrl !== currentUrl) {
         router.replace(nextUrl, { scroll: false });
