@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
@@ -39,16 +39,28 @@ export function ProposalPage({
   initialProposal?: ParsedProposal | null;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const requestedGovId = searchParams.get("govId");
-  const requestedTab = searchParams.get("tab");
   const governorAddress = useMemo(
     () => parseGovernorId(requestedGovId),
     [requestedGovId]
   );
-  const activeTab = normalizeProposalTab(requestedTab) ?? "description";
+  const [activeTab, setActiveTab] = useState<ProposalTab>(() => {
+    if (typeof window === "undefined") return "description";
+    const params = new URLSearchParams(window.location.search);
+    return normalizeProposalTab(params.get("tab")) ?? "description";
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const next = normalizeProposalTab(params.get("tab")) ?? "description";
+      setActiveTab(next);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   const stableInitialProposal = useMemo(() => {
     if (!initialProposal) return null;
 
@@ -77,26 +89,35 @@ export function ProposalPage({
   const error = proposal ? null : liveError;
 
   useEffect(() => {
-    if (!proposal) return;
+    if (!proposal || typeof window === "undefined") return;
+
+    const liveParams = new URLSearchParams(window.location.search);
+    const liveGovId = liveParams.get("govId");
+    const liveTabRaw = liveParams.get("tab");
+    const liveActiveTab = normalizeProposalTab(liveTabRaw) ?? "description";
 
     const canonicalGovId = buildGovernorId(proposal.contractAddress);
     const canonicalUrl = buildProposalPath({
       proposalId: proposal.id,
       governorAddress: proposal.contractAddress,
-      tab: activeTab,
+      tab: liveActiveTab,
     });
     const isTabCanonical =
-      activeTab === "description"
-        ? requestedTab === null
-        : requestedTab === activeTab;
+      liveActiveTab === "description"
+        ? liveTabRaw === null
+        : liveTabRaw === liveActiveTab;
+    const isGovIdCanonical =
+      liveGovId?.toLowerCase() === canonicalGovId.toLowerCase();
 
-    if (requestedGovId !== canonicalGovId || !isTabCanonical) {
+    if (!isGovIdCanonical || !isTabCanonical) {
+      window.history.replaceState(null, "", canonicalUrl);
       router.replace(canonicalUrl, { scroll: false });
     }
-  }, [activeTab, proposal, requestedGovId, requestedTab, router]);
+  }, [proposal, router]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
+      setActiveTab(tab);
       if (!proposal) return;
 
       const nextUrl = buildProposalPath({
@@ -104,16 +125,11 @@ export function ProposalPage({
         governorAddress: proposal.contractAddress,
         tab,
       });
-      const currentQuery = searchParams.toString();
-      const currentUrl = currentQuery
-        ? `${pathname}?${currentQuery}`
-        : pathname;
 
-      if (nextUrl !== currentUrl) {
-        router.replace(nextUrl, { scroll: false });
-      }
+      window.history.replaceState(null, "", nextUrl);
+      router.replace(nextUrl, { scroll: false });
     },
-    [pathname, proposal, router, searchParams]
+    [proposal, router]
   );
 
   return (
