@@ -1,3 +1,5 @@
+import { CurrentCouncilOverview } from "@/components/election/CurrentCouncilOverview";
+import { getCachedSecurityCouncilSnapshot } from "@/lib/security-council/server";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 import ElectionPageClient from "./ElectionPageClient";
 
@@ -11,7 +13,10 @@ export const metadata = {
 };
 
 export default async function ElectionsPage() {
-  const initialDisplayRecords = await getCachedElectionAddressDisplayRecords();
+  const [initialDisplayRecords, council] = await Promise.all([
+    getCachedElectionAddressDisplayRecords(),
+    getCachedSecurityCouncilSnapshot(),
+  ]);
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
@@ -26,6 +31,8 @@ export default async function ElectionsPage() {
             cohorts.
           </p>
         </div>
+
+        {council && <CurrentCouncilOverview council={council} />}
 
         <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
       </div>

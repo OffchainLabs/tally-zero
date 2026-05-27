@@ -2916,5 +2916,11 @@
     "projects": "na",
     "country": "nomad",
     "registered_at": "2023-09-15T13:50:03.015506Z"
+  },
+  "0x78bB97d2F3811256D7F0041E81Aaf4B426eF3b67": {
+    "name": "John Morrow",
+    "title": "Co-founder at Gauntlet",
+    "address": "0x78bB97d2F3811256D7F0041E81Aaf4B426eF3b67",
+    "type": "individual"
   }
 }
