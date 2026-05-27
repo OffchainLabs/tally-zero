@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 
 import {
+  getBundledProposalCreationTxHash,
   initializeBundledCache,
   resetBundledCacheFlag,
 } from "./bundled-cache-loader";
@@ -167,6 +168,54 @@ describe("bundled-cache-loader", () => {
       const cache3 = createMockCache(["tx:existing-key"]);
       await initializeBundledCache(cache3);
       expect(cache3.keys).toHaveBeenCalled();
+    });
+  });
+
+  describe("getBundledProposalCreationTxHash", () => {
+    // Pulled directly from @gzeoneth/gov-tracker/bundled-cache.json so the
+    // test exercises the real JSON the app loads at runtime.
+    const KNOWN_PROPOSAL_ID =
+      "60371879178081104082641012273221287927865067413661362234634146098631763379427";
+    const KNOWN_TX_HASH =
+      "0x91226f5bfad5d1c0911ed590287734241f6b3101d8b60970911987dfa74fe37e";
+    const KNOWN_GOVERNOR = "0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9";
+
+    it("returns the creation tx hash for a proposal present in the bundled cache", async () => {
+      const result = await getBundledProposalCreationTxHash({
+        proposalId: KNOWN_PROPOSAL_ID,
+      });
+      expect(result).toBe(KNOWN_TX_HASH);
+    });
+
+    it("matches the governor address case-insensitively", async () => {
+      const result = await getBundledProposalCreationTxHash({
+        proposalId: KNOWN_PROPOSAL_ID,
+        governorAddress: KNOWN_GOVERNOR.toLowerCase(),
+      });
+      expect(result).toBe(KNOWN_TX_HASH);
+    });
+
+    it("returns null when the governor address does not match the bundled entry", async () => {
+      const result = await getBundledProposalCreationTxHash({
+        proposalId: KNOWN_PROPOSAL_ID,
+        governorAddress: "0x0000000000000000000000000000000000000000",
+      });
+      expect(result).toBeNull();
+    });
+
+    it("returns null for proposal ids not present in the bundled cache", async () => {
+      const result = await getBundledProposalCreationTxHash({
+        proposalId: "0",
+      });
+      expect(result).toBeNull();
+    });
+
+    it("returns null when the bundled cache is disabled via settings", async () => {
+      mockGetStoredValue.mockReturnValue(true);
+      const result = await getBundledProposalCreationTxHash({
+        proposalId: KNOWN_PROPOSAL_ID,
+      });
+      expect(result).toBeNull();
     });
   });
 

@@ -14,7 +14,6 @@ const PROPOSER = "0x1111111111111111111111111111111111111111";
 const OTHER_ACCOUNT = "0x2222222222222222222222222222222222222222";
 
 const mocks = vi.hoisted(() => ({
-  appKitOpen: vi.fn(),
   switchChain: vi.fn(),
   useAccount: vi.fn(),
   useChainId: vi.fn(),
@@ -26,12 +25,6 @@ const mocks = vi.hoisted(() => ({
   toast: Object.assign(vi.fn(), {
     error: vi.fn(),
     success: vi.fn(),
-  }),
-}));
-
-vi.mock("@reown/appkit/react", () => ({
-  useAppKit: () => ({
-    open: mocks.appKitOpen,
   }),
 }));
 

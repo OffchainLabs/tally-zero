@@ -203,6 +203,41 @@ describe("buildCancelArgs", () => {
     expect(typeof args![1][0]).toBe("bigint");
   });
 
+  it("computes descriptionHash over the full long description, not a display-truncated version", () => {
+    // Regression: gov-tracker's queryProposalCreatedEvents truncates
+    // descriptions over 100,000 chars to "<first 100k>... [truncated]".
+    // If useProposalById ever fed that truncated string back into
+    // buildCancelArgs, cancel(...) would receive a hash the Governor
+    // contract does not recognize. The descriptionHash must always be
+    // computed over the original, untruncated description.
+    const GOV_TRACKER_MAX_LEN = 100_000;
+    const longDescription = "L".repeat(150_000);
+    const truncatedForDisplay =
+      longDescription.slice(0, GOV_TRACKER_MAX_LEN) + "... [truncated]";
+
+    const args = buildCancelArgs({
+      id: "999",
+      proposer: PROPOSER,
+      contractAddress: GOVERNORS.treasury.address,
+      targets: [PROPOSER],
+      values: ["0"],
+      signatures: [""],
+      calldatas: ["0x"],
+      startBlock: "1",
+      endBlock: "2",
+      description: longDescription,
+      networkId: String(ARBITRUM_CHAIN_ID),
+      state: "Pending",
+    });
+
+    expect(args).not.toBeNull();
+    const descriptionHash = args![3];
+    expect(descriptionHash).toBe(keccak256(stringToBytes(longDescription)));
+    expect(descriptionHash).not.toBe(
+      keccak256(stringToBytes(truncatedForDisplay))
+    );
+  });
+
   it("rejects malformed proposal data so we never encode an invalid cancel call", () => {
     // Non-hex calldata
     expect(

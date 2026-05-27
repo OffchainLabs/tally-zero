@@ -17,7 +17,7 @@ describe("getProposalCancelVisibility", () => {
         proposer: PROPOSER,
         state: "Pending",
       })
-    ).toBe("connect");
+    ).toBe("hidden");
     expect(
       getProposalCancelVisibility({
         accountAddress: PROPOSER,

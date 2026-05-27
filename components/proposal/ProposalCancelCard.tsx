@@ -1,8 +1,7 @@
 "use client";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { useAppKit } from "@reown/appkit/react";
-import { CheckCircle2, CircleX, Wallet } from "lucide-react";
+import { CheckCircle2, CircleX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Abi } from "viem";
@@ -72,7 +71,6 @@ export function ProposalCancelCard({
   proposal,
   onCanceled,
 }: ProposalCancelCardProps) {
-  const { open } = useAppKit();
   const { address: accountAddress, isConnected } = useAccount();
   const chainId = useChainId();
   const {
@@ -171,13 +169,10 @@ export function ProposalCancelCard({
   }, [isSimulateError, simulateError, visibility]);
 
   useEffect(() => {
-    if (!writeError) return;
-    toast.error(
-      isUserRejectedError(writeError)
-        ? "Proposal cancellation was rejected in your wallet."
-        : getErrorMessage(writeError, "cancel proposal"),
-      { id: "proposal-cancel-write-error" }
-    );
+    if (!writeError || isUserRejectedError(writeError)) return;
+    toast.error(getErrorMessage(writeError, "cancel proposal"), {
+      id: "proposal-cancel-write-error",
+    });
   }, [writeError]);
 
   useEffect(() => {
@@ -214,10 +209,6 @@ export function ProposalCancelCard({
     !isSimulateError &&
     !isConfirmed;
 
-  function connect() {
-    open({ view: "Connect" });
-  }
-
   function switchToArbitrum() {
     switchChain({ chainId: ARBITRUM_CHAIN_ID });
   }
@@ -237,10 +228,6 @@ export function ProposalCancelCard({
     });
   }
 
-  if (!isConnected) {
-    return null;
-  }
-
   return (
     <Card
       variant="glass"
@@ -253,12 +240,7 @@ export function ProposalCancelCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {visibility === "connect" ? (
-          <Button className="w-full" onClick={connect}>
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
-        ) : isWrongNetwork ? (
+        {isWrongNetwork ? (
           <Button
             className="w-full"
             onClick={switchToArbitrum}
