@@ -35,6 +35,13 @@ let bundledCacheInitialized = false;
 let bundledCacheInitPromise: Promise<void> | null = null;
 let bundledCacheData: BundledCache | null = null;
 
+interface BundledProposalCreationLookup {
+  creationTxHash: string;
+  governorAddress: string;
+}
+let proposalCreationTxIndex: Map<string, BundledProposalCreationLookup> | null =
+  null;
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries = BUNDLED_CACHE_MAX_RETRIES
@@ -158,6 +165,65 @@ export function resetBundledCacheFlag(): void {
   bundledCacheInitialized = false;
   bundledCacheInitPromise = null;
   bundledCacheData = null;
+  proposalCreationTxIndex = null;
+}
+
+async function getProposalCreationTxIndex(): Promise<
+  Map<string, BundledProposalCreationLookup>
+> {
+  if (proposalCreationTxIndex) return proposalCreationTxIndex;
+
+  const cache = await loadBundledCache();
+  const index = new Map<string, BundledProposalCreationLookup>();
+  for (const checkpoint of Object.values(cache)) {
+    const input = checkpoint?.input;
+    if (!input || input.type !== "governor") continue;
+    if (!input.proposalId || !input.creationTxHash) continue;
+    index.set(input.proposalId, {
+      creationTxHash: input.creationTxHash,
+      governorAddress: input.governorAddress,
+    });
+  }
+  proposalCreationTxIndex = index;
+  return index;
+}
+
+/**
+ * Look up a proposal's creation transaction hash from the bundled gov-tracker
+ * cache. Used to avoid scanning ProposalCreated event logs over a wide block
+ * range when we already know the tx hash that emitted the event.
+ *
+ * Returns null if the bundled cache is disabled, fails to load, or does not
+ * contain the proposal. When `governorAddress` is provided, the entry must
+ * also match it (case-insensitive).
+ */
+export async function getBundledProposalCreationTxHash({
+  proposalId,
+  governorAddress,
+}: {
+  proposalId: string;
+  governorAddress?: string;
+}): Promise<string | null> {
+  const skipBundledCache = getStoredValue<boolean>(
+    STORAGE_KEYS.SKIP_BUNDLED_CACHE,
+    false
+  );
+  if (skipBundledCache) return null;
+
+  try {
+    const index = await getProposalCreationTxIndex();
+    const entry = index.get(proposalId);
+    if (!entry) return null;
+    if (
+      governorAddress &&
+      entry.governorAddress.toLowerCase() !== governorAddress.toLowerCase()
+    ) {
+      return null;
+    }
+    return entry.creationTxHash;
+  } catch {
+    return null;
+  }
 }
 
 /**

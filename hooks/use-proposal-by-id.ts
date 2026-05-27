@@ -5,10 +5,6 @@
  * Searches all governors and used for deep linking
  */
 
-import {
-  queryProposalCreatedEvents,
-  type ProposalData,
-} from "@gzeoneth/gov-tracker";
 import { ethers } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
@@ -17,6 +13,12 @@ import {
   ARBITRUM_GOVERNORS,
 } from "@/config/arbitrum-governance";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
+import { getBundledProposalCreationTxHash } from "@/lib/bundled-cache-loader";
+import {
+  proposalCreatedEventDataFromArgs,
+  queryProposalCreatedEventsUntruncated,
+  type ProposalCreatedEventData,
+} from "@/lib/proposal-created-event";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { getStateName } from "@/lib/state-utils";
 import { formatVotes, type RawVotes } from "@/lib/vote-utils";
@@ -26,9 +28,13 @@ import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 // Arbitrum governors report proposalSnapshot/proposalDeadline as L1 Ethereum
 // block numbers (voting is based on ARB token snapshots at L1 blocks), but the
 // governor contract and its ProposalCreated events live on L2 Arbitrum. Search
-// a recent L2 block window instead of the L1 snapshot block.
+// a recent L2 block window to cover proposals that are not yet in the
+// hardcoded list or the bundled gov-tracker cache.
 const L2_CREATION_SEARCH_WINDOW_BLOCKS = 10_000_000;
 
+// Proposals that the bundled gov-tracker cache does not yet cover. The hash
+// here lets us skip log scanning and parse the ProposalCreated event straight
+// from the transaction receipt.
 const PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID: Record<
   number,
   Record<string, string>
@@ -100,7 +106,7 @@ async function findProposalCreatedEventByTxHash({
   governorAddress: string;
   proposalId: string;
   txHash: string;
-}): Promise<ProposalData | null> {
+}): Promise<ProposalCreatedEventData | null> {
   const receipt = await provider.getTransactionReceipt(txHash);
   if (!receipt) return null;
 
@@ -114,27 +120,63 @@ async function findProposalCreatedEventByTxHash({
       });
 
       if (parsed.name !== "ProposalCreated") continue;
-      if (parsed.args.proposalId.toString() !== proposalId) continue;
 
-      return {
-        proposalId,
-        proposer: parsed.args.proposer,
-        targets: parsed.args.targets,
-        values: parsed.args[3],
-        signatures: parsed.args.signatures,
-        calldatas: parsed.args.calldatas,
-        startBlock: parsed.args.startBlock,
-        endBlock: parsed.args.endBlock,
-        description: parsed.args.description,
-        creationBlock: log.blockNumber,
-        creationTxHash: log.transactionHash,
-      };
+      const data = proposalCreatedEventDataFromArgs({
+        args: parsed.args,
+        blockNumber: log.blockNumber,
+        transactionHash: log.transactionHash,
+      });
+      if (!data) continue;
+      if (data.proposalId !== proposalId) continue;
+
+      return data;
     } catch {
       // Ignore unrelated governor logs in the same transaction receipt.
     }
   }
 
   return null;
+}
+
+async function resolveCreationTxHash({
+  proposalId,
+  governorAddress,
+}: {
+  proposalId: string;
+  governorAddress: string;
+}): Promise<string | null> {
+  const hardcoded = getKnownProposalCreationTxHash(
+    ARBITRUM_CHAIN_ID,
+    proposalId
+  );
+  if (hardcoded) return hardcoded;
+
+  return getBundledProposalCreationTxHash({ proposalId, governorAddress });
+}
+
+async function findProposalCreatedEventByLogScan({
+  provider,
+  contract,
+  proposalId,
+}: {
+  provider: ethers.providers.Provider;
+  contract: ethers.Contract;
+  proposalId: string;
+}): Promise<ProposalCreatedEventData | null> {
+  const currentL2Block = await provider.getBlockNumber();
+  const searchFromBlock = Math.max(
+    currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
+    0
+  );
+  const creationEvents = await queryProposalCreatedEventsUntruncated({
+    contract,
+    fromBlock: searchFromBlock,
+    toBlock: currentL2Block,
+  });
+
+  return (
+    creationEvents.find((event) => event.proposalId === proposalId) ?? null
+  );
 }
 
 async function findProposalCreatedEvent({
@@ -147,39 +189,30 @@ async function findProposalCreatedEvent({
   contract: ethers.Contract;
   governorAddress: string;
   proposalId: string;
-}): Promise<ProposalData | null> {
-  const knownCreationTxHash = getKnownProposalCreationTxHash(
-    ARBITRUM_CHAIN_ID,
-    proposalId
-  );
+}): Promise<ProposalCreatedEventData | null> {
+  const creationTxHash = await resolveCreationTxHash({
+    proposalId,
+    governorAddress,
+  });
 
-  if (knownCreationTxHash) {
-    const knownTxEvent = await findProposalCreatedEventByTxHash({
+  if (creationTxHash) {
+    const fromReceipt = await findProposalCreatedEventByTxHash({
       provider,
       contract,
       governorAddress,
       proposalId,
-      txHash: knownCreationTxHash,
+      txHash: creationTxHash,
     });
-
-    if (knownTxEvent) return knownTxEvent;
+    if (fromReceipt) return fromReceipt;
   }
 
-  const currentL2Block = await provider.getBlockNumber();
-  const searchFromBlock = Math.max(
-    currentL2Block - L2_CREATION_SEARCH_WINDOW_BLOCKS,
-    0
-  );
-  const creationEvents = await queryProposalCreatedEvents(
+  // Last resort: scan the recent L2 block window for proposals that aren't
+  // in the hardcoded list or the bundled cache yet (e.g. freshly created).
+  return findProposalCreatedEventByLogScan({
     provider,
-    governorAddress,
-    searchFromBlock,
-    currentL2Block
-  );
-
-  return (
-    creationEvents.find((event) => event.proposalId === proposalId) ?? null
-  );
+    contract,
+    proposalId,
+  });
 }
 
 async function fetchProposalContractData(
@@ -252,7 +285,7 @@ function buildProposalFromEvent({
   creationEvent,
   quorum,
 }: BuildProposalBaseOptions & {
-  creationEvent: ProposalData;
+  creationEvent: ProposalCreatedEventData;
   quorum: string | undefined;
 }): ParsedProposal {
   return {
