@@ -32,7 +32,7 @@ export default async function ElectionsPage() {
           </p>
         </div>
 
-        {council && <CurrentCouncilOverview council={council} />}
+        <CurrentCouncilOverview council={council} />
 
         <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
       </div>

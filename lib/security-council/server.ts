@@ -16,6 +16,13 @@ import { SECONDS_PER_DAY } from "@/lib/date-utils";
 import { debug } from "@/lib/debug";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 
+class SecurityCouncilSnapshotError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SecurityCouncilSnapshotError";
+  }
+}
+
 export interface CouncilMember {
   address: string;
   label: string | null;
@@ -33,7 +40,7 @@ export interface SecurityCouncilSnapshot {
 const scManagerAbi = parseAbi(SECURITY_COUNCIL_MANAGER_ABI);
 const nomineeGovernorAbi = parseAbi(NOMINEE_ELECTION_GOVERNOR_ABI);
 
-async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot | null> {
+async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> {
   try {
     const client = createPublicClient({
       chain: arbitrum,
@@ -140,7 +147,11 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot |
     };
   } catch (err) {
     debug.app("Failed to fetch Security Council snapshot: %O", err);
-    return null;
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new SecurityCouncilSnapshotError(
+      `Failed to fetch Security Council snapshot from ${ARBITRUM_RPC_URL}: ${detail}`,
+      { cause: err }
+    );
   }
 }
 
