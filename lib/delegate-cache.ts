@@ -257,10 +257,7 @@ export async function getProposalIndexEntry(
 }
 
 export async function getDelegateVotesWatermarkBlock(): Promise<number> {
-  const value = await getTallyDataClient().getBuildMetadata(
-    "delegate_votes_watermark_block"
-  );
-  return value ? Number(value) : 0;
+  return getTallyDataClient().getDelegateVotesWatermarkBlock();
 }
 
 export { useAddressDisplayRecord, useAddressDisplayRecords };

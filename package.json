@@ -5,8 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "sqlite:build": "tsx scripts/build-tally-sqlite.ts",
-    "sqlite:deploy": "tsx scripts/deploy-tally-sqlite.ts",
     "vote-history:fetch": "tsx scripts/fetch-vote-history.ts",
     "avatars:upload": "tsx scripts/upload-governance-avatars.ts",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
@@ -76,7 +74,6 @@
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^1.4.0",
-    "sql.js-httpvfs": "^0.8.12",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
