@@ -67,7 +67,7 @@ export function ProposalVoteSummaryCard({
   return (
     <Card
       variant="glass"
-      className="rounded-2xl border border-white/40 shadow-lg shadow-black/5 dark:border-white/10 max-h-fit"
+      className="rounded-none md:rounded-2xl border border-white/40 shadow-lg shadow-black/5 dark:border-white/10 max-h-fit"
     >
       <CardContent className="p-4 md:p-6">
         <div className="space-y-3">

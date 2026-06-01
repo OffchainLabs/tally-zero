@@ -27,7 +27,11 @@ import {
   mergeProposalData,
 } from "@/lib/proposal-utils";
 import { findStateByValue } from "@/lib/state-utils";
-import { extractProposalTitle, truncateText } from "@/lib/text-utils";
+import {
+  extractProposalTitle,
+  truncateMiddle,
+  truncateText,
+} from "@/lib/text-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import { ArrowLeft } from "lucide-react";
 
@@ -134,7 +138,7 @@ export function ProposalPage({
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
-      <div className="container max-w-screen-xl space-y-6">
+      <div className="container px-0 md:px-8 max-w-screen-xl space-y-6">
         <Button asChild variant="ghost" size="sm" className="w-fit">
           <Link href="/proposals">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -185,6 +189,7 @@ function ProposalPageContent({
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
   );
+  const [showFullId, setShowFullId] = useState(false);
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -226,15 +231,23 @@ function ProposalPageContent({
 
   return (
     <div className="space-y-4">
-      <div className="glass rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5">
+      <div className="glass md:rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {proposal.governorName && (
               <GovernorBadge governorName={proposal.governorName} />
             )}
             <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-muted-foreground dark:bg-white/5 break-all">
-              {proposal.id}
+              {showFullId ? proposal.id : truncateMiddle(proposal.id)}
             </code>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-muted-foreground"
+              onClick={() => setShowFullId((prev) => !prev)}
+            >
+              {showFullId ? "Show less" : "Show full ID"}
+            </Button>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             {title}
@@ -243,7 +256,7 @@ function ProposalPageContent({
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           <ProposalVoteSummaryCard
             governorAddress={proposal.contractAddress}
             votes={proposal.votes}
@@ -265,7 +278,7 @@ function ProposalPageContent({
           variant="page"
           defaultTab={activeTab}
           onTabChange={onTabChange}
-          className="md:col-span-2"
+          className="md:col-span-2 min-w-0"
           calldataOverrides={calldataOverrides}
           onCalldataOverrideChange={handleCalldataOverrideChange}
         />

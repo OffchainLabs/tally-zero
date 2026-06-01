@@ -231,7 +231,7 @@ export function ProposalCancelCard({
   return (
     <Card
       variant="glass"
-      className="rounded-2xl border border-destructive/30 shadow-lg shadow-black/5"
+      className="rounded-none md:rounded-2xl border border-destructive/30 shadow-lg shadow-black/5"
     >
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
