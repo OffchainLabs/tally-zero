@@ -27,7 +27,11 @@ import {
   mergeProposalData,
 } from "@/lib/proposal-utils";
 import { findStateByValue } from "@/lib/state-utils";
-import { extractProposalTitle, truncateText } from "@/lib/text-utils";
+import {
+  extractProposalTitle,
+  truncateMiddle,
+  truncateText,
+} from "@/lib/text-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import { ArrowLeft } from "lucide-react";
 
@@ -185,6 +189,7 @@ function ProposalPageContent({
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
     {}
   );
+  const [showFullId, setShowFullId] = useState(false);
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -233,8 +238,16 @@ function ProposalPageContent({
               <GovernorBadge governorName={proposal.governorName} />
             )}
             <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-muted-foreground dark:bg-white/5 break-all">
-              {proposal.id}
+              {showFullId ? proposal.id : truncateMiddle(proposal.id)}
             </code>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-muted-foreground"
+              onClick={() => setShowFullId((prev) => !prev)}
+            >
+              {showFullId ? "Show less" : "Show full ID"}
+            </Button>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             {title}
