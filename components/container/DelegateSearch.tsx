@@ -150,6 +150,7 @@ export default function DelegateSearch() {
         customUrls={customRpcUrls}
         onHealthChecked={handleRpcHealthChecked}
         autoCheck={rpcSettingsHydrated}
+        hidden
       />
     </div>
   );

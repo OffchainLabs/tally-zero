@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -58,6 +59,12 @@ interface RpcStatusProps {
   };
   onHealthChecked?: (allHealthy: boolean, requiredHealthy: boolean) => void;
   autoCheck?: boolean;
+  /**
+   * When true, the component still runs health checks (and fires
+   * onHealthChecked) but renders nothing. Useful for pages that depend on RPC
+   * health to drive data loading without showing the status card.
+   */
+  hidden?: boolean;
 }
 
 const StatusIndicator = memo(function StatusIndicator({
@@ -89,6 +96,7 @@ export default function RpcStatus({
   customUrls,
   onHealthChecked,
   autoCheck = true,
+  hidden = false,
 }: RpcStatusProps) {
   const { results, isChecking, summary, checkHealth } = useRpcHealth({
     customUrls,
@@ -97,6 +105,8 @@ export default function RpcStatus({
   const isMobile = useMediaQuery("(max-width: 639px)");
   const [isExpanded, setIsExpanded] = useState(false);
   const shownToastRef = useRef(false);
+  const searchParams = useSearchParams();
+  const devMode = searchParams.get("devmode") === "true";
 
   // Notify parent when health check completes - use useEffect to avoid setState during render
   useEffect(() => {
@@ -114,9 +124,9 @@ export default function RpcStatus({
   const degradedRpcs = results.filter((r) => r.status === "degraded");
   const hasDegradedRpcs = degradedRpcs.length > 0;
 
-  // Show toast notification for degraded RPCs (only once)
+  // Show toast notification for degraded RPCs (only once, dev mode only)
   useEffect(() => {
-    if (hasDegradedRpcs && !isChecking && !shownToastRef.current) {
+    if (devMode && hasDegradedRpcs && !isChecking && !shownToastRef.current) {
       shownToastRef.current = true;
 
       const rpcNames = degradedRpcs.map((rpc) => rpc.name).join(", ");
@@ -136,7 +146,12 @@ export default function RpcStatus({
         },
       });
     }
-  }, [hasDegradedRpcs, degradedRpcs, isChecking]);
+  }, [devMode, hasDegradedRpcs, degradedRpcs, isChecking]);
+
+  // Keep the health-check hooks/effects running above, but render nothing.
+  if (hidden) {
+    return null;
+  }
 
   return (
     <div className="glass rounded-xl p-4 space-y-3">
