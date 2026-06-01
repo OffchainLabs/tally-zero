@@ -107,7 +107,7 @@ function ProposalTabsContent({
             <h3 className="text-sm font-semibold mb-2 text-foreground">
               Description
             </h3>
-            <div className="text-sm break-words prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground">
+            <div className="text-sm [overflow-wrap:anywhere] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap">
               <ReactMarkdown
                 rehypePlugins={[
                   [rehypeSanitize, proposalSanitizeSchema],
@@ -436,7 +436,7 @@ export default function VoteModel({
   if (variant === "page") {
     return (
       <div
-        className={`glass rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5 ${className}`}
+        className={`glass md:rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5 ${className}`}
       >
         <div className="mb-4">
           <ProposalHeader stateValue={stateValue} />

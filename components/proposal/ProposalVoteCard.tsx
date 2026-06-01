@@ -41,7 +41,7 @@ export function ProposalVoteCard({
       className={cn(
         "max-h-fit",
         !hasRecordedVote
-          ? "rounded-2xl border border-white/40 shadow-lg shadow-black/5 dark:border-white/10"
+          ? "rounded-none md:rounded-2xl border border-white/40 shadow-lg shadow-black/5 dark:border-white/10"
           : "border-none"
       )}
     >
