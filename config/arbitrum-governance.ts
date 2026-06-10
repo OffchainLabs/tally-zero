@@ -21,8 +21,13 @@ export const ARBITRUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
 /** Default Arbitrum Nova RPC URL */
 export const ARBITRUM_NOVA_RPC_URL = "https://nova.arbitrum.io/rpc";
 
+/** Public Ethereum Mainnet RPC URL — used as a fallback when a private RPC fails */
+export const ETHEREUM_PUBLIC_RPC_URL = "https://eth.drpc.org";
+
 /** Default Ethereum Mainnet RPC URL */
-export const ETHEREUM_RPC_URL = "https://eth.drpc.org";
+export const ETHEREUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
+  ? `https://eth-mainnet.g.alchemy.com/v2/${env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+  : ETHEREUM_PUBLIC_RPC_URL;
 
 /**
  * Core Governor Contract (Constitutional Proposals)
