@@ -113,7 +113,7 @@
       "lodash": ">=4.18.0",
       "axios": ">=1.15.2",
       "defu": ">=6.1.5",
-      "hono": ">=4.12.16",
+      "hono": ">=4.12.21",
       "semver": ">=6.3.1",
       "slow-redact": "0.3.1",
       "@noble/curves": "1.8.2",
@@ -127,7 +127,8 @@
       "@protobufjs/utf8": ">=1.1.1",
       "uuid@11": ">=11.1.1",
       "brace-expansion@5": ">=5.0.6",
-      "ws@8": ">=8.20.1"
+      "ws@8": ">=8.20.1",
+      "shell-quote": ">=1.8.4"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
