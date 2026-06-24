@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { TimelockOperationInfo } from "@/hooks/use-timelock-operation";
+import { addressesEqual } from "@/lib/address-utils";
 import { buildLookupMap } from "@/lib/collection-utils";
 import { type EstimatedTimeRange } from "@/lib/date-utils";
 import { getAllStageMetadata } from "@/lib/stage-tracker";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
-import { calculateExpectedEta } from "@gzeoneth/gov-tracker";
+import { ADDRESSES, calculateExpectedEta } from "@gzeoneth/gov-tracker";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 
 import { LoadingSkeleton, StageItem } from "../../proposal/stages";
@@ -69,6 +70,16 @@ export function TimelockStagesList({
     () => buildLookupMap(stages, (s) => s.type),
     [stages]
   );
+
+  // Treasury (non-Constitutional) timelock operations have a 3-day L2 waiting
+  // period vs the 8-day Constitutional one, so the stage duration shown depends
+  // on which L2 timelock this operation belongs to.
+  const governorType: "core" | "treasury" = addressesEqual(
+    operation.timelockAddress,
+    ADDRESSES.L2_NON_CONSTITUTIONAL_TIMELOCK
+  )
+    ? "treasury"
+    : "core";
 
   const allStageMetadata = useMemo(() => getAllStageMetadata(), []);
 
@@ -171,7 +182,7 @@ export function TimelockStagesList({
               onRefresh={handleRefreshFromStage}
               estimatedCompletion={estimatedCompletion}
               votingTimeRange={null}
-              governorType="core"
+              governorType={governorType}
               proposalId={operation.operationId}
               governorAddress={operation.timelockAddress}
             />

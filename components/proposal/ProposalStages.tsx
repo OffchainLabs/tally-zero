@@ -16,6 +16,7 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 
 import {
   calculateEstimatedCompletionTimes,
+  getStageEstimatedDays,
   LoadingSkeleton,
   StageItem,
 } from "./stages";
@@ -85,23 +86,33 @@ export default function ProposalStages({
     const votingIdx = stageTypeToIndex.get("VOTING_ACTIVE") ?? -1;
     const l2ExecutedIdx = stageTypeToIndex.get("L2_TIMELOCK") ?? -1;
 
-    return allStageTypes.filter((meta) => {
-      // Filter out election stages for non-election proposals
-      if (!isElection && electionStageTypes.includes(meta.type)) {
-        return false;
-      }
+    return allStageTypes
+      .filter((meta) => {
+        // Filter out election stages for non-election proposals
+        if (!isElection && electionStageTypes.includes(meta.type)) {
+          return false;
+        }
 
-      const currentIdx = stageTypeToIndex.get(meta.type) ?? -1;
+        const currentIdx = stageTypeToIndex.get(meta.type) ?? -1;
 
-      if (isDefeated) {
-        return currentIdx <= votingIdx;
-      }
-      if (isTreasuryProposal) {
-        return currentIdx <= l2ExecutedIdx;
-      }
-      return true;
-    });
-  }, [allStageTypes, isDefeated, isTreasuryProposal, isElection]);
+        if (isDefeated) {
+          return currentIdx <= votingIdx;
+        }
+        if (isTreasuryProposal) {
+          return currentIdx <= l2ExecutedIdx;
+        }
+        return true;
+      })
+      .map((meta) => ({
+        // gov-tracker reports the 8-day Constitutional L2 timelock for every
+        // proposal; override it so treasury (non-Constitutional) proposals use
+        // their 3-day L2 waiting period in completion estimates.
+        ...meta,
+        estimatedDays:
+          getStageEstimatedDays(meta.type, meta.estimatedDays, governorType) ??
+          meta.estimatedDays,
+      }));
+  }, [allStageTypes, isDefeated, isTreasuryProposal, isElection, governorType]);
 
   const { estimatedTimes, votingTimeRange } = calculateEstimatedCompletionTimes(
     relevantStageTypes,

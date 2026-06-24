@@ -8,6 +8,7 @@ export {
   VOTING_EXTENSION_DAYS,
   calculateEstimatedCompletionTimes,
   createStageCalendarUrl,
+  getStageEstimatedDays,
   getStageTxExplorerUrl,
   type BlockBasedTiming,
   type EstimatedTimesResult,
