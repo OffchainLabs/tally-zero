@@ -60,6 +60,20 @@ export const L2_TREASURY_TIMELOCK = {
 } as const;
 
 /**
+ * L2 timelock waiting period, in days, per the Arbitrum Constitution (Section 2,
+ * Phase 4): a 3-day waiting period for DAO Treasury actions (non-Constitutional)
+ * and an 8-day waiting period for L2-to-L1 messages (Constitutional).
+ *
+ * Note: gov-tracker's getStageMetadata reports the Constitutional (8-day) value
+ * for every proposal regardless of type, so the treasury value must be applied
+ * explicitly for Treasury Governor proposals.
+ */
+export const L2_TIMELOCK_DAYS = {
+  constitutional: 8,
+  treasury: 3,
+} as const;
+
+/**
  * L1 Timelock Contract (Ethereum Mainnet)
  * 3-day delay, only used for Core Governor proposals
  */

@@ -8,6 +8,7 @@ import { MS_PER_DAY } from "@/lib/date-utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
 import {
   calculateEstimatedCompletionTimes,
+  getStageEstimatedDays,
   getStageTxExplorerUrl,
   VOTING_EXTENSION_DAYS,
 } from "./stage-utils";
@@ -40,6 +41,21 @@ describe("getStageTxExplorerUrl", () => {
 describe("VOTING_EXTENSION_DAYS constant", () => {
   it("is 2 days (Arbitrum voting extension period)", () => {
     expect(VOTING_EXTENSION_DAYS).toBe(2);
+  });
+});
+
+describe("getStageEstimatedDays", () => {
+  it("returns the 3-day L2 timelock for treasury proposals", () => {
+    expect(getStageEstimatedDays("L2_TIMELOCK", 8, "treasury")).toBe(3);
+  });
+
+  it("keeps the 8-day L2 timelock for core proposals", () => {
+    expect(getStageEstimatedDays("L2_TIMELOCK", 8, "core")).toBe(8);
+  });
+
+  it("does not alter non-timelock stages for treasury proposals", () => {
+    expect(getStageEstimatedDays("VOTING_ACTIVE", 16, "treasury")).toBe(16);
+    expect(getStageEstimatedDays("L1_TIMELOCK", 3, "treasury")).toBe(3);
   });
 });
 

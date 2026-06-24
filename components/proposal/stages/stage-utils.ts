@@ -1,4 +1,8 @@
-import { L1_SECONDS_PER_BLOCK } from "@/config/arbitrum-governance";
+import {
+  L1_SECONDS_PER_BLOCK,
+  L2_TIMELOCK_DAYS,
+} from "@/config/arbitrum-governance";
+import type { GovernorType } from "@/config/governors";
 import {
   createGoogleCalendarUrl,
   MS_PER_DAY,
@@ -27,6 +31,26 @@ export function getStageTxExplorerUrl(
 }
 
 export const VOTING_EXTENSION_DAYS = 2;
+
+/**
+ * Resolve the estimated duration (in days) for a stage, accounting for the
+ * proposal type.
+ *
+ * gov-tracker's stage metadata always reports the 8-day Constitutional L2
+ * timelock, but Treasury (non-Constitutional) proposals only have a 3-day L2
+ * waiting period (Arbitrum Constitution, Section 2, Phase 4). All other stages
+ * keep the value reported by gov-tracker.
+ */
+export function getStageEstimatedDays(
+  stageType: StageType,
+  baseEstimatedDays: number | undefined,
+  governorType: GovernorType
+): number | undefined {
+  if (stageType === "L2_TIMELOCK" && governorType === "treasury") {
+    return L2_TIMELOCK_DAYS.treasury;
+  }
+  return baseEstimatedDays;
+}
 
 export interface BlockBasedTiming {
   startBlock: number;
