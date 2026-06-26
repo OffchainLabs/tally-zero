@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -9,6 +10,7 @@ import {
   type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
+import { delegateVotingPowerKey } from "@/hooks/use-delegate-voting-power";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
 import {
@@ -79,6 +81,7 @@ export function useDelegateSearch({
   addressFilter,
 }: UseDelegateSearchOptions): UseDelegateSearchResult {
   const { l2Rpc, isHydrated } = useRpcSettings({ customL2Rpc: customRpcUrl });
+  const queryClient = useQueryClient();
   const [debouncedAddressFilter, setDebouncedAddressFilter] = useState(
     addressFilter ?? ""
   );
@@ -186,6 +189,12 @@ export function useDelegateSearch({
         const provider = await createRpcProvider(l2Rpc);
         const powerMap = await queryDelegateVotingPowers(provider, toRefresh);
 
+        // Seed the shared cache so the delegate profile reuses these live
+        // on-chain values instead of re-querying the chain per address.
+        for (const [addr, power] of powerMap) {
+          queryClient.setQueryData(delegateVotingPowerKey(addr, l2Rpc), power);
+        }
+
         const newlyRefreshed: string[] = [];
         for (const addr of toRefresh) {
           const lower = addr.toLowerCase();
@@ -241,7 +250,7 @@ export function useDelegateSearch({
         setIsRefreshingVisible(false);
       }
     },
-    [enabled, isHydrated, l2Rpc, delegateData]
+    [enabled, isHydrated, l2Rpc, delegateData, queryClient]
   );
 
   return {
