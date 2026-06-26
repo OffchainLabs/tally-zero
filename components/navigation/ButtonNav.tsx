@@ -54,52 +54,59 @@ export function ButtonNav() {
       ? shortenAddress(ensAddress, 6)
       : "Wallet";
 
+  const walletControls = isConnected ? (
+    <>
+      <div className="hidden sm:block">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void open({ view: "Networks" })}
+        >
+          {networkLabel}
+        </Button>
+      </div>
+      <Button
+        size="sm"
+        variant="default"
+        onClick={() => void open({ view: "Account" })}
+      >
+        {accountLabel}
+      </Button>
+    </>
+  ) : (
+    <Button
+      size="sm"
+      variant="default"
+      onClick={() => void open({ view: "Connect" })}
+      disabled={isConnecting}
+    >
+      {isConnecting ? "Connecting..." : "Connect Wallet"}
+    </Button>
+  );
+
   return (
     <nav className="flex-shrink-0">
       {isAppPage ? (
         <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle backdrop-blur rounded-xl p-2">
           <SettingsSheet />
-          {isConnected ? (
-            <>
-              <div className="hidden sm:block">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void open({ view: "Networks" })}
-                >
-                  {networkLabel}
-                </Button>
-              </div>
-              <Button
-                size="sm"
-                variant="default"
-                onClick={() => void open({ view: "Account" })}
-              >
-                {accountLabel}
-              </Button>
-            </>
-          ) : (
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => void open({ view: "Connect" })}
-              disabled={isConnecting}
-            >
-              {isConnecting ? "Connecting..." : "Connect Wallet"}
-            </Button>
-          )}
+          {walletControls}
         </div>
       ) : (
-        <Link
-          href="/proposals"
-          className={cn(
-            buttonVariants({ variant: "default", size: "sm" }),
-            "px-3 sm:px-4 min-h-[44px] transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
-          )}
-        >
-          <Icons.search className="w-4 h-4 sm:mr-2" />
-          <span className="hidden sm:inline">Start exploring</span>
-        </Link>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <Link
+            href="/proposals"
+            className={cn(
+              buttonVariants({ variant: "default", size: "sm" }),
+              "px-3 sm:px-4 min-h-[44px] transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+            )}
+          >
+            <Icons.search className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Start exploring</span>
+          </Link>
+          <div className="flex items-center gap-1.5 sm:gap-2 glass-subtle backdrop-blur rounded-xl p-2">
+            {walletControls}
+          </div>
+        </div>
       )}
     </nav>
   );

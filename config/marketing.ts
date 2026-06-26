@@ -13,7 +13,7 @@ export const marketingConfig: MarketingConfig = {
       href: "/proposals",
     },
     {
-      title: "Elections",
+      title: "Security Council Elections",
       href: "/elections",
     },
     {
