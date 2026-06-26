@@ -9,6 +9,15 @@ import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 
 /**
+ * How long a fetched voting power is treated as fresh. Voting power changes as
+ * delegations move, so it must not be cached indefinitely. Within this window
+ * the value is shared across pages without a refetch; after it, react-query
+ * refreshes on the next mount/focus/reconnect, and `refetchInterval` covers a
+ * long-open page that never remounts or refocuses.
+ */
+const VOTING_POWER_FRESH_MS = 60 * 60 * 1000; // 1 hour
+
+/**
  * Shared TanStack Query key for a delegate's live on-chain voting power.
  *
  * The delegate search table and the delegate profile both read on-chain
@@ -51,7 +60,9 @@ export function useDelegateVotingPower(
       }
     },
     enabled: enabled && isHydrated && !!address,
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
+    staleTime: VOTING_POWER_FRESH_MS,
+    gcTime: VOTING_POWER_FRESH_MS,
+    refetchInterval: VOTING_POWER_FRESH_MS,
+    refetchIntervalInBackground: false,
   });
 }
