@@ -1,7 +1,7 @@
-import Features from "@components/section/display/Features";
+import Search from "@/components/container/Search";
+import SearchSkeleton from "@/components/container/SearchSkeleton";
 import Hero from "@components/section/display/Hero";
-import DaoValues from "@components/section/display/Opensource";
-import HowItWorks from "@components/section/how-it-works/HowItWorks";
+import { Suspense } from "react";
 
 export const metadata = {
   title: "ArbitrumDAO Governance",
@@ -11,9 +11,11 @@ export default async function IndexPage() {
   return (
     <>
       <Hero />
-      <Features />
-      <HowItWorks />
-      <DaoValues />
+      <div className="container flex flex-col gap-4 pb-8 md:pb-12">
+        <Suspense fallback={<SearchSkeleton />}>
+          <Search />
+        </Suspense>
+      </div>
     </>
   );
 }
