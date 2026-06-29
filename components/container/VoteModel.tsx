@@ -218,6 +218,7 @@ function ProposalTabsContent({
           <ProposalDelegateVotes
             proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
+            proposalState={proposal.state}
           />
         </div>
       </TabsContent>
