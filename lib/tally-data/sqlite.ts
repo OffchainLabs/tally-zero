@@ -27,7 +27,7 @@ import type {
 } from "@/lib/tally-data/types";
 
 const DEFAULT_DB_SCHEMA_VERSION = "delegate-votes-v7";
-const DEFAULT_DB_SIZE_BYTES = 882110464;
+const DEFAULT_DB_SIZE_BYTES = 883085312;
 const DEFAULT_DB_URL =
   // eslint-disable-next-line no-process-env
   process.env.NODE_ENV === "development"
