@@ -12,11 +12,9 @@ import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import {
   getDelegateDisplayRecords,
   getDelegateVotesWatermarkBlock,
-  getProposalIndexEntry,
   getProposalVoteSummary,
   getProposalVotersPage,
   type TallyProposalDelegateVote,
-  type TallyProposalIndexEntry,
   type TallyProposalVoteSummary,
   type TallyProposalVoteSupport,
   type TallyProposalVoter,
@@ -67,15 +65,6 @@ export const PROPOSAL_VOTE_SUPPORT_VALUES: Record<
   for: 1,
   abstain: 2,
 };
-
-const FINALIZED_PROPOSAL_STATES = new Set([
-  "succeeded",
-  "queued",
-  "executed",
-  "defeated",
-  "canceled",
-  "expired",
-]);
 
 const SUPPORT_KEYS = ["for", "against", "abstain"] as const;
 const DEFAULT_VISIBLE_COUNTS: Record<ProposalVoteSupportKey, number> = {
@@ -133,8 +122,11 @@ function getVisibleCount(
   );
 }
 
-function hasFinalizedVotes(proposalState: string | undefined): boolean {
-  return FINALIZED_PROPOSAL_STATES.has(proposalState?.toLowerCase() ?? "");
+// Delegates can only cast votes while a proposal is Active. In every other
+// state (Pending, finalized, etc.) the vote set cannot change, so there is no
+// reason to fetch the live RPC delta.
+function isActiveProposalState(proposalState: string | undefined): boolean {
+  return proposalState?.trim().toLowerCase() === "active";
 }
 
 export function prefetchProposalDelegateVotesCache(
@@ -152,16 +144,6 @@ export function prefetchProposalDelegateVotesCache(
   }
 ): void {
   Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: [
-        "proposal-index-entry",
-        proposalId,
-        governorAddress.toLowerCase(),
-      ],
-      queryFn: () => getProposalIndexEntry(proposalId, governorAddress),
-      staleTime: Infinity,
-      gcTime: QUERY_GC_TIME,
-    }),
     queryClient.prefetchQuery({
       queryKey: proposalDelegateVotesSummaryQueryKey(
         proposalId,
@@ -403,6 +385,7 @@ function buildResult({
 export function useProposalDelegateVotes({
   proposalId,
   governorAddress,
+  proposalState,
   activeSupport = "for",
   visibleCounts,
   enabledSupports,
@@ -410,6 +393,7 @@ export function useProposalDelegateVotes({
 }: {
   proposalId: string;
   governorAddress: string;
+  proposalState?: string;
   activeSupport?: ProposalVoteSupportKey;
   visibleCounts?: Partial<Record<ProposalVoteSupportKey, number>>;
   enabledSupports?: ReadonlySet<ProposalVoteSupportKey>;
@@ -422,18 +406,6 @@ export function useProposalDelegateVotes({
   const summaryQuery = useQuery<TallyProposalVoteSummary, Error>({
     queryKey: proposalDelegateVotesSummaryQueryKey(proposalId, governorAddress),
     queryFn: () => getProposalVoteSummary(proposalId, governorAddress),
-    enabled: queryEnabled,
-    staleTime: Infinity,
-    gcTime: QUERY_GC_TIME,
-  });
-
-  const proposalIndexQuery = useQuery<TallyProposalIndexEntry | null, Error>({
-    queryKey: [
-      "proposal-index-entry",
-      proposalId,
-      governorAddress.toLowerCase(),
-    ],
-    queryFn: () => getProposalIndexEntry(proposalId, governorAddress),
     enabled: queryEnabled,
     staleTime: Infinity,
     gcTime: QUERY_GC_TIME,
@@ -468,18 +440,15 @@ export function useProposalDelegateVotes({
     }),
   });
 
-  const sqliteProposalState = proposalIndexQuery.data?.state ?? undefined;
   const shouldFetchRpcDelta =
-    queryEnabled &&
-    !proposalIndexQuery.isLoading &&
-    !hasFinalizedVotes(sqliteProposalState);
+    queryEnabled && isActiveProposalState(proposalState);
 
   const rpcDeltaQuery = useQuery<ProposalVoter[], Error>({
     queryKey: [
       "proposal-delegate-votes-rpc-delta",
       proposalId,
       governorAddress.toLowerCase(),
-      sqliteProposalState?.toLowerCase() ?? null,
+      proposalState?.toLowerCase() ?? null,
       l2Rpc,
     ],
     queryFn: async () => {

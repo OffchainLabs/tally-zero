@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 interface ProposalDelegateVotesProps {
   proposalId: string;
   governorAddress: string;
+  proposalState: string;
 }
 
 type SupportKey = ProposalVoteSupportKey;
@@ -70,6 +71,7 @@ const SECTIONS: Array<{
 export function ProposalDelegateVotes({
   proposalId,
   governorAddress,
+  proposalState,
 }: ProposalDelegateVotesProps) {
   const [activeSupport, setActiveSupport] = useState<SupportKey>("for");
   const [loadedSupports, setLoadedSupports] = useState<Set<SupportKey>>(
@@ -94,6 +96,7 @@ export function ProposalDelegateVotes({
   } = useProposalDelegateVotes({
     proposalId,
     governorAddress,
+    proposalState,
     activeSupport,
     visibleCounts,
     enabledSupports: loadedSupports,
