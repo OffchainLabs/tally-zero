@@ -20,7 +20,7 @@ const steps = [
     title: "Temp Check Voting",
     description:
       "Submit, review, or vote on Snapshot proposals to gauge the DAO's interest before they move to an onchain vote.",
-    href: "https://snapshot.org/#/arbitrumfoundation.eth",
+    href: "https://snapshot.org/#/org/arbitrum",
     cta: "View Snapshots",
   },
   {

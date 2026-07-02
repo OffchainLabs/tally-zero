@@ -10,7 +10,7 @@ const flowSteps = [
   {
     icon: ThumbsUp,
     title: "Temp Check",
-    href: "https://snapshot.org/#/arbitrumfoundation.eth",
+    href: "https://snapshot.org/#/org/arbitrum",
   },
   { icon: Vote, title: "Onchain Vote", href: "/proposals" },
 ];
