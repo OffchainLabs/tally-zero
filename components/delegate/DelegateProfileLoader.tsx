@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { DelegateProfile } from "@/components/delegate/DelegateProfile";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useDelegateVotingPower } from "@/hooks/use-delegate-voting-power";
 import {
   getDelegateProfile,
   type TallyDelegateProfile,
@@ -59,6 +60,10 @@ export function DelegateProfileLoader({
     };
   }, [address]);
 
+  // Live on-chain voting power, shared via TanStack Query with the delegate
+  // search table so the value is fetched once and reused across both pages.
+  const { data: onChainVotingPower } = useDelegateVotingPower(address);
+
   const isLoading = state.address !== address || state.isLoading;
   const { delegate, error } = state;
 
@@ -84,5 +89,11 @@ export function DelegateProfileLoader({
     );
   }
 
-  return <DelegateProfile address={address} delegate={delegate} />;
+  return (
+    <DelegateProfile
+      address={address}
+      delegate={delegate}
+      onChainVotingPower={onChainVotingPower ?? null}
+    />
+  );
 }

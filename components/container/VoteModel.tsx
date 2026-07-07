@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -109,6 +110,7 @@ function ProposalTabsContent({
             </h3>
             <div className="text-sm [overflow-wrap:anywhere] prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap">
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 rehypePlugins={[
                   [rehypeSanitize, proposalSanitizeSchema],
                   rehypeRaw,
@@ -216,6 +218,7 @@ function ProposalTabsContent({
           <ProposalDelegateVotes
             proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
+            proposalState={proposal.state}
           />
         </div>
       </TabsContent>

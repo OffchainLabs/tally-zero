@@ -21,8 +21,13 @@ export const ARBITRUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
 /** Default Arbitrum Nova RPC URL */
 export const ARBITRUM_NOVA_RPC_URL = "https://nova.arbitrum.io/rpc";
 
+/** Public Ethereum Mainnet RPC URL — used as a fallback when a private RPC fails */
+export const ETHEREUM_PUBLIC_RPC_URL = "https://eth.drpc.org";
+
 /** Default Ethereum Mainnet RPC URL */
-export const ETHEREUM_RPC_URL = "https://eth.drpc.org";
+export const ETHEREUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
+  ? `https://eth-mainnet.g.alchemy.com/v2/${env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+  : ETHEREUM_PUBLIC_RPC_URL;
 
 /**
  * Core Governor Contract (Constitutional Proposals)
@@ -52,6 +57,20 @@ export const L2_TREASURY_TIMELOCK = {
   address: ADDRESSES.L2_NON_CONSTITUTIONAL_TIMELOCK,
   name: "L2 Treasury Timelock",
   delay: "3 days",
+} as const;
+
+/**
+ * L2 timelock waiting period, in days, per the Arbitrum Constitution (Section 2,
+ * Phase 4): a 3-day waiting period for DAO Treasury actions (non-Constitutional)
+ * and an 8-day waiting period for L2-to-L1 messages (Constitutional).
+ *
+ * Note: gov-tracker's getStageMetadata reports the Constitutional (8-day) value
+ * for every proposal regardless of type, so the treasury value must be applied
+ * explicitly for Treasury Governor proposals.
+ */
+export const L2_TIMELOCK_DAYS = {
+  constitutional: 8,
+  treasury: 3,
 } as const;
 
 /**

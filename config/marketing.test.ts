@@ -22,9 +22,9 @@ describe("marketing config", () => {
         expect(proposals?.href).toBe("/proposals");
       });
 
-      it("has Elections nav item", () => {
+      it("has Security Council Elections nav item", () => {
         const elections = marketingConfig.mainNav.find(
-          (item) => item.title === "Elections"
+          (item) => item.title === "Security Council Elections"
         );
         expect(elections).toBeDefined();
         expect(elections?.href).toBe("/elections");

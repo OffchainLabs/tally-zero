@@ -11,7 +11,11 @@ import type { ProposalStage, StageType } from "@/types/proposal-stage";
 import { getStageMetadata } from "@gzeoneth/gov-tracker";
 import { CalendarIcon, ReloadIcon } from "@radix-ui/react-icons";
 
-import { createStageCalendarUrl, type VotingTimeRange } from "./stage-utils";
+import {
+  createStageCalendarUrl,
+  getStageEstimatedDays,
+  type VotingTimeRange,
+} from "./stage-utils";
 import { StageDataDisplay } from "./StageDataDisplay";
 import { StatusIcon } from "./StatusIcon";
 import { TransactionsList } from "./TransactionsList";
@@ -48,9 +52,18 @@ export const StageItem = memo(function StageItem({
   proposalId,
   governorAddress,
 }: StageItemProps) {
-  // Note: governorType ("core"/"treasury") maps to ProposalType conceptually
-  // but getStageMetadata's second param is optional, so we omit it
-  const metadata = getStageMetadata(stageType);
+  // gov-tracker's getStageMetadata always reports the 8-day Constitutional L2
+  // timelock, so override estimatedDays here for treasury (non-Constitutional)
+  // proposals, which only have a 3-day L2 waiting period.
+  const baseMetadata = getStageMetadata(stageType);
+  const metadata = {
+    ...baseMetadata,
+    estimatedDays: getStageEstimatedDays(
+      stageType,
+      baseMetadata.estimatedDays,
+      governorType
+    ),
+  };
   const status = stage?.status || "NOT_STARTED";
   const isActive = isTracking && !stage;
   const canRefresh = Boolean(stage && !isLoading);

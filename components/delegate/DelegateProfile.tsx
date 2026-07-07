@@ -31,12 +31,22 @@ import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
 interface DelegateProfileProps {
   address: string;
   delegate: TallyDelegateProfile | null;
+  /**
+   * Live on-chain voting power (wei string). When provided, it is shown
+   * instead of the cached Tally snapshot (`delegate.votesCount`); otherwise
+   * the cached value is used as a fallback while it loads or is unavailable.
+   */
+  onChainVotingPower?: string | null;
 }
 
 type DelegateAccount = TallyDelegateProfile["account"];
 type DelegateStatement = TallyDelegateProfile["statement"];
 
-export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
+export function DelegateProfile({
+  address,
+  delegate,
+  onChainVotingPower,
+}: DelegateProfileProps) {
   const explorerUrl = getAddressExplorerUrl(address);
 
   if (!delegate) {
@@ -60,6 +70,7 @@ export function DelegateProfile({ address, delegate }: DelegateProfileProps) {
           delegate={delegate}
           delegateAddress={address}
           delegateName={displayName}
+          onChainVotingPower={onChainVotingPower}
         />
 
         <DelegateDetailsTabs address={address} statement={delegate.statement} />
@@ -249,17 +260,23 @@ function DelegateStatsColumn({
   delegate,
   delegateAddress,
   delegateName,
+  onChainVotingPower,
 }: {
   delegate: TallyDelegateProfile;
   delegateAddress: string;
   delegateName: string;
+  onChainVotingPower?: string | null;
 }) {
+  // Prefer the live on-chain voting power; fall back to the cached Tally
+  // snapshot while it loads or when it is unavailable.
+  const votingPower = onChainVotingPower ?? delegate.votesCount;
+
   return (
     <div className="space-y-4">
       <StatCard
         icon={<Users className="h-4 w-4 text-muted-foreground" />}
         label="Voting Power"
-        value={`${formatVotingPower(delegate.votesCount)} ARB`}
+        value={`${formatVotingPower(votingPower)} ARB`}
       />
       <StatCard
         icon={<User className="h-4 w-4 text-muted-foreground" />}
