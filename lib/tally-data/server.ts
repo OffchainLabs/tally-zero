@@ -21,6 +21,8 @@ type ElectionCandidateJson = {
   projects?: string | null;
   country?: string | null;
   registered_at?: string | null;
+  message?: string | null;
+  signatureHash?: string | null;
 };
 
 function toElectionCandidate(
@@ -41,6 +43,8 @@ function toElectionCandidate(
     projects: candidate.projects ?? null,
     country: candidate.country ?? null,
     registeredAt: candidate.registered_at ?? null,
+    message: candidate.message ?? null,
+    signatureHash: candidate.signatureHash ?? null,
   };
 }
 
@@ -52,7 +56,7 @@ const getElectionCandidates = unstable_cache(
       .map(([key, candidate]) => toElectionCandidate(key, candidate))
       .sort((a, b) => a.address.localeCompare(b.address));
   },
-  ["tally-zero-election-candidates-v1"],
+  ["tally-zero-election-candidates-v2"],
   { revalidate: false }
 );
 

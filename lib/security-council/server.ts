@@ -210,6 +210,6 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
 
 export const getCachedSecurityCouncilSnapshot = unstable_cache(
   fetchSecurityCouncilSnapshot,
-  ["tally-zero-security-council-snapshot-v2"],
+  ["tally-zero-security-council-snapshot-v3"],
   { revalidate: false }
 );

@@ -2,6 +2,7 @@
   "version": 1,
   "description": "Known delegate names for Arbitrum governance. Maps delegate addresses to human-readable labels.",
   "delegates": {
+    "0xeeffd9041f8c4411c3ad90310e61add65e0b7c1e": "Tigran",
     "0xb4c064f466931B8d0F637654c916E3F203c46f13": "Entropy Advisors",
     "0xA5dF0cf3F95C6cd97d998b9D990a86864095d9b0": "Blockworks Advisory",
     "0xdb5781a835b60110298fF7205D8ef9678Ff1f800": "yoav.eth",

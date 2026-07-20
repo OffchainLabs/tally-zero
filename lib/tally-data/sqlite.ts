@@ -567,6 +567,8 @@ function toCandidate(row: CandidateRow): TallyElectionCandidate {
     projects: row.projects,
     country: row.country,
     registeredAt: row.registered_at,
+    message: null,
+    signatureHash: null,
   };
 }
 

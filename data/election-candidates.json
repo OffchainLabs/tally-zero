@@ -142,6 +142,29 @@
     "country": "Israel",
     "registered_at": "2026-03-18T20:13:13.85021Z"
   },
+  "0xeeffd9041f8c4411c3ad90310e61add65e0b7c1e": {
+    "name": "Tigran (Certora)",
+    "title": "Head of Security Labs",
+    "address": "0xeeffd9041f8c4411c3ad90310e61add65e0b7c1e",
+    "twitter": "https://twitter.com/CertoraInc",
+    "type": "organization",
+    "representative": null,
+    "motivation": "Certora is motivated to contribute to the security, resilience, and long-term reliability of the Arbitrum ecosystem.\n\nWe believe our combination of deep expertise in smart contract security, formal verification, and protocol design provides a valuable perspective to the Security Council. Our work with leading protocols and infrastructure teams across Web3, together with extensive experience in broader cybersecurity domains, allows us to approach risk with both technical rigor and practical judgment.\n\nWe view participation in the Security Council as both a responsibility and a commitment to the ecosystem, and we value the opportunity to support Arbitrum’s security and governance.",
+    "experience": "Tigran has extensive experience in blockchain security, leading security research and verification efforts for many of the largest protocols in the blockchain ecosystem. As Head of Security Labs, he oversees Certora's security organization, driving smart contract audits, formal verification, security research, and the continued advancement of the company's security methodologies. Before joining Certora, Tigran spent more than 10 years at the Central Bank of Armenia in portfolio management and financial risk management. He holds a PhD in Mathematics, bringing a strong analytical foundation to blockchain security.",
+    "skills": {
+      "canVerifySigning": true,
+      "golang": 9,
+      "solidity": 10,
+      "rust": 10,
+      "javascript": 10,
+      "cyberSecurity": "Over 20 years in web2 and web3 security"
+    },
+    "projects": "Aave, Compound and SKY",
+    "country": "Israel",
+    "registered_at": "2026-03-18T20:13:13.85021Z",
+    "message": "ArbitrumSCElectionsMarch2026@42161 tigran@certora.com",
+    "signatureHash": "0x3e620c5c5f08d9932dbdd3f303ac41079e2219a934391d31e20a529fb81965f657f0634ebcd381c2cc0ca74c9ddcf25ceed22333b5762b996934bd5b4ec25aad1b"
+  },
   "0x09BDaf6Be43CD6ff378E9CC785CD7A667B64668D": {
     "name": "DZack23",
     "title": "Independent (Ex Offchain Labs)",
