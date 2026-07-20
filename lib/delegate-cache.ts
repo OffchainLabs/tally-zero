@@ -7,6 +7,7 @@
  */
 
 import {
+  EXCLUDED_DELEGATE_ADDRESSES,
   getDelegateCacheStats as sdkGetDelegateCacheStats,
   getDelegateRankInfo as sdkGetDelegateRankInfo,
   getTopDelegates as sdkGetTopDelegates,
@@ -44,6 +45,44 @@ import { formatCacheAge } from "./format-utils";
 import { getStoredValue } from "./storage-utils";
 
 const DEFAULT_MIN_VOTING_POWER = "10000000000000000000";
+
+const EXCLUDED_DELEGATE_ADDRESS_SET = new Set<string>(
+  EXCLUDED_DELEGATE_ADDRESSES.map((address) => address.toLowerCase())
+);
+
+/**
+ * Remove the governance exclude address (0x...0A4B86) from a delegate list.
+ *
+ * Voting power delegated to this address is deliberately excluded from
+ * quorum, so it must not appear as a delegate nor count toward the
+ * delegated voting power total.
+ */
+export function stripExcludedDelegates(
+  result: TallyDelegateListResult
+): TallyDelegateListResult {
+  const excluded = result.delegates.filter((delegate) =>
+    EXCLUDED_DELEGATE_ADDRESS_SET.has(delegate.address.toLowerCase())
+  );
+  if (excluded.length === 0) return result;
+
+  const excludedPower = excluded.reduce(
+    (sum, delegate) => sum + BigInt(delegate.votingPower),
+    BigInt(0)
+  );
+  const remainingPower = BigInt(result.totalVotingPower) - excludedPower;
+
+  return {
+    ...result,
+    delegates: result.delegates.filter(
+      (delegate) =>
+        !EXCLUDED_DELEGATE_ADDRESS_SET.has(delegate.address.toLowerCase())
+    ),
+    totalVotingPower: (remainingPower > BigInt(0)
+      ? remainingPower
+      : BigInt(0)
+    ).toString(),
+  };
+}
 
 function getSkipDelegateCacheSetting(): boolean {
   return (
@@ -137,7 +176,8 @@ export function getTopDelegates(
 export async function loadDelegateList(
   minVotingPower = DEFAULT_MIN_VOTING_POWER
 ): Promise<TallyDelegateListResult> {
-  return getTallyDataClient().getDelegateList(minVotingPower);
+  const result = await getTallyDataClient().getDelegateList(minVotingPower);
+  return stripExcludedDelegates(result);
 }
 
 export function getDelegateListStats(
@@ -257,10 +297,7 @@ export async function getProposalIndexEntry(
 }
 
 export async function getDelegateVotesWatermarkBlock(): Promise<number> {
-  const value = await getTallyDataClient().getBuildMetadata(
-    "delegate_votes_watermark_block"
-  );
-  return value ? Number(value) : 0;
+  return getTallyDataClient().getDelegateVotesWatermarkBlock();
 }
 
 export { useAddressDisplayRecord, useAddressDisplayRecords };

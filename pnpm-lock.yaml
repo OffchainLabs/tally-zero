@@ -173,9 +173,6 @@ importers:
       sonner:
         specifier: ^1.4.0
         version: 1.7.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      sql.js-httpvfs:
-        specifier: ^0.8.12
-        version: 0.8.12
       tailwind-merge:
         specifier: ^2.2.1
         version: 2.6.1
@@ -9586,12 +9583,6 @@ packages:
         integrity: sha512-mTyOoPbrivtXnwnIxZRFYRrPNtEFKlpB2fvjSnCQUiAA6qAZzqwna5envK4uk6OIeP17CsdF3rSBGYVBsU0Tkg==,
       }
 
-  sql.js-httpvfs@0.8.12:
-    resolution:
-      {
-        integrity: sha512-lcEBc2q0psFRfdCx8Di22oUIkkv5MUIaVO/fGCj/Jjx6YQDKVylQEcjd7NSSbmINHTRwVkm/vWP8uuevT7Rkkw==,
-      }
-
   stable-hash-x@0.2.0:
     resolution:
       {
@@ -18691,10 +18682,6 @@ snapshots:
   split@1.0.1:
     dependencies:
       through: 2.3.8
-
-  sql.js-httpvfs@0.8.12:
-    dependencies:
-      comlink: 4.4.2
 
   stable-hash-x@0.2.0: {}
 

@@ -199,7 +199,7 @@ function upsertProposal(
   );
 }
 
-async function loadSqliteProposalIndexProposals(): Promise<ParsedProposal[]> {
+async function loadIndexedProposalIndexProposals(): Promise<ParsedProposal[]> {
   try {
     const client = getTallyDataClient();
     const entries = await client.getProposalsIndex();
@@ -215,7 +215,7 @@ async function loadSqliteProposalIndexProposals(): Promise<ParsedProposal[]> {
       proposalFromSqliteIndexEntry(entry, voteSummaries[index])
     );
   } catch (error) {
-    debug.search("failed to load SQLite proposals index: %O", error);
+    debug.search("failed to load indexed proposals: %O", error);
     return [];
   }
 }
@@ -257,8 +257,8 @@ export function useMultiGovernorSearch({
       setProgress(5);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const [sqliteIndexProposals, sqliteWatermarkBlock] = await Promise.all([
-        loadSqliteProposalIndexProposals(),
+      const [indexedProposals, indexedWatermarkBlock] = await Promise.all([
+        loadIndexedProposalIndexProposals(),
         getDelegateVotesWatermarkBlock().catch(() => 0),
       ]);
 
@@ -266,16 +266,16 @@ export function useMultiGovernorSearch({
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
       const proposalsByKey = new Map<string, ParsedProposal>();
-      for (const proposal of sqliteIndexProposals) {
+      for (const proposal of indexedProposals) {
         upsertProposal(proposalsByKey, proposal);
       }
 
       const cachedCount = proposalsByKey.size;
 
       debug.search(
-        "loaded %d proposals from SQLite index (watermark block %d)",
+        "loaded %d proposals from indexer (watermark block %d)",
         cachedCount,
-        sqliteWatermarkBlock
+        indexedWatermarkBlock
       );
 
       const proposalsNeedingRefresh = Array.from(
@@ -302,8 +302,8 @@ export function useMultiGovernorSearch({
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
       const rpcStartBlock =
-        sqliteWatermarkBlock > 0
-          ? Math.max(sqliteWatermarkBlock + 1, userStartBlock)
+        indexedWatermarkBlock > 0
+          ? Math.max(indexedWatermarkBlock + 1, userStartBlock)
           : userStartBlock;
 
       let freshCount = 0;
@@ -342,7 +342,7 @@ export function useMultiGovernorSearch({
       } else {
         debug.search(
           "skipping RPC search - watermark %d covers search range",
-          sqliteWatermarkBlock
+          indexedWatermarkBlock
         );
         setProgress(80);
       }
@@ -355,7 +355,7 @@ export function useMultiGovernorSearch({
         proposals: sortProposals(Array.from(proposalsByKey.values())),
         cacheInfo: {
           loaded: cachedCount > 0,
-          snapshotBlock: sqliteWatermarkBlock,
+          snapshotBlock: indexedWatermarkBlock,
           cacheStartBlock: 0,
           cachedCount,
           freshCount,

@@ -7,6 +7,7 @@ import {
   getDelegateCacheStats,
   getDelegateLabel,
   getTopDelegates,
+  stripExcludedDelegates,
   type TallyDelegateListItem,
 } from "./delegate-cache";
 
@@ -101,6 +102,70 @@ describe("delegate-cache", () => {
       // Age should be a string like "1d 2h" or similar
       expect(typeof stats.age).toBe("string");
       expect(stats.age.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("stripExcludedDelegates", () => {
+    const createListItem = (
+      address: `0x${string}`,
+      votingPower: string
+    ): TallyDelegateListItem => ({
+      address,
+      votingPower,
+      lastChangeBlock: 100,
+      votesCount: votingPower,
+      delegatorsCount: 1,
+      isPrioritized: false,
+      ens: null,
+      name: null,
+      picture: null,
+      knownLabel: null,
+      displayName: null,
+    });
+
+    const EXCLUDE_ADDRESS = "0x00000000000000000000000000000000000a4b86";
+
+    it("removes the exclude address and subtracts its voting power", () => {
+      const result = stripExcludedDelegates({
+        delegates: [
+          createListItem(EXCLUDE_ADDRESS, "700"),
+          createListItem("0x1111111111111111111111111111111111111111", "300"),
+        ],
+        totalVotingPower: "1000",
+        totalSupply: "2000",
+      });
+
+      expect(result.delegates).toHaveLength(1);
+      expect(result.delegates[0].address).toBe(
+        "0x1111111111111111111111111111111111111111"
+      );
+      expect(result.totalVotingPower).toBe("300");
+      expect(result.totalSupply).toBe("2000");
+    });
+
+    it("matches the exclude address case-insensitively", () => {
+      const result = stripExcludedDelegates({
+        delegates: [
+          createListItem("0x00000000000000000000000000000000000A4B86", "700"),
+        ],
+        totalVotingPower: "700",
+        totalSupply: "2000",
+      });
+
+      expect(result.delegates).toHaveLength(0);
+      expect(result.totalVotingPower).toBe("0");
+    });
+
+    it("returns the list unchanged when the exclude address is absent", () => {
+      const list = {
+        delegates: [
+          createListItem("0x1111111111111111111111111111111111111111", "300"),
+        ],
+        totalVotingPower: "300",
+        totalSupply: "2000",
+      };
+
+      expect(stripExcludedDelegates(list)).toBe(list);
     });
   });
 

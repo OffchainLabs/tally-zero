@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { SqliteTallyDataClient } from "@/lib/tally-data/sqlite";
+import { IndexerTallyDataClient } from "@/lib/tally-data/indexer";
 import type {
   TallyAddressDisplayRecord,
   TallyDataClient,
@@ -25,7 +25,7 @@ export type AddressDisplayRecordsState = {
 };
 
 export function getTallyDataClient(): TallyDataClient {
-  client ??= new SqliteTallyDataClient();
+  client ??= new IndexerTallyDataClient();
   return client;
 }
 
