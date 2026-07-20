@@ -44,6 +44,8 @@ export type TallyElectionCandidate = {
   projects: string | null;
   country: string | null;
   registeredAt: string | null;
+  message: string | null;
+  signatureHash: string | null;
 };
 
 export type TallyCandidateSummary = {

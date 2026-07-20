@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import {
   ExternalLink,
   Globe,
+  KeyRound,
   MapPin,
   ShieldCheck,
   ShieldX,
@@ -282,10 +283,12 @@ export function ContenderProfile({
               </a>
             )}
 
-            <div className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5" />
-              <span>{candidate.country ?? "Unknown"}</span>
-            </div>
+            {candidate.country && (
+              <div className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{candidate.country}</span>
+              </div>
+            )}
 
             {candidate.representative && (
               <div className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -303,81 +306,127 @@ export function ContenderProfile({
           <NomineeVoterList address={address} />
         </div>
         <div className="flex space-y-6 flex-col flex-1 min-w-0">
-          <Card variant="glass">
-            <CardHeader>
-              <CardTitle>Motivation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {textToElements(candidate.motivation ?? "")}
-              </div>
-            </CardContent>
-          </Card>
+          {(candidate.message || candidate.signatureHash) && (
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5" />
+                  Signing Key Verification
+                </CardTitle>
+                <CardDescription>
+                  Signed message proving control of this Security Council
+                  signing address.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-4 text-sm">
+                  {candidate.message && (
+                    <div className="space-y-1">
+                      <dt className="font-medium">Message</dt>
+                      <dd className="font-mono text-xs break-all text-muted-foreground">
+                        {candidate.message}
+                      </dd>
+                    </div>
+                  )}
+                  {candidate.signatureHash && (
+                    <div className="space-y-1">
+                      <dt className="font-medium">Signature Hash</dt>
+                      <dd className="font-mono text-xs break-all text-muted-foreground">
+                        {candidate.signatureHash}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card variant="glass">
-            <CardHeader>
-              <CardTitle>Experience</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {textToElements(candidate.experience ?? "")}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="glass">
-            <CardHeader>
-              <CardTitle>Skills</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <SkillBar label="Solidity" level={skills.solidity ?? 0} />
-                  <SkillBar label="Rust" level={skills.rust ?? 0} />
-                  <SkillBar label="Go" level={skills.golang ?? 0} />
-                  <SkillBar label="JavaScript" level={skills.javascript ?? 0} />
+          {candidate.motivation && (
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle>Motivation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {textToElements(candidate.motivation)}
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <div className="space-y-2 pt-2">
-                  <h4 className="text-sm font-medium">Cybersecurity</h4>
-                  <div className="space-y-3">
-                    {textToElements(skills.cyberSecurity ?? "")}
+          {candidate.experience && (
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle>Experience</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {textToElements(candidate.experience)}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {candidate.skills != null && (
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle>Skills</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SkillBar label="Solidity" level={skills.solidity ?? 0} />
+                    <SkillBar label="Rust" level={skills.rust ?? 0} />
+                    <SkillBar label="Go" level={skills.golang ?? 0} />
+                    <SkillBar
+                      label="JavaScript"
+                      level={skills.javascript ?? 0}
+                    />
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-sm font-medium">Cybersecurity</h4>
+                    <div className="space-y-3">
+                      {textToElements(skills.cyberSecurity ?? "")}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    {skills.canVerifySigning ? (
+                      <Badge
+                        variant="secondary"
+                        className="text-green-500 border-green-500/30 flex items-center gap-1"
+                      >
+                        <ShieldCheck className="h-3 w-3" />
+                        Can independently verify multisig transactions
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="secondary"
+                        className="text-red-500 border-red-500/30 flex items-center gap-1"
+                      >
+                        <ShieldX className="h-3 w-3" />
+                        Cannot independently verify multisig transactions
+                      </Badge>
+                    )}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <div className="flex items-center gap-2 pt-2">
-                  {skills.canVerifySigning ? (
-                    <Badge
-                      variant="secondary"
-                      className="text-green-500 border-green-500/30 flex items-center gap-1"
-                    >
-                      <ShieldCheck className="h-3 w-3" />
-                      Can independently verify multisig transactions
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="secondary"
-                      className="text-red-500 border-red-500/30 flex items-center gap-1"
-                    >
-                      <ShieldX className="h-3 w-3" />
-                      Cannot independently verify multisig transactions
-                    </Badge>
-                  )}
+          {candidate.projects && (
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle>Projects</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {textToElements(candidate.projects)}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="glass">
-            <CardHeader>
-              <CardTitle>Projects</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {textToElements(candidate.projects ?? "")}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
