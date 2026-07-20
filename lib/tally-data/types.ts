@@ -1,6 +1,4 @@
 import type { TallyDelegate } from "@/types/tally-delegate";
-import type { TrackingCheckpoint } from "@gzeoneth/gov-tracker";
-import type { SqliteStats } from "sql.js-httpvfs";
 
 export type TallyDelegateProfile = TallyDelegate & {
   knownLabel: string | null;
@@ -111,7 +109,7 @@ export type TallyDataStats = {
   delegateLabels: number;
   delegateSearch: number;
   electionCandidates: number;
-  httpvfs: SqliteStats | null;
+  httpvfs: null;
 };
 
 export interface TallyDataClient {
@@ -152,7 +150,6 @@ export interface TallyDataClient {
     proposalId: string,
     governorAddress: string
   ): Promise<TallyProposalIndexEntry | null>;
-  getProposalCheckpoint(txHash: string): Promise<TrackingCheckpoint | null>;
-  getBuildMetadata(key: string): Promise<string | null>;
+  getDelegateVotesWatermarkBlock(): Promise<number>;
   getStats(): Promise<TallyDataStats>;
 }
