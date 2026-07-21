@@ -13,6 +13,7 @@ import type {
   TallyElectionCandidate,
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
+  TallyProposalVoteSummaryEntry,
   TallyProposalVoteSupport,
   TallyProposalVoter,
 } from "@/lib/tally-data/types";
@@ -146,6 +147,19 @@ export class IndexerTallyDataClient implements TallyDataClient {
         governorAddress
       )}/${proposalId}/vote-summary`
     );
+  }
+
+  /** One aggregated request served by this app's own API route, not the proxy */
+  async getAllProposalVoteSummaries(): Promise<
+    TallyProposalVoteSummaryEntry[]
+  > {
+    const response = await fetch("/api/proposal-vote-summaries", {
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`Vote summaries request failed: ${response.status}`);
+    }
+    return (await response.json()) as TallyProposalVoteSummaryEntry[];
   }
 
   getProposalVotersPage(

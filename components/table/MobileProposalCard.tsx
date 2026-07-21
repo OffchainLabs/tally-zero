@@ -5,6 +5,7 @@ import { memo } from "react";
 
 import { VoteDistributionBarCompact } from "@/components/proposal/stages/VoteDistributionBarCompact";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
+import { HasVotedBadge } from "@/components/ui/HasVotedBadge";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { extractProposalTitle, truncateText } from "@/lib/text-utils";
@@ -52,6 +53,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
             {proposal.governorName && (
               <GovernorBadge governorName={proposal.governorName} size="sm" />
             )}
+            <HasVotedBadge proposal={proposal} size="sm" />
           </div>
           {proposal.votes && (
             <div className="mt-2">

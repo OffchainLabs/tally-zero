@@ -8,6 +8,7 @@ import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import { DataTableRowActions } from "@components/table/RowActions";
 import { ClickableDescriptionCell } from "@components/ui/DescriptionCell";
 import { GovernorBadge } from "@components/ui/GovernorBadge";
+import { HasVotedBadge } from "@components/ui/HasVotedBadge";
 import {
   HoverCard,
   HoverCardContent,
@@ -109,6 +110,19 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       );
     },
     size: 180,
+  },
+  {
+    id: "hasVoted",
+    meta: {
+      label: "Your Vote",
+    },
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Your Vote" />
+    ),
+    cell: ({ row }: { row: Row<ParsedProposal> }) => (
+      <HasVotedBadge proposal={row.original} showPlaceholder />
+    ),
+    size: 100,
   },
   {
     id: "vote",
