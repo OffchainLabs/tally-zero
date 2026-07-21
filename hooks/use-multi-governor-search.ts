@@ -364,9 +364,12 @@ export function useMultiGovernorSearch({
 
   // Background vote-summary fill: the index query renders without votes so
   // the table is not blocked on one request per proposal. One aggregated
-  // request (this app's own API route) fetches every summary; if it fails,
-  // fall back to per-proposal batches in display order so visible rows fill
-  // first. Never overwrites votes that arrived from an RPC refresh.
+  // request (this app's own API route) fetches every summary; because the
+  // upstream indexer serves summaries serially (~200ms each), a cold
+  // aggregate can take many seconds, so the first screen of rows is also
+  // fetched directly in parallel. If the aggregate fails, fall back to
+  // per-proposal batches in display order. Never overwrites votes that
+  // arrived from an RPC refresh.
   useEffect(() => {
     if (!enabled || isFetching || !data) return;
 
@@ -401,10 +404,39 @@ export function useMultiGovernorSearch({
       );
     };
 
+    const fetchBatch = async (batch: ParsedProposal[]) => {
+      for (const proposal of batch) requested.add(proposalKey(proposal));
+
+      const summaries = await Promise.all(
+        batch.map((proposal) =>
+          client
+            .getProposalVoteSummary(proposal.id, proposal.contractAddress)
+            .catch(() => null)
+        )
+      );
+
+      if (cancelled) return;
+
+      const votesByKey = new Map<string, ProposalVotes>();
+      batch.forEach((proposal, index) => {
+        const votes = voteSummaryToProposalVotes(summaries[index]);
+        if (votes) votesByKey.set(proposalKey(proposal), votes);
+      });
+
+      patchVotes(votesByKey);
+    };
+
     void (async () => {
+      // Visible rows first: don't leave the first screen without vote bars
+      // while a cold aggregate response is being assembled upstream.
+      const firstBatchDone = fetchBatch(
+        missing.slice(0, VOTE_SUMMARY_BATCH_SIZE)
+      );
+
       const aggregated = await client
         .getAllProposalVoteSummaries()
         .catch(() => null);
+      await firstBatchDone;
 
       if (cancelled) return;
 
@@ -428,29 +460,13 @@ export function useMultiGovernorSearch({
 
       debug.search("aggregated vote summaries failed, falling back to batches");
 
-      for (let i = 0; i < missing.length; i += VOTE_SUMMARY_BATCH_SIZE) {
+      for (
+        let i = VOTE_SUMMARY_BATCH_SIZE;
+        i < missing.length;
+        i += VOTE_SUMMARY_BATCH_SIZE
+      ) {
         if (cancelled) return;
-
-        const batch = missing.slice(i, i + VOTE_SUMMARY_BATCH_SIZE);
-        for (const proposal of batch) requested.add(proposalKey(proposal));
-
-        const summaries = await Promise.all(
-          batch.map((proposal) =>
-            client
-              .getProposalVoteSummary(proposal.id, proposal.contractAddress)
-              .catch(() => null)
-          )
-        );
-
-        if (cancelled) return;
-
-        const votesByKey = new Map<string, ProposalVotes>();
-        batch.forEach((proposal, index) => {
-          const votes = voteSummaryToProposalVotes(summaries[index]);
-          if (votes) votesByKey.set(proposalKey(proposal), votes);
-        });
-
-        patchVotes(votesByKey);
+        await fetchBatch(missing.slice(i, i + VOTE_SUMMARY_BATCH_SIZE));
       }
     })();
 

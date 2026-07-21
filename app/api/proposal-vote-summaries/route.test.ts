@@ -71,7 +71,7 @@ describe("proposal vote summaries aggregation", () => {
       },
     ]);
     expect(response.headers.get("cache-control")).toBe(
-      "public, s-maxage=30, stale-while-revalidate=300"
+      "public, s-maxage=300, stale-while-revalidate=3600"
     );
     expect(String(fetchMock.mock.calls[0][0])).toBe(
       "https://indexer.example.test/api/tally/proposals"

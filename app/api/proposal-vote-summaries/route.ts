@@ -83,9 +83,13 @@ export async function GET(): Promise<Response> {
 
     const headers = new Headers();
     headers.set("content-type", "application/json");
+    // The upstream indexer serves summaries one at a time (~200ms each), so a
+    // cold aggregate takes many seconds for ~90 proposals. Cache aggressively:
+    // settled proposals never change, and active proposals get live tallies
+    // from the client's RPC refresh regardless.
     headers.set(
       "cache-control",
-      "public, s-maxage=30, stale-while-revalidate=300"
+      "public, s-maxage=300, stale-while-revalidate=3600"
     );
 
     return new Response(JSON.stringify(summaries), { status: 200, headers });
