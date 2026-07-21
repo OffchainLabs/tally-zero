@@ -31,6 +31,30 @@ describe("IndexerTallyDataClient", () => {
     );
   });
 
+  it("fetches aggregated vote summaries from the app route, not the proxy", async () => {
+    const entries = [
+      {
+        proposalId: "1",
+        governorAddress: "0xaaa",
+        voteSummary: {
+          for: { weight: "10", count: 2 },
+          against: { weight: "5", count: 1 },
+          abstain: { weight: "0", count: 0 },
+          totalCount: 3,
+        },
+      },
+    ];
+    const fetchMock = mockJsonFetch(entries);
+
+    await expect(
+      new IndexerTallyDataClient().getAllProposalVoteSummaries()
+    ).resolves.toEqual(entries);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/proposal-vote-summaries", {
+      headers: { accept: "application/json" },
+    });
+  });
+
   it("normalizes, dedupes, and batches address map requests", async () => {
     const addresses = Array.from(
       { length: 201 },

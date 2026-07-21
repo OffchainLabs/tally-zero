@@ -85,6 +85,13 @@ export type TallyProposalVoteSummary = {
   totalCount: number;
 };
 
+/** One proposal's vote summary in the aggregated response */
+export type TallyProposalVoteSummaryEntry = {
+  proposalId: string;
+  governorAddress: string;
+  voteSummary: TallyProposalVoteSummary;
+};
+
 export type TallyProposalIndexEntry = {
   proposalId: string;
   governorAddress: string;
@@ -138,6 +145,7 @@ export interface TallyDataClient {
     proposalId: string,
     governorAddress: string
   ): Promise<TallyProposalVoteSummary>;
+  getAllProposalVoteSummaries(): Promise<TallyProposalVoteSummaryEntry[]>;
   getProposalVotersPage(
     proposalId: string,
     governorAddress: string,

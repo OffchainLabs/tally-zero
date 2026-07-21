@@ -363,9 +363,10 @@ export function useMultiGovernorSearch({
   }, [queryClient]);
 
   // Background vote-summary fill: the index query renders without votes so
-  // the table is not blocked on one request per proposal. Fetch summaries in
-  // batches (in display order, so visible rows fill first) and patch them in.
-  // Never overwrites votes that arrived from an RPC refresh.
+  // the table is not blocked on one request per proposal. One aggregated
+  // request (this app's own API route) fetches every summary; if it fails,
+  // fall back to per-proposal batches in display order so visible rows fill
+  // first. Never overwrites votes that arrived from an RPC refresh.
   useEffect(() => {
     if (!enabled || isFetching || !data) return;
 
@@ -379,7 +380,54 @@ export function useMultiGovernorSearch({
     let cancelled = false;
     const client = getTallyDataClient();
 
+    const patchVotes = (votesByKey: Map<string, ProposalVotes>) => {
+      if (votesByKey.size === 0) return;
+
+      queryClient.setQueryData<ProposalSearchData>(
+        proposalKeys.indexer(),
+        (prev) => {
+          if (!prev) return prev;
+
+          let changed = false;
+          const proposals = prev.proposals.map((proposal) => {
+            const votes = votesByKey.get(proposalKey(proposal));
+            if (!votes || proposal.votes) return proposal;
+            changed = true;
+            return { ...proposal, votes };
+          });
+
+          return changed ? { ...prev, proposals } : prev;
+        }
+      );
+    };
+
     void (async () => {
+      const aggregated = await client
+        .getAllProposalVoteSummaries()
+        .catch(() => null);
+
+      if (cancelled) return;
+
+      if (aggregated) {
+        for (const proposal of missing) requested.add(proposalKey(proposal));
+
+        const votesByKey = new Map<string, ProposalVotes>();
+        for (const entry of aggregated) {
+          const votes = voteSummaryToProposalVotes(entry.voteSummary);
+          if (votes) {
+            votesByKey.set(
+              proposalIdentityKey(entry.proposalId, entry.governorAddress),
+              votes
+            );
+          }
+        }
+
+        patchVotes(votesByKey);
+        return;
+      }
+
+      debug.search("aggregated vote summaries failed, falling back to batches");
+
       for (let i = 0; i < missing.length; i += VOTE_SUMMARY_BATCH_SIZE) {
         if (cancelled) return;
 
@@ -402,24 +450,7 @@ export function useMultiGovernorSearch({
           if (votes) votesByKey.set(proposalKey(proposal), votes);
         });
 
-        if (votesByKey.size === 0) continue;
-
-        queryClient.setQueryData<ProposalSearchData>(
-          proposalKeys.indexer(),
-          (prev) => {
-            if (!prev) return prev;
-
-            let changed = false;
-            const proposals = prev.proposals.map((proposal) => {
-              const votes = votesByKey.get(proposalKey(proposal));
-              if (!votes || proposal.votes) return proposal;
-              changed = true;
-              return { ...proposal, votes };
-            });
-
-            return changed ? { ...prev, proposals } : prev;
-          }
-        );
+        patchVotes(votesByKey);
       }
     })();
 
