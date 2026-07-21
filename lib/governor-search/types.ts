@@ -22,21 +22,19 @@ export interface UseMultiGovernorSearchOptions {
 }
 
 /**
- * Information about cache usage
+ * Information about where the proposal data came from
  */
-export interface CacheHitInfo {
-  /** Whether the cache was successfully loaded */
-  loaded: boolean;
-  /** Block number when cache was generated */
-  snapshotBlock: number;
-  /** Starting block of cached data */
-  cacheStartBlock: number;
-  /** Number of proposals loaded from cache */
-  cachedCount: number;
-  /** Number of proposals fetched fresh from RPC */
-  freshCount: number;
-  /** Whether cache was used in this search */
-  cacheUsed: boolean;
+export interface ProposalSourceInfo {
+  /** Whether the governance indexer responded */
+  indexerAvailable: boolean;
+  /** Number of proposals loaded from the indexer */
+  indexedCount: number;
+  /** Number of new proposals found by the background RPC gap scan */
+  rpcFreshCount: number;
+  /** Last block the indexer had synced when loaded */
+  watermarkBlock: number;
+  /** Whether the background RPC reconciliation has completed */
+  reconciled: boolean;
   /** Human-readable description of search range */
   rangeInfo?: string;
 }
@@ -47,16 +45,16 @@ export interface CacheHitInfo {
 export interface UseMultiGovernorSearchResult {
   /** Array of found proposals */
   proposals: ParsedProposal[];
-  /** Search progress percentage (0-100) */
-  progress: number;
-  /** Error if search failed */
+  /** Blocking error: neither the indexer nor the RPC fallback could load proposals */
   error: Error | null;
-  /** Whether search is currently in progress */
+  /** Whether the initial proposal list is still loading */
   isSearching: boolean;
-  /** Whether the RPC provider is ready */
-  isProviderReady: boolean;
-  /** Information about cache usage */
-  cacheInfo?: CacheHitInfo;
+  /** Whether the background RPC reconciliation is running */
+  isReconciling: boolean;
+  /** Non-blocking error from the background RPC reconciliation */
+  rpcError: Error | null;
+  /** Information about where the proposal data came from */
+  sourceInfo?: ProposalSourceInfo;
 }
 
 /**

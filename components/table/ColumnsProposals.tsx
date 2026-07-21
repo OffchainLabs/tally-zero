@@ -1,8 +1,6 @@
 "use client";
 
 import { ColumnDef, Row } from "@tanstack/react-table";
-import { Check } from "lucide-react";
-import { useAccount } from "wagmi";
 
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
 import { VoteDistributionBarCompact } from "@components/proposal/stages/VoteDistributionBarCompact";
@@ -10,50 +8,17 @@ import { DataTableColumnHeader } from "@components/table/ColumnHeader";
 import { DataTableRowActions } from "@components/table/RowActions";
 import { ClickableDescriptionCell } from "@components/ui/DescriptionCell";
 import { GovernorBadge } from "@components/ui/GovernorBadge";
+import { HasVotedBadge } from "@components/ui/HasVotedBadge";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@components/ui/HoverCard";
 import { LifecycleCell } from "@components/ui/LifecycleCell";
-import { Skeleton } from "@components/ui/Skeleton";
 import { VoteDisplay } from "@components/ui/VoteDisplay";
 
-import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
 import { sumVoteCounts } from "@/lib/vote-utils";
 import { ParsedProposal } from "@/types/proposal";
-
-function HasVotedCell({ proposal }: { proposal: ParsedProposal }) {
-  const { isConnected } = useAccount();
-  const { hasVoted, isLoadingHasVoted } = useProposalHasVoted({
-    proposalId: proposal.id,
-    governorAddress: proposal.contractAddress as `0x${string}`,
-  });
-
-  if (!isConnected || hasVoted === undefined) {
-    if (isConnected && isLoadingHasVoted) {
-      return <Skeleton className="h-5 w-16" />;
-    }
-    return <span className="text-xs text-muted-foreground">–</span>;
-  }
-
-  if (!hasVoted) {
-    return <span className="text-xs text-muted-foreground">Not voted</span>;
-  }
-
-  return (
-    <span
-      className={
-        "inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium backdrop-blur-md " +
-        "bg-emerald-500/10 text-emerald-700 border border-emerald-300/40 " +
-        "dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-400/30"
-      }
-    >
-      <Check className="h-3 w-3" />
-      Voted
-    </span>
-  );
-}
 
 export const columns: ColumnDef<ParsedProposal>[] = [
   {
@@ -155,7 +120,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       <DataTableColumnHeader column={column} title="Your Vote" />
     ),
     cell: ({ row }: { row: Row<ParsedProposal> }) => (
-      <HasVotedCell proposal={row.original} />
+      <HasVotedBadge proposal={row.original} showPlaceholder />
     ),
     size: 100,
   },

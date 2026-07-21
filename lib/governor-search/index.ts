@@ -4,7 +4,7 @@ export {
   searchGovernor,
 } from "./search-utils";
 export type {
-  CacheHitInfo,
+  ProposalSourceInfo,
   UseMultiGovernorSearchOptions,
   UseMultiGovernorSearchResult,
 } from "./types";
