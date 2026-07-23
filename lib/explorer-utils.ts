@@ -38,6 +38,25 @@ export function getTxExplorerUrl(
 }
 
 /**
+ * Get block explorer URL for a block number
+ * @param blockNumber - The block number
+ * @param chain - The chain identifier (defaults to arb1)
+ * @param options - Set `countdown` for a block that is not mined yet; the
+ *   explorer then shows its estimated-time countdown page instead of a
+ *   "block not found" error
+ * @returns The full explorer URL for the block
+ */
+export function getBlockExplorerUrl(
+  blockNumber: number,
+  chain: ChainId = "arb1",
+  options?: { countdown?: boolean }
+): string {
+  return options?.countdown
+    ? `${EXPLORER_BASE_URLS[chain]}/block/countdown/${blockNumber}`
+    : `${EXPLORER_BASE_URLS[chain]}/block/${blockNumber}`;
+}
+
+/**
  * Get explorer name for a chain
  * @param chain - The chain identifier
  * @returns Human-readable explorer name

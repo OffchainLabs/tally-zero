@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { useRpcSettings } from "./use-rpc-settings";
 
@@ -11,54 +11,45 @@ interface UseL1BlockResult {
   isLoading: boolean;
 }
 
+async function fetchL1BlockNumber(l1Rpc: string): Promise<number> {
+  const response = await fetch(l1Rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "eth_blockNumber",
+      params: [],
+      id: 1,
+    }),
+  });
+  const data = await response.json();
+  if (typeof data?.result !== "string") {
+    throw new Error("eth_blockNumber returned no result");
+  }
+  return parseInt(data.result, 16);
+}
+
 /**
- * Hook to fetch and cache the current L1 block number.
- * Refreshes periodically to keep block estimates accurate.
+ * Hook for the current L1 block number, refreshed periodically.
+ *
+ * Served from the shared query cache so every consumer sees the same block
+ * height at the same time; this keeps block-derived dates identical across
+ * surfaces (e.g. the vote summary card and the Lifecycle tab).
  */
 export function useL1Block(): UseL1BlockResult {
   const { l1Rpc, isHydrated } = useRpcSettings();
-  const [currentL1Block, setCurrentL1Block] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (!isHydrated) return;
+  const query = useQuery({
+    queryKey: ["l1-block-number", l1Rpc],
+    queryFn: () => fetchL1BlockNumber(l1Rpc),
+    enabled: isHydrated,
+    refetchInterval: L1_BLOCK_REFRESH_INTERVAL_MS,
+    staleTime: L1_BLOCK_REFRESH_INTERVAL_MS / 2,
+    retry: 1,
+  });
 
-    let isMounted = true;
-
-    const fetchL1Block = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(l1Rpc, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "eth_blockNumber",
-            params: [],
-            id: 1,
-          }),
-        });
-        const data = await response.json();
-        if (data.result && isMounted) {
-          setCurrentL1Block(parseInt(data.result, 16));
-        }
-      } catch {
-        // Silently fail - L1 block is optional for timing estimates
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchL1Block();
-    const interval = setInterval(fetchL1Block, L1_BLOCK_REFRESH_INTERVAL_MS);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [l1Rpc, isHydrated]);
-
-  return { currentL1Block, isLoading };
+  return {
+    currentL1Block: query.data ?? null,
+    isLoading: query.isPending,
+  };
 }

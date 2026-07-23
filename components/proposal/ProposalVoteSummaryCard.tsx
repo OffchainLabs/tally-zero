@@ -1,7 +1,12 @@
 "use client";
 
+import {
+  VotingExtensionBadge,
+  VotingPeriodPanel,
+} from "@/components/proposal/stages";
 import { Card, CardContent } from "@/components/ui/Card";
 import { getGovernorByAddress } from "@/config/governors";
+import { useVotingPeriod } from "@/hooks/use-voting-period";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -13,13 +18,26 @@ import {
 import type { ProposalVotes } from "@/types/proposal";
 
 export function ProposalVoteSummaryCard({
+  proposalId,
   governorAddress,
   votes,
+  startBlock,
+  endBlock,
 }: {
+  proposalId?: string;
   governorAddress: string;
   votes?: ProposalVotes | null;
+  startBlock?: string;
+  endBlock?: string;
 }) {
   const governorConfig = getGovernorByAddress(governorAddress);
+  // Shared with the Lifecycle tab so both surfaces display identical data
+  const { votingPeriod, extensionStillPossible } = useVotingPeriod({
+    proposalId,
+    governorAddress,
+    startBlock,
+    endBlock,
+  });
   const forVotes = votes?.forVotes ?? "0";
   const againstVotes = votes?.againstVotes ?? "0";
   const abstainVotes = votes?.abstainVotes ?? "0";
@@ -81,6 +99,12 @@ export function ProposalVoteSummaryCard({
               </p>
             </div>
           </div>
+
+          {votingPeriod && (
+            <VotingPeriodPanel range={votingPeriod.range}>
+              {extensionStillPossible && <VotingExtensionBadge />}
+            </VotingPeriodPanel>
+          )}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
             {voteLegendItems.map(({ label, value, percentage, colors }) => (

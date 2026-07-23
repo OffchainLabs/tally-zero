@@ -5,8 +5,6 @@ import { memo } from "react";
 import { TopDelegatesNotVoted } from "@/components/proposal/TopDelegatesNotVoted";
 import { Badge } from "@/components/ui/Badge";
 import {
-  formatDateRange,
-  formatDateShort,
   formatEstimatedCompletion,
   type EstimatedTimeRange,
 } from "@/lib/date-utils";
@@ -22,6 +20,8 @@ import { CalendarIcon } from "@radix-ui/react-icons";
 import { QuorumProgressBar } from "./QuorumProgressBar";
 import { createStageCalendarUrl, type VotingTimeRange } from "./stage-utils";
 import { VoteDistributionBar } from "./VoteDistributionBar";
+import { VotingExtensionBadge } from "./VotingExtensionBadge";
+import { VotingPeriodPanel } from "./VotingPeriodPanel";
 
 function getVotingData(
   stage: ProposalStage | undefined
@@ -33,6 +33,8 @@ function getVotingData(
 export interface VotingStageContentProps {
   stage?: ProposalStage;
   votingTimeRange?: VotingTimeRange | null;
+  /** Whether the +2d late-quorum extension can still occur */
+  extensionStillPossible?: boolean;
   estimatedCompletion?: EstimatedTimeRange;
   metadata?: {
     title: string;
@@ -48,6 +50,7 @@ export interface VotingStageContentProps {
 export const VotingStageContent = memo(function VotingStageContent({
   stage,
   votingTimeRange,
+  extensionStillPossible = false,
   estimatedCompletion,
   metadata,
   stageType,
@@ -63,51 +66,25 @@ export const VotingStageContent = memo(function VotingStageContent({
   return (
     <div className="mt-3 space-y-3">
       {votingTimeRange && (
-        <div className="space-y-2 glass-subtle backdrop-blur rounded-lg px-3 py-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-muted-foreground">
-              Voting Period
-            </span>
-            <span className="text-foreground">
-              {formatDateShort(votingTimeRange.votingStartDate)} →{" "}
-              {votingData?.extensionPossible === false
-                ? formatDateShort(votingTimeRange.votingEndMaxDate)
-                : formatDateRange(
-                    votingTimeRange.votingEndMinDate,
-                    votingTimeRange.votingEndMaxDate
-                  )}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {Boolean(votingData?.quorumReached) && (
-              <Badge
-                variant="secondary"
-                className="bg-green-500/20 dark:bg-green-500/25 text-green-700 dark:text-green-400 border border-green-500/30 text-xs py-0 px-2"
-              >
-                Quorum Reached
-              </Badge>
-            )}
-            {Boolean(votingData?.wasExtended) && (
-              <Badge
-                variant="secondary"
-                className="bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-400 border border-blue-500/30 text-xs py-0 px-2"
-              >
-                Extended
-              </Badge>
-            )}
-            {Boolean(
-              votingData?.extensionPossible !== false &&
-              !votingData?.wasExtended
-            ) && (
-              <Badge
-                variant="outline"
-                className="text-xs py-0 px-2 glass-subtle backdrop-blur"
-              >
-                +2d extension possible
-              </Badge>
-            )}
-          </div>
-        </div>
+        <VotingPeriodPanel range={votingTimeRange}>
+          {Boolean(votingData?.quorumReached) && (
+            <Badge
+              variant="secondary"
+              className="bg-green-500/20 dark:bg-green-500/25 text-green-700 dark:text-green-400 border border-green-500/30 text-xs py-0 px-2"
+            >
+              Quorum Reached
+            </Badge>
+          )}
+          {Boolean(votingData?.wasExtended) && (
+            <Badge
+              variant="secondary"
+              className="bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-400 border border-blue-500/30 text-xs py-0 px-2"
+            >
+              Extended
+            </Badge>
+          )}
+          {extensionStillPossible && <VotingExtensionBadge />}
+        </VotingPeriodPanel>
       )}
 
       <TopDelegatesNotVoted
