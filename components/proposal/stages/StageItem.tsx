@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { Fragment, memo } from "react";
 
 import {
   formatEstimatedCompletion,
@@ -9,11 +9,16 @@ import {
 import { cn } from "@/lib/utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
 import { getStageMetadata } from "@gzeoneth/gov-tracker";
-import { CalendarIcon, ReloadIcon } from "@radix-ui/react-icons";
+import {
+  CalendarIcon,
+  ExternalLinkIcon,
+  ReloadIcon,
+} from "@radix-ui/react-icons";
 
 import {
   createStageCalendarUrl,
   getStageEstimatedDays,
+  getStageExtraInfo,
   type VotingTimeRange,
 } from "./stage-utils";
 import { StageDataDisplay } from "./StageDataDisplay";
@@ -32,6 +37,8 @@ export interface StageItemProps {
   onRefresh: (index: number) => void;
   estimatedCompletion?: EstimatedTimeRange;
   votingTimeRange?: VotingTimeRange | null;
+  /** Whether the +2d late-quorum extension can still occur */
+  extensionStillPossible?: boolean;
   governorType: "core" | "treasury";
   proposalId: string;
   governorAddress: string;
@@ -48,6 +55,7 @@ export const StageItem = memo(function StageItem({
   onRefresh,
   estimatedCompletion,
   votingTimeRange,
+  extensionStillPossible = false,
   governorType,
   proposalId,
   governorAddress,
@@ -67,6 +75,7 @@ export const StageItem = memo(function StageItem({
   const status = stage?.status || "NOT_STARTED";
   const isActive = isTracking && !stage;
   const canRefresh = Boolean(stage && !isLoading);
+  const extraInfo = getStageExtraInfo(stageType, governorAddress);
 
   return (
     <div className="relative flex gap-4">
@@ -116,6 +125,31 @@ export const StageItem = memo(function StageItem({
 
         <p className="text-xs text-muted-foreground mt-0.5">
           {metadata?.description}
+          {extraInfo && (
+            <>
+              {" "}
+              {extraInfo.map((segment, index) =>
+                typeof segment === "string" ? (
+                  <Fragment key={index}>{segment}</Fragment>
+                ) : (
+                  <a
+                    key={index}
+                    href={segment.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={segment.title}
+                    className="inline-flex items-center gap-0.5 underline decoration-dotted underline-offset-2 transition-colors hover:text-primary"
+                  >
+                    {segment.label}
+                    <ExternalLinkIcon
+                      className="h-3 w-3 opacity-60"
+                      aria-hidden
+                    />
+                  </a>
+                )
+              )}
+            </>
+          )}
         </p>
 
         {/* Voting stage specific content */}
@@ -123,6 +157,7 @@ export const StageItem = memo(function StageItem({
           <VotingStageContent
             stage={stage}
             votingTimeRange={votingTimeRange}
+            extensionStillPossible={extensionStillPossible}
             estimatedCompletion={estimatedCompletion}
             metadata={metadata}
             stageType={stageType}
@@ -149,7 +184,7 @@ export const StageItem = memo(function StageItem({
         )}
 
         {/* Stage data */}
-        {stage?.data && <StageDataDisplay data={stage.data} />}
+        {stage?.data && <StageDataDisplay data={stage.data} status={status} />}
       </div>
     </div>
   );
