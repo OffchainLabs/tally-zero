@@ -258,8 +258,11 @@ function ProposalPageContent({
       <div className="grid md:grid-cols-3 gap-6">
         <div className="space-y-6 min-w-0">
           <ProposalVoteSummaryCard
+            proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
             votes={proposal.votes}
+            startBlock={proposal.startBlock}
+            endBlock={proposal.endBlock}
           />
           <ProposalCancelCard
             proposal={parsedProposal.data}

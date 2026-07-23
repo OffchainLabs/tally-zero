@@ -178,6 +178,8 @@ function ProposalTabsContent({
                 creationTxHash={proposal.creationTxHash}
                 governorAddress={proposal.contractAddress}
                 currentL1Block={currentL1Block ?? undefined}
+                startBlock={proposal.startBlock}
+                endBlock={proposal.endBlock}
               />
             </ErrorBoundary>
           </div>
