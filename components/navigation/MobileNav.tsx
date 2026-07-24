@@ -31,10 +31,17 @@ export function MobileNav({ items, children }: MobileNavProps) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button
-          className="flex items-center space-x-2 md:hidden"
+          className={cn(
+            "flex size-[42px] items-center justify-center rounded-[10px] border border-[#212121] bg-white/5 text-foreground/70 transition-colors lg:hidden",
+            "hover:bg-white/10 hover:text-foreground"
+          )}
           aria-label="Toggle menu"
         >
-          {open ? <Icons.close /> : <Icons.logo />}
+          {open ? (
+            <Icons.close className="size-5" />
+          ) : (
+            <Icons.menu className="size-5" />
+          )}
         </button>
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] sm:w-[320px] glass">
@@ -42,11 +49,11 @@ export function MobileNav({ items, children }: MobileNavProps) {
           <SheetTitle asChild>
             <Link
               href="/"
-              className="flex items-center space-x-2"
+              className="flex items-center"
               onClick={() => setOpen(false)}
+              aria-label={siteConfig.name}
             >
-              <Icons.logo />
-              <span className="font-bold text-lg">{siteConfig.name}</span>
+              <Icons.wordmark className="h-8 w-auto" />
             </Link>
           </SheetTitle>
         </SheetHeader>
