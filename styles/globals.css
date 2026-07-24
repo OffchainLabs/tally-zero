@@ -12,21 +12,21 @@
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #55555595;
+  background: rgba(255, 255, 255, 0.24);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #88888868 #f1f1f100;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 @layer base {
@@ -63,32 +63,35 @@
   }
 
   .dark {
-    --background: 222 85% 7%;
-    --foreground: 200 20% 95%;
-    --card: 222 75% 9%;
-    --card-foreground: 200 20% 95%;
-    --popover: 222 75% 9%;
-    --popover-foreground: 200 20% 95%;
-    --primary: 188 100% 53%;
-    --primary-foreground: 222 85% 13%;
-    --secondary: 222 50% 15%;
-    --secondary-foreground: 200 20% 95%;
-    --muted: 222 50% 15%;
-    --muted-foreground: 210 15% 60%;
-    --accent: 212 99% 45%;
-    --accent-foreground: 200 20% 95%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 200 20% 95%;
-    --border: 222 40% 18%;
-    --input: 222 40% 18%;
-    --ring: 188 100% 53%;
+    /* Figma "Proposals" dark palette:
+       bg #0b0c10, surface #111e30, brand #28a0f0, accent #3cc8a0,
+       error #dc5a3c, text #e8f0f8. */
+    --background: 228 19% 5%;
+    --foreground: 210 53% 94%;
+    --card: 215 48% 13%;
+    --card-foreground: 210 53% 94%;
+    --popover: 215 48% 13%;
+    --popover-foreground: 210 53% 94%;
+    --primary: 204 87% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 48% 13%;
+    --secondary-foreground: 210 53% 94%;
+    --muted: 215 40% 14%;
+    --muted-foreground: 214 15% 66%;
+    --accent: 216 33% 18%;
+    --accent-foreground: 210 53% 94%;
+    --destructive: 11 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 16% 16%;
+    --input: 216 16% 16%;
+    --ring: 204 87% 55%;
 
     /* Glass effect variables - dark mode */
-    --glass-bg: rgba(15, 23, 42, 0.6);
-    --glass-bg-subtle: rgba(5, 22, 61, 0.3);
-    --glass-border: rgba(16, 225, 255, 0.08);
-    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-    --shadow-card-hover: 0 20px 40px -15px rgba(1, 107, 229, 0.3);
+    --glass-bg: rgba(17, 30, 48, 0.6);
+    --glass-bg-subtle: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    --shadow-card-hover: 0 20px 40px -15px rgba(40, 160, 240, 0.35);
   }
 }
 
@@ -168,13 +171,13 @@
     background: rgba(255, 255, 255, 0.95);
   }
   .dark .glass {
-    background: rgba(5, 22, 61, 0.98);
+    background: rgba(17, 30, 48, 0.98);
   }
   .glass-subtle {
     background: rgba(255, 255, 255, 0.9);
   }
   .dark .glass-subtle {
-    background: rgba(5, 22, 61, 0.95);
+    background: rgba(23, 33, 51, 0.96);
   }
 }
 

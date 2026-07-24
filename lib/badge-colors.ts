@@ -3,47 +3,44 @@
  * Use these constants to maintain consistency across the UI.
  */
 
-// Vote type colors - using emerald/rose for semantic meaning
+// Vote type colors - aligned to the Figma "Proposals" palette
+// (For = accent teal-green, Against = error red-orange, Abstain = muted grey).
 export const VOTE_COLORS = {
   for: {
-    text: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500 dark:bg-emerald-400",
-    dot: "bg-emerald-500 dark:bg-emerald-400",
-    gradient:
-      "bg-gradient-to-r from-emerald-500 to-emerald-400 dark:from-emerald-400 dark:to-emerald-300",
+    text: "text-arb-accent2",
+    bg: "bg-arb-accent2",
+    dot: "bg-arb-accent2",
+    gradient: "bg-arb-accent2",
   },
   against: {
-    text: "text-rose-600 dark:text-rose-400",
-    bg: "bg-rose-500 dark:bg-rose-400",
-    dot: "bg-rose-500 dark:bg-rose-400",
-    gradient:
-      "bg-gradient-to-r from-rose-500 to-rose-400 dark:from-rose-400 dark:to-rose-300",
+    text: "text-arb-error",
+    bg: "bg-arb-error",
+    dot: "bg-arb-error",
+    gradient: "bg-arb-error",
   },
   abstain: {
     text: "text-muted-foreground",
-    bg: "bg-gray-400 dark:bg-gray-500",
-    dot: "bg-gray-400 dark:bg-gray-500",
-    gradient:
-      "bg-gradient-to-r from-gray-400 to-gray-300 dark:from-gray-500 dark:to-gray-400",
+    bg: "bg-white/30",
+    dot: "bg-white/30",
+    gradient: "bg-white/25",
   },
 } as const;
 
 // Quorum status colors
 export const QUORUM_COLORS = {
   reached: {
-    text: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500/20",
-    ring: "ring-emerald-500/30",
-    icon: "text-emerald-500",
-    gradient:
-      "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+    text: "text-arb-accent2",
+    bg: "bg-arb-accent2/20",
+    ring: "ring-arb-accent2/30",
+    icon: "text-arb-accent2",
+    gradient: "bg-arb-accent2 shadow-[0_0_8px_rgba(60,200,160,0.5)]",
   },
   pending: {
-    text: "text-arb-blue dark:text-arb-teal",
-    bg: "bg-arb-blue/20",
-    ring: "ring-arb-blue/30",
-    icon: "text-arb-blue",
-    gradient: "bg-gradient-to-r from-arb-blue to-arb-teal",
+    text: "text-arb-brand",
+    bg: "bg-arb-brand/20",
+    ring: "ring-arb-brand/30",
+    icon: "text-arb-brand",
+    gradient: "bg-arb-brand",
   },
 } as const;
 

@@ -29,18 +29,19 @@ describe("badge-colors", () => {
       }
     });
 
-    it("for uses emerald colors", () => {
-      expect(VOTE_COLORS.for.text).toContain("emerald");
-      expect(VOTE_COLORS.for.bg).toContain("emerald");
+    it("for uses the accent (teal-green) token", () => {
+      expect(VOTE_COLORS.for.text).toContain("arb-accent2");
+      expect(VOTE_COLORS.for.bg).toContain("arb-accent2");
     });
 
-    it("against uses rose colors", () => {
-      expect(VOTE_COLORS.against.text).toContain("rose");
-      expect(VOTE_COLORS.against.bg).toContain("rose");
+    it("against uses the error (red-orange) token", () => {
+      expect(VOTE_COLORS.against.text).toContain("arb-error");
+      expect(VOTE_COLORS.against.bg).toContain("arb-error");
     });
 
-    it("abstain uses gray/muted colors", () => {
-      expect(VOTE_COLORS.abstain.bg).toContain("gray");
+    it("abstain uses muted/neutral colors", () => {
+      expect(VOTE_COLORS.abstain.text).toContain("muted-foreground");
+      expect(VOTE_COLORS.abstain.bg).toContain("white");
     });
   });
 
@@ -62,14 +63,14 @@ describe("badge-colors", () => {
       }
     });
 
-    it("reached uses emerald colors", () => {
-      expect(QUORUM_COLORS.reached.text).toContain("emerald");
-      expect(QUORUM_COLORS.reached.icon).toContain("emerald");
+    it("reached uses the accent (teal-green) token", () => {
+      expect(QUORUM_COLORS.reached.text).toContain("arb-accent2");
+      expect(QUORUM_COLORS.reached.icon).toContain("arb-accent2");
     });
 
-    it("pending uses arb brand colors", () => {
-      expect(QUORUM_COLORS.pending.text).toContain("arb-blue");
-      expect(QUORUM_COLORS.pending.icon).toContain("arb-blue");
+    it("pending uses the brand (blue) token", () => {
+      expect(QUORUM_COLORS.pending.text).toContain("arb-brand");
+      expect(QUORUM_COLORS.pending.icon).toContain("arb-brand");
     });
   });
 
@@ -104,16 +105,8 @@ describe("badge-colors", () => {
   });
 
   describe("dark mode support", () => {
-    it("vote colors include dark mode variants", () => {
-      expect(VOTE_COLORS.for.text).toContain("dark:");
-      expect(VOTE_COLORS.against.text).toContain("dark:");
-    });
-
-    it("quorum colors include dark mode variants", () => {
-      expect(QUORUM_COLORS.reached.text).toContain("dark:");
-      expect(QUORUM_COLORS.pending.text).toContain("dark:");
-    });
-
+    // Vote and quorum colors now use single-theme Figma palette tokens
+    // (the app is fixed to dark mode), so they no longer carry dark: variants.
     it("status badge colors include dark mode variants", () => {
       expect(STATUS_BADGE_COLORS.success).toContain("dark:");
       expect(STATUS_BADGE_COLORS.warning).toContain("dark:");

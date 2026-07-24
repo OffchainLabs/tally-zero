@@ -104,6 +104,13 @@ const config = {
           green: "#00E340",
           yellow: "#FFE103",
           orange: "#FF4400",
+          // Figma "Proposals" dark-theme tokens
+          brand: "#28A0F0",
+          accent2: "#3CC8A0",
+          error: "#DC5A3C",
+          ink: "#0B0C10",
+          surface: "#111E30",
+          line: "#212121",
         },
       },
       borderRadius: {
