@@ -1,3 +1,4 @@
+export { fetchProposalQuorum } from "./quorum";
 export {
   parseProposals,
   refreshProposalStates,

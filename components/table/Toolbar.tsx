@@ -1,14 +1,11 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { Table } from "@tanstack/react-table";
 
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
-import { Button } from "@components/ui/Button";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -34,25 +31,15 @@ export function DataTableToolbar<TData>({
   }, [table]);
 
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex flex-1 items-center gap-2 sm:space-x-2">
-        <ToolbarSearch
-          value={searchValue}
-          onChange={handleSearchChange}
-          placeholder="Search ..."
-          className="w-full sm:w-[150px] lg:w-[450px]"
-        />
+    <div className="flex items-center gap-2">
+      <ToolbarSearch
+        value={searchValue}
+        onChange={handleSearchChange}
+        placeholder="Search Proposals"
+        className="w-full sm:w-[280px]"
+      />
 
-        {isFiltered && <ToolbarResetButton onClick={handleReset} />}
-      </div>
-      <div className="flex items-center gap-2">
-        <Button asChild size="sm" variant="default">
-          <Link href="/proposal/new">
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            New Proposal
-          </Link>
-        </Button>
-      </div>
+      {isFiltered && <ToolbarResetButton onClick={handleReset} />}
     </div>
   );
 }

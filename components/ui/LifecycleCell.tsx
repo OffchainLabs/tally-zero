@@ -15,14 +15,15 @@ import {
   formatCurrentState,
   formatStageName,
   getEffectiveDisplayState,
+  getStateDotColor,
   getStateStyle,
 } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
 import {
-  CheckCircledIcon,
   ClockIcon,
   CrossCircledIcon,
+  ExternalLinkIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
 
@@ -121,19 +122,18 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
 }
 
 function StaticLifecycleContent({ currentState }: { currentState: string }) {
-  const { icon, color } = getStateStyle(currentState);
-  const StateIcon = iconMap[icon];
+  const { color } = getStateStyle(currentState);
+  const dotColor = getStateDotColor(currentState);
 
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
-        <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-          <StateIcon
-            className={cn("h-3.5 w-3.5 drop-shadow-sm shrink-0", color)}
-          />
+        <div className="inline-flex items-center gap-1.5 cursor-help">
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", dotColor)} />
           <span className={cn("text-xs font-medium", color)}>
             {formatCurrentState(currentState)}
           </span>
+          <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="glass w-auto">
@@ -247,26 +247,23 @@ const LifecycleContent = memo(function LifecycleContent({
 
     // Use different styling for in-progress Core proposals
     const effectiveState = isInProgress ? "pending" : currentState;
-    const { icon, color } = getStateStyle(effectiveState);
-    const StateIcon = iconMap[icon];
+    const { color } = getStateStyle(effectiveState);
+    const dotColor = getStateDotColor(effectiveState);
 
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
-          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-            {isBackgroundRefreshing ? (
-              <div className="relative">
-                <StateIcon
-                  className={cn("h-3.5 w-3.5 drop-shadow-sm", color)}
-                />
-                <ReloadIcon className="absolute -top-0.5 -right-0.5 h-2 w-2 text-blue-500 animate-spin drop-shadow-sm" />
-              </div>
-            ) : (
-              <StateIcon className={cn("h-3.5 w-3.5 drop-shadow-sm", color)} />
-            )}
+          <div className="inline-flex items-center gap-1.5 cursor-help">
+            <span className="relative flex shrink-0">
+              <span className={cn("h-2 w-2 rounded-full", dotColor)} />
+              {isBackgroundRefreshing && (
+                <ReloadIcon className="absolute -top-1 -right-1 h-2 w-2 text-blue-500 animate-spin drop-shadow-sm" />
+              )}
+            </span>
             <span className={cn("text-xs font-medium", color)}>
               {stateDisplay}
             </span>
+            <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
           </div>
         </HoverCardTrigger>
         <HoverCardContent className="glass w-auto">
@@ -290,10 +287,3 @@ const LifecycleContent = memo(function LifecycleContent({
 
   return null;
 });
-
-const iconMap = {
-  check: CheckCircledIcon,
-  reload: ReloadIcon,
-  clock: ClockIcon,
-  cross: CrossCircledIcon,
-} as const;

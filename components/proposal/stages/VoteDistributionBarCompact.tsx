@@ -34,24 +34,16 @@ export const VoteDistributionBarCompact = memo(
       );
     }
 
-    // Only show percentages for segments that have votes
+    // Show all three percentages (For / Against / Abstain), matching the design.
     const segments = [
-      { pct: forPct, label: `${Math.round(forPct)}%`, type: "for" as const },
-      {
-        pct: againstPct,
-        label: `${Math.round(againstPct)}%`,
-        type: "against" as const,
-      },
-      {
-        pct: abstainPct,
-        label: `${Math.round(abstainPct)}%`,
-        type: "abstain" as const,
-      },
-    ].filter((s) => s.pct > 0);
+      { pct: forPct, type: "for" as const },
+      { pct: againstPct, type: "against" as const },
+      { pct: abstainPct, type: "abstain" as const },
+    ];
 
     return (
-      <div className="w-24 space-y-0.5">
-        {/* Stacked bar with glassmorphism */}
+      <div className="w-24 space-y-1">
+        {/* Stacked 6px bar */}
         <div className="flex h-1.5 rounded-full overflow-hidden bg-white/10 backdrop-blur-sm">
           {forPct > 0 && (
             <div
@@ -73,11 +65,11 @@ export const VoteDistributionBarCompact = memo(
           )}
         </div>
 
-        {/* Compact percentage labels */}
-        <div className="flex justify-between text-[10px] text-muted-foreground">
+        {/* Percentage labels: always For / Against / Abstain */}
+        <div className="flex justify-between text-[10px] font-medium tabular-nums">
           {segments.map((segment) => (
             <span key={segment.type} className={VOTE_COLORS[segment.type].text}>
-              {segment.label}
+              {Math.round(segment.pct)}%
             </span>
           ))}
         </div>
