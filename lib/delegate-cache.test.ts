@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DELEGATE_MIN_VOTING_POWER_WEI } from "@/config/delegates";
 import type { DelegateCache, DelegateInfo } from "@/types/delegate";
 
 import {
@@ -10,6 +11,11 @@ import {
   stripExcludedDelegates,
   type TallyDelegateListItem,
 } from "./delegate-cache";
+
+const ELIGIBLE_VOTING_POWER = DELEGATE_MIN_VOTING_POWER_WEI;
+const INELIGIBLE_VOTING_POWER = (
+  BigInt(DELEGATE_MIN_VOTING_POWER_WEI) - BigInt(1)
+).toString();
 
 // Mock cache data for testing
 const createMockDelegate = (
@@ -79,9 +85,12 @@ describe("delegate-cache", () => {
       const delegates = [
         createMockDelegate(
           "0x1111111111111111111111111111111111111111",
-          "1000"
+          ELIGIBLE_VOTING_POWER
         ),
-        createMockDelegate("0x2222222222222222222222222222222222222222", "500"),
+        createMockDelegate(
+          "0x2222222222222222222222222222222222222222",
+          ELIGIBLE_VOTING_POWER
+        ),
       ];
       const cache = createMockCache(delegates);
 
@@ -93,6 +102,25 @@ describe("delegate-cache", () => {
       expect(stats.totalVotingPower).toBe("1000000000000000000000000");
       expect(stats.totalSupply).toBe("10000000000000000000000000000");
       expect(stats.age).toBeDefined();
+    });
+
+    it("counts only delegates that meet the eligibility threshold", () => {
+      // The SDK builds the cache with a lower floor of its own, so its
+      // stats.totalDelegates over-counts by this app's rule.
+      const cache = createMockCache([
+        createMockDelegate(
+          "0x1111111111111111111111111111111111111111",
+          ELIGIBLE_VOTING_POWER
+        ),
+        createMockDelegate(
+          "0x2222222222222222222222222222222222222222",
+          INELIGIBLE_VOTING_POWER
+        ),
+        createMockDelegate("0x00000000000000000000000000000000000a4b86", "1"),
+      ]);
+
+      expect(cache.stats.totalDelegates).toBe(3);
+      expect(getDelegateCacheStats(cache).totalDelegates).toBe(1);
     });
 
     it("formats age correctly", () => {

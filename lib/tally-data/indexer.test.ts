@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  DELEGATE_LIST_MAX_ROWS,
+  DELEGATE_MIN_VOTING_POWER_WEI,
+} from "@/config/delegates";
 import { IndexerTallyDataClient } from "@/lib/tally-data/indexer";
 
 function mockJsonFetch(body: unknown, status = 200) {
@@ -23,12 +27,29 @@ describe("IndexerTallyDataClient", () => {
       totalSupply: "0",
     });
 
-    await new IndexerTallyDataClient().getDelegateList("42");
+    await new IndexerTallyDataClient().getDelegateList("42", 7);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/governance-indexer/api/tally/delegates?minVotingPower=42",
+      "/api/governance-indexer/api/tally/delegates?minVotingPower=42&limit=7",
       { headers: { accept: "application/json" } }
     );
+  });
+
+  it("defaults delegate list requests to the eligibility threshold and an explicit row cap", async () => {
+    const fetchMock = mockJsonFetch({
+      delegates: [],
+      totalVotingPower: "0",
+      totalSupply: "0",
+    });
+
+    await new IndexerTallyDataClient().getDelegateList();
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "https://app.test");
+    expect(url.searchParams.get("minVotingPower")).toBe(
+      DELEGATE_MIN_VOTING_POWER_WEI
+    );
+    // The indexer silently truncates at 1,000 rows without an explicit limit.
+    expect(Number(url.searchParams.get("limit"))).toBe(DELEGATE_LIST_MAX_ROWS);
   });
 
   it("fetches aggregated vote summaries from the app route, not the proxy", async () => {

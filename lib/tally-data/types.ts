@@ -120,7 +120,10 @@ export type TallyDataStats = {
 };
 
 export interface TallyDataClient {
-  getDelegateList(minVotingPower?: string): Promise<TallyDelegateListResult>;
+  getDelegateList(
+    minVotingPower?: string,
+    limit?: number
+  ): Promise<TallyDelegateListResult>;
   getDelegate(address: string): Promise<TallyDelegateProfile | null>;
   getDelegateSummaries(
     addresses: string[]

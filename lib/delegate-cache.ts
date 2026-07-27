@@ -7,7 +7,6 @@
  */
 
 import {
-  EXCLUDED_DELEGATE_ADDRESSES,
   getDelegateCacheStats as sdkGetDelegateCacheStats,
   getDelegateRankInfo as sdkGetDelegateRankInfo,
   getTopDelegates as sdkGetTopDelegates,
@@ -16,6 +15,11 @@ import {
   type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
+import {
+  DELEGATE_MIN_VOTING_POWER_WEI,
+  countEligibleDelegates,
+  isExcludedDelegateAddress,
+} from "@/config/delegates";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import {
   getAddressDisplayRecord,
@@ -44,12 +48,6 @@ import { debug } from "./debug";
 import { formatCacheAge } from "./format-utils";
 import { getStoredValue } from "./storage-utils";
 
-const DEFAULT_MIN_VOTING_POWER = "10000000000000000000";
-
-const EXCLUDED_DELEGATE_ADDRESS_SET = new Set<string>(
-  EXCLUDED_DELEGATE_ADDRESSES.map((address) => address.toLowerCase())
-);
-
 /**
  * Remove the governance exclude address (0x...0A4B86) from a delegate list.
  *
@@ -61,7 +59,7 @@ export function stripExcludedDelegates(
   result: TallyDelegateListResult
 ): TallyDelegateListResult {
   const excluded = result.delegates.filter((delegate) =>
-    EXCLUDED_DELEGATE_ADDRESS_SET.has(delegate.address.toLowerCase())
+    isExcludedDelegateAddress(delegate.address)
   );
   if (excluded.length === 0) return result;
 
@@ -74,8 +72,7 @@ export function stripExcludedDelegates(
   return {
     ...result,
     delegates: result.delegates.filter(
-      (delegate) =>
-        !EXCLUDED_DELEGATE_ADDRESS_SET.has(delegate.address.toLowerCase())
+      (delegate) => !isExcludedDelegateAddress(delegate.address)
     ),
     totalVotingPower: (remainingPower > BigInt(0)
       ? remainingPower
@@ -157,7 +154,10 @@ export function getDelegateCacheStats(
   const generatedAt = new Date(sdkStats.generatedAt);
 
   return {
-    totalDelegates: sdkStats.totalDelegates,
+    // Not sdkStats.totalDelegates: the cache is built with the SDK's own
+    // (lower) floor, so counting it directly would disagree with every other
+    // delegate figure in the app.
+    totalDelegates: countEligibleDelegates(cache.delegates),
     snapshotBlock: sdkStats.snapshotBlock,
     generatedAt,
     age: formatCacheAge(generatedAt),
@@ -173,8 +173,15 @@ export function getTopDelegates(
   return sdkGetTopDelegates(cache, limit);
 }
 
+/**
+ * Load the eligible delegate population.
+ *
+ * Defaults to the app-wide threshold rather than the indexer's near-zero floor,
+ * so a caller counting `delegates.length` gets the same figure as every other
+ * delegate count in the app.
+ */
 export async function loadDelegateList(
-  minVotingPower = DEFAULT_MIN_VOTING_POWER
+  minVotingPower = DELEGATE_MIN_VOTING_POWER_WEI
 ): Promise<TallyDelegateListResult> {
   const result = await getTallyDataClient().getDelegateList(minVotingPower);
   return stripExcludedDelegates(result);
@@ -186,7 +193,9 @@ export function getDelegateListStats(
   const generatedAt = new Date();
 
   return {
-    totalDelegates: delegateList.delegates.length,
+    // Re-applies the threshold rather than trusting the list's own filter: a
+    // caller may have requested a lower floor.
+    totalDelegates: countEligibleDelegates(delegateList.delegates),
     snapshotBlock: 0,
     generatedAt,
     age: formatCacheAge(generatedAt),
