@@ -18,6 +18,7 @@ import {
   Loader2,
   LucideIcon,
   LucideProps,
+  Menu,
   Moon,
   MoreVertical,
   PackageOpenIcon,
@@ -118,8 +119,25 @@ function LogoIcon({ className }: { className?: string } = { className: "" }) {
   );
 }
 
+function WordmarkIcon(
+  { className }: { className?: string } = { className: "" }
+) {
+  return (
+    <Image
+      src="/logos/arbitrum-foundation.svg"
+      alt="Arbitrum Foundation"
+      className={className}
+      width={128}
+      height={33}
+      priority
+    />
+  );
+}
+
 export const Icons = {
   logo: LogoIcon,
+  wordmark: WordmarkIcon,
+  menu: Menu,
   close: X,
   spinner: Loader2,
   chevronLeft: ChevronLeft,

@@ -22,13 +22,6 @@ export const ToolbarSearch = memo(function ToolbarSearch({
 }: ToolbarSearchProps) {
   return (
     <div className="relative flex-1 sm:flex-initial group">
-      <SearchIcon
-        className={cn(
-          "absolute top-1/2 left-4 -translate-y-1/2 h-4 w-4",
-          "text-muted-foreground/50 transition-colors",
-          "group-focus-within:text-primary"
-        )}
-      />
       <Input
         placeholder={placeholder}
         value={value}
@@ -39,6 +32,13 @@ export const ToolbarSearch = memo(function ToolbarSearch({
           "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
           "placeholder:text-muted-foreground/40",
           className
+        )}
+      />
+      <SearchIcon
+        className={cn(
+          "absolute top-1/2 left-4 -translate-y-1/2 h-4 w-4",
+          "transition-colors",
+          "group-focus-within:text-primary text-white"
         )}
       />
     </div>

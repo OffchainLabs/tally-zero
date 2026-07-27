@@ -58,6 +58,7 @@ export function DataTable<TData, TValue>({
     () => ({
       proposer: xl,
       votes: lg,
+      quorum: xl,
       governorName: md,
       lifecycle: sm,
     }),

@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  DELEGATE_LIST_MAX_ROWS,
+  DELEGATE_MIN_VOTING_POWER_WEI,
+} from "@/config/delegates";
 import type {
   TallyAddressDisplayRecord,
   TallyCandidateSummary,
@@ -78,9 +82,12 @@ async function fetchAddressMap<T extends { address: string }>(
 }
 
 export class IndexerTallyDataClient implements TallyDataClient {
-  getDelegateList(minVotingPower = "10000000000000000000") {
+  getDelegateList(
+    minVotingPower = DELEGATE_MIN_VOTING_POWER_WEI,
+    limit = DELEGATE_LIST_MAX_ROWS
+  ) {
     return fetchIndexer<TallyDelegateListResult>(
-      `api/tally/delegates${queryString({ minVotingPower })}`
+      `api/tally/delegates${queryString({ minVotingPower, limit })}`
     );
   }
 

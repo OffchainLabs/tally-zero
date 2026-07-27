@@ -12,18 +12,18 @@ const DESKTOP_ROWS = 8;
 const MOBILE_CARDS = 5;
 
 /**
- * Skeleton mirroring the proposals DataTable layout: toolbar, glass table
- * with the real column headers on desktop, stacked cards on mobile.
- * Column visibility matches DataTable's breakpoint map (governor: md,
- * votes: lg); the table itself only renders at sm+ like the real one.
+ * Skeleton mirroring the proposals table below the tabs header: the search
+ * toolbar, the glass table with the real column headers on desktop (including
+ * the Quorum column), stacked cards on mobile, and the paginated footer.
+ * Column visibility matches DataTable's breakpoint map (governor: md, votes: lg,
+ * quorum: xl); the table itself only renders at sm+ like the real one.
  */
 export default function SearchSkeleton() {
   return (
     <div className="space-y-4">
-      {/* Toolbar: search input + New Proposal button */}
-      <div className="flex items-center justify-between gap-2">
-        <Skeleton className="h-10 w-full sm:w-[150px] lg:w-[450px]" />
-        <Skeleton className="h-9 w-[130px]" />
+      {/* Toolbar: search input */}
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-10 w-full sm:w-[280px] rounded-md" />
       </div>
 
       {/* Mobile: stacked proposal cards */}
@@ -61,9 +61,15 @@ export default function SearchSkeleton() {
                 <TableHead style={{ width: 100 }}>Status</TableHead>
                 <TableHead
                   className="hidden lg:table-cell"
-                  style={{ width: 180 }}
+                  style={{ width: 120 }}
                 >
                   Votes
+                </TableHead>
+                <TableHead
+                  className="hidden xl:table-cell"
+                  style={{ width: 120 }}
+                >
+                  Quorum
                 </TableHead>
                 <TableHead style={{ width: 100 }}>Your Vote</TableHead>
                 <TableHead style={{ width: 100 }} />
@@ -79,13 +85,25 @@ export default function SearchSkeleton() {
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-md" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <div className="flex items-center gap-1.5">
+                      <Skeleton className="h-2 w-2 rounded-full" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    <Skeleton className="h-2.5 w-28 rounded-full" />
+                    <div className="w-24 space-y-1">
+                      <Skeleton className="h-1.5 w-24 rounded-full" />
+                      <Skeleton className="h-2.5 w-20" />
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden xl:table-cell">
+                    <div className="w-24 space-y-1">
+                      <Skeleton className="h-1.5 w-24 rounded-full" />
+                      <Skeleton className="h-2.5 w-8" />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Skeleton className="h-5 w-14 rounded-full" />
@@ -101,11 +119,16 @@ export default function SearchSkeleton() {
       </div>
 
       {/* Pagination */}
-      <div className="hidden sm:flex items-center justify-between">
-        <Skeleton className="h-4 w-40" />
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-8 w-32" />
+      <div className="hidden sm:grid grid-cols-3 items-center gap-3 px-2">
+        <Skeleton className="h-4 w-44" />
+        <div className="flex items-center justify-center gap-1">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-8 rounded-md" />
+          ))}
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Skeleton className="h-4 w-10" />
+          <Skeleton className="h-8 w-[70px] rounded-md" />
         </div>
       </div>
     </div>

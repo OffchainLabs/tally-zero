@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   filterDelegatesByAddress,
@@ -10,6 +10,7 @@ import {
   type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
+import { countEligibleDelegates } from "@/config/delegates";
 import { delegateVotingPowerKey } from "@/hooks/use-delegate-voting-power";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
@@ -33,6 +34,12 @@ export interface UseDelegateSearchOptions {
 
 export interface UseDelegateSearchResult {
   delegates: DelegateInfo[];
+  /**
+   * Size of the eligible delegate population, independent of the search and
+   * min-power filters, so a "total delegates" figure does not shrink as the
+   * user narrows the table.
+   */
+  eligibleDelegateCount: number;
   totalVotingPower: string;
   totalSupply: string;
   error: Error | null;
@@ -173,6 +180,14 @@ export function useDelegateSearch({
     filterFromCache();
   }, [minVotingPower, debouncedAddressFilter, delegateData]);
 
+  // Counted off the loaded list rather than `delegates` so the figure survives
+  // the search box, and re-counted after refreshVisibleDelegates writes fresh
+  // on-chain power in case a delegate has dropped below the threshold.
+  const eligibleDelegateCount = useMemo(
+    () => (delegateData ? countEligibleDelegates(delegateData.delegates) : 0),
+    [delegateData]
+  );
+
   const refreshVisibleDelegates = useCallback(
     async (addresses: string[]) => {
       if (!enabled || !isHydrated || addresses.length === 0) return;
@@ -255,6 +270,7 @@ export function useDelegateSearch({
 
   return {
     delegates,
+    eligibleDelegateCount,
     totalVotingPower,
     totalSupply,
     error,

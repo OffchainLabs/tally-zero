@@ -187,3 +187,25 @@ export function getStateStyle(state: string | null): {
   if (!state) return DEFAULT_STATE_STYLE;
   return STATE_STYLE_MAP[state.toLowerCase()] ?? DEFAULT_STATE_STYLE;
 }
+
+/** Background-color class for the status dot, matching each state's hue. */
+const STATE_DOT_MAP: Record<string, string> = {
+  executed: "bg-green-500",
+  active: "bg-blue-500",
+  pending: "bg-blue-500",
+  queued: "bg-yellow-500",
+  succeeded: "bg-yellow-500",
+  defeated: "bg-red-500",
+  canceled: "bg-red-500",
+  expired: "bg-red-500",
+};
+
+/**
+ * Get the status dot background color class for a proposal state.
+ * @param state - The proposal state
+ * @returns A Tailwind bg-* class for the 8px status dot
+ */
+export function getStateDotColor(state: string | null): string {
+  if (!state) return "bg-muted-foreground";
+  return STATE_DOT_MAP[state.toLowerCase()] ?? "bg-muted-foreground";
+}

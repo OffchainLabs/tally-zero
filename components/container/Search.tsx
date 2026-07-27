@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { DeepLinkHandler } from "@/components/container/DeepLinkHandler";
 import SearchSkeleton from "@/components/container/SearchSkeleton";
@@ -14,7 +14,12 @@ import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useMultiGovernorSearch } from "@/hooks/use-multi-governor-search";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 
-export default function Search() {
+export interface SearchProps {
+  /** Notified with the number of proposals in the table once a search settles. */
+  onProposalCountChange?: (count: number) => void;
+}
+
+export default function Search({ onProposalCountChange }: SearchProps = {}) {
   const searchParams = useSearchParams();
 
   const [storedDays] = useLocalStorage<number>(
@@ -47,6 +52,11 @@ export default function Search() {
     () => proposals.filter((proposal) => proposal.id?.trim()),
     [proposals]
   );
+
+  useEffect(() => {
+    if (isSearching) return;
+    onProposalCountChange?.(validProposals.length);
+  }, [isSearching, validProposals.length, onProposalCountChange]);
 
   return (
     <div className="flex flex-col space-y-4">

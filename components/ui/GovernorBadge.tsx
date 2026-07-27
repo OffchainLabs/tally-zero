@@ -25,37 +25,21 @@ export const GovernorBadge = memo(function GovernorBadge({
   const isCore = governorType === "core";
 
   const sizeClasses =
-    size === "sm" ? "text-[10px] px-2 py-0.5" : "text-xs px-2.5 py-0.5";
+    size === "sm"
+      ? "text-[9px] px-2 py-0.5 tracking-wide"
+      : "text-[10px] px-2.5 py-1 tracking-wider";
 
   return (
     <span
       className={cn(
-        // Base styles
-        "inline-flex items-center rounded-md font-medium",
-        "transition-all duration-200",
+        // Base styles: uppercase tag pill (Figma "Routes Tag")
+        "inline-flex items-center rounded-md font-semibold uppercase",
+        "backdrop-blur-md ring-1 ring-inset transition-all duration-200",
         sizeClasses,
-        // Glass effect
-        "backdrop-blur-md",
-        // Governor-specific colors with glass transparency
+        // Governor-specific colors: Core = brand blue, Treasury = accent teal-green
         isCore
-          ? [
-              // Light mode: blue tint
-              "bg-blue-500/10 text-blue-700 border border-blue-300/40",
-              // Dark mode: blue tint
-              "dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-400/30",
-              // Hover effects
-              "hover:bg-blue-500/20 hover:border-blue-300/60",
-              "dark:hover:bg-blue-500/25 dark:hover:border-blue-400/50",
-            ]
-          : [
-              // Light mode: amber tint
-              "bg-amber-500/10 text-amber-700 border border-amber-300/40",
-              // Dark mode: amber tint
-              "dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/30",
-              // Hover effects
-              "hover:bg-amber-500/20 hover:border-amber-300/60",
-              "dark:hover:bg-amber-500/25 dark:hover:border-amber-400/50",
-            ],
+          ? "bg-arb-brand/15 text-arb-brand ring-arb-brand/30 hover:bg-arb-brand/25"
+          : "bg-arb-accent2/15 text-arb-accent2 ring-arb-accent2/30 hover:bg-arb-accent2/25",
         className
       )}
     >

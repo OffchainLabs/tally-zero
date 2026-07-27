@@ -69,23 +69,21 @@ export default function RootLayout({ children }: RootLayoutProps) {
 
       <body
         className={cn(
-          "min-h-screen font-sans antialiased bg-[#f0f8ff] dark:bg-[#040019] transition-colors duration-200 ease-in-out",
+          "min-h-screen font-sans antialiased bg-[#0b0c10] transition-colors duration-200 ease-in-out",
           GeistSans.className
         )}
       >
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
           <PostHogProvider>
             <Web3ModalProvider>
               <NerdModeProvider>
                 <DeepLinkProvider>
                   <SettingsSheetProvider>
-                    <header className="sticky top-0 z-50 w-full">
-                      <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4">
-                        <div className="glass rounded-2xl px-4 sm:px-6 backdrop-blur-md">
-                          <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
-                            <MainNav items={marketingConfig.mainNav} />
-                            <ButtonNav />
-                          </div>
+                    <header className="sticky top-0 z-50 w-full backdrop-blur-md">
+                      <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+                        <div className="relative flex h-16 items-center justify-between gap-2">
+                          <MainNav items={marketingConfig.mainNav} />
+                          <ButtonNav />
                         </div>
                       </div>
                     </header>

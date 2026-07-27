@@ -2,9 +2,9 @@
 
 import { ColumnDef, Row } from "@tanstack/react-table";
 
-import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
 import { VoteDistributionBarCompact } from "@components/proposal/stages/VoteDistributionBarCompact";
 import { DataTableColumnHeader } from "@components/table/ColumnHeader";
+import { QuorumCell } from "@components/table/QuorumCell";
 import { DataTableRowActions } from "@components/table/RowActions";
 import { ClickableDescriptionCell } from "@components/ui/DescriptionCell";
 import { GovernorBadge } from "@components/ui/GovernorBadge";
@@ -17,7 +17,6 @@ import {
 import { LifecycleCell } from "@components/ui/LifecycleCell";
 import { VoteDisplay } from "@components/ui/VoteDisplay";
 
-import { sumVoteCounts } from "@/lib/vote-utils";
 import { ParsedProposal } from "@/types/proposal";
 
 export const columns: ColumnDef<ParsedProposal>[] = [
@@ -82,34 +81,31 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     cell: ({ row }: { row: Row<ParsedProposal> }) => {
       const votes = row.original.votes;
 
-      // Calculate votes toward quorum (only For + Abstain count, not Against)
-      const votesTowardQuorum = sumVoteCounts(
-        votes?.forVotes,
-        votes?.abstainVotes
-      );
-
       return (
-        <div className="flex items-center gap-3">
-          <HoverCard>
-            <HoverCardTrigger className="cursor-pointer">
-              <VoteDistributionBarCompact votes={votes} />
-            </HoverCardTrigger>
-            <HoverCardContent className="w-auto glass rounded-xl">
-              <VoteDisplay votes={votes} />
-            </HoverCardContent>
-          </HoverCard>
-          {votes?.quorum && (
-            <div className="hidden xl:block">
-              <QuorumIndicator
-                current={votesTowardQuorum}
-                required={votes.quorum}
-              />
-            </div>
-          )}
-        </div>
+        <HoverCard>
+          <HoverCardTrigger className="cursor-pointer">
+            <VoteDistributionBarCompact votes={votes} />
+          </HoverCardTrigger>
+          <HoverCardContent className="w-auto glass rounded-xl">
+            <VoteDisplay votes={votes} />
+          </HoverCardContent>
+        </HoverCard>
       );
     },
-    size: 180,
+    size: 120,
+  },
+  {
+    id: "quorum",
+    meta: {
+      label: "Quorum",
+    },
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Quorum" />
+    ),
+    cell: ({ row }: { row: Row<ParsedProposal> }) => (
+      <QuorumCell proposal={row.original} />
+    ),
+    size: 120,
   },
   {
     id: "hasVoted",

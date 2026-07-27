@@ -38,12 +38,12 @@ describe("marketing config", () => {
         expect(delegates?.href).toBe("/delegates");
       });
 
-      it("has ArbitrumDAO nav item", () => {
-        const dao = marketingConfig.mainNav.find(
-          (item) => item.title === "ArbitrumDAO"
+      it("has About nav item", () => {
+        const about = marketingConfig.mainNav.find(
+          (item) => item.title === "About"
         );
-        expect(dao).toBeDefined();
-        expect(dao?.href).toBe("https://arbitrum.foundation/governance");
+        expect(about).toBeDefined();
+        expect(about?.href).toBe("https://arbitrum.foundation/governance");
       });
 
       it("all nav items have title and href", () => {

@@ -10,22 +10,22 @@ import {
   DelegatesTable,
   SnapshotBlockNotice,
 } from "@/components/container/delegate";
+import {
+  DELEGATE_MIN_VOTING_POWER_ARB,
+  DELEGATE_MIN_VOTING_POWER_WEI,
+} from "@/config/delegates";
 import { useDelegateSearch } from "@/hooks/use-delegate-search";
 import { useRpcHealthOrchestration } from "@/hooks/use-rpc-health-orchestration";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
 
 const ARB_DECIMALS = BigNumber.from(10).pow(18);
-const MIN_DELEGATE_POWER_ARB = 5000;
-const MIN_DELEGATE_POWER_WEI = BigNumber.from(MIN_DELEGATE_POWER_ARB)
-  .mul(ARB_DECIMALS)
-  .toString();
 const MIN_POWER_PATTERN = /^\d+(?:\.\d+)?$/;
 
 export default function DelegateSearch() {
   const searchParams = useSearchParams();
   const [minPowerFilter, setMinPowerFilter] = useState<string>(
-    String(MIN_DELEGATE_POWER_ARB)
+    String(DELEGATE_MIN_VOTING_POWER_ARB)
   );
   const [delegateSearchFilter, setDelegateSearchFilter] = useState<string>("");
 
@@ -45,33 +45,35 @@ export default function DelegateSearch() {
   const { autoStarted, rpcHealthy, handleRpcHealthChecked } =
     useRpcHealthOrchestration();
 
-  // Always enforce a 5000 ARB minimum, while still allowing the UI to raise it.
+  // Never drop below the eligibility threshold, while still letting the UI
+  // raise it. Anything under it is not a delegate as far as this app counts.
   const minVotingPowerWei = useMemo(() => {
     const trimmedMinPowerFilter = minPowerFilter.trim();
-    if (!trimmedMinPowerFilter) return MIN_DELEGATE_POWER_WEI;
+    if (!trimmedMinPowerFilter) return DELEGATE_MIN_VOTING_POWER_WEI;
 
     if (!MIN_POWER_PATTERN.test(trimmedMinPowerFilter)) {
       debug.delegates("invalid min power filter: %s", trimmedMinPowerFilter);
-      return MIN_DELEGATE_POWER_WEI;
+      return DELEGATE_MIN_VOTING_POWER_WEI;
     }
 
     try {
       const requestedWholeArb = BigNumber.from(
         trimmedMinPowerFilter.split(".")[0] || "0"
       );
-      const effectiveArb = requestedWholeArb.lt(MIN_DELEGATE_POWER_ARB)
-        ? BigNumber.from(MIN_DELEGATE_POWER_ARB)
+      const effectiveArb = requestedWholeArb.lt(DELEGATE_MIN_VOTING_POWER_ARB)
+        ? BigNumber.from(DELEGATE_MIN_VOTING_POWER_ARB)
         : requestedWholeArb;
 
       return effectiveArb.mul(ARB_DECIMALS).toString();
     } catch (error) {
       debug.delegates("invalid min power filter: %O", error);
-      return MIN_DELEGATE_POWER_WEI;
+      return DELEGATE_MIN_VOTING_POWER_WEI;
     }
   }, [minPowerFilter]);
 
   const {
     delegates,
+    eligibleDelegateCount,
     totalVotingPower,
     totalSupply,
     error,
@@ -118,9 +120,9 @@ export default function DelegateSearch() {
 
   return (
     <div className="flex flex-col space-y-4">
-      {delegates.length > 0 && !error && (
+      {eligibleDelegateCount > 0 && !error && (
         <DelegateStatsCards
-          delegateCount={delegates.length}
+          delegateCount={eligibleDelegateCount}
           totalVotingPower={totalVotingPower}
           totalSupply={totalSupply}
         />
@@ -139,7 +141,7 @@ export default function DelegateSearch() {
         isLoading={isLoading}
         error={error}
         rpcHealthy={rpcHealthy}
-        minPowerFloor={MIN_DELEGATE_POWER_ARB}
+        minPowerFloor={DELEGATE_MIN_VOTING_POWER_ARB}
         refreshedAddresses={refreshedAddresses}
         onSearchChange={setDelegateSearchFilter}
         onMinPowerChange={setMinPowerFilter}
