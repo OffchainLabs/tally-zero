@@ -13,7 +13,6 @@ import { http } from "viem";
 import { createConfig, useEnsName } from "wagmi";
 import { mainnet } from "wagmi/chains";
 
-import { Icons } from "@components/Icons";
 import { SettingsSheet } from "@components/container/SettingsSheet";
 import { Button } from "@components/ui/Button";
 
@@ -70,9 +69,6 @@ export function ButtonNav() {
         className="gap-2 rounded-full"
         onClick={() => void open({ view: "Account" })}
       >
-        <span className="flex size-4 items-center justify-center rounded-full bg-primary/20 text-primary">
-          <Icons.check className="size-3" strokeWidth={3} />
-        </span>
         {accountLabel}
       </Button>
     </>
