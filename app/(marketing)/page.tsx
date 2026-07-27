@@ -20,8 +20,7 @@ export default async function IndexPage() {
       </div>
 
       <div className="container flex flex-col gap-4 pb-8 pt-6 md:pb-12 md:pt-10">
-        <ProposalBanner />
-        <HomeView />
+        <HomeView banner={<ProposalBanner />} />
       </div>
     </div>
   );

@@ -41,22 +41,25 @@ export function GovernanceStatCards({
         : "N/A";
 
   return (
-    <div className="rounded-2xl bg-white/[0.05] p-3 backdrop-blur-[15px] sm:p-5">
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-        <StatCard value={delegateValue} label="Delegates" />
+    <div className="rounded-2xl bg-white/[0.05] p-2 backdrop-blur-[15px] sm:p-3">
+      <div className="grid h-full gap-2 sm:grid-cols-3">
+        <StatCard
+          value={delegateValue}
+          label="Delegates with ≥5000 ARB voting power"
+        />
         <StatCard
           value={proposalCount === null ? null : String(proposalCount)}
           label="Proposals"
         />
-        <StatCard label="Treasury" className="sm:col-span-2 lg:col-span-1">
+        <StatCard label="Treasury">
           <a
             href={TREASURY_DATA_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xl font-semibold leading-tight text-arb-brand transition-colors hover:text-arb-teal lg:text-2xl xl:text-3xl"
+            className="inline-flex items-start gap-1 text-sm font-semibold leading-tight text-arb-brand transition-colors hover:text-arb-teal xl:text-base"
           >
             See the treasury on ArbData
-            <ArrowUpRight className="size-5 shrink-0 lg:size-6" />
+            <ArrowUpRight className="size-4 shrink-0" />
           </a>
         </StatCard>
       </div>
@@ -77,12 +80,12 @@ function StatCard({ label, value, children, className }: StatCardProps) {
   return (
     <div
       className={cn(
-        "flex min-h-[120px] flex-col justify-center gap-2 rounded-2xl border border-arb-surface bg-white/[0.05] p-6 sm:min-h-[180px] sm:p-8 lg:min-h-[180px] lg:p-6",
+        "flex min-h-[104px] flex-col justify-center gap-1 rounded-xl border border-arb-surface bg-white/[0.05] p-4 sm:min-h-[116px]",
         className
       )}
     >
       {children ?? (
-        <p className="text-4xl font-bold uppercase leading-none tracking-tight text-[#e8f0f8] sm:text-5xl lg:text-[84px]">
+        <p className="text-3xl font-bold uppercase leading-none tracking-tight text-[#e8f0f8] xl:text-4xl">
           {value === null || value === undefined ? (
             <>
               <span
@@ -96,7 +99,7 @@ function StatCard({ label, value, children, className }: StatCardProps) {
           )}
         </p>
       )}
-      <p className="text-sm uppercase text-[#e8f0f8]/50">{label}</p>
+      <p className="text-xs uppercase text-[#e8f0f8]/50">{label}</p>
     </div>
   );
 }
