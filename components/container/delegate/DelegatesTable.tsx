@@ -2,10 +2,7 @@
 "use no memo";
 
 import { columns } from "@/components/table/ColumnsDelegates";
-import {
-  DelegatesToolbar,
-  type DelegateSortOrder,
-} from "@/components/table/DelegatesToolbar";
+import { DelegatesToolbar } from "@/components/table/DelegatesToolbar";
 import { DataTablePagination } from "@/components/table/Pagination";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -16,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import { buildShuffleMap, sortByOrderMap } from "@/lib/collection-utils";
+import type { DelegateSortOrder } from "@/hooks/use-delegate-search";
 import {
   getDelegateSummaries,
   type TallyDelegateSummary,
@@ -24,18 +21,17 @@ import {
 import type { DelegateInfo } from "@/types/delegate";
 import {
   ColumnFiltersState,
-  SortingState,
   VisibilityState,
   flexRender,
   getCoreRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
+  type PaginationState,
+  type SortingState,
 } from "@tanstack/react-table";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export interface DelegatesTableProps {
   delegates: DelegateInfo[];
@@ -45,6 +41,15 @@ export interface DelegatesTableProps {
   rpcHealthy: boolean | null;
   minPowerFloor: number;
   refreshedAddresses: Set<string>;
+  // Server-driven pagination + sorting: the parent owns this state and refetches.
+  pageIndex: number;
+  pageSize: number;
+  rowCount: number;
+  onPaginationChange: (pagination: PaginationState) => void;
+  sorting: SortingState;
+  onSortingChange: (sorting: SortingState) => void;
+  sortOrder: DelegateSortOrder;
+  onSortOrderChange: (order: DelegateSortOrder) => void;
   onSearchChange: (value: string) => void;
   onMinPowerChange: (value: string) => void;
   onVisibleRowsChange: (addresses: string[]) => void;
@@ -77,6 +82,14 @@ export function DelegatesTable({
   rpcHealthy,
   minPowerFloor,
   refreshedAddresses,
+  pageIndex,
+  pageSize,
+  rowCount,
+  onPaginationChange,
+  sorting,
+  onSortingChange,
+  sortOrder,
+  onSortOrderChange,
   onSearchChange,
   onMinPowerChange,
   onVisibleRowsChange,
@@ -84,59 +97,20 @@ export function DelegatesTable({
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [sortOrder, setSortOrder] = useState<DelegateSortOrder>("votingPower");
-  const prevSortOrderRef = useRef(sortOrder);
-  const randomOrderRef = useRef<Map<string, number>>(new Map());
-  const randomOrderKeyRef = useRef("");
   const [searchValue, setSearchValue] = useState("");
   const [minPowerValue, setMinPowerValue] = useState(String(minPowerFloor));
   const [delegateSummaries, setDelegateSummaries] = useState<
     Map<string, TallyDelegateSummary>
   >(new Map());
-  const delegateAddressKey = useMemo(
-    () =>
-      delegates
-        .map((delegate) => delegate.address.toLowerCase())
-        .sort()
-        .join(","),
-    [delegates]
-  );
-
-  const sortedDelegates = useMemo(() => {
-    if (sortOrder !== "random") {
-      prevSortOrderRef.current = sortOrder;
-      return delegates;
-    }
-
-    const shouldRefreshRandomOrder =
-      prevSortOrderRef.current !== "random" ||
-      randomOrderKeyRef.current !== delegateAddressKey;
-
-    if (shouldRefreshRandomOrder) {
-      randomOrderRef.current = buildShuffleMap(
-        delegates.map((delegate) => delegate.address.toLowerCase())
-      );
-      randomOrderKeyRef.current = delegateAddressKey;
-    }
-
-    prevSortOrderRef.current = sortOrder;
-
-    return sortByOrderMap(
-      delegates,
-      (delegate) => delegate.address.toLowerCase(),
-      randomOrderRef.current
-    );
-  }, [delegateAddressKey, delegates, sortOrder]);
 
   const rowDelegateSummaries = useMemo(() => {
     const summaries = new Map<string, TallyDelegateSummary>();
-    for (const delegate of sortedDelegates) {
+    for (const delegate of delegates) {
       const summary = getRowDelegateSummary(delegate);
       if (summary) summaries.set(delegate.address.toLowerCase(), summary);
     }
     return summaries;
-  }, [sortedDelegates]);
+  }, [delegates]);
   const tableDelegateSummaries = useMemo(
     () => new Map([...delegateSummaries, ...rowDelegateSummaries]),
     [rowDelegateSummaries, delegateSummaries]
@@ -144,33 +118,46 @@ export function DelegatesTable({
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<DelegateInfo>({
-    data: sortedDelegates,
+    data: delegates,
     columns,
     state: {
-      sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
+      sorting,
+      pagination: { pageIndex, pageSize },
     },
-    initialState: {
-      pagination: { pageIndex: 0, pageSize: 20 },
-    },
+    // Server-side pagination + sorting: `data` is already the current page,
+    // `rowCount` is the whole-set total from the count endpoint, and ordering is
+    // resolved by the indexer from the sorting/sortOrder state below.
+    manualPagination: true,
+    manualFiltering: true,
+    manualSorting: true,
+    rowCount,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    autoResetPageIndex: false,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      onSortingChange(next);
+    },
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === "function"
+          ? updater({ pageIndex, pageSize })
+          : updater;
+      onPaginationChange(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
     meta: {
       totalVotingPower,
       delegateSummaries: tableDelegateSummaries,
       refreshedAddresses,
+      rowOffset: pageIndex * pageSize,
     },
   });
 
@@ -188,7 +175,6 @@ export function DelegatesTable({
   // py-5 + h-7 avatar row ≈ 68px; header is 48px (h-12 in TableHead).
   const ROW_HEIGHT_PX = 68;
   const HEADER_HEIGHT_PX = 48;
-  const pageSize = table.getState().pagination.pageSize;
   const minTableHeight = pageSize * ROW_HEIGHT_PX + HEADER_HEIGHT_PX;
 
   useEffect(() => {
@@ -238,17 +224,15 @@ export function DelegatesTable({
             searchValue={searchValue}
             minPowerValue={minPowerValue}
             onSearchChange={(value) => {
-              table.setPageIndex(0);
               setSearchValue(value);
               onSearchChange(value);
             }}
             onMinPowerChange={(value) => {
-              table.setPageIndex(0);
               setMinPowerValue(value);
               onMinPowerChange(value);
             }}
             sortOrder={sortOrder}
-            onSortOrderChange={setSortOrder}
+            onSortOrderChange={onSortOrderChange}
           />
 
           <div className="relative">

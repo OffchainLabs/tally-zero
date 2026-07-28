@@ -1,10 +1,9 @@
 import {
-  DELEGATE_LIST_MAX_ROWS,
   DELEGATE_MIN_VOTING_POWER_ARB,
   DELEGATE_MIN_VOTING_POWER_WEI,
-  countEligibleDelegates,
+  EXCLUDED_DELEGATE_ADDRESSES,
 } from "@/config/delegates";
-import type { TallyDelegateListResult } from "@/lib/tally-data/types";
+import type { TallyDelegateCountResult } from "@/lib/tally-data/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +18,9 @@ function getIndexerUrl(): string | null {
 /**
  * Counts the delegates that clear the app-wide voting-power threshold.
  *
- * The indexer has no count endpoint, so the only way to get this number is to
- * read the whole eligible list (~250 KB today). This route does that read
- * server-side and hands the browser a single integer instead.
+ * The indexer's dedicated /delegate-count endpoint applies the same threshold
+ * and the governance exclude list server-side (via SQL COUNT), so this route
+ * just relays that number — no whole-list read.
  */
 export async function GET(): Promise<Response> {
   const indexerUrl = getIndexerUrl();
@@ -34,7 +33,7 @@ export async function GET(): Promise<Response> {
 
   const search = new URLSearchParams({
     minVotingPower: DELEGATE_MIN_VOTING_POWER_WEI,
-    limit: String(DELEGATE_LIST_MAX_ROWS),
+    exclude: EXCLUDED_DELEGATE_ADDRESSES.join(","),
   });
 
   const controller = new AbortController();
@@ -42,7 +41,7 @@ export async function GET(): Promise<Response> {
 
   try {
     const upstream = await fetch(
-      `${indexerUrl}/api/tally/delegates?${search}`,
+      `${indexerUrl}/api/tally/delegate-count?${search}`,
       {
         signal: controller.signal,
         headers: { accept: "application/json" },
@@ -52,12 +51,12 @@ export async function GET(): Promise<Response> {
       throw new Error(`Indexer request failed: ${upstream.status}`);
     }
 
-    const { delegates } = (await upstream.json()) as TallyDelegateListResult;
+    const { totalCount } = (await upstream.json()) as TallyDelegateCountResult;
 
     const headers = new Headers();
     headers.set("content-type", "application/json");
-    // The population moves slowly (delegations, not votes), and the upstream
-    // read is heavy, so cache it hard and refresh in the background.
+    // The population moves slowly (delegations, not votes), so cache it hard and
+    // refresh in the background.
     headers.set(
       "cache-control",
       "public, s-maxage=300, stale-while-revalidate=3600"
@@ -65,7 +64,7 @@ export async function GET(): Promise<Response> {
 
     return new Response(
       JSON.stringify({
-        count: countEligibleDelegates(delegates ?? []),
+        count: totalCount,
         minVotingPowerArb: DELEGATE_MIN_VOTING_POWER_ARB,
         minVotingPower: DELEGATE_MIN_VOTING_POWER_WEI,
       }),

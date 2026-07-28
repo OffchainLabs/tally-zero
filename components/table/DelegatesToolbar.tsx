@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { Table } from "@tanstack/react-table";
 import { ArrowDownUp } from "lucide-react";
 
+import type { DelegateSortOrder } from "@/hooks/use-delegate-search";
 import { cn } from "@/lib/utils";
 import { ToolbarResetButton } from "@components/table/ToolbarResetButton";
 import { ToolbarSearch } from "@components/table/ToolbarSearch";
@@ -17,8 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/Select";
-
-export type DelegateSortOrder = "votingPower" | "random";
 
 interface DelegatesToolbarProps<TData> {
   table: Table<TData>;

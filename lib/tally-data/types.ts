@@ -31,6 +31,31 @@ export type TallyDelegateListResult = {
   totalSupply: string;
 };
 
+export type TallyDelegateCountResult = {
+  totalCount: number;
+  totalVotingPower: string;
+  totalSupply: string;
+};
+
+export type DelegateSortField = "votingPower" | "address" | "random";
+
+export type DelegatePageParams = {
+  minVotingPower?: string;
+  query?: string;
+  exclude?: string[];
+  limit: number;
+  offset: number;
+  sort?: DelegateSortField;
+  dir?: "asc" | "desc";
+  seed?: string;
+};
+
+export type DelegateCountParams = {
+  minVotingPower?: string;
+  query?: string;
+  exclude?: string[];
+};
+
 export type TallyElectionCandidate = {
   address: string;
   name: string;
@@ -124,6 +149,12 @@ export interface TallyDataClient {
     minVotingPower?: string,
     limit?: number
   ): Promise<TallyDelegateListResult>;
+  getDelegatesPage(
+    params: DelegatePageParams
+  ): Promise<TallyDelegateListResult>;
+  getDelegateCount(
+    params?: DelegateCountParams
+  ): Promise<TallyDelegateCountResult>;
   getDelegate(address: string): Promise<TallyDelegateProfile | null>;
   getDelegateSummaries(
     addresses: string[]

@@ -1,6 +1,11 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { SortingState } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -10,20 +15,33 @@ import {
   type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
-import { countEligibleDelegates } from "@/config/delegates";
+import { EXCLUDED_DELEGATE_ADDRESSES } from "@/config/delegates";
 import { delegateVotingPowerKey } from "@/hooks/use-delegate-voting-power";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { debug } from "@/lib/debug";
-import {
-  delegateMatchesSearch,
-  getDelegateListStats,
-  loadDelegateList,
-  type TallyDelegateListItem,
-  type TallyDelegateListResult,
-} from "@/lib/delegate-cache";
 import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
-import type { DelegateCacheStats } from "@/types/delegate";
+import { getTallyDataClient } from "@/lib/tally-data/client";
+import type {
+  DelegateSortField,
+  TallyDelegateListItem,
+} from "@/lib/tally-data/types";
+
+/** Default rows per page for the server-paginated delegate table. */
+export const DELEGATE_PAGE_SIZE = 20;
+
+/** Toolbar order modes: ranked by voting power, or a seeded shuffle. */
+export type DelegateSortOrder = "votingPower" | "random";
+
+// Map a TanStack column id to the indexer's sort field (percentage is derived
+// from voting power, so it orders the same).
+function columnToSortField(columnId: string): DelegateSortField {
+  return columnId === "address" ? "address" : "votingPower";
+}
+
+// Applied server-side (list + count) so pages and the total stay mutually
+// consistent; a spread copy because the config export is a readonly tuple.
+const EXCLUDE = [...EXCLUDED_DELEGATE_ADDRESSES];
 
 export interface UseDelegateSearchOptions {
   enabled: boolean;
@@ -35,22 +53,48 @@ export interface UseDelegateSearchOptions {
 export interface UseDelegateSearchResult {
   delegates: DelegateInfo[];
   /**
-   * Size of the eligible delegate population, independent of the search and
-   * min-power filters, so a "total delegates" figure does not shrink as the
-   * user narrows the table.
+   * Size of the eligible delegate population for the active filters, from the
+   * dedicated count endpoint — independent of the current page.
    */
   eligibleDelegateCount: number;
   totalVotingPower: string;
   totalSupply: string;
   error: Error | null;
   isLoading: boolean;
-  cacheStats?: DelegateCacheStats;
-  snapshotBlock: number;
+  pageIndex: number;
+  pageSize: number;
+  rowCount: number;
+  setPagination: (pagination: { pageIndex: number; pageSize: number }) => void;
+  sorting: SortingState;
+  setSorting: (sorting: SortingState) => void;
+  sortOrder: DelegateSortOrder;
+  setSortOrder: (order: DelegateSortOrder) => void;
   refreshVisibleDelegates: (addresses: string[]) => Promise<void>;
   isRefreshingVisible: boolean;
   refreshedAddresses: Set<string>;
 }
 
+export function delegatesPageKey(
+  query: string,
+  minVotingPower: string,
+  pageIndex: number,
+  pageSize: number,
+  sort: string,
+  dir: string,
+  seed: string
+) {
+  return [
+    "delegates-page",
+    { query, minVotingPower, pageIndex, pageSize, sort, dir, seed },
+  ] as const;
+}
+
+export function delegatesCountKey(query: string, minVotingPower: string) {
+  return ["delegates-count", { query, minVotingPower }] as const;
+}
+
+// Retained pure helpers (unit-tested in use-delegate-search.test.ts). No longer
+// used by the hook itself now that filtering happens server-side.
 export function filterDelegates(
   delegates: DelegateInfo[],
   options: {
@@ -84,109 +128,132 @@ export function sortDelegatesByVotingPower<T extends { votingPower: string }>(
 export function useDelegateSearch({
   enabled,
   customRpcUrl,
-  minVotingPower,
+  minVotingPower = "0",
   addressFilter,
 }: UseDelegateSearchOptions): UseDelegateSearchResult {
   const { l2Rpc, isHydrated } = useRpcSettings({ customL2Rpc: customRpcUrl });
   const queryClient = useQueryClient();
-  const [debouncedAddressFilter, setDebouncedAddressFilter] = useState(
-    addressFilter ?? ""
+  const client = useMemo(() => getTallyDataClient(), []);
+
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(DELEGATE_PAGE_SIZE);
+  const [debouncedQuery, setDebouncedQuery] = useState(
+    (addressFilter ?? "").trim()
   );
 
-  const [delegates, setDelegates] = useState<DelegateInfo[]>([]);
-  const [totalVotingPower, setTotalVotingPower] = useState<string>("0");
-  const [totalSupply, setTotalSupply] = useState<string>("0");
-  const [snapshotBlock, setSnapshotBlock] = useState<number>(0);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshingVisible, setIsRefreshingVisible] = useState(false);
-  const [cacheStats, setCacheStats] = useState<DelegateCacheStats>();
-  const [delegateData, setDelegateData] =
-    useState<TallyDelegateListResult | null>(null);
+  // Sort: a "Voting Power" vs "Random" toolbar mode plus optional column-header
+  // sorting; both resolve to an indexer order below. `random` carries a seed so
+  // the shuffle is stable across pages until the user re-selects it.
+  const [sortOrder, setSortOrderState] =
+    useState<DelegateSortOrder>("votingPower");
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [randomSeed, setRandomSeed] = useState("");
 
+  const { sort, dir, seed } = useMemo(() => {
+    if (sortOrder === "random") {
+      return {
+        sort: "random" as DelegateSortField,
+        dir: "desc",
+        seed: randomSeed,
+      };
+    }
+    const active = sorting[0];
+    if (!active) {
+      return {
+        sort: "votingPower" as DelegateSortField,
+        dir: "desc",
+        seed: "",
+      };
+    }
+    return {
+      sort: columnToSortField(active.id),
+      dir: active.desc ? "desc" : "asc",
+      seed: "",
+    };
+  }, [sortOrder, sorting, randomSeed]);
+
+  const setSortOrder = useCallback((order: DelegateSortOrder) => {
+    if (order === "random") {
+      // A new seed each time Random is (re)selected → a fresh shuffle.
+      setRandomSeed(`${Math.floor(Math.random() * 1_000_000_000)}`);
+    }
+    setSortOrderState(order);
+  }, []);
+
+  // On-chain voting-power overlay for the visible page: refreshedAddresses gates
+  // the row out of its skeleton, refreshedPowers supplies the fresh value.
   const refreshedAddressesRef = useRef<Set<string>>(new Set());
   const [refreshedAddresses, setRefreshedAddresses] = useState<Set<string>>(
     () => new Set()
   );
+  const [refreshedPowers, setRefreshedPowers] = useState<Map<string, string>>(
+    () => new Map()
+  );
+  const [isRefreshingVisible, setIsRefreshingVisible] = useState(false);
 
+  // Debounce the search box before it drives a server fetch.
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setDebouncedAddressFilter(addressFilter ?? "");
+      setDebouncedQuery((addressFilter ?? "").trim());
     }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
+    return () => window.clearTimeout(timeout);
   }, [addressFilter]);
 
+  // Any filter or sort change resets to the first page.
   useEffect(() => {
-    let cancelled = false;
+    setPageIndex(0);
+  }, [debouncedQuery, minVotingPower, sort, dir, seed]);
 
-    setIsLoading(true);
-    setError(null);
-
-    loadDelegateList()
-      .then((loaded) => {
-        if (cancelled) return;
-
-        if (loaded) {
-          // SQLite already returns delegates ordered by rank
-          // (voting-power desc), so no resort is needed on load.
-          setDelegateData(loaded);
-          setTotalVotingPower(loaded.totalVotingPower);
-          setTotalSupply(loaded.totalSupply);
-          setSnapshotBlock(0);
-          setCacheStats(getDelegateListStats(loaded));
-          debug.delegates(
-            "SQLite delegate list loaded: %d delegates",
-            loaded.delegates.length
-          );
-        }
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        debug.delegates("failed to load SQLite delegate list: %O", err);
-        setError(toError(err));
-        setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    function filterFromCache() {
-      if (!delegateData) return;
-
-      const baseDelegates = filterDelegates(delegateData.delegates, {
+  const pageQuery = useQuery({
+    queryKey: delegatesPageKey(
+      debouncedQuery,
+      minVotingPower,
+      pageIndex,
+      pageSize,
+      sort,
+      dir,
+      seed
+    ),
+    queryFn: () =>
+      client.getDelegatesPage({
         minVotingPower,
-      }) as TallyDelegateListItem[];
+        query: debouncedQuery || undefined,
+        exclude: EXCLUDE,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+        sort,
+        dir: dir as "asc" | "desc",
+        seed: seed || undefined,
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
 
-      const trimmedFilter = debouncedAddressFilter.trim();
-      const filtered = trimmedFilter
-        ? baseDelegates.filter((delegate) =>
-            delegateMatchesSearch(delegate, trimmedFilter)
-          )
-        : baseDelegates;
+  const countQuery = useQuery({
+    queryKey: delegatesCountKey(debouncedQuery, minVotingPower),
+    queryFn: () =>
+      client.getDelegateCount({
+        minVotingPower,
+        query: debouncedQuery || undefined,
+        exclude: EXCLUDE,
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
 
-      // Preserve SQLite's voting-power-desc order. refreshVisibleDelegates
-      // sorts within the refreshed subset's original indices; sorting here
-      // would cause cascading reorders across pages.
-      setDelegates(filtered);
-    }
+  // The server already orders by voting power desc; overlay any refreshed
+  // on-chain powers so the visible rows show live values.
+  const delegates = useMemo<DelegateInfo[]>(() => {
+    const rows = (pageQuery.data?.delegates ?? []) as TallyDelegateListItem[];
+    const overlaid = rows.map((row) => {
+      const power = refreshedPowers.get(row.address.toLowerCase());
+      return power ? { ...row, votingPower: power } : row;
+    });
+    return overlaid as unknown as DelegateInfo[];
+  }, [pageQuery.data, refreshedPowers]);
 
-    filterFromCache();
-  }, [minVotingPower, debouncedAddressFilter, delegateData]);
-
-  // Counted off the loaded list rather than `delegates` so the figure survives
-  // the search box, and re-counted after refreshVisibleDelegates writes fresh
-  // on-chain power in case a delegate has dropped below the threshold.
-  const eligibleDelegateCount = useMemo(
-    () => (delegateData ? countEligibleDelegates(delegateData.delegates) : 0),
-    [delegateData]
-  );
+  const rawError = pageQuery.error ?? countQuery.error;
+  const error = rawError ? toError(rawError) : null;
 
   const refreshVisibleDelegates = useCallback(
     async (addresses: string[]) => {
@@ -195,11 +262,9 @@ export function useDelegateSearch({
       const toRefresh = addresses.filter(
         (addr) => !refreshedAddressesRef.current.has(addr.toLowerCase())
       );
-
       if (toRefresh.length === 0) return;
 
       setIsRefreshingVisible(true);
-
       try {
         const provider = await createRpcProvider(l2Rpc);
         const powerMap = await queryDelegateVotingPowers(provider, toRefresh);
@@ -222,6 +287,15 @@ export function useDelegateSearch({
           }
         }
 
+        if (powerMap.size > 0) {
+          setRefreshedPowers((current) => {
+            const next = new Map(current);
+            for (const [addr, power] of powerMap) {
+              next.set(addr.toLowerCase(), power);
+            }
+            return next;
+          });
+        }
         if (newlyRefreshed.length > 0) {
           setRefreshedAddresses((current) => {
             const next = new Set(current);
@@ -229,54 +303,38 @@ export function useDelegateSearch({
             return next;
           });
         }
-
-        if (powerMap.size > 0 && delegateData) {
-          // Update fresh values in place, then sort just the refreshed subset
-          // within its original indices. This reorders only the rows we just
-          // fetched (typically the visible page) using fresh on-chain values
-          // without shifting rows on other pages.
-          const refreshedIndices: number[] = [];
-          const refreshedObjects: TallyDelegateListItem[] = [];
-          const updatedDelegates = delegateData.delegates.map((d, i) => {
-            const newPower = powerMap.get(d.address.toLowerCase());
-            if (!newPower) return d;
-
-            const updated = { ...d, votingPower: newPower };
-            refreshedIndices.push(i);
-            refreshedObjects.push(updated);
-            return updated;
-          });
-
-          const sortedSubset = sortDelegatesByVotingPower(refreshedObjects);
-          refreshedIndices.forEach((idx, k) => {
-            updatedDelegates[idx] = sortedSubset[k];
-          });
-
-          setDelegateData({ ...delegateData, delegates: updatedDelegates });
-
-          const newTotalVotingPower = updatedDelegates
-            .reduce((sum, d) => sum + BigInt(d.votingPower), BigInt(0))
-            .toString();
-          setTotalVotingPower(newTotalVotingPower);
-        }
       } catch (err) {
         debug.delegates("error refreshing visible delegates: %O", err);
       } finally {
         setIsRefreshingVisible(false);
       }
     },
-    [enabled, isHydrated, l2Rpc, delegateData, queryClient]
+    [enabled, isHydrated, l2Rpc, queryClient]
+  );
+
+  const setPagination = useCallback(
+    (pagination: { pageIndex: number; pageSize: number }) => {
+      setPageIndex(pagination.pageIndex);
+      setPageSize(pagination.pageSize);
+    },
+    []
   );
 
   return {
     delegates,
-    eligibleDelegateCount,
-    totalVotingPower,
-    totalSupply,
+    eligibleDelegateCount: countQuery.data?.totalCount ?? 0,
+    totalVotingPower: countQuery.data?.totalVotingPower ?? "0",
+    totalSupply: countQuery.data?.totalSupply ?? "0",
     error,
-    isLoading,
-    cacheStats,
-    snapshotBlock,
+    isLoading: pageQuery.isLoading || countQuery.isLoading,
+    pageIndex,
+    pageSize,
+    rowCount: countQuery.data?.totalCount ?? 0,
+    setPagination,
+    sorting,
+    setSorting,
+    sortOrder,
+    setSortOrder,
     refreshVisibleDelegates,
     isRefreshingVisible,
     refreshedAddresses,

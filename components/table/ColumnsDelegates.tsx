@@ -25,6 +25,9 @@ declare module "@tanstack/react-table" {
     totalVotingPower?: string;
     delegateSummaries?: Map<string, TallyDelegateSummary>;
     refreshedAddresses?: Set<string>;
+    // Absolute index of the first row on the current page (pageIndex * pageSize),
+    // so rank stays continuous across server-paginated pages.
+    rowOffset?: number;
   }
 }
 
@@ -35,10 +38,17 @@ export const columns: ColumnDef<DelegateInfo>[] = [
       label: "Rank",
     },
     header: "Rank",
-    cell: ({ row }: { row: Row<DelegateInfo> }) => {
+    cell: ({
+      row,
+      table,
+    }: {
+      row: Row<DelegateInfo>;
+      table: Table<DelegateInfo>;
+    }) => {
+      const rowOffset = table.options.meta?.rowOffset ?? 0;
       return (
         <span className="flex h-7 items-center font-medium">
-          {row.index + 1}
+          {rowOffset + row.index + 1}
         </span>
       );
     },
