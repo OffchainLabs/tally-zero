@@ -5,10 +5,13 @@ import {
   DELEGATE_MIN_VOTING_POWER_WEI,
 } from "@/config/delegates";
 import type {
+  DelegateCountParams,
+  DelegatePageParams,
   TallyAddressDisplayRecord,
   TallyCandidateSummary,
   TallyDataClient,
   TallyDataStats,
+  TallyDelegateCountResult,
   TallyDelegateListResult,
   TallyDelegateProfile,
   TallyDelegateSearchResult,
@@ -88,6 +91,44 @@ export class IndexerTallyDataClient implements TallyDataClient {
   ) {
     return fetchIndexer<TallyDelegateListResult>(
       `api/tally/delegates${queryString({ minVotingPower, limit })}`
+    );
+  }
+
+  getDelegatesPage({
+    minVotingPower,
+    query,
+    exclude,
+    limit,
+    offset,
+    sort,
+    dir,
+    seed,
+  }: DelegatePageParams) {
+    return fetchIndexer<TallyDelegateListResult>(
+      `api/tally/delegates${queryString({
+        minVotingPower,
+        query: query || undefined,
+        exclude: exclude?.length ? exclude.join(",") : undefined,
+        limit,
+        offset,
+        sort,
+        dir,
+        seed: seed || undefined,
+      })}`
+    );
+  }
+
+  getDelegateCount({
+    minVotingPower,
+    query,
+    exclude,
+  }: DelegateCountParams = {}) {
+    return fetchIndexer<TallyDelegateCountResult>(
+      `api/tally/delegate-count${queryString({
+        minVotingPower,
+        query: query || undefined,
+        exclude: exclude?.length ? exclude.join(",") : undefined,
+      })}`
     );
   }
 

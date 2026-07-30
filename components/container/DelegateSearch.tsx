@@ -8,7 +8,6 @@ import RpcStatus from "@/components/container/RpcStatus";
 import {
   DelegateStatsCards,
   DelegatesTable,
-  SnapshotBlockNotice,
 } from "@/components/container/delegate";
 import {
   DELEGATE_MIN_VOTING_POWER_ARB,
@@ -78,8 +77,14 @@ export default function DelegateSearch() {
     totalSupply,
     error,
     isLoading,
-    cacheStats,
-    snapshotBlock,
+    pageIndex,
+    pageSize,
+    rowCount,
+    setPagination,
+    sorting,
+    setSorting,
+    sortOrder,
+    setSortOrder,
     refreshVisibleDelegates,
     refreshedAddresses,
   } = useDelegateSearch({
@@ -128,13 +133,6 @@ export default function DelegateSearch() {
         />
       )}
 
-      {snapshotBlock > 0 && cacheStats && (
-        <SnapshotBlockNotice
-          snapshotBlock={snapshotBlock}
-          cacheAge={cacheStats.age}
-        />
-      )}
-
       <DelegatesTable
         delegates={delegates}
         totalVotingPower={totalVotingPower}
@@ -143,6 +141,14 @@ export default function DelegateSearch() {
         rpcHealthy={rpcHealthy}
         minPowerFloor={DELEGATE_MIN_VOTING_POWER_ARB}
         refreshedAddresses={refreshedAddresses}
+        pageIndex={pageIndex}
+        pageSize={pageSize}
+        rowCount={rowCount}
+        onPaginationChange={setPagination}
+        sorting={sorting}
+        onSortingChange={setSorting}
+        sortOrder={sortOrder}
+        onSortOrderChange={setSortOrder}
         onSearchChange={setDelegateSearchFilter}
         onMinPowerChange={setMinPowerFilter}
         onVisibleRowsChange={handleVisibleRowsChange}

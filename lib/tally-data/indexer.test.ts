@@ -52,6 +52,57 @@ describe("IndexerTallyDataClient", () => {
     expect(Number(url.searchParams.get("limit"))).toBe(DELEGATE_LIST_MAX_ROWS);
   });
 
+  it("requests a delegates page with paging + filter params", async () => {
+    const fetchMock = mockJsonFetch({
+      delegates: [],
+      totalVotingPower: "0",
+      totalSupply: "0",
+    });
+
+    await new IndexerTallyDataClient().getDelegatesPage({
+      minVotingPower: "42",
+      query: "alice",
+      exclude: ["0xAAA", "0xBBB"],
+      limit: 20,
+      offset: 40,
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "https://app.test");
+    expect(url.pathname).toBe("/api/governance-indexer/api/tally/delegates");
+    expect(url.searchParams.get("minVotingPower")).toBe("42");
+    expect(url.searchParams.get("query")).toBe("alice");
+    expect(url.searchParams.get("exclude")).toBe("0xAAA,0xBBB");
+    expect(url.searchParams.get("limit")).toBe("20");
+    expect(url.searchParams.get("offset")).toBe("40");
+  });
+
+  it("requests the delegate count endpoint with threshold + exclude", async () => {
+    const fetchMock = mockJsonFetch({
+      totalCount: 5,
+      totalVotingPower: "0",
+      totalSupply: "0",
+    });
+
+    await expect(
+      new IndexerTallyDataClient().getDelegateCount({
+        minVotingPower: "42",
+        exclude: ["0xAAA"],
+      })
+    ).resolves.toEqual({
+      totalCount: 5,
+      totalVotingPower: "0",
+      totalSupply: "0",
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "https://app.test");
+    expect(url.pathname).toBe(
+      "/api/governance-indexer/api/tally/delegate-count"
+    );
+    expect(url.searchParams.get("minVotingPower")).toBe("42");
+    expect(url.searchParams.get("exclude")).toBe("0xAAA");
+    expect(url.searchParams.has("limit")).toBe(false);
+  });
+
   it("fetches aggregated vote summaries from the app route, not the proxy", async () => {
     const entries = [
       {
