@@ -9,6 +9,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/HoverCard";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { proposalSchema } from "@/config/schema";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
 import {
@@ -28,7 +29,10 @@ import {
 } from "@radix-ui/react-icons";
 
 interface LifecycleCellProps {
-  proposal: z.infer<typeof proposalSchema>;
+  proposal: z.infer<typeof proposalSchema> & {
+    /** See `isProposalStateUnverified` in lib/proposal-utils */
+    isStateUnverified?: boolean;
+  };
 }
 
 /**
@@ -69,6 +73,13 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     governorAddress: proposal.contractAddress,
     tab: "stages",
   });
+
+  // The indexer called this vote closed, but a late-quorum extension can leave
+  // it open on-chain. Hold the status back rather than show one that is about to
+  // be overturned by the governor.
+  if (proposal.isStateUnverified) {
+    return <UnverifiedLifecycleContent />;
+  }
 
   if (!shouldTrackLifecycle) {
     return (
@@ -118,6 +129,29 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     >
       {content}
     </Link>
+  );
+}
+
+/**
+ * Placeholder shown while a proposal's indexed status is being confirmed against
+ * the governor contract.
+ */
+function UnverifiedLifecycleContent() {
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div className="inline-flex items-center gap-1.5 cursor-help">
+          <ReloadIcon className="h-3 w-3 shrink-0 animate-spin text-muted-foreground/60" />
+          <Skeleton className="h-3 w-14" />
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="glass w-auto">
+        <p className="text-sm">Confirming status on-chain</p>
+        <p className="text-xs text-muted-foreground">
+          Waiting for the governor to confirm before showing a status.
+        </p>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 

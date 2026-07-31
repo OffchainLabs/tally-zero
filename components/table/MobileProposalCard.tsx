@@ -6,6 +6,7 @@ import { memo } from "react";
 import { VoteDistributionBarCompact } from "@/components/proposal/stages/VoteDistributionBarCompact";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { HasVotedBadge } from "@/components/ui/HasVotedBadge";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { extractProposalTitle, truncateText } from "@/lib/text-utils";
@@ -49,7 +50,12 @@ export const MobileProposalCard = memo(function MobileProposalCard({
             {plainText}
           </p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <StatusBadgeGlass state={proposal.state} />
+            {/* Withheld until the governor confirms it; see isProposalStateUnverified */}
+            {proposal.isStateUnverified ? (
+              <Skeleton className="h-5 w-20 rounded-full" />
+            ) : (
+              <StatusBadgeGlass state={proposal.state} />
+            )}
             {proposal.governorName && (
               <GovernorBadge governorName={proposal.governorName} size="sm" />
             )}

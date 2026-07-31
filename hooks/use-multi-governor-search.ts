@@ -11,10 +11,11 @@
  * chain head. See docs/plans/plan-indexer-first-proposals.md.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useL1Block } from "@/hooks/use-l1-block";
 import { findByAddress } from "@/lib/address-utils";
 import { buildLookupMap } from "@/lib/collection-utils";
 import { debug } from "@/lib/debug";
@@ -32,17 +33,19 @@ import {
   subscribeToVoteUpdates,
   type VoteUpdate,
 } from "@/lib/proposal-tracker-manager";
+import {
+  isProposalStateUnverified,
+  needsOnChainStateRefresh,
+  type StateVerificationProgress,
+} from "@/lib/proposal-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
+import { normalizeProposalStateName } from "@/lib/state-utils";
 import { getTallyDataClient } from "@/lib/tally-data/client";
 import type {
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
 } from "@/lib/tally-data/types";
-import type {
-  ParsedProposal,
-  ProposalStateName,
-  ProposalVotes,
-} from "@/types/proposal";
+import type { ParsedProposal, ProposalVotes } from "@/types/proposal";
 import {
   ARBITRUM_CHAIN_ID,
   ARBITRUM_GOVERNORS,
@@ -66,23 +69,6 @@ const WATERMARK_TOLERANCE_BLOCKS = Math.ceil(
   (BLOCKS_PER_DAY.arbitrum / (24 * 60)) * WATERMARK_TOLERANCE_MINUTES
 );
 
-const VALID_PROPOSAL_STATES: ProposalStateName[] = [
-  "Pending",
-  "Active",
-  "Canceled",
-  "Defeated",
-  "Succeeded",
-  "Queued",
-  "Expired",
-  "Executed",
-];
-
-const RPC_REFRESH_STATES = new Set<ProposalStateName>([
-  "Active",
-  "Pending",
-  "Unknown",
-]);
-
 /**
  * Vote summaries are one request per proposal; fetch them in small batches so
  * the background fill does not monopolize the browser's per-origin connection
@@ -97,9 +83,23 @@ export const proposalKeys = {
 };
 
 /** Shape of data stored in the TanStack Query cache */
-interface ProposalSearchData {
+export interface ProposalSearchData {
   proposals: ParsedProposal[];
   sourceInfo: ProposalSourceInfo;
+}
+
+/** Everything a finished reconciliation pass folds back into the cache */
+export interface ReconciliationResult {
+  /** Proposals re-read from the governor with `state()` / `proposalVotes()` */
+  refreshed: ParsedProposal[];
+  /** Proposals discovered by the watermark-to-head log scan */
+  gapProposals: ParsedProposal[];
+  /** First block of the gap scan, or null when it was skipped */
+  scanStartBlock: number | null;
+  /** L2 chain head the pass ran against */
+  currentBlock: number;
+  /** Indexer watermark the pass ran against */
+  watermarkBlock: number;
 }
 
 function proposalIdentityKey(
@@ -113,15 +113,19 @@ function proposalKey(proposal: ParsedProposal): string {
   return proposalIdentityKey(proposal.id, proposal.contractAddress);
 }
 
-function normalizeProposalState(
-  state: string | null | undefined
-): ProposalStateName {
-  const normalized = state?.toLowerCase();
-  const match = VALID_PROPOSAL_STATES.find(
-    (value) => value.toLowerCase() === normalized
-  );
-
-  return match ?? "Unknown";
+/**
+ * Restate an RPC-derived proposal with the canonical state casing.
+ *
+ * `refreshProposalStates` and `parseProposals` build their state with
+ * `getStateName`, which lowercases; the indexer feed and every state comparison
+ * in the table path (`sortProposals`, `mergeProposal`'s Unknown guard,
+ * `sameStateAndVotes`) use the capitalized names. Without this, a proposal
+ * corrected from "Defeated" to "active" would not sort ahead of the settled
+ * rows, and every reconcile pass would report a spurious change.
+ */
+function withCanonicalState(proposal: ParsedProposal): ParsedProposal {
+  const state = normalizeProposalStateName(proposal.state);
+  return proposal.state === state ? proposal : { ...proposal, state };
 }
 
 function voteSummaryToProposalVotes(
@@ -155,7 +159,7 @@ function proposalFromSqliteIndexEntry(
     endBlock: "0",
     description: entry.description ?? `Proposal ${entry.proposalId}`,
     networkId: String(ARBITRUM_CHAIN_ID),
-    state: normalizeProposalState(entry.state),
+    state: normalizeProposalStateName(entry.state),
     governorName: governor?.name ?? "Unknown",
     votes: voteSummaryToProposalVotes(voteSummary),
   };
@@ -232,6 +236,72 @@ function sameStateAndVotes(a: ParsedProposal, b: ParsedProposal): boolean {
 }
 
 /**
+ * Fold a finished reconciliation pass into the cached search data.
+ *
+ * This is where an indexed state that lost to the chain gets corrected, so a
+ * `Defeated` proposal whose deadline was extended by a late-quorum extension
+ * becomes `Active` here and sorts back to the top of the table.
+ *
+ * Returns `prev` unchanged when nothing differs, so the query cache does not
+ * churn (and the effect that wrote it does not re-run).
+ */
+export function applyReconciliation(
+  prev: ProposalSearchData,
+  {
+    refreshed,
+    gapProposals,
+    scanStartBlock,
+    currentBlock,
+    watermarkBlock,
+  }: ReconciliationResult
+): ProposalSearchData {
+  const refreshedMap = buildLookupMap(
+    refreshed.map(withCanonicalState),
+    proposalKey
+  );
+
+  let changed = !prev.sourceInfo.reconciled;
+
+  const proposalsByKey = new Map<string, ParsedProposal>();
+  for (const proposal of prev.proposals) {
+    const updated = refreshedMap.get(proposalKey(proposal));
+    if (updated && !sameStateAndVotes(updated, proposal)) {
+      changed = true;
+      proposalsByKey.set(
+        proposalKey(proposal),
+        mergeProposal(proposal, updated)
+      );
+    } else {
+      proposalsByKey.set(proposalKey(proposal), proposal);
+    }
+  }
+
+  let rpcFreshCount = prev.sourceInfo.rpcFreshCount;
+  for (const proposal of gapProposals.map(withCanonicalState)) {
+    if (!proposalsByKey.has(proposalKey(proposal))) {
+      rpcFreshCount++;
+    }
+    changed = true;
+    upsertProposal(proposalsByKey, proposal);
+  }
+
+  if (!changed) return prev;
+
+  return {
+    proposals: sortProposals(Array.from(proposalsByKey.values())),
+    sourceInfo: {
+      ...prev.sourceInfo,
+      rpcFreshCount,
+      reconciled: true,
+      rangeInfo:
+        scanStartBlock !== null
+          ? `RPC scan: ${scanStartBlock} → ${currentBlock}`
+          : `Indexer synced to block ${watermarkBlock} (head ${currentBlock})`,
+    },
+  };
+}
+
+/**
  * Loads all proposals from the governance indexer index (one request).
  * Vote summaries are filled in later by the background effect.
  * Throws if the index fetch fails.
@@ -260,6 +330,11 @@ export function useMultiGovernorSearch({
   const [isReconciling, setIsReconciling] = useState(false);
   const [rpcError, setRpcError] = useState<Error | null>(null);
   const queryClient = useQueryClient();
+
+  // The governor clock is the L1 block height (Arbitrum's `block.number`), so
+  // this is what proposal snapshot and deadline blocks are measured in. Shared
+  // query cache, so this costs nothing beyond what other surfaces already pay.
+  const { currentL1Block, isLoading: isL1BlockLoading } = useL1Block();
 
   const rpcUrl = customRpcUrl || ARBITRUM_RPC_URL;
 
@@ -475,15 +550,17 @@ export function useMultiGovernorSearch({
     };
   }, [data, enabled, isFetching, queryClient]);
 
-  // Background RPC reconciliation: refresh live states for active proposals
-  // and scan the watermark-to-head gap for proposals the indexer has not
-  // indexed yet. Never blocks rendering of the indexer data.
+  // Background RPC reconciliation: re-read the states the indexer cannot be
+  // trusted on (see needsOnChainStateRefresh) straight from the governor with
+  // `state()`, the same call the proposal detail page makes, and scan the
+  // watermark-to-head gap for proposals the indexer has not indexed yet. Never
+  // blocks rendering of the indexer data.
   useEffect(() => {
     if (!enabled || isFetching || !data) return;
 
     const needsGapScan = !data.sourceInfo.reconciled;
     const proposalsNeedingRefresh = data.proposals.filter((proposal) =>
-      RPC_REFRESH_STATES.has(proposal.state)
+      needsOnChainStateRefresh(proposal, currentL1Block)
     );
 
     if (!needsGapScan && proposalsNeedingRefresh.length === 0) {
@@ -510,7 +587,15 @@ export function useMultiGovernorSearch({
 
     lastReconcileKeyRef.current = reconcileKey;
     const runId = ++reconcileRunIdRef.current;
-    let cancelled = false;
+    // Ownership, not a cancellation flag. This effect depends on `data`, which
+    // the background vote-summary fill patches while a pass is still in flight;
+    // that re-runs the effect, but the re-run computes the same `reconcileKey`
+    // and early-returns above without starting a pass. A boolean set from the
+    // cleanup would therefore make the in-flight pass discard its results and
+    // nothing would ever retry it, so live states never reached the table.
+    // `runId` only advances when a pass actually starts, so a pass is abandoned
+    // only when a genuinely newer one supersedes it.
+    const isCurrentRun = () => reconcileRunIdRef.current === runId;
     setIsReconciling(true);
     setRpcError(null);
 
@@ -583,71 +668,33 @@ export function useMultiGovernorSearch({
             : Promise.resolve([] as ParsedProposal[]),
         ]);
 
-        if (cancelled) return;
-
-        const refreshedMap = buildLookupMap(refreshed, proposalKey);
+        if (!isCurrentRun()) return;
 
         queryClient.setQueryData<ProposalSearchData>(
           proposalKeys.indexer(),
-          (prev) => {
-            if (!prev) return prev;
-
-            let changed = !prev.sourceInfo.reconciled;
-
-            const proposalsByKey = new Map<string, ParsedProposal>();
-            for (const proposal of prev.proposals) {
-              const updated = refreshedMap.get(proposalKey(proposal));
-              if (updated && !sameStateAndVotes(updated, proposal)) {
-                changed = true;
-                proposalsByKey.set(
-                  proposalKey(proposal),
-                  mergeProposal(proposal, updated)
-                );
-              } else {
-                proposalsByKey.set(proposalKey(proposal), proposal);
-              }
-            }
-
-            let rpcFreshCount = prev.sourceInfo.rpcFreshCount;
-            for (const proposal of gapProposals) {
-              if (!proposalsByKey.has(proposalKey(proposal))) {
-                rpcFreshCount++;
-              }
-              changed = true;
-              upsertProposal(proposalsByKey, proposal);
-            }
-
-            if (!changed) return prev;
-
-            return {
-              proposals: sortProposals(Array.from(proposalsByKey.values())),
-              sourceInfo: {
-                ...prev.sourceInfo,
-                rpcFreshCount,
-                reconciled: true,
-                rangeInfo:
-                  scanStartBlock !== null
-                    ? `RPC scan: ${scanStartBlock} → ${currentBlock}`
-                    : `Indexer synced to block ${watermarkBlock} (head ${currentBlock})`,
-              },
-            };
-          }
+          (prev) =>
+            prev
+              ? applyReconciliation(prev, {
+                  refreshed,
+                  gapProposals,
+                  scanStartBlock,
+                  currentBlock,
+                  watermarkBlock,
+                })
+              : prev
         );
       } catch (error) {
         debug.search("background reconciliation failed: %O", error);
-        if (!cancelled) setRpcError(error as Error);
+        if (isCurrentRun()) setRpcError(error as Error);
       } finally {
-        // Only the latest run owns the flag; a cancelled run must not clear
-        // (or leave set) the state of the run that superseded it.
-        if (reconcileRunIdRef.current === runId) setIsReconciling(false);
+        // Only the latest run owns the flag; a superseded run must not clear
+        // (or leave set) the state of the run that replaced it.
+        if (isCurrentRun()) setIsReconciling(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     blockRange,
+    currentL1Block,
     data,
     daysToSearch,
     enabled,
@@ -671,8 +718,33 @@ export function useMultiGovernorSearch({
       ? rpcError
       : null;
 
+  // Flag the rows whose indexed state the governor has not confirmed yet, so the
+  // status cells can withhold a "Defeated" that reconciliation may overturn.
+  // Derived on read rather than stored, so the query cache keeps holding plain
+  // proposal data.
+  const proposals = useMemo(() => {
+    if (!data?.proposals.length) return data?.proposals ?? [];
+
+    const cached = data.proposals;
+    const progress: StateVerificationProgress = {
+      currentGovernorBlock: currentL1Block,
+      governorClockPending: isL1BlockLoading,
+      reconciled: data.sourceInfo.reconciled,
+      reconcileFailed: rpcError !== null,
+    };
+
+    let anyUnverified = false;
+    const flagged = cached.map((proposal) => {
+      if (!isProposalStateUnverified(proposal, progress)) return proposal;
+      anyUnverified = true;
+      return { ...proposal, isStateUnverified: true };
+    });
+
+    return anyUnverified ? flagged : cached;
+  }, [currentL1Block, data, isL1BlockLoading, rpcError]);
+
   return {
-    proposals: data?.proposals ?? [],
+    proposals,
     error: (queryError as Error | null) ?? blockingError,
     isSearching: isFetching || waitingOnRpcFallback,
     isReconciling,
