@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { findStateByValue, getStateName } from "./state-utils";
+import {
+  findStateByValue,
+  getStateName,
+  IN_FLIGHT_PROPOSAL_STATES,
+  normalizeProposalStateName,
+} from "./state-utils";
 
 describe("state-utils", () => {
   describe("findStateByValue", () => {
@@ -114,6 +119,59 @@ describe("state-utils", () => {
       expect(getStateName(8)).toBe("unknown");
       expect(getStateName(-1)).toBe("unknown");
       expect(getStateName(100)).toBe("unknown");
+    });
+  });
+
+  describe("normalizeProposalStateName", () => {
+    it("returns every canonical name unchanged", () => {
+      const canonical = [
+        "Pending",
+        "Active",
+        "Canceled",
+        "Defeated",
+        "Succeeded",
+        "Queued",
+        "Expired",
+        "Executed",
+      ];
+
+      for (const state of canonical) {
+        expect(normalizeProposalStateName(state)).toBe(state);
+      }
+    });
+
+    it("capitalizes the lowercase names getStateName produces", () => {
+      expect(normalizeProposalStateName(getStateName(1))).toBe("Active");
+      expect(normalizeProposalStateName(getStateName(3))).toBe("Defeated");
+      expect(normalizeProposalStateName(getStateName(7))).toBe("Executed");
+    });
+
+    it("handles arbitrary casing and surrounding whitespace", () => {
+      expect(normalizeProposalStateName("ACTIVE")).toBe("Active");
+      expect(normalizeProposalStateName("dEfEaTeD")).toBe("Defeated");
+      expect(normalizeProposalStateName("  queued  ")).toBe("Queued");
+    });
+
+    it("returns Unknown for unrecognized or missing states", () => {
+      expect(normalizeProposalStateName("Unknown")).toBe("Unknown");
+      expect(normalizeProposalStateName("not-a-state")).toBe("Unknown");
+      expect(normalizeProposalStateName("")).toBe("Unknown");
+      expect(normalizeProposalStateName(null)).toBe("Unknown");
+      expect(normalizeProposalStateName(undefined)).toBe("Unknown");
+    });
+  });
+
+  describe("IN_FLIGHT_PROPOSAL_STATES", () => {
+    it("covers the states that can still change without a new event", () => {
+      expect([...IN_FLIGHT_PROPOSAL_STATES].sort()).toEqual([
+        "Active",
+        "Pending",
+        "Unknown",
+      ]);
+    });
+
+    it("excludes Defeated, which is windowed separately", () => {
+      expect(IN_FLIGHT_PROPOSAL_STATES).not.toContain("Defeated");
     });
   });
 });
