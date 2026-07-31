@@ -100,6 +100,12 @@ export type ParsedProposal = {
   stagesTrackedAt?: string;
   /** Link to timelock cache for post-queue stages */
   timelockLink?: TimelockLink;
+  /**
+   * Set while `state` came from the indexer and is still being verified against
+   * the governor contract, so the UI should withhold it instead of rendering a
+   * status that may be about to change. See `isProposalStateUnverified`.
+   */
+  isStateUnverified?: boolean;
 };
 
 /** Return type for useTotalProposals hook */
