@@ -84,6 +84,21 @@ export const L1_TIMELOCK = {
 } as const;
 
 /**
+ * Governor voting period, in governor-clock blocks.
+ *
+ * Both governors report `votingPeriod() == 100800` (read on-chain 2026-07-31).
+ * The governor clock is the L1 Ethereum block number, because Arbitrum's
+ * `block.number` returns it, so this is 100800 * 12s = 14 days. `proposalDeadline()`
+ * can exceed `proposalSnapshot() + this` by up to 2 days when
+ * `GovernorPreventLateQuorum` extends a vote that reached quorum late.
+ *
+ * Governance can change this with `setVotingPeriod`. Nothing user-facing is
+ * derived from it: it only sizes the window that decides which Defeated
+ * proposals are worth re-reading from the chain.
+ */
+export const GOVERNOR_VOTING_PERIOD_BLOCKS = 100_800;
+
+/**
  * ARB Token Contract
  */
 export const ARB_TOKEN = {
