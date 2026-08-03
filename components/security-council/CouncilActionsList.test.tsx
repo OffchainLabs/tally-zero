@@ -33,14 +33,37 @@ function render(props: Parameters<typeof CouncilActionsList>[0]): string {
   return renderToStaticMarkup(<CouncilActionsList {...props} />);
 }
 
+/**
+ * Visible text with tags stripped. Titles are asserted against this rather than
+ * the raw markup because the last word is wrapped in its own span, so the title
+ * is not a contiguous string in the HTML.
+ */
+function visibleText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 describe("CouncilActionsList", () => {
   it("renders each action title linked to its discourse post", () => {
     const html = render({ actions: [NON_EMERGENCY, EMERGENCY] });
 
     expect(html).toContain(`href="${NON_EMERGENCY.url}"`);
     expect(html).toContain(`href="${EMERGENCY.url}"`);
-    expect(html).toContain("Non-Emergency Security Action to Correct Total DVP");
-    expect(html).toContain("Security Council Emergency Action");
+    expect(visibleText(html)).toContain(NON_EMERGENCY.title);
+    expect(visibleText(html)).toContain(EMERGENCY.title);
+  });
+
+  it("keeps the external-link glyph on the same line as the last word", () => {
+    // Regression guard: the glyph used to be a flex sibling of the title, which
+    // parked it beside the first line of a wrapped title, and a plain
+    // non-breaking space still let Chromium strand it on a line of its own.
+    const html = render({ actions: [UNLABELLED] });
+
+    expect(html).toMatch(
+      /Key Rotation - July <span class="whitespace-nowrap">2026<svg/
+    );
   });
 
   it("opens forum links safely in a new tab", () => {
@@ -69,7 +92,7 @@ describe("CouncilActionsList", () => {
   it("omits the badge when the action kind is unknown", () => {
     const html = render({ actions: [UNLABELLED] });
 
-    expect(html).toContain("Key Rotation - July 2026");
+    expect(visibleText(html)).toContain("Key Rotation - July 2026");
     expect(html).not.toContain("Emergency");
   });
 

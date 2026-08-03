@@ -43,6 +43,32 @@ function KindBadge({ kind }: { kind: CouncilActionKind }) {
   );
 }
 
+/**
+ * Title text with a trailing external-link glyph.
+ *
+ * The last word and the glyph share a `whitespace-nowrap` span so they always
+ * wrap as one unit. A non-breaking space is not enough: Chromium still takes a
+ * break opportunity before an atomic inline (the svg), which left the glyph
+ * stranded alone on a final line for titles that wrapped just so.
+ */
+function ActionTitle({ title }: { title: string }) {
+  const words = title.split(" ");
+  const lastWord = words.pop() ?? "";
+
+  return (
+    <>
+      {words.length > 0 && `${words.join(" ")} `}
+      <span className="whitespace-nowrap">
+        {lastWord}
+        <ExternalLink
+          className="ml-1 inline size-3 align-[-0.1em] text-muted-foreground group-hover:text-primary transition-colors"
+          aria-hidden
+        />
+      </span>
+    </>
+  );
+}
+
 function ForumTagLink({ children }: { children: React.ReactNode }) {
   return (
     <a
@@ -89,19 +115,18 @@ export function CouncilActionsList({
         {actions.map((action) => (
           <li
             key={action.id}
-            className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 border-b border-border/50 last:border-b-0"
+            className="flex flex-col gap-2 p-4 border-b border-border/50 last:border-b-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
           >
+            {/* Not a flex container: the glyph has to sit in the text flow so
+                it trails the last word of a wrapped title instead of floating
+                beside the first line. */}
             <a
               href={action.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-start gap-1.5 text-sm font-medium hover:text-primary transition-colors"
+              className="group text-sm font-medium hover:text-primary transition-colors sm:min-w-0"
             >
-              {action.title}
-              <ExternalLink
-                className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground group-hover:text-primary transition-colors"
-                aria-hidden
-              />
+              <ActionTitle title={action.title} />
             </a>
             <div className="flex shrink-0 items-center gap-2">
               <KindBadge kind={action.kind} />
