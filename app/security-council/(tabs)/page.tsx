@@ -19,23 +19,15 @@ export default async function ElectionsPage() {
   ]);
 
   return (
-    <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
-      <div className="container flex flex-col gap-4">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Security Council Elections
-          </h1>
-          <p className="text-muted-foreground">
-            The Arbitrum Security Council consists of 12 members split into two
-            cohorts. Elections occur every 6 months, alternating between
-            cohorts.
-          </p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <p className="text-muted-foreground">
+        The Arbitrum Security Council consists of 12 members split into two
+        cohorts. Elections occur every 6 months, alternating between cohorts.
+      </p>
 
-        <CurrentCouncilOverview council={council} />
+      <CurrentCouncilOverview council={council} />
 
-        <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
-      </div>
+      <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
     </div>
   );
 }

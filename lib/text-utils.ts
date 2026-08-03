@@ -1,11 +1,44 @@
 /**
+ * A well-formed tag: `<p>`, `<a href="x">`, `</div>`. Used with split(), which
+ * matches every occurrence, so the g flag is not needed.
+ */
+const HTML_TAG = /<[^>]*>/;
+
+/**
+ * A tag-like fragment left unterminated at the end of the input, such as a
+ * description cut off mid-tag (`...<script`). HTML_TAG cannot match these,
+ * since it requires a closing `>`.
+ *
+ * The tag name must be at least two characters so that prose comparisons
+ * survive: `APY < 5%` and `if x<y then` are kept verbatim, while `<script`,
+ * `</iframe` and `<img src="` are dropped.
+ */
+const UNTERMINATED_HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]+[^>]*$/;
+
+/**
  * Strips HTML tags and markdown syntax from text
  * @param text - The text to strip HTML and markdown from
  * @returns Plain text with HTML tags and markdown syntax removed
  */
 export function stripMarkdownAndHtml(text: string): string {
-  // Remove HTML tags first
-  const withoutHtml = text.replace(/<[^>]*>/g, "");
+  // Keep the text between tags instead of replacing tags with "". Splitting on
+  // tag boundaries states what this actually does -- extract text -- and keeps
+  // it out of the shape of a hand-rolled HTML sanitizer, which is what CodeQL's
+  // incomplete-multi-character-sanitization rule reports. That rule judges a
+  // remove-the-tags replace on its own, so neither later cleanup nor a
+  // fixed-point loop clears it; the alert simply moves inside the loop.
+  //
+  // One split suffices: the pattern consumes every "<" that has a later ">", so
+  // no surviving "<" can pair with a surviving ">" to form a tag it missed.
+  const withoutTags = text.split(HTML_TAG).join("");
+
+  // A fragment with no closing ">" is the one thing the pattern above cannot
+  // reach, which is why "<script" used to survive verbatim. Cut it off.
+  const unterminated = UNTERMINATED_HTML_TAG.exec(withoutTags);
+  const withoutHtml = unterminated
+    ? withoutTags.slice(0, unterminated.index)
+    : withoutTags;
+
   // Unescape markdown backslash escapes (e.g., \[ \] \*) so the escape
   // character itself does not leak through to the rendered title.
   const unescaped = withoutHtml.replace(/\\([!-/:-@[-`{-~])/g, "$1");

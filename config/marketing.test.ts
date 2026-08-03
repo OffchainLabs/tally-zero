@@ -22,12 +22,12 @@ describe("marketing config", () => {
         expect(proposals?.href).toBe("/proposals");
       });
 
-      it("has Security Council Elections nav item", () => {
-        const elections = marketingConfig.mainNav.find(
-          (item) => item.title === "Security Council Elections"
+      it("has Security Council nav item", () => {
+        const securityCouncil = marketingConfig.mainNav.find(
+          (item) => item.title === "Security Council"
         );
-        expect(elections).toBeDefined();
-        expect(elections?.href).toBe("/elections");
+        expect(securityCouncil).toBeDefined();
+        expect(securityCouncil?.href).toBe("/security-council");
       });
 
       it("has Delegates nav item", () => {
