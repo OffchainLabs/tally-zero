@@ -18,14 +18,21 @@ const UNTERMINATED_HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]+[^>]*$/;
  * @returns Plain text with HTML tags and markdown syntax removed
  */
 export function stripMarkdownAndHtml(text: string): string {
-  // Remove HTML tags first. A single pass is already a fixed point: HTML_TAG
-  // consumes every "<" that has a later ">", so no surviving "<" can pair with
-  // a surviving ">" to form a tag the pass missed. What it cannot reach is an
-  // unterminated fragment, which is why "<script" used to survive verbatim
-  // (CodeQL js/incomplete-multi-character-sanitization). Drop that separately.
-  const withoutHtml = text
-    .replace(HTML_TAG, "")
-    .replace(UNTERMINATED_HTML_TAG, "");
+  // Remove HTML tags and tag-like fragments to a fixed point so intermediate
+  // removals cannot reveal a new match on a subsequent pass.
+  let withoutHtml = text;
+  let previous: string;
+  do {
+    previous = withoutHtml;
+    withoutHtml = withoutHtml
+      .replace(HTML_TAG, "")
+      .replace(UNTERMINATED_HTML_TAG, "");
+  } while (withoutHtml !== previous);
+
+  // Remove any remaining angle brackets so residual tag-like text cannot
+  // survive in output.
+  withoutHtml = withoutHtml.replace(/[<>]/g, "");
+
   // Unescape markdown backslash escapes (e.g., \[ \] \*) so the escape
   // character itself does not leak through to the rendered title.
   const unescaped = withoutHtml.replace(/\\([!-/:-@[-`{-~])/g, "$1");
