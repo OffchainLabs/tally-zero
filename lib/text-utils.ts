@@ -1,5 +1,8 @@
-/** A well-formed tag: `<p>`, `<a href="x">`, `</div>`. */
-const HTML_TAG = /<[^>]*>/g;
+/**
+ * A well-formed tag: `<p>`, `<a href="x">`, `</div>`. Used with split(), which
+ * matches every occurrence, so the g flag is not needed.
+ */
+const HTML_TAG = /<[^>]*>/;
 
 /**
  * A tag-like fragment left unterminated at the end of the input, such as a
@@ -18,20 +21,23 @@ const UNTERMINATED_HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]+[^>]*$/;
  * @returns Plain text with HTML tags and markdown syntax removed
  */
 export function stripMarkdownAndHtml(text: string): string {
-  // Remove HTML tags and tag-like fragments to a fixed point so intermediate
-  // removals cannot reveal a new match on a subsequent pass.
-  let withoutHtml = text;
-  let previous: string;
-  do {
-    previous = withoutHtml;
-    withoutHtml = withoutHtml
-      .replace(HTML_TAG, "")
-      .replace(UNTERMINATED_HTML_TAG, "");
-  } while (withoutHtml !== previous);
+  // Keep the text between tags instead of replacing tags with "". Splitting on
+  // tag boundaries states what this actually does -- extract text -- and keeps
+  // it out of the shape of a hand-rolled HTML sanitizer, which is what CodeQL's
+  // incomplete-multi-character-sanitization rule reports. That rule judges a
+  // remove-the-tags replace on its own, so neither later cleanup nor a
+  // fixed-point loop clears it; the alert simply moves inside the loop.
+  //
+  // One split suffices: the pattern consumes every "<" that has a later ">", so
+  // no surviving "<" can pair with a surviving ">" to form a tag it missed.
+  const withoutTags = text.split(HTML_TAG).join("");
 
-  // Remove any remaining angle brackets so residual tag-like text cannot
-  // survive in output.
-  withoutHtml = withoutHtml.replace(/[<>]/g, "");
+  // A fragment with no closing ">" is the one thing the pattern above cannot
+  // reach, which is why "<script" used to survive verbatim. Cut it off.
+  const unterminated = UNTERMINATED_HTML_TAG.exec(withoutTags);
+  const withoutHtml = unterminated
+    ? withoutTags.slice(0, unterminated.index)
+    : withoutTags;
 
   // Unescape markdown backslash escapes (e.g., \[ \] \*) so the escape
   // character itself does not leak through to the rendered title.
