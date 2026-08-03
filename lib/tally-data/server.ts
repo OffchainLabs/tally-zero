@@ -69,7 +69,7 @@ export async function getCachedElectionAddressDisplayRecords(): Promise<
     label: candidate.name || null,
     title: candidate.title,
     picture: null,
-    profileUrl: `/elections/contender/${candidate.address.toLowerCase()}`,
+    profileUrl: `/security-council/contender/${candidate.address.toLowerCase()}`,
     source: "candidate",
   }));
 }

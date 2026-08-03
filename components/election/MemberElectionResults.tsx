@@ -58,7 +58,7 @@ export function MemberElectionResults({
                 </span>
                 <div className="flex items-center gap-2 min-w-0">
                   <Link
-                    href={`/elections/contender/${nominee.address.toLowerCase()}`}
+                    href={`/security-council/contender/${nominee.address.toLowerCase()}`}
                     className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
                   >
                     {label ?? nominee.address}

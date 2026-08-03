@@ -16,7 +16,7 @@ const features = [
     title: "Security Council",
     description:
       "Elect the 12-member Security Council that safeguards the protocol. Two 6-member cohorts are replaced every six months.",
-    href: "/elections",
+    href: "/security-council",
   },
   {
     icon: Users,

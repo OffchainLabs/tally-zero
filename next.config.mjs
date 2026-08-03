@@ -4,6 +4,22 @@ const nextConfig = {
     unoptimized: true,
     domains: ["placehold.co", "raw.githubusercontent.com"],
   },
+  // The elections page moved under the Security Council section; keep old
+  // links and bookmarks working.
+  async redirects() {
+    return [
+      {
+        source: "/elections",
+        destination: "/security-council",
+        permanent: true,
+      },
+      {
+        source: "/elections/contender/:address",
+        destination: "/security-council/contender/:address",
+        permanent: true,
+      },
+    ];
+  },
   turbopack: {
     resolveAlias: {
       async_hooks: "./lib/async-hooks-mock.js",
