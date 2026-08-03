@@ -34,15 +34,20 @@ function render(props: Parameters<typeof CouncilActionsList>[0]): string {
 }
 
 /**
- * Visible text with tags stripped. Titles are asserted against this rather than
- * the raw markup because the last word is wrapped in its own span, so the title
- * is not a contiguous string in the HTML.
+ * A title as it appears in the rendered markup. The component wraps the last
+ * word together with the external-link glyph in a nowrap span, so a title is
+ * never a contiguous string in the HTML and cannot be asserted whole.
+ *
+ * This builds the expected markup instead of stripping tags out of the actual
+ * markup, because a hand-rolled tag stripper is a single-pass sanitizer that
+ * CodeQL flags (js/incomplete-multi-character-sanitization) even in test code.
+ * Asserting the rendered shape is also stricter than comparing loose text.
  */
-function visibleText(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function titleMarkup(title: string): string {
+  const words = title.split(" ");
+  const lastWord = words.pop() ?? "";
+  const leadingWords = words.length > 0 ? `${words.join(" ")} ` : "";
+  return `${leadingWords}<span class="whitespace-nowrap">${lastWord}`;
 }
 
 describe("CouncilActionsList", () => {
@@ -51,8 +56,8 @@ describe("CouncilActionsList", () => {
 
     expect(html).toContain(`href="${NON_EMERGENCY.url}"`);
     expect(html).toContain(`href="${EMERGENCY.url}"`);
-    expect(visibleText(html)).toContain(NON_EMERGENCY.title);
-    expect(visibleText(html)).toContain(EMERGENCY.title);
+    expect(html).toContain(titleMarkup(NON_EMERGENCY.title));
+    expect(html).toContain(titleMarkup(EMERGENCY.title));
   });
 
   it("keeps the external-link glyph on the same line as the last word", () => {
@@ -61,9 +66,7 @@ describe("CouncilActionsList", () => {
     // non-breaking space still let Chromium strand it on a line of its own.
     const html = render({ actions: [UNLABELLED] });
 
-    expect(html).toMatch(
-      /Key Rotation - July <span class="whitespace-nowrap">2026<svg/
-    );
+    expect(html).toContain(`${titleMarkup(UNLABELLED.title)}<svg`);
   });
 
   it("opens forum links safely in a new tab", () => {
@@ -92,7 +95,7 @@ describe("CouncilActionsList", () => {
   it("omits the badge when the action kind is unknown", () => {
     const html = render({ actions: [UNLABELLED] });
 
-    expect(visibleText(html)).toContain("Key Rotation - July 2026");
+    expect(html).toContain(titleMarkup(UNLABELLED.title));
     expect(html).not.toContain("Emergency");
   });
 
