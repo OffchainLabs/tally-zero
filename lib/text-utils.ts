@@ -1,11 +1,31 @@
+/** A well-formed tag: `<p>`, `<a href="x">`, `</div>`. */
+const HTML_TAG = /<[^>]*>/g;
+
+/**
+ * A tag-like fragment left unterminated at the end of the input, such as a
+ * description cut off mid-tag (`...<script`). HTML_TAG cannot match these,
+ * since it requires a closing `>`.
+ *
+ * The tag name must be at least two characters so that prose comparisons
+ * survive: `APY < 5%` and `if x<y then` are kept verbatim, while `<script`,
+ * `</iframe` and `<img src="` are dropped.
+ */
+const UNTERMINATED_HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]+[^>]*$/;
+
 /**
  * Strips HTML tags and markdown syntax from text
  * @param text - The text to strip HTML and markdown from
  * @returns Plain text with HTML tags and markdown syntax removed
  */
 export function stripMarkdownAndHtml(text: string): string {
-  // Remove HTML tags first
-  const withoutHtml = text.replace(/<[^>]*>/g, "");
+  // Remove HTML tags first. A single pass is already a fixed point: HTML_TAG
+  // consumes every "<" that has a later ">", so no surviving "<" can pair with
+  // a surviving ">" to form a tag the pass missed. What it cannot reach is an
+  // unterminated fragment, which is why "<script" used to survive verbatim
+  // (CodeQL js/incomplete-multi-character-sanitization). Drop that separately.
+  const withoutHtml = text
+    .replace(HTML_TAG, "")
+    .replace(UNTERMINATED_HTML_TAG, "");
   // Unescape markdown backslash escapes (e.g., \[ \] \*) so the escape
   // character itself does not leak through to the rendered title.
   const unescaped = withoutHtml.replace(/\\([!-/:-@[-`{-~])/g, "$1");

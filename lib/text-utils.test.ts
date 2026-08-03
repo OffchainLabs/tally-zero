@@ -66,6 +66,39 @@ describe("text-utils", () => {
       expect(result).toBe("Bold and italic with ");
     });
 
+    it("removes tag-like fragments left unterminated", () => {
+      // A lone "<script" has no closing ">", so the well-formed-tag pass cannot
+      // reach it and it used to survive verbatim.
+      expect(stripMarkdownAndHtml("<script")).toBe("");
+      expect(stripMarkdownAndHtml("<a><script")).toBe("");
+      expect(stripMarkdownAndHtml('Title <img src="x')).toBe("Title ");
+      expect(stripMarkdownAndHtml("Title </iframe")).toBe("Title ");
+    });
+
+    it("keeps prose comparisons that only look like tags", () => {
+      expect(stripMarkdownAndHtml("APY < 5% target")).toBe("APY < 5% target");
+      expect(stripMarkdownAndHtml("if x<y then")).toBe("if x<y then");
+      expect(stripMarkdownAndHtml("threshold <3 days")).toBe(
+        "threshold <3 days"
+      );
+    });
+
+    it("never leaves a tag-like token in its output", () => {
+      const inputs = [
+        "<script",
+        "<scr<div>ipt>alert(1)",
+        "<<div>script>",
+        "<sc<b>ript>",
+        '<div class="x',
+        "<p>Hello</p>",
+        "plain text",
+      ];
+
+      for (const input of inputs) {
+        expect(stripMarkdownAndHtml(input)).not.toMatch(/<\/?[a-zA-Z]{2}/);
+      }
+    });
+
     it("unescapes backslash-escaped markdown brackets", () => {
       expect(
         stripMarkdownAndHtml(
