@@ -1,5 +1,12 @@
 "use client";
 
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import {
+  arbitrum as appkitArbitrum,
+  arbitrumSepolia as appkitArbitrumSepolia,
+  type AppKitNetwork,
+} from "@reown/appkit/networks";
+import { createAppKit } from "@reown/appkit/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { createClient, custom, http, type Hex } from "viem";
@@ -15,6 +22,35 @@ import {
 
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
+
+// Shared components (e.g. the nav) call useAppKit(), which throws unless
+// createAppKit() has run. In normal mode Web3ModalProviderInner does that; the
+// test-wallet path bypasses it, so initialize a minimal AppKit singleton here
+// too (idempotent, test-mode only). wagmi hooks are still governed by the test
+// config below — this only satisfies the AppKit modal singleton.
+let appKitInitialized = false;
+function ensureAppKit() {
+  if (appKitInitialized) return;
+  // eslint-disable-next-line no-process-env
+  const projectId = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || "test";
+  const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
+    appkitArbitrum,
+    appkitArbitrumSepolia,
+  ];
+  createAppKit({
+    adapters: [new WagmiAdapter({ projectId, networks })],
+    projectId,
+    networks,
+    defaultNetwork: appkitArbitrum,
+    metadata: {
+      name: "Arbitrum Governance (test wallet)",
+      description: "e2e test wallet",
+      url: "http://localhost:3000",
+      icons: [],
+    },
+  });
+  appKitInitialized = true;
+}
 
 declare global {
   interface Window {
@@ -299,6 +335,7 @@ export default function TestWalletProvider({
   >(() => {
     if (typeof window === "undefined") return { mode: "normal" };
     if (window.__TEST_WALLET_KEY__?.startsWith("0x")) {
+      ensureAppKit();
       return {
         mode: "test",
         config: createTestConfig(window.__TEST_WALLET_KEY__ as `0x${string}`),
@@ -315,6 +352,7 @@ export default function TestWalletProvider({
         }
       })();
     if (readOnlyAddress?.startsWith("0x")) {
+      ensureAppKit();
       return {
         mode: "test",
         config: createReadOnlyConfig(readOnlyAddress as `0x${string}`),

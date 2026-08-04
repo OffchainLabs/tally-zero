@@ -63,3 +63,8 @@ delegate-cache.json
 
 # local avatar uploads (STORAGE_DRIVER=local, dev/e2e only)
 public/uploads/
+
+# playwright
+test-results/
+playwright-report/
+.playwright/
