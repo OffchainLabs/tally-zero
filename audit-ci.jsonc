@@ -9,11 +9,5 @@
     // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>uuid (8.3.2)
     // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@metamask/sdk>@metamask/providers>@metamask/rpc-errors>@metamask/utils>uuid (9.0.1)
     "GHSA-w5hq-g745-h8pq",
-
-    // https://github.com/advisories/GHSA-mh99-v99m-4gvg
-    // brace-expansion DoS: expand() bounds the number of results but not their total length, so chained brace groups can crash the process with an uncatchable OOM.
-    // Path-scoped: the 5.x path is fixed by the ">=5.0.8" override. This 1.x path comes from minimatch@3, which every eslint release still depends on (@eslint/eslintrc pins minimatch ^3.1.5) and which cannot consume brace-expansion 5 (ESM named export vs. CJS default). We pin ">=1.1.17 <2", the maintenance-v1 backport that adds the same EXPANSION_MAX_LENGTH bound; the advisory range "<=5.0.7" is a plain semver comparison so it cannot express that backport. Verified locally: the advisory PoC ('{a,b}'.repeat(1500)) returns a bounded, truncated result on 1.1.17 instead of crashing. eslint is dev-only and never runs on untrusted input.
-    // from: eslint>minimatch>brace-expansion (1.1.17)
-    "GHSA-mh99-v99m-4gvg|eslint>minimatch>brace-expansion",
   ],
 }
