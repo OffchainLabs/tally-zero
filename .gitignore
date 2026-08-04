@@ -60,3 +60,6 @@ delegate-cache.json
 
 # Generated local/Vercel-hosted data artifacts
 /public/tally-data/
+
+# local avatar uploads (STORAGE_DRIVER=local, dev/e2e only)
+public/uploads/
