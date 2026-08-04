@@ -13,7 +13,8 @@
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e": "playwright test"
   },
   "prettier": {
     "semi": true,
