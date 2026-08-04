@@ -2,7 +2,12 @@
 const nextConfig = {
   images: {
     unoptimized: true,
-    domains: ["placehold.co", "raw.githubusercontent.com"],
+    remotePatterns: [
+      { protocol: "https", hostname: "placehold.co" },
+      { protocol: "https", hostname: "raw.githubusercontent.com" },
+      // User-uploaded avatars hosted on Vercel Blob.
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+    ],
   },
   // The elections page moved under the Security Council section; keep old
   // links and bookmarks working.
