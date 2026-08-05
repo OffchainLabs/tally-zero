@@ -125,9 +125,24 @@ describe("normalizePayloadActions", () => {
     expect(group.isCanonicalRoute).toBe(true);
     expect(group.routeChains).toEqual(["ethereum", "arb1", "nova"]);
     expect(group.actions).toMatchObject([
-      { target: L1_ACTION, value: "7", chain: "ethereum" },
-      { target: ARB1_ACTION, value: "8", chain: "arb1" },
-      { target: NOVA_ACTION, value: "9", chain: "nova" },
+      {
+        target: L1_ACTION,
+        actionType: "call",
+        value: "7",
+        chain: "ethereum",
+      },
+      {
+        target: ARB1_ACTION,
+        actionType: "delegatecall",
+        value: "8",
+        chain: "arb1",
+      },
+      {
+        target: NOVA_ACTION,
+        actionType: "call",
+        value: "9",
+        chain: "nova",
+      },
     ]);
     expect(group.actions.map((action) => action.calldata)).toEqual(
       [BigInt(1), BigInt(2), BigInt(3)].map((newValue) =>
@@ -181,6 +196,7 @@ describe("normalizePayloadActions", () => {
     expect(group.actions).toMatchObject([
       {
         target: L1_ACTION,
+        actionType: "call",
         value: "5",
         calldata: directCalldata,
         chain: "ethereum",

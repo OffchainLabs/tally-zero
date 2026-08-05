@@ -15,7 +15,10 @@ import type { KnownChain } from "@gzeoneth/gov-tracker";
 import { useCopyToClipboard } from "@hooks/use-copy-to-clipboard";
 import { useDecodedCalldata } from "@hooks/use-decoded-calldata";
 import { getAddressExplorerUrl, getExplorerName } from "@lib/explorer-utils";
-import type { PayloadActionSimulation } from "@lib/payload-actions";
+import type {
+  EffectivePayloadActionType,
+  PayloadActionSimulation,
+} from "@lib/payload-actions";
 import { simulateCall, simulateRetryableTicket } from "@lib/tenderly";
 import { cn } from "@lib/utils";
 import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
@@ -33,6 +36,7 @@ export interface ActionViewProps {
   onCalldataChange?: (newCalldata: string | undefined) => void;
   governorAddress?: string;
   chainContext?: KnownChain;
+  actionType?: EffectivePayloadActionType;
   simulation?: PayloadActionSimulation;
   editable?: boolean;
   title?: string;
@@ -58,6 +62,7 @@ export function ActionView({
   onCalldataChange,
   governorAddress,
   chainContext,
+  actionType,
   simulation,
   editable = true,
   title = "Action",
@@ -124,6 +129,19 @@ export function ActionView({
           {chainContext && (
             <Badge variant="outline" className="text-[10px] bg-muted/40">
               {CHAIN_LABELS[chainContext]}
+            </Badge>
+          )}
+          {actionType && (
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-muted/40"
+              title={
+                actionType === "delegatecall"
+                  ? "Executed with the UpgradeExecutor's context"
+                  : "Executed as a normal contract call"
+              }
+            >
+              {actionType === "delegatecall" ? "Delegatecall" : "Call"}
             </Badge>
           )}
           {isOverridden && (

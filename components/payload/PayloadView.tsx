@@ -224,6 +224,7 @@ export function PayloadView({
                 nerdMode={nerdMode}
                 governorAddress={governorAddress}
                 chainContext={action.chain}
+                actionType={action.actionType}
                 simulation={action.simulation}
                 editable={false}
               />

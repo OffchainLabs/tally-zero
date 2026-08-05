@@ -39,8 +39,11 @@ export type PayloadActionSimulation =
       chain: "arb1" | "nova" | "unknown";
     };
 
+export type EffectivePayloadActionType = "call" | "delegatecall";
+
 export interface EffectivePayloadAction {
   target: string;
+  actionType: EffectivePayloadActionType;
   value: string;
   calldata: string;
   chain: KnownChain;
@@ -109,9 +112,17 @@ function unwrapUpgradeExecutor(
   chain: KnownChain,
   simulation: PayloadActionSimulation
 ): EffectivePayloadAction {
+  const directCall: EffectivePayloadAction = {
+    target,
+    actionType: "call",
+    value,
+    calldata,
+    chain,
+    simulation,
+  };
   const targetLabel = getAddressLabel(target, chain);
   if (!targetLabel?.includes("UpgradeExecutor")) {
-    return { target, value, calldata, chain, simulation };
+    return directCall;
   }
 
   try {
@@ -122,13 +133,16 @@ function unwrapUpgradeExecutor(
     const [actionTarget, actionCalldata] = decoded.args;
     return {
       target: actionTarget,
+      // UpgradeExecutor.execute delegatecalls an action contract so it can act
+      // with the executor's authority. executeCall invokes the target normally.
+      actionType: decoded.functionName === "execute" ? "delegatecall" : "call",
       value,
       calldata: actionCalldata,
       chain,
       simulation,
     };
   } catch {
-    return { target, value, calldata, chain, simulation };
+    return directCall;
   }
 }
 
