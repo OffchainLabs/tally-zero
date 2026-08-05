@@ -28,10 +28,10 @@ describe("gov-tracker integration", () => {
       );
     });
 
-    it("returns nova arbiscan URL for nova", () => {
+    it("returns Nova Blockscout URL for nova", () => {
       const address = "0x1234567890123456789012345678901234567890";
       expect(getAddressExplorerUrl(address, "nova")).toBe(
-        `https://nova.arbiscan.io/address/${address}`
+        `https://arbitrum-nova.blockscout.com/address/${address}`
       );
     });
 

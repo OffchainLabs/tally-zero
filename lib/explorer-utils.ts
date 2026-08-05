@@ -8,7 +8,7 @@ export type ChainId = "ethereum" | "arb1" | "nova";
 const EXPLORER_BASE_URLS: Record<ChainId, string> = {
   ethereum: "https://etherscan.io",
   arb1: "https://arbiscan.io",
-  nova: "https://nova.arbiscan.io",
+  nova: "https://arbitrum-nova.blockscout.com",
 };
 
 /**

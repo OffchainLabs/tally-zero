@@ -5,7 +5,6 @@ import { formatEther } from "viem";
 
 import { Badge } from "@components/ui/Badge";
 import { Button } from "@components/ui/Button";
-import { CopyableText } from "@components/ui/CopyableText";
 import { Input } from "@components/ui/Input";
 import { Label } from "@components/ui/Label";
 import { SimulationButton } from "@components/ui/SimulationButton";
@@ -13,10 +12,13 @@ import { SimulationButton } from "@components/ui/SimulationButton";
 import { L2_TREASURY_TIMELOCK } from "@config/arbitrum-governance";
 import { isTreasuryGovernor } from "@config/governors";
 import type { KnownChain } from "@gzeoneth/gov-tracker";
+import { useCopyToClipboard } from "@hooks/use-copy-to-clipboard";
 import { useDecodedCalldata } from "@hooks/use-decoded-calldata";
+import { getAddressExplorerUrl, getExplorerName } from "@lib/explorer-utils";
 import type { PayloadActionSimulation } from "@lib/payload-actions";
 import { simulateCall, simulateRetryableTicket } from "@lib/tenderly";
 import { cn } from "@lib/utils";
+import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 
 import { DecodedCalldataView } from "./DecodedCalldataView";
 import { RawCalldataDisplay } from "./RawCalldataDisplay";
@@ -63,6 +65,7 @@ export function ActionView({
 }: ActionViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(overriddenCalldata || calldata);
+  const { copied: targetCopied, copy: copyTarget } = useCopyToClipboard();
 
   const effectiveCalldata = overriddenCalldata ?? calldata;
   const isOverridden = overriddenCalldata !== undefined;
@@ -70,6 +73,8 @@ export function ActionView({
   const ethValue = formatEther(BigInt(value));
   const hasValue = ethValue !== "0";
   const hasCalldata = effectiveCalldata !== "0x" && effectiveCalldata !== "";
+  const targetChain = chainContext ?? "arb1";
+  const targetExplorerUrl = getAddressExplorerUrl(target, targetChain);
 
   const { decoded, isDecoding } = useDecodedCalldata({
     calldata: effectiveCalldata,
@@ -142,11 +147,34 @@ export function ActionView({
         <span className="text-xs text-muted-foreground shrink-0 font-medium">
           To:
         </span>
-        <CopyableText
-          value={target}
-          className="text-xs font-mono"
-          maxLength={42}
-        />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <a
+            href={targetExplorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`View on ${getExplorerName(targetChain)}`}
+            className="text-xs font-mono break-all text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {target}
+          </a>
+          <button
+            type="button"
+            onClick={() => copyTarget(target)}
+            aria-label="Copy target address"
+            title="Copy target address"
+            className={cn(
+              "p-1 rounded shrink-0 transition-colors",
+              "text-muted-foreground hover:text-primary hover:bg-muted/60",
+              targetCopied && "text-emerald-500 hover:text-emerald-500"
+            )}
+          >
+            {targetCopied ? (
+              <CheckIcon className="w-3.5 h-3.5" />
+            ) : (
+              <CopyIcon className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Calldata section */}
