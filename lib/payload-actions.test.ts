@@ -9,10 +9,13 @@ import {
 } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { normalizePayloadActions } from "./payload-actions";
+import {
+  canFlattenGovernancePayload,
+  normalizePayloadActions,
+} from "./payload-actions";
 
 const arbSysAbi = parseAbi([
-  "function sendTxToL1(address destination, bytes data) returns (uint256)",
+  "function sendTxToL1(address destination, bytes data) payable returns (uint256)",
 ]);
 const timelockAbi = parseAbi([
   "function schedule(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt, uint256 delay)",
@@ -20,6 +23,7 @@ const timelockAbi = parseAbi([
 ]);
 const executorAbi = parseAbi([
   "function execute(address target, bytes data) payable",
+  "function executeCall(address target, bytes data) payable",
 ]);
 const actionAbi = parseAbi(["function perform(uint256 newValue)"]);
 
@@ -31,10 +35,14 @@ const L1_ACTION = "0x4444444444444444444444444444444444444444" as Address;
 const ARB1_ACTION = "0x5555555555555555555555555555555555555555" as Address;
 const NOVA_ACTION = "0x6666666666666666666666666666666666666666" as Address;
 
-function executorCall(target: Address, newValue: bigint): Hex {
+function executorCall(
+  target: Address,
+  newValue: bigint,
+  functionName: "execute" | "executeCall" = "execute"
+): Hex {
   return encodeFunctionData({
     abi: executorAbi,
-    functionName: "execute",
+    functionName,
     args: [
       target,
       encodeFunctionData({
@@ -70,9 +78,13 @@ function arbSysCall(l1TimelockCalldata: Hex): Hex {
 
 describe("normalizePayloadActions", () => {
   it("flattens a mixed L1, Arbitrum One, and Nova timelock batch", () => {
-    const l1ExecutorCall = executorCall(L1_ACTION, BigInt(1));
+    const l1ExecutorCall = executorCall(L1_ACTION, BigInt(1), "executeCall");
     const arb1ExecutorCall = executorCall(ARB1_ACTION, BigInt(2));
-    const novaExecutorCall = executorCall(NOVA_ACTION, BigInt(3));
+    const novaExecutorCall = executorCall(
+      NOVA_ACTION,
+      BigInt(3),
+      "executeCall"
+    );
     const scheduleBatch = encodeFunctionData({
       abi: timelockAbi,
       functionName: "scheduleBatch",
@@ -131,6 +143,14 @@ describe("normalizePayloadActions", () => {
       "retryable",
       "retryable",
     ]);
+    expect(group.actions[0].simulation).toMatchObject({
+      type: "call",
+      calldata: l1ExecutorCall,
+    });
+    expect(group.actions[2].simulation).toMatchObject({
+      type: "retryable",
+      l2Calldata: novaExecutorCall,
+    });
   });
 
   it("flattens a single schedule and stops safely before a non-executor call", () => {
@@ -178,5 +198,67 @@ describe("normalizePayloadActions", () => {
     expect(groups).toHaveLength(2);
     expect(groups.every((group) => !group.isCanonicalRoute)).toBe(true);
     expect(groups.every((group) => group.actions.length === 0)).toBe(true);
+  });
+
+  it("rejects a canonical-looking route with nonzero outer call value", () => {
+    const directCalldata = executorCall(L1_ACTION, BigInt(42));
+    const schedule = encodeFunctionData({
+      abi: timelockAbi,
+      functionName: "schedule",
+      args: [
+        L1_EXECUTOR,
+        BigInt(0),
+        directCalldata,
+        ZERO_HASH,
+        ZERO_HASH,
+        BigInt(259_200),
+      ],
+    });
+
+    const [group] = normalizePayloadActions({
+      targets: [ADDRESSES.ARB_SYS],
+      values: ["1"],
+      calldatas: [arbSysCall(schedule)],
+    });
+
+    expect(group.isCanonicalRoute).toBe(false);
+  });
+
+  it("can disable canonical normalization for non-Core proposal origins", () => {
+    const directCalldata = executorCall(L1_ACTION, BigInt(42));
+    const schedule = encodeFunctionData({
+      abi: timelockAbi,
+      functionName: "schedule",
+      args: [
+        L1_EXECUTOR,
+        BigInt(0),
+        directCalldata,
+        ZERO_HASH,
+        ZERO_HASH,
+        BigInt(259_200),
+      ],
+    });
+
+    const [group] = normalizePayloadActions({
+      targets: [ADDRESSES.ARB_SYS],
+      values: ["0"],
+      calldatas: [arbSysCall(schedule)],
+      allowCanonicalRoutes: false,
+    });
+
+    expect(group.isCanonicalRoute).toBe(false);
+  });
+
+  it("only enables flattening for the Core Governor", () => {
+    expect(canFlattenGovernancePayload(ADDRESSES.CONSTITUTIONAL_GOVERNOR)).toBe(
+      true
+    );
+    expect(
+      canFlattenGovernancePayload(ADDRESSES.NON_CONSTITUTIONAL_GOVERNOR)
+    ).toBe(false);
+    expect(
+      canFlattenGovernancePayload("0x1111111111111111111111111111111111111111")
+    ).toBe(false);
+    expect(canFlattenGovernancePayload(undefined)).toBe(false);
   });
 });

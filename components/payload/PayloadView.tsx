@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import { Badge } from "@components/ui/Badge";
 import {
+  canFlattenGovernancePayload,
   normalizePayloadActions,
   type NormalizedPayloadGroup,
 } from "@lib/payload-actions";
@@ -131,8 +132,9 @@ export function PayloadView({
         targets,
         values,
         calldatas: effectiveCalldatas,
+        allowCanonicalRoutes: canFlattenGovernancePayload(governorAddress),
       }),
-    [targets, values, effectiveCalldatas]
+    [targets, values, effectiveCalldatas, governorAddress]
   );
 
   if (targets.length === 0) {

@@ -1,4 +1,5 @@
 import { addressesEqual } from "@/lib/address-utils";
+import { isCoreGovernor } from "@config/governors";
 import {
   ADDRESSES,
   decodeRetryableTicket,
@@ -8,7 +9,7 @@ import {
 import { decodeFunctionData, parseAbi } from "viem";
 
 const arbSysAbi = parseAbi([
-  "function sendTxToL1(address destination, bytes data) returns (uint256)",
+  "function sendTxToL1(address destination, bytes data) payable returns (uint256)",
 ]);
 
 const l1TimelockAbi = parseAbi([
@@ -18,6 +19,7 @@ const l1TimelockAbi = parseAbi([
 
 const upgradeExecutorAbi = parseAbi([
   "function execute(address target, bytes data) payable",
+  "function executeCall(address target, bytes data) payable",
 ]);
 
 export type PayloadActionSimulation =
@@ -53,6 +55,12 @@ export interface NormalizedPayloadGroup {
   isCanonicalRoute: boolean;
   routeChains: KnownChain[];
   actions: EffectivePayloadAction[];
+}
+
+export function canFlattenGovernancePayload(
+  governorAddress: string | undefined
+): boolean {
+  return governorAddress !== undefined && isCoreGovernor(governorAddress);
 }
 
 interface ScheduledOperation {
@@ -179,6 +187,11 @@ function tryNormalizeCanonicalRoute(
   if (!addressesEqual(target, ADDRESSES.ARB_SYS)) return null;
 
   try {
+    // ArbSys is payable, but the Outbox forwards this value to the L1
+    // destination. Timelock schedule/scheduleBatch are nonpayable, so a
+    // canonical scheduling message cannot carry an outer value.
+    if (BigInt(value) !== BigInt(0)) return null;
+
     const arbSysCall = decodeFunctionData({
       abi: arbSysAbi,
       data: calldata as `0x${string}`,
@@ -213,20 +226,19 @@ export function normalizePayloadActions({
   targets,
   values,
   calldatas,
+  allowCanonicalRoutes = true,
 }: {
   targets: string[];
   values: string[];
   calldatas: string[];
+  allowCanonicalRoutes?: boolean;
 }): NormalizedPayloadGroup[] {
   return targets.map((target, sourceIndex) => {
     const value = values[sourceIndex] || "0";
     const calldata = calldatas[sourceIndex] || "0x";
-    const canonical = tryNormalizeCanonicalRoute(
-      sourceIndex,
-      target,
-      value,
-      calldata
-    );
+    const canonical = allowCanonicalRoutes
+      ? tryNormalizeCanonicalRoute(sourceIndex, target, value, calldata)
+      : null;
     if (canonical) return canonical;
 
     return {
