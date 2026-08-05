@@ -29,7 +29,9 @@ describe("explorer-utils", () => {
 
     it("returns Nova Explorer address URL for nova chain", () => {
       const url = getAddressExplorerUrl(sampleAddress, "nova");
-      expect(url).toBe(`https://nova.arbiscan.io/address/${sampleAddress}`);
+      expect(url).toBe(
+        `https://arbitrum-nova.blockscout.com/address/${sampleAddress}`
+      );
     });
   });
 
@@ -51,7 +53,9 @@ describe("explorer-utils", () => {
 
     it("returns Nova Explorer tx URL for nova chain", () => {
       const url = getTxExplorerUrl(sampleTxHash, "nova");
-      expect(url).toBe(`https://nova.arbiscan.io/tx/${sampleTxHash}`);
+      expect(url).toBe(
+        `https://arbitrum-nova.blockscout.com/tx/${sampleTxHash}`
+      );
     });
   });
 

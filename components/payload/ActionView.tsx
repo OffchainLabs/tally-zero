@@ -5,16 +5,23 @@ import { formatEther } from "viem";
 
 import { Badge } from "@components/ui/Badge";
 import { Button } from "@components/ui/Button";
-import { CopyableText } from "@components/ui/CopyableText";
 import { Input } from "@components/ui/Input";
 import { Label } from "@components/ui/Label";
 import { SimulationButton } from "@components/ui/SimulationButton";
 
 import { L2_TREASURY_TIMELOCK } from "@config/arbitrum-governance";
 import { isTreasuryGovernor } from "@config/governors";
+import type { KnownChain } from "@gzeoneth/gov-tracker";
+import { useCopyToClipboard } from "@hooks/use-copy-to-clipboard";
 import { useDecodedCalldata } from "@hooks/use-decoded-calldata";
-import { simulateCall } from "@lib/tenderly";
+import { getAddressExplorerUrl, getExplorerName } from "@lib/explorer-utils";
+import type {
+  EffectivePayloadActionType,
+  PayloadActionSimulation,
+} from "@lib/payload-actions";
+import { simulateCall, simulateRetryableTicket } from "@lib/tenderly";
 import { cn } from "@lib/utils";
+import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 
 import { DecodedCalldataView } from "./DecodedCalldataView";
 import { RawCalldataDisplay } from "./RawCalldataDisplay";
@@ -28,7 +35,19 @@ export interface ActionViewProps {
   overriddenCalldata?: string;
   onCalldataChange?: (newCalldata: string | undefined) => void;
   governorAddress?: string;
+  chainContext?: KnownChain;
+  actionType?: EffectivePayloadActionType;
+  simulation?: PayloadActionSimulation;
+  editable?: boolean;
+  title?: string;
+  showIndex?: boolean;
 }
+
+const CHAIN_LABELS: Record<KnownChain, string> = {
+  ethereum: "Ethereum",
+  arb1: "Arbitrum One",
+  nova: "Nova",
+};
 
 /**
  * Single action view with calldata decoding and optional editing
@@ -42,9 +61,16 @@ export function ActionView({
   overriddenCalldata,
   onCalldataChange,
   governorAddress,
+  chainContext,
+  actionType,
+  simulation,
+  editable = true,
+  title = "Action",
+  showIndex = true,
 }: ActionViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(overriddenCalldata || calldata);
+  const { copied: targetCopied, copy: copyTarget } = useCopyToClipboard();
 
   const effectiveCalldata = overriddenCalldata ?? calldata;
   const isOverridden = overriddenCalldata !== undefined;
@@ -52,11 +78,14 @@ export function ActionView({
   const ethValue = formatEther(BigInt(value));
   const hasValue = ethValue !== "0";
   const hasCalldata = effectiveCalldata !== "0x" && effectiveCalldata !== "";
+  const targetChain = chainContext ?? "arb1";
+  const targetExplorerUrl = getAddressExplorerUrl(target, targetChain);
 
   const { decoded, isDecoding } = useDecodedCalldata({
     calldata: effectiveCalldata,
     targetAddress: target,
     enabled: hasCalldata,
+    chainContext,
   });
 
   const showDecoded = decoded && decoded.decodingSource !== "failed";
@@ -91,10 +120,30 @@ export function ActionView({
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-            {index + 1}
-          </span>
-          <span className="text-sm font-medium text-foreground">Action</span>
+          {showIndex && (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+              {index + 1}
+            </span>
+          )}
+          <span className="text-sm font-medium text-foreground">{title}</span>
+          {chainContext && (
+            <Badge variant="outline" className="text-[10px] bg-muted/40">
+              {CHAIN_LABELS[chainContext]}
+            </Badge>
+          )}
+          {actionType && (
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-muted/40"
+              title={
+                actionType === "delegatecall"
+                  ? "Executed with the UpgradeExecutor's context"
+                  : "Executed as a normal contract call"
+              }
+            >
+              {actionType === "delegatecall" ? "Delegatecall" : "Call"}
+            </Badge>
+          )}
           {isOverridden && (
             <Badge
               variant="outline"
@@ -116,11 +165,34 @@ export function ActionView({
         <span className="text-xs text-muted-foreground shrink-0 font-medium">
           To:
         </span>
-        <CopyableText
-          value={target}
-          className="text-xs font-mono"
-          maxLength={42}
-        />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <a
+            href={targetExplorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`View on ${getExplorerName(targetChain)}`}
+            className="text-xs font-mono break-all text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {target}
+          </a>
+          <button
+            type="button"
+            onClick={() => copyTarget(target)}
+            aria-label="Copy target address"
+            title="Copy target address"
+            className={cn(
+              "p-1 rounded shrink-0 transition-colors",
+              "text-muted-foreground hover:text-primary hover:bg-muted/60",
+              targetCopied && "text-emerald-500 hover:text-emerald-500"
+            )}
+          >
+            {targetCopied ? (
+              <CheckIcon className="w-3.5 h-3.5" />
+            ) : (
+              <CopyIcon className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Calldata section */}
@@ -128,10 +200,25 @@ export function ActionView({
         <div className="space-y-2">
           {/* Decoded view */}
           {(showDecoded || isDecoding) && !isEditing && (
-            <DecodedCalldataView decoded={decoded} isDecoding={isDecoding} />
+            <DecodedCalldataView
+              decoded={decoded}
+              isDecoding={isDecoding}
+              chainContext={chainContext}
+            />
           )}
 
-          {showDecoded && !isEditing && governorAddress && (
+          {hasCalldata && !isEditing && simulation && (
+            <SimulationButton
+              type={simulation.type}
+              onSimulate={() =>
+                simulation.type === "retryable"
+                  ? simulateRetryableTicket(simulation)
+                  : simulateCall(simulation)
+              }
+            />
+          )}
+
+          {showDecoded && !isEditing && !simulation && governorAddress && (
             <SimulationButton
               type="call"
               onSimulate={() =>
@@ -148,7 +235,7 @@ export function ActionView({
           )}
 
           {/* Editing mode */}
-          {nerdMode && isEditing ? (
+          {nerdMode && editable && isEditing ? (
             <div className="glass-subtle backdrop-blur rounded-lg p-3 space-y-3">
               <Label className="text-xs font-medium">Edit Calldata (hex)</Label>
               <Input
@@ -198,7 +285,7 @@ export function ActionView({
                 <div className="mt-2 space-y-2">
                   <RawCalldataDisplay
                     calldata={effectiveCalldata}
-                    nerdMode={nerdMode}
+                    nerdMode={nerdMode && editable}
                     isOverridden={isOverridden}
                     onEdit={() => {
                       setEditValue(effectiveCalldata);

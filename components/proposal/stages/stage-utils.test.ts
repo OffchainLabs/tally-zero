@@ -34,14 +34,14 @@ describe("getStageTxExplorerUrl", () => {
     expect(url).toBe(`https://arbiscan.io/tx/${testHash}`);
   });
 
-  it("returns Nova Arbiscan URL for nova chain", () => {
+  it("returns Nova Blockscout URL for nova chain", () => {
     const url = getStageTxExplorerUrl(testHash, "nova");
-    expect(url).toBe(`https://nova.arbiscan.io/tx/${testHash}`);
+    expect(url).toBe(`https://arbitrum-nova.blockscout.com/tx/${testHash}`);
   });
 
   it("uses targetChain when provided", () => {
     const url = getStageTxExplorerUrl(testHash, "ethereum", "nova");
-    expect(url).toBe(`https://nova.arbiscan.io/tx/${testHash}`);
+    expect(url).toBe(`https://arbitrum-nova.blockscout.com/tx/${testHash}`);
   });
 });
 
