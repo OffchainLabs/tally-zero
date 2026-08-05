@@ -3,9 +3,9 @@
  * Parses calldata into human-readable function calls and parameters
  */
 
-import type { DecodedCalldata } from "@gzeoneth/gov-tracker";
-import { decodeCalldata } from "@gzeoneth/gov-tracker";
 import { getErrorMessage } from "@/lib/error-utils";
+import type { DecodedCalldata, KnownChain } from "@gzeoneth/gov-tracker";
+import { decodeCalldata } from "@gzeoneth/gov-tracker";
 import { useCallback, useEffect, useState } from "react";
 
 /** Options for configuring calldata decoding */
@@ -16,6 +16,8 @@ interface UseDecodedCalldataOptions {
   targetAddress?: string;
   /** Whether decoding is enabled */
   enabled?: boolean;
+  /** Chain used for nested address labels and explorer context */
+  chainContext?: KnownChain;
 }
 
 /** Return type for useDecodedCalldata hook */
@@ -39,6 +41,7 @@ export function useDecodedCalldata({
   calldata,
   targetAddress,
   enabled = true,
+  chainContext = "arb1",
 }: UseDecodedCalldataOptions): UseDecodedCalldataResult {
   const [decoded, setDecoded] = useState<DecodedCalldata | null>(null);
   const [isDecoding, setIsDecoding] = useState(false);
@@ -55,7 +58,12 @@ export function useDecodedCalldata({
     setError(null);
 
     try {
-      const result = await decodeCalldata(calldata, targetAddress);
+      const result = await decodeCalldata(
+        calldata,
+        targetAddress,
+        0,
+        chainContext
+      );
       setDecoded(result);
     } catch (err) {
       setError(getErrorMessage(err, "decode calldata"));
@@ -63,7 +71,7 @@ export function useDecodedCalldata({
     } finally {
       setIsDecoding(false);
     }
-  }, [calldata, targetAddress, enabled]);
+  }, [calldata, targetAddress, enabled, chainContext]);
 
   useEffect(() => {
     decode();

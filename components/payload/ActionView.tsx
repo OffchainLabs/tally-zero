@@ -12,8 +12,10 @@ import { SimulationButton } from "@components/ui/SimulationButton";
 
 import { L2_TREASURY_TIMELOCK } from "@config/arbitrum-governance";
 import { isTreasuryGovernor } from "@config/governors";
+import type { KnownChain } from "@gzeoneth/gov-tracker";
 import { useDecodedCalldata } from "@hooks/use-decoded-calldata";
-import { simulateCall } from "@lib/tenderly";
+import type { PayloadActionSimulation } from "@lib/payload-actions";
+import { simulateCall, simulateRetryableTicket } from "@lib/tenderly";
 import { cn } from "@lib/utils";
 
 import { DecodedCalldataView } from "./DecodedCalldataView";
@@ -28,7 +30,18 @@ export interface ActionViewProps {
   overriddenCalldata?: string;
   onCalldataChange?: (newCalldata: string | undefined) => void;
   governorAddress?: string;
+  chainContext?: KnownChain;
+  simulation?: PayloadActionSimulation;
+  editable?: boolean;
+  title?: string;
+  showIndex?: boolean;
 }
+
+const CHAIN_LABELS: Record<KnownChain, string> = {
+  ethereum: "Ethereum",
+  arb1: "Arbitrum One",
+  nova: "Nova",
+};
 
 /**
  * Single action view with calldata decoding and optional editing
@@ -42,6 +55,11 @@ export function ActionView({
   overriddenCalldata,
   onCalldataChange,
   governorAddress,
+  chainContext,
+  simulation,
+  editable = true,
+  title = "Action",
+  showIndex = true,
 }: ActionViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(overriddenCalldata || calldata);
@@ -57,6 +75,7 @@ export function ActionView({
     calldata: effectiveCalldata,
     targetAddress: target,
     enabled: hasCalldata,
+    chainContext,
   });
 
   const showDecoded = decoded && decoded.decodingSource !== "failed";
@@ -91,10 +110,17 @@ export function ActionView({
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-            {index + 1}
-          </span>
-          <span className="text-sm font-medium text-foreground">Action</span>
+          {showIndex && (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+              {index + 1}
+            </span>
+          )}
+          <span className="text-sm font-medium text-foreground">{title}</span>
+          {chainContext && (
+            <Badge variant="outline" className="text-[10px] bg-muted/40">
+              {CHAIN_LABELS[chainContext]}
+            </Badge>
+          )}
           {isOverridden && (
             <Badge
               variant="outline"
@@ -128,10 +154,25 @@ export function ActionView({
         <div className="space-y-2">
           {/* Decoded view */}
           {(showDecoded || isDecoding) && !isEditing && (
-            <DecodedCalldataView decoded={decoded} isDecoding={isDecoding} />
+            <DecodedCalldataView
+              decoded={decoded}
+              isDecoding={isDecoding}
+              chainContext={chainContext}
+            />
           )}
 
-          {showDecoded && !isEditing && governorAddress && (
+          {hasCalldata && !isEditing && simulation && (
+            <SimulationButton
+              type={simulation.type}
+              onSimulate={() =>
+                simulation.type === "retryable"
+                  ? simulateRetryableTicket(simulation)
+                  : simulateCall(simulation)
+              }
+            />
+          )}
+
+          {showDecoded && !isEditing && !simulation && governorAddress && (
             <SimulationButton
               type="call"
               onSimulate={() =>
@@ -148,7 +189,7 @@ export function ActionView({
           )}
 
           {/* Editing mode */}
-          {nerdMode && isEditing ? (
+          {nerdMode && editable && isEditing ? (
             <div className="glass-subtle backdrop-blur rounded-lg p-3 space-y-3">
               <Label className="text-xs font-medium">Edit Calldata (hex)</Label>
               <Input
@@ -198,7 +239,7 @@ export function ActionView({
                 <div className="mt-2 space-y-2">
                   <RawCalldataDisplay
                     calldata={effectiveCalldata}
-                    nerdMode={nerdMode}
+                    nerdMode={nerdMode && editable}
                     isOverridden={isOverridden}
                     onEdit={() => {
                       setEditValue(effectiveCalldata);

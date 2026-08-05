@@ -136,7 +136,7 @@ function ProposalTabsContent({
         >
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">
-              Proposal Actions ({proposal.targets.length})
+              Proposal Payload
             </h3>
             {nerdMode && (
               <Badge variant="outline" className="text-[10px]">
