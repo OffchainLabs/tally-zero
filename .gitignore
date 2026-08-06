@@ -40,9 +40,13 @@ next-env.d.ts
 # opensrc - source code for packages
 opensrc/
 
-# Claude Code instructions (local only)
+# Claude Code instructions (local only, except the shared skills folder)
 CLAUDE.md
-/.claude/
+/.claude/*
+!/.claude/skills/
+
+# Branch review artifacts written by the pre-push review hook
+code-review-*.md
 
 # Agent loop metadata
 .agent/summary.md

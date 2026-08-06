@@ -58,6 +58,33 @@ yarn lint       # ESLint with auto-fix
 yarn test       # Lint + typecheck + Vitest
 ```
 
+## Git hooks
+
+Hooks are managed by [husky](https://typicode.github.io/husky/) and install
+automatically when you run `pnpm install`.
+
+- **pre-commit** runs `lint-staged` and `pnpm test` (lint, typecheck, Vitest).
+- **pre-push** runs an AI branch review through
+  [Claude Code](https://docs.claude.com/en/docs/claude-code/setup), using the
+  shared skill at `.claude/skills/pre-push-review-branch/SKILL.md`. It compares
+  your branch against the merge-base with `main`, reads the PR description when
+  one exists, and writes `code-review-<branch>.md` (gitignored) to the repo
+  root.
+
+The pre-push review is **advisory**. It prints its verdict and never blocks a
+push, and it skips itself silently if the `claude` CLI is not installed, so it
+is optional for collaborators who do not use Claude Code.
+
+```bash
+pnpm review:branch                # run the review by hand
+SKIP_CLAUDE_REVIEW=1 git push     # skip the review for one push
+git push --no-verify              # skip every hook
+```
+
+Editing `.claude/skills/pre-push-review-branch/SKILL.md` changes the review
+criteria for everyone on the next pull. The rest of `.claude/` stays gitignored
+and personal.
+
 ## License
 
 See upstream [TallyZero](https://github.com/withtally/tally-zero) repository.

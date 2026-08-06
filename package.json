@@ -11,6 +11,7 @@
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
     "start": "next start",
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
+    "review:branch": "sh scripts/claude-branch-review.sh",
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
     "prepare": "husky"
