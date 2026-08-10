@@ -1,8 +1,6 @@
-import { getIndexerUrl } from "@/lib/indexer/server";
+import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 
 export const dynamic = "force-dynamic";
-
-const FETCH_TIMEOUT_MS = 10_000;
 
 type RouteContext = {
   params: Promise<{ path: string[] }>;
@@ -17,38 +15,21 @@ async function proxy(
   context: RouteContext
 ): Promise<Response> {
   const { path } = await context.params;
-  const indexerUrl = getIndexerUrl();
-  if (!indexerUrl) {
-    return Response.json(
-      { error: "Governance indexer is not configured." },
-      { status: 503 }
-    );
-  }
-
   const inboundUrl = new URL(request.url);
   const encodedPath = path.map(encodeURIComponent).join("/");
-  const upstreamUrl = new URL(`${indexerUrl}/${encodedPath}`);
-  upstreamUrl.search = inboundUrl.search;
 
   const method = request.method;
   const hasBody = method !== "GET" && method !== "HEAD";
   const cookie = request.headers.get("cookie");
-
-  const outHeaders: Record<string, string> = { accept: "application/json" };
   const contentType = request.headers.get("content-type");
-  if (contentType) outHeaders["content-type"] = contentType;
-  if (cookie) outHeaders["cookie"] = cookie;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(upstreamUrl, {
+    const upstream = await indexerFetch(`/${encodedPath}${inboundUrl.search}`, {
       method,
-      signal: controller.signal,
-      headers: outHeaders,
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      cookie,
       redirect: "manual",
+      body: hasBody ? await request.arrayBuffer() : undefined,
+      headers: contentType ? { "content-type": contentType } : undefined,
     });
 
     const headers = new Headers();
@@ -73,10 +54,8 @@ async function proxy(
       statusText: upstream.statusText,
       headers,
     });
-  } catch {
-    return Response.json({ error: "Indexer upstream error." }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
+  } catch (error) {
+    return indexerErrorResponse(error);
   }
 }
 

@@ -1,4 +1,4 @@
-import { getIndexerUrl, indexerFetch } from "@/lib/indexer/server";
+import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 import { putAvatar } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
@@ -30,23 +30,21 @@ function sniffImage(bytes: Uint8Array): boolean {
 // (429). Only then do we accept and store the image; the returned URL is saved
 // into the profile's `picture` field via PATCH /api/me/profile (client-side).
 export async function POST(request: Request): Promise<Response> {
-  const indexerUrl = getIndexerUrl();
-  if (!indexerUrl) {
-    return Response.json(
-      { error: "Governance indexer is not configured." },
-      { status: 503 }
-    );
-  }
-
   const cookie = request.headers.get("cookie");
   if (!cookie) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const intent = await indexerFetch(indexerUrl, "/api/me/avatar-intent", {
-    method: "POST",
-    cookie,
-  });
+  // Authorize (session + delegated-ARB gate + rate limit) at the indexer.
+  let intent: Response;
+  try {
+    intent = await indexerFetch("/api/me/avatar-intent", {
+      method: "POST",
+      cookie,
+    });
+  } catch (error) {
+    return indexerErrorResponse(error);
+  }
   if (intent.status === 401) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
