@@ -16,15 +16,33 @@ class SiweApiError extends Error {
   }
 }
 
+// Two error shapes reach this client: the indexer's nested
+// `{ error: { code, message } }` (relayed verbatim by the proxy) and the
+// proxy's own flat `{ error: string }` (503 unconfigured / 502 upstream). Read
+// both so the indexer's precise message (wrong domain/chainId, not-a-delegate,
+// rate-limited) actually surfaces instead of a bare HTTP status text.
+function extractError(
+  body: unknown,
+  fallbackMessage: string
+): { code: string; message: string } {
+  const error = (body as { error?: unknown } | null)?.error;
+  if (error && typeof error === "object") {
+    const { code, message } = error as { code?: unknown; message?: unknown };
+    return {
+      code: typeof code === "string" ? code : "error",
+      message: typeof message === "string" ? message : fallbackMessage,
+    };
+  }
+  if (typeof error === "string") return { code: "error", message: error };
+  return { code: "error", message: fallbackMessage };
+}
+
 async function parse<T>(res: Response): Promise<T> {
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    throw new SiweApiError(
-      res.status,
-      body?.error ?? "error",
-      body?.message ?? res.statusText
-    );
+    const { code, message } = extractError(body, res.statusText);
+    throw new SiweApiError(res.status, code, message);
   }
   return body as T;
 }

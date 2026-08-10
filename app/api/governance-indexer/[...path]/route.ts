@@ -1,3 +1,5 @@
+import { getIndexerUrl } from "@/lib/indexer/server";
+
 export const dynamic = "force-dynamic";
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -5,12 +7,6 @@ const FETCH_TIMEOUT_MS = 10_000;
 type RouteContext = {
   params: Promise<{ path: string[] }>;
 };
-
-function getIndexerUrl(): string | null {
-  // eslint-disable-next-line no-process-env
-  const value = process.env.GOVERNANCE_INDEXER_URL?.trim();
-  return value ? value.replace(/\/+$/, "") : null;
-}
 
 // Single handler for every method. GET reads stay CDN-cacheable; the SIWE
 // surface (POST /api/auth/*, GET/PATCH /api/me, ...) is cookie-based, so we
