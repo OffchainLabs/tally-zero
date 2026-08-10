@@ -1,14 +1,9 @@
+import { getIndexerUrl, indexerFetch } from "@/lib/indexer/server";
 import { putAvatar } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 2_000_000;
-
-function getIndexerUrl(): string | null {
-  // eslint-disable-next-line no-process-env
-  const value = process.env.GOVERNANCE_INDEXER_URL?.trim();
-  return value ? value.replace(/\/+$/, "") : null;
-}
 
 // Sniff the real image type from magic bytes rather than trusting the client
 // content-type header (which is spoofable). Covers the formats browsers upload.
@@ -48,9 +43,9 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const intent = await fetch(`${indexerUrl}/api/me/avatar-intent`, {
+  const intent = await indexerFetch(indexerUrl, "/api/me/avatar-intent", {
     method: "POST",
-    headers: { accept: "application/json", cookie },
+    cookie,
   });
   if (intent.status === 401) {
     return Response.json({ error: "Not signed in." }, { status: 401 });

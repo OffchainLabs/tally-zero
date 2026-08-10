@@ -1,18 +1,14 @@
 "use client";
 
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import {
-  arbitrum,
-  arbitrumSepolia,
-  type AppKitNetwork,
-} from "@reown/appkit/networks";
-import { createAppKit } from "@reown/appkit/react";
+import { arbitrum, arbitrumSepolia } from "@reown/appkit/networks";
 import { type ReactNode } from "react";
 import { http } from "viem";
 import { WagmiProvider, type Config } from "wagmi";
 
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
+import { APPKIT_NETWORKS, createGovernanceAppKit } from "@/lib/appkit";
 import { env } from "../env";
 
 // Get project ID from environment
@@ -21,19 +17,6 @@ const projectId = env.NEXT_PUBLIC_REOWN_PROJECT_ID;
 if (!projectId) {
   throw new Error("NEXT_PUBLIC_REOWN_PROJECT_ID is not defined");
 }
-
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
-  arbitrum,
-  arbitrumSepolia,
-];
-
-// Metadata for your app
-const metadata = {
-  name: "Arbitrum Governance",
-  description: "Decentralized voting platform for onchain governance",
-  url: "https://alt.gov.arbitrum.foundation",
-  icons: ["/favicon/favicon.ico"],
-};
 
 /** Read stored L2 RPC from localStorage (JSON-encoded by useLocalStorage) */
 function getStoredL2Rpc(): string {
@@ -66,21 +49,12 @@ const customTransports = {
 // Configure Wagmi Adapter with custom transports
 const wagmiAdapter = new WagmiAdapter({
   projectId,
-  networks,
+  networks: APPKIT_NETWORKS,
   transports: customTransports,
 });
 
-// Create modal instance
-createAppKit({
-  adapters: [wagmiAdapter],
-  projectId,
-  networks,
-  defaultNetwork: arbitrum,
-  metadata,
-  features: {
-    analytics: true,
-  },
-});
+// Create the modal singleton (shared networks/metadata; see lib/appkit).
+createGovernanceAppKit(projectId, wagmiAdapter);
 
 export default function Web3ModalProviderInner({
   children,
