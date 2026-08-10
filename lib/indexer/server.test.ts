@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getIndexerUrl, indexerFetch } from "./server";
+import {
+  getIndexerUrl,
+  indexerErrorResponse,
+  indexerFetch,
+  IndexerUnconfiguredError,
+} from "./server";
 
 describe("getIndexerUrl", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -14,14 +19,18 @@ describe("getIndexerUrl", () => {
 });
 
 describe("indexerFetch", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
 
-  it("forwards the cookie + accept header and joins base/path", async () => {
+  it("resolves the base, forwards cookie + accept, joins base/path", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://idx.example");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response("{}", { status: 200 }));
 
-    await indexerFetch("https://idx.example", "/api/me/avatar-intent", {
+    await indexerFetch("/api/me/avatar-intent", {
       method: "POST",
       cookie: "siwe_session=tok",
     });
@@ -35,13 +44,40 @@ describe("indexerFetch", () => {
   });
 
   it("omits the cookie header when none is provided", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://idx.example");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response("{}", { status: 200 }));
 
-    await indexerFetch("https://idx.example", "/api/tally/stats");
+    await indexerFetch("/api/tally/stats");
 
-    const init = fetchMock.mock.calls[0][1]!;
-    expect(init.headers).not.toHaveProperty("cookie");
+    expect(fetchMock.mock.calls[0][1]!.headers).not.toHaveProperty("cookie");
+  });
+
+  it("throws IndexerUnconfiguredError when the base URL is unset", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(indexerFetch("/api/tally/stats")).rejects.toBeInstanceOf(
+      IndexerUnconfiguredError
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("indexerErrorResponse", () => {
+  it("maps IndexerUnconfiguredError → 503", async () => {
+    const res = indexerErrorResponse(new IndexerUnconfiguredError());
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "Governance indexer is not configured.",
+    });
+  });
+
+  it("maps any other error → 502", async () => {
+    const res = indexerErrorResponse(new Error("socket hang up"));
+    expect(res.status).toBe(502);
+    await expect(res.json()).resolves.toEqual({
+      error: "Indexer upstream error.",
+    });
   });
 });

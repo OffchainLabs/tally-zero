@@ -1,4 +1,4 @@
-import { getIndexerUrl, indexerFetch } from "@/lib/indexer/server";
+import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 import type {
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
  */
 const UPSTREAM_CONCURRENCY = 16;
 
-async function fetchUpstream<T>(base: string, path: string): Promise<T> {
-  const response = await indexerFetch(base, path);
+async function fetchUpstream<T>(path: string): Promise<T> {
+  const response = await indexerFetch(path);
   if (!response.ok) {
     throw new Error(`Indexer request failed: ${response.status}`);
   }
@@ -28,17 +28,8 @@ async function fetchUpstream<T>(base: string, path: string): Promise<T> {
  * the client fills all vote bars with a single request instead of N.
  */
 export async function GET(): Promise<Response> {
-  const indexerUrl = getIndexerUrl();
-  if (!indexerUrl) {
-    return Response.json(
-      { error: "Governance indexer is not configured." },
-      { status: 503 }
-    );
-  }
-
   try {
     const entries = await fetchUpstream<TallyProposalIndexEntry[]>(
-      indexerUrl,
       "/api/tally/proposals"
     );
 
@@ -49,7 +40,6 @@ export async function GET(): Promise<Response> {
         batch.map(async (entry) => {
           const governorAddress = entry.governorAddress.toLowerCase();
           const voteSummary = await fetchUpstream<TallyProposalVoteSummary>(
-            indexerUrl,
             `/api/tally/proposals/${encodeURIComponent(
               governorAddress
             )}/${encodeURIComponent(entry.proposalId)}/vote-summary`
@@ -78,7 +68,7 @@ export async function GET(): Promise<Response> {
     );
 
     return new Response(JSON.stringify(summaries), { status: 200, headers });
-  } catch {
-    return Response.json({ error: "Indexer upstream error." }, { status: 502 });
+  } catch (error) {
+    return indexerErrorResponse(error);
   }
 }

@@ -3,7 +3,7 @@ import {
   DELEGATE_MIN_VOTING_POWER_WEI,
   EXCLUDED_DELEGATE_ADDRESSES,
 } from "@/config/delegates";
-import { getIndexerUrl, indexerFetch } from "@/lib/indexer/server";
+import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 import type { TallyDelegateCountResult } from "@/lib/tally-data/types";
 
 export const dynamic = "force-dynamic";
@@ -16,25 +16,15 @@ export const dynamic = "force-dynamic";
  * just relays that number — no whole-list read.
  */
 export async function GET(): Promise<Response> {
-  const indexerUrl = getIndexerUrl();
-  if (!indexerUrl) {
-    return Response.json(
-      { error: "Governance indexer is not configured." },
-      { status: 503 }
-    );
-  }
-
   const search = new URLSearchParams({
     minVotingPower: DELEGATE_MIN_VOTING_POWER_WEI,
     exclude: EXCLUDED_DELEGATE_ADDRESSES.join(","),
   });
 
   try {
-    const upstream = await indexerFetch(
-      indexerUrl,
-      `/api/tally/delegate-count?${search}`,
-      { timeoutMs: 15_000 }
-    );
+    const upstream = await indexerFetch(`/api/tally/delegate-count?${search}`, {
+      timeoutMs: 15_000,
+    });
     if (!upstream.ok) {
       throw new Error(`Indexer request failed: ${upstream.status}`);
     }
@@ -58,7 +48,7 @@ export async function GET(): Promise<Response> {
       }),
       { status: 200, headers }
     );
-  } catch {
-    return Response.json({ error: "Indexer upstream error." }, { status: 502 });
+  } catch (error) {
+    return indexerErrorResponse(error);
   }
 }

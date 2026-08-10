@@ -5,6 +5,14 @@
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** Thrown by indexerFetch when GOVERNANCE_INDEXER_URL is unset. */
+export class IndexerUnconfiguredError extends Error {
+  constructor() {
+    super("Governance indexer is not configured.");
+    this.name = "IndexerUnconfiguredError";
+  }
+}
+
 export function getIndexerUrl(): string | null {
   // eslint-disable-next-line no-process-env
   const value = process.env.GOVERNANCE_INDEXER_URL?.trim();
@@ -19,17 +27,19 @@ type IndexerFetchInit = RequestInit & {
 };
 
 /**
- * Fetch a path on the indexer with the shared boilerplate: `accept: json`,
- * optional cookie forwarding, and an abort timeout. `base` comes from
- * `getIndexerUrl()` (guard for null at the call site so the route can return
- * its own 503). Returns the raw upstream `Response`; callers decide how to map
- * status codes.
+ * Fetch a path on the indexer with the shared boilerplate: base-URL resolution
+ * (throws IndexerUnconfiguredError if unset), `accept: json`, optional cookie
+ * forwarding, and an abort timeout. Returns the raw upstream `Response`; callers
+ * decide how to map status codes (or use `indexerErrorResponse` for the common
+ * "just relay the indexer" 503/502 mapping).
  */
 export async function indexerFetch(
-  base: string,
   path: string,
   init: IndexerFetchInit = {}
 ): Promise<Response> {
+  const base = getIndexerUrl();
+  if (!base) throw new IndexerUnconfiguredError();
+
   const { cookie, timeoutMs = DEFAULT_TIMEOUT_MS, headers, ...rest } = init;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -46,4 +56,15 @@ export async function indexerFetch(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Standard error → Response for routes that just relay the indexer:
+ * unconfigured → 503, anything else (network/timeout) → 502.
+ */
+export function indexerErrorResponse(error: unknown): Response {
+  if (error instanceof IndexerUnconfiguredError) {
+    return Response.json({ error: error.message }, { status: 503 });
+  }
+  return Response.json({ error: "Indexer upstream error." }, { status: 502 });
 }
