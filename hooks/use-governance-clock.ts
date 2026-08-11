@@ -6,11 +6,18 @@ import { useReadContract } from "wagmi";
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 
 /**
- * How often the clock is refreshed. Arbitrum One advances `block.number` in
- * step with L1 (~12s), so a short interval keeps derived reads (voting power,
- * quorum) close to live without hammering the RPC.
+ * How often the clock is refreshed.
+ *
+ * Deliberately slow. Every new clock value invalidates the reads derived from
+ * it (voting power, one quorum per governor), so polling faster multiplies
+ * traffic against an RPC the user configures in Settings and which is often a
+ * rate-limited public endpoint. Nothing here needs to be live: quorum and
+ * proposal thresholds move over days, and a staler snapshot block is always the
+ * safe direction to err in, since it is further in the past. 60s matches the
+ * cadence `useL1Block` used before this hook replaced it on the create
+ * proposal page.
  */
-const GOVERNANCE_CLOCK_REFRESH_INTERVAL_MS = 15_000;
+const GOVERNANCE_CLOCK_REFRESH_INTERVAL_MS = 60_000;
 
 /**
  * Multicall3 exposes `block.number` as a plain view function.
@@ -51,7 +58,11 @@ interface UseGovernanceClockResult {
  * mined". Sourcing the clock from the chain we call means no guessing buffer.
  *
  * Uses the same wagmi transport as the governance reads themselves, so the
- * clock and those reads always see the same node.
+ * clock and those reads hit the same RPC endpoint. Note that the same endpoint
+ * is not necessarily the same machine: public RPCs load-balance across replicas
+ * that can be a block apart, which is why callers derive their snapshot a few
+ * blocks back rather than reading at the clock value itself (see
+ * `SNAPSHOT_LOOKBACK_BLOCKS`).
  */
 export function useGovernanceClock(): UseGovernanceClockResult {
   const { data, isPending } = useReadContract({

@@ -37,13 +37,20 @@ describe("create-proposal-form-utils", () => {
       expect(getProposalSnapshotBlock(undefined)).toBeUndefined();
     });
 
-    it("tracks the clock one block behind so checkpoint reads do not revert", () => {
+    it("stays a few blocks behind the clock so checkpoint reads do not revert", () => {
       expect(getProposalSnapshotBlock(BigInt(23_456_789))).toBe(
-        BigInt(23_456_788)
+        BigInt(23_456_786)
       );
     });
 
+    it("never returns the clock itself, which would revert as not yet mined", () => {
+      const clock = BigInt(23_456_789);
+
+      expect(getProposalSnapshotBlock(clock)).toBeLessThan(clock);
+    });
+
     it("clamps to zero instead of going negative", () => {
+      expect(getProposalSnapshotBlock(BigInt(3))).toBe(BigInt(0));
       expect(getProposalSnapshotBlock(BigInt(1))).toBe(BigInt(0));
       expect(getProposalSnapshotBlock(BigInt(0))).toBe(BigInt(0));
     });
