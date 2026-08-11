@@ -26,6 +26,10 @@ import type {
   DelegateSortField,
   TallyDelegateListItem,
 } from "@/lib/tally-data/types";
+import {
+  TOTAL_VOTING_POWER_REVALIDATE_SECONDS,
+  type TotalVotingPowerSnapshot,
+} from "@/lib/total-voting-power";
 
 /** Default rows per page for the server-paginated delegate table. */
 export const DELEGATE_PAGE_SIZE = 20;
@@ -43,6 +47,13 @@ function columnToSortField(columnId: string): DelegateSortField {
 // consistent; a spread copy because the config export is a readonly tuple.
 const EXCLUDE = [...EXCLUDED_DELEGATE_ADDRESSES];
 
+/**
+ * Match the server's refresh interval: the route serves an hour-old snapshot,
+ * so refetching sooner would only re-download the same number.
+ */
+const TOTAL_VOTING_POWER_FRESH_MS =
+  TOTAL_VOTING_POWER_REVALIDATE_SECONDS * 1000;
+
 export interface UseDelegateSearchOptions {
   enabled: boolean;
   customRpcUrl?: string;
@@ -57,6 +68,12 @@ export interface UseDelegateSearchResult {
    * dedicated count endpoint — independent of the current page.
    */
   eligibleDelegateCount: number;
+  /**
+   * Delegated voting power of the whole DAO: the ARB token's
+   * `getTotalDelegation()` minus the exclude address's `getVotes`, read and
+   * cached hourly by the server so every user sees the same figure. Falls back
+   * to the indexer's sum until (or unless) that fetch succeeds.
+   */
   totalVotingPower: string;
   totalSupply: string;
   error: Error | null;
@@ -91,6 +108,30 @@ export function delegatesPageKey(
 
 export function delegatesCountKey(query: string, minVotingPower: string) {
   return ["delegates-count", { query, minVotingPower }] as const;
+}
+
+/**
+ * Key for the delegated-voting-power total. No filter or RPC in it: the figure
+ * is the whole DAO's delegated power, computed server-side, and is therefore
+ * the same for every user and every page of the table.
+ */
+export function totalVotingPowerKey() {
+  return ["arb-total-voting-power"] as const;
+}
+
+/**
+ * Fetch the DAO's delegated voting power from our own server, which reads it
+ * from the ARB token and caches it for an hour on everyone's behalf.
+ */
+async function fetchTotalVotingPower(): Promise<string> {
+  const response = await fetch("/api/total-voting-power", {
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Total voting power request failed: ${response.status}`);
+  }
+  const snapshot = (await response.json()) as TotalVotingPowerSnapshot;
+  return snapshot.totalVotingPower;
 }
 
 // Retained pure helpers (unit-tested in use-delegate-search.test.ts). No longer
@@ -241,6 +282,18 @@ export function useDelegateSearch({
     staleTime: 30_000,
   });
 
+  // Delegated voting power straight from the token, so the total (and every
+  // "% of total" derived from it) reflects the chain rather than the indexer's
+  // filter-scoped sum. Ungated, like the two indexer queries above: it hits our
+  // own server rather than the user's RPC, so the RPC-health gate that guards
+  // `refreshVisibleDelegates` would only withhold a figure we can always serve.
+  const totalVotingPowerQuery = useQuery({
+    queryKey: totalVotingPowerKey(),
+    queryFn: fetchTotalVotingPower,
+    staleTime: TOTAL_VOTING_POWER_FRESH_MS,
+    gcTime: TOTAL_VOTING_POWER_FRESH_MS,
+  });
+
   // The server already orders by voting power desc; overlay any refreshed
   // on-chain powers so the visible rows show live values.
   const delegates = useMemo<DelegateInfo[]>(() => {
@@ -323,7 +376,11 @@ export function useDelegateSearch({
   return {
     delegates,
     eligibleDelegateCount: countQuery.data?.totalCount ?? 0,
-    totalVotingPower: countQuery.data?.totalVotingPower ?? "0",
+    // The indexer's sum is only a fallback: for the first render and for a
+    // failed fetch. That failure is deliberately not merged into `error` below
+    // — a missing total must not blank the delegate table.
+    totalVotingPower:
+      totalVotingPowerQuery.data ?? countQuery.data?.totalVotingPower ?? "0",
     totalSupply: countQuery.data?.totalSupply ?? "0",
     error,
     isLoading: pageQuery.isLoading || countQuery.isLoading,
