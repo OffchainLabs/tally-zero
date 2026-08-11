@@ -67,7 +67,7 @@ export function useSiwe() {
     isLoadingSession: sessionQuery.isLoading,
     signIn: signIn.mutateAsync,
     isSigningIn: signIn.isPending,
-    signInError: signIn.error as Error | null,
+    signInError: signIn.error,
     signOut: signOut.mutateAsync,
     refreshSession,
   };

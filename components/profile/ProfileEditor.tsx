@@ -53,7 +53,6 @@ function toPatch(form: FormState): Partial<ProfileFields> {
     discourseUsername: str(form.discourseUsername),
     statement: str(form.statement),
     isSeekingDelegation: form.isSeekingDelegation,
-    picture: str(form.picture),
   };
 }
 
@@ -91,7 +90,7 @@ export function ProfileEditor() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "upload failed");
       set("picture", json.url as string);
-      toast("Avatar uploaded.");
+      toast("Avatar saved.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Avatar upload failed.");
     } finally {
