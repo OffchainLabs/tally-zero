@@ -1,6 +1,7 @@
 "use client";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
+import { keepPreviousData } from "@tanstack/react-query";
 import type { ICommand } from "@uiw/react-md-editor";
 import {
   ArrowRight,
@@ -208,6 +209,12 @@ export default function CreateProposalForm() {
       ),
       query: {
         enabled: isConnected && !!address && snapshotBlock !== undefined,
+        // The snapshot block is part of this read's cache key, so each new
+        // governance clock value starts a fresh query. Without a placeholder
+        // the figure would blank out to "Loading…" on every refresh; voting
+        // power at the previous block is a fine thing to keep showing while
+        // the next read is in flight.
+        placeholderData: keepPreviousData,
       },
     });
   const votingPower = rawVotingPower as bigint | undefined;
@@ -643,6 +650,9 @@ function GovernorOption({
     chainId: ARBITRUM_CHAIN_ID,
     query: {
       enabled: snapshotBlock !== undefined,
+      // Keyed on the snapshot block, so keep the last quorum on screen instead
+      // of flashing "Loading…" whenever the governance clock advances.
+      placeholderData: keepPreviousData,
     },
   });
   const quorum = rawQuorum as bigint | undefined;
@@ -662,13 +672,14 @@ function GovernorOption({
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">{gov.name}</span>
+          {/* Safe to nest inside the <label>: HTML excludes interactive
+              content descendants from a label's activation behavior, so
+              clicking the address opens the explorer without selecting the
+              radio. */}
           <a
             href={getAddressExplorerUrl(gov.address, "arb1")}
             target="_blank"
             rel="noopener noreferrer"
-            // The whole card is a <label>, so keep the click from reaching it
-            // and flipping the radio on the way to the explorer.
-            onClick={(event) => event.stopPropagation()}
             aria-label={`View the ${gov.name} contract on ${getExplorerName("arb1")}`}
             className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary hover:underline"
           >
