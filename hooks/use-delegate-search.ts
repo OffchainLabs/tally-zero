@@ -376,11 +376,7 @@ export function useDelegateSearch({
   return {
     delegates,
     eligibleDelegateCount: countQuery.data?.totalCount ?? 0,
-    // The indexer's sum is only a fallback: for the first render and for a
-    // failed fetch. That failure is deliberately not merged into `error` below
-    // — a missing total must not blank the delegate table.
-    totalVotingPower:
-      totalVotingPowerQuery.data ?? countQuery.data?.totalVotingPower ?? "0",
+    totalVotingPower: totalVotingPowerQuery.data ?? "0",
     totalSupply: countQuery.data?.totalSupply ?? "0",
     error,
     isLoading: pageQuery.isLoading || countQuery.isLoading,
