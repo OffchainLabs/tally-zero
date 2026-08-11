@@ -9,6 +9,7 @@ import {
   CircleQuestionMark,
   Code,
   Columns2,
+  ExternalLink,
   Eye,
   Heading,
   Image as ImageIcon,
@@ -114,7 +115,7 @@ async function loadExtraCommands(): Promise<ICommand[]> {
   ];
 }
 
-import { useL1Block } from "@/hooks/use-l1-block";
+import { useGovernanceClock } from "@/hooks/use-governance-clock";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -137,13 +138,19 @@ import {
   getProposalEligibility,
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
+  getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
-import { formatVotingPower } from "@/lib/format-utils";
+import {
+  getAddressExplorerUrl,
+  getBlockExplorerUrl,
+  getExplorerName,
+} from "@/lib/explorer-utils";
+import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import type { ProposalImportResult } from "@/lib/proposal-import";
 import {
   computeProposalId,
@@ -159,8 +166,6 @@ import { readVotingPower } from "@gzeoneth/gov-tracker";
 import { zeroAddress, type Abi } from "viem";
 
 const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
-
-const L1_BLOCK_SYNC_BUFFER = 100;
 
 interface SubmittedProposalMeta {
   proposalId: string | null;
@@ -187,13 +192,12 @@ export default function CreateProposalForm() {
 
   const governor = GOVERNORS[governorType];
 
-  const { currentL1Block } = useL1Block();
+  const { clockBlock } = useGovernanceClock();
 
-  const snapshotBlock = useMemo(() => {
-    if (currentL1Block === null) return undefined;
-    const buffered = currentL1Block - L1_BLOCK_SYNC_BUFFER;
-    return buffered > 0 ? BigInt(buffered) : BigInt(0);
-  }, [currentL1Block]);
+  const snapshotBlock = useMemo(
+    () => getProposalSnapshotBlock(clockBlock),
+    [clockBlock]
+  );
 
   const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
     useReadContract({
@@ -658,6 +662,19 @@ function GovernorOption({
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">{gov.name}</span>
+          <a
+            href={getAddressExplorerUrl(gov.address, "arb1")}
+            target="_blank"
+            rel="noopener noreferrer"
+            // The whole card is a <label>, so keep the click from reaching it
+            // and flipping the radio on the way to the explorer.
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`View the ${gov.name} contract on ${getExplorerName("arb1")}`}
+            className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary hover:underline"
+          >
+            {shortenAddress(gov.address)}
+            <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{gov.description}</p>
         <p className="text-[11px] text-muted-foreground">
@@ -666,7 +683,7 @@ function GovernorOption({
             : `L2 timelock ${gov.l2TimelockDelay}`}
         </p>
         <p className="text-[11px] text-muted-foreground">
-          Quorum at block #
+          Quorum at Ethereum block #
           {snapshotBlock !== undefined ? snapshotBlock.toLocaleString() : "?"}:{" "}
           {quorum !== undefined ? (
             <span className="tabular-nums text-foreground">
@@ -707,10 +724,10 @@ function ThresholdCard({
       <CardHeader>
         <CardTitle className="text-base">Proposer Eligibility</CardTitle>
         <p className="text-[11px] text-muted-foreground">
-          Values at block #
+          Values at Ethereum block #
           {snapshotBlock !== undefined ? (
             <a
-              href={`https://arbiscan.io/block/${snapshotBlock.toString()}`}
+              href={getBlockExplorerUrl(Number(snapshotBlock), "ethereum")}
               target="_blank"
               className="underline"
               rel="noopener noreferrer"
