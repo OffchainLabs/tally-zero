@@ -8,6 +8,7 @@ import {
   createProposalDraft,
   getProposalEligibility,
   getProposalPreviewRehypePlugins,
+  getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
   PROPOSAL_DRAFT_VERSION,
@@ -27,6 +28,24 @@ describe("create-proposal-form-utils", () => {
       expect(first.id).toMatch(/^proposal-action-\d+$/);
       expect(second.id).toMatch(/^proposal-action-\d+$/);
       expect(first.id).not.toBe(second.id);
+    });
+  });
+
+  describe("getProposalSnapshotBlock", () => {
+    it("returns undefined while the governance clock is unknown", () => {
+      expect(getProposalSnapshotBlock(null)).toBeUndefined();
+      expect(getProposalSnapshotBlock(undefined)).toBeUndefined();
+    });
+
+    it("tracks the clock one block behind so checkpoint reads do not revert", () => {
+      expect(getProposalSnapshotBlock(BigInt(23_456_789))).toBe(
+        BigInt(23_456_788)
+      );
+    });
+
+    it("clamps to zero instead of going negative", () => {
+      expect(getProposalSnapshotBlock(BigInt(1))).toBe(BigInt(0));
+      expect(getProposalSnapshotBlock(BigInt(0))).toBe(BigInt(0));
     });
   });
 

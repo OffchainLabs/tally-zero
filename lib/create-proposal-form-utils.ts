@@ -134,6 +134,32 @@ export function parseProposalDraft(
   };
 }
 
+/**
+ * Blocks subtracted from the governance clock to get a readable snapshot.
+ *
+ * `ERC20Votes.getPastVotes` and `Governor.quorum` both revert ("block not yet
+ * mined") unless the timepoint is strictly in the past, so the clock itself is
+ * unusable. One block back is the freshest value that reads, and it is also the
+ * exact timepoint OZ Governor's `propose()` uses for its threshold check
+ * (`getVotes(proposer, block.number - 1)`), so the eligibility shown here is
+ * the one the transaction will be judged on.
+ */
+const SNAPSHOT_LOOKBACK_BLOCKS = BigInt(1);
+
+/**
+ * Derives the block to read voting power and quorum at from the current
+ * governance clock. Returns undefined while the clock is unknown, so callers
+ * can gate their reads instead of querying block 0.
+ */
+export function getProposalSnapshotBlock(
+  clockBlock: bigint | null | undefined
+): bigint | undefined {
+  if (clockBlock === null || clockBlock === undefined) return undefined;
+
+  const snapshot = clockBlock - SNAPSHOT_LOOKBACK_BLOCKS;
+  return snapshot > BigInt(0) ? snapshot : BigInt(0);
+}
+
 export function getProposalEligibility(
   votingPower: bigint | undefined,
   proposalThreshold: bigint | undefined
