@@ -62,6 +62,8 @@ export function ProfileEditor() {
     isConnected,
     session,
     isSignedIn,
+    actingAs,
+    effectiveAddress,
     signIn,
     isSigningIn,
     signInError,
@@ -164,8 +166,18 @@ export function ProfileEditor() {
         <CardTitle>Edit profile</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* When acting as a Safe the form writes the Safe's profile, not the
+            signer's — name the subject here so Save is never a surprise. */}
         <p className="text-sm text-muted-foreground" data-testid="siwe-address">
-          Signed in as {session?.address}
+          {actingAs ? (
+            <>
+              Editing <span className="font-mono">{effectiveAddress}</span>{" "}
+              <span className="text-amber-500">(Safe)</span> · signed in as{" "}
+              <span className="font-mono">{session?.address}</span>
+            </>
+          ) : (
+            <>Signed in as {session?.address}</>
+          )}
         </p>
 
         <div className="flex items-center gap-4">

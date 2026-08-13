@@ -7,6 +7,7 @@ import { Web3ModalProvider } from "@components/Web3ModalProvider";
 import { marketingConfig } from "@config/marketing";
 import { cn } from "@lib/utils";
 
+import { ActingAsBanner } from "@/components/siwe/ActingAsBanner";
 import { Toaster } from "@/components/ui/Sonner";
 import { ButtonNav } from "@components/navigation/ButtonNav";
 import { MainNav } from "@components/navigation/MainNav";
@@ -87,6 +88,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
                         </div>
                       </div>
                     </header>
+
+                    {/* Sits directly under the sticky header so the act-as
+                        mode is visible on every page, not just /profile. */}
+                    <ActingAsBanner />
 
                     {children}
                     <SiteFooter />
