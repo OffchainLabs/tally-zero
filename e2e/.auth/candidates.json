@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "siwe_session",
-      "value": "54bd2ff37f826c96440f4ca233694183f777589c308ac09edb14676f86c2f2c7",
+      "value": "fad7fcdb2df2431b789ecd56f1463a0733a961272f871ed116fa2226efe2e4b6",
       "domain": "localhost",
       "path": "/",
-      "expires": 1787250050.138615,
+      "expires": 1787339633.165815,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Lax"
@@ -21,7 +21,7 @@
         },
         {
           "name": "base-acc-sdk.store",
-          "value": "{\"state\":{\"chains\":[],\"keys\":{},\"account\":{},\"spendPermissions\":[],\"config\":{\"version\":\"2.4.0\",\"metadata\":{\"appName\":\"App\",\"appLogoUrl\":\"\",\"appChainIds\":[42161,421614]},\"preference\":{\"options\":\"all\"},\"deviceId\":\"4dd6e91e-25bc-4628-b95c-6123307bc76b\"}},\"version\":0}"
+          "value": "{\"state\":{\"chains\":[],\"keys\":{},\"account\":{},\"spendPermissions\":[],\"config\":{\"version\":\"2.4.0\",\"metadata\":{\"appName\":\"App\",\"appLogoUrl\":\"\",\"appChainIds\":[42161,421614]},\"preference\":{\"options\":\"all\"},\"deviceId\":\"3c19758f-ecaa-4ed7-b0da-3dff790fa677\"}},\"version\":0}"
         },
         {
           "name": "@appkit/disconnected_connector_ids",
