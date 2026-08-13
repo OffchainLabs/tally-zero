@@ -34,7 +34,8 @@ const STATEMENT_PLACEHOLDER =
 
 export function DelegateRegistrationForm() {
   const router = useRouter();
-  const { session, signOut, refreshSession } = useSiwe();
+  const { session, actingAs, effectiveAddress, signOut, refreshSession } =
+    useSiwe();
 
   const [form, setForm] = useState<FormState>(EMPTY_REGISTRATION_FORM);
   const [saving, setSaving] = useState(false);
@@ -43,15 +44,17 @@ export function DelegateRegistrationForm() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const hydratedFor = useRef<string | null>(null);
 
-  // Hydrate once per signed-in address. Keying on the whole session would let a
+  // Hydrate once per edited address. Keying on the whole session would let a
   // background refetch (refetchOnWindowFocus, staleTime 30s) overwrite whatever
-  // the user has typed but not yet submitted.
+  // the user has typed but not yet submitted. The key is the *effective*
+  // address, so switching to a Safe re-hydrates onto that Safe's profile
+  // instead of leaving the signer's values in the fields.
   useEffect(() => {
-    const address = session?.address ?? null;
+    const address = effectiveAddress ?? session?.address ?? null;
     if (!address || hydratedFor.current === address) return;
     hydratedFor.current = address;
     setForm(toRegistrationForm(session?.profile));
-  }, [session]);
+  }, [session, effectiveAddress]);
 
   // The upload route commits `picture` itself, so the session is the only
   // source of truth for it — never a form field.
@@ -109,11 +112,22 @@ export function DelegateRegistrationForm() {
             <CardDescription>
               Your basics are shared across all Tally delegate profiles
             </CardDescription>
+            {/* When acting as a Safe the form writes the Safe's profile, not
+                the signer's — name the subject here so Save is never a
+                surprise. */}
             <p
               className="pt-1 text-xs text-muted-foreground"
               data-testid="siwe-address"
             >
-              Signed in as {session?.address}
+              {actingAs ? (
+                <>
+                  Editing <span className="font-mono">{effectiveAddress}</span>{" "}
+                  <span className="text-amber-500">(Safe)</span> · signed in as{" "}
+                  <span className="font-mono">{session?.address}</span>
+                </>
+              ) : (
+                <>Signed in as {session?.address}</>
+              )}
             </p>
           </CardHeader>
           <CardContent className="space-y-6">

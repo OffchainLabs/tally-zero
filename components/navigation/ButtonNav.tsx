@@ -13,6 +13,7 @@ import { http } from "viem";
 import { createConfig, useEnsName } from "wagmi";
 import { mainnet } from "wagmi/chains";
 
+import { ActAsSwitcher } from "@/components/siwe/ActAsSwitcher";
 import { SettingsSheet } from "@components/container/SettingsSheet";
 import { Button } from "@components/ui/Button";
 
@@ -87,6 +88,10 @@ export function ButtonNav() {
   return (
     <nav className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
       {isAppPage && <SettingsSheet />}
+      {/* Renders itself only once a SIWE session exists. */}
+      <div className="hidden sm:block">
+        <ActAsSwitcher />
+      </div>
       {walletControls}
     </nav>
   );
