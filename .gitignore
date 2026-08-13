@@ -68,3 +68,6 @@ public/uploads/
 test-results/
 playwright-report/
 .playwright/
+
+# Playwright pre-authenticated session state
+e2e/.auth/
