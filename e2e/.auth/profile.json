@@ -1,0 +1,45 @@
+{
+  "cookies": [
+    {
+      "name": "siwe_session",
+      "value": "1f36827150b66713439a0625160bb30962c0e8fd2b39a70893fcd581489a961d",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1787250069.35069,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "@appkit/connection_status",
+          "value": "disconnected"
+        },
+        {
+          "name": "base-acc-sdk.store",
+          "value": "{\"state\":{\"chains\":[],\"keys\":{},\"account\":{},\"spendPermissions\":[],\"config\":{\"version\":\"2.4.0\",\"metadata\":{\"appName\":\"App\",\"appLogoUrl\":\"\",\"appChainIds\":[42161,421614]},\"preference\":{\"options\":\"all\"},\"deviceId\":\"fb0598f8-10d5-40de-be98-8c9d0dcda92a\"}},\"version\":0}"
+        },
+        {
+          "name": "@appkit/disconnected_connector_ids",
+          "value": "{\"eip155\":[\"\"]}"
+        },
+        {
+          "name": "wagmi.store",
+          "value": "{\"state\":{\"connections\":{\"__type\":\"Map\",\"value\":[]},\"chainId\":42161,\"current\":null},\"version\":3}"
+        },
+        {
+          "name": "@appkit/active_caip_network_id",
+          "value": "eip155:42161"
+        },
+        {
+          "name": "@appkit/active_namespace",
+          "value": "eip155"
+        }
+      ]
+    }
+  ]
+}
