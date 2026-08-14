@@ -375,7 +375,13 @@ function buildProposalFromEvent({
   };
 }
 
-async function fetchProposalFromGovernor({
+/**
+ * Fetch one proposal from a single governor, preferring the `ProposalCreated`
+ * event and falling back to contract state plus indexer metadata.
+ *
+ * Exported for tests.
+ */
+export async function fetchProposalFromGovernor({
   provider,
   governor,
   proposalId,
