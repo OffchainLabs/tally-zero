@@ -21,8 +21,22 @@ export const ARBITRUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
 /** Default Arbitrum Nova RPC URL */
 export const ARBITRUM_NOVA_RPC_URL = "https://nova.arbitrum.io/rpc";
 
-/** Public Ethereum Mainnet RPC URL — used as a fallback when a private RPC fails */
-export const ETHEREUM_PUBLIC_RPC_URL = "https://eth.drpc.org";
+/**
+ * Public Ethereum Mainnet RPC URL, used as a fallback when a private RPC fails.
+ *
+ * Must serve `eth_getLogs` for historical blocks, not just recent ones: the
+ * lifecycle tracker reads L1 timelock and outbox logs from the blocks a
+ * proposal actually touched, which are routinely days or months behind head.
+ *
+ * This was `https://eth.drpc.org`, which cannot do that. Its free tier answers
+ * `eth_getLogs` near head but rejects anything deeper with
+ * `Can't route your request to suitable provider` (code 12), regardless of how
+ * small the block range is, so the lifecycle tab failed for every proposal
+ * whose L1 stages had aged out of that window. Chunking cannot work around it
+ * because the limit is on block depth, not range size.
+ */
+export const ETHEREUM_PUBLIC_RPC_URL =
+  "https://gateway.tenderly.co/public/mainnet";
 
 /** Default Ethereum Mainnet RPC URL */
 export const ETHEREUM_RPC_URL = env.NEXT_PUBLIC_ALCHEMY_API_KEY
@@ -126,7 +140,8 @@ export const DEFAULT_FORM_VALUES = {
 
 /**
  * Default chunking configuration for event searches
- * Optimized for default public RPCs (arb1.arbitrum.io, eth.drpc.org)
+ * Sized for the default public RPCs (arb1.arbitrum.io, gateway.tenderly.co),
+ * both of which accept these ranges.
  */
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
   l2ChunkSize: DEFAULT_FORM_VALUES.blockRange,

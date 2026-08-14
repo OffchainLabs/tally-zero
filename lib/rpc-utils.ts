@@ -137,10 +137,14 @@ async function resolveBlockTag(
 /**
  * Patches a provider's getLogs to auto-chunk requests that exceed `chunkSize`.
  *
- * Some RPCs (e.g. drpc.org free tier) reject `eth_getLogs` over 10k blocks.
+ * Public RPCs commonly cap `eth_getLogs` block ranges, historically at 10k.
  * The Arbitrum SDK's EventFetcher queries L1 assertion logs without chunking,
  * which trips that limit and breaks L2_TO_L1_MESSAGE tracking. Wrapping the
  * provider intercepts those calls transparently.
+ *
+ * Note this only helps with range caps. An endpoint that refuses historical
+ * logs at any range, as eth.drpc.org's free tier did, cannot be chunked around;
+ * see ETHEREUM_PUBLIC_RPC_URL in config/arbitrum-governance.ts.
  */
 function applyChunkedGetLogs(
   provider: ethers.providers.StaticJsonRpcProvider,
