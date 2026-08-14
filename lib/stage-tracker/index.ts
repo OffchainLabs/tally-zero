@@ -56,8 +56,8 @@ export function createProposalTracker(
   };
 
   // Wrap providers so eth_getLogs auto-chunks. The Arbitrum SDK's EventFetcher
-  // queries L1 assertion logs without chunking, which exceeds drpc.org's
-  // free-tier 10k block range and breaks L2_TO_L1_MESSAGE tracking.
+  // queries L1 assertion logs without chunking, which exceeds the block range
+  // public L1 endpoints accept and breaks L2_TO_L1_MESSAGE tracking.
   const l1Provider = getOrCreateChunkedProvider(
     l1RpcUrl,
     chunkingConfig.l1ChunkSize

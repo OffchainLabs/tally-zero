@@ -140,7 +140,8 @@ export const DEFAULT_FORM_VALUES = {
 
 /**
  * Default chunking configuration for event searches
- * Optimized for default public RPCs (arb1.arbitrum.io, gateway.tenderly.co)
+ * Sized for the default public RPCs (arb1.arbitrum.io, gateway.tenderly.co),
+ * both of which accept these ranges.
  */
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
   l2ChunkSize: DEFAULT_FORM_VALUES.blockRange,
