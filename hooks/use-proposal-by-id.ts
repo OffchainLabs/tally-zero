@@ -14,6 +14,7 @@ import {
 } from "@/config/arbitrum-governance";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getBundledProposalCreationTxHash } from "@/lib/bundled-cache-loader";
+import { getProposalIndexEntry } from "@/lib/delegate-cache";
 import {
   proposalCreatedEventDataFromArgs,
   queryProposalCreatedEventsUntruncated,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/proposal-created-event";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { getStateName } from "@/lib/state-utils";
+import type { TallyProposalIndexEntry } from "@/lib/tally-data/types";
 import { formatVotes, type RawVotes } from "@/lib/vote-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
@@ -46,8 +48,15 @@ const PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID: Record<
       "0x5d76ab672426aafeeb88bb67212388d3425598bf06ff490aed9b7550d72bd00c",
     "21861170607500194610699142421898826942478361357343425061227227766726035674989":
       "0xa12f865055b2c9dcb0b5ecc0cea61fd9f246bc5555e9e198a529ecabe9c603fb",
+    // Constitutional AIP: ArbOS61 Elara Upgrade. Created at L2 block
+    // 483,508,532, which left the log-scan window around 2026-08-11.
+    "7191014407719621170610709569285477750369874509305441081488686529382763374426":
+      "0xb354f3f34e2bb93fe006c43f52672da7167db1ed4faf0bdab3804e846d9cf44b",
   },
 };
+
+/** Proposer shown when no metadata source knows the real one */
+const UNKNOWN_PROPOSER = "Unknown";
 
 /** Options for configuring proposal lookup */
 interface UseProposalByIdOptions {
@@ -248,6 +257,61 @@ async function fetchQuorum(
   }
 }
 
+/**
+ * Proposal metadata that the governor contract does not expose.
+ *
+ * The `ProposalCreated` event is the richest source and the only one carrying the
+ * payload, but it is reachable only while the creation tx hash is known or the
+ * creation block is still inside {@link L2_CREATION_SEARCH_WINDOW_BLOCKS}. When
+ * it is not, the governance indexer still has the proposer and the full
+ * description, which is what the page header and description tab need.
+ */
+export interface ProposalMetadataFallback {
+  proposer: string;
+  description: string;
+}
+
+/**
+ * Pick the best available proposer and description for a proposal whose
+ * `ProposalCreated` event could not be found.
+ *
+ * @param proposalId - Used to build the placeholder description
+ * @param indexEntry - Governance indexer row, or null when unavailable
+ */
+export function resolveProposalMetadataFallback({
+  proposalId,
+  indexEntry,
+}: {
+  proposalId: string;
+  indexEntry: TallyProposalIndexEntry | null;
+}): ProposalMetadataFallback {
+  return {
+    proposer: indexEntry?.proposer || UNKNOWN_PROPOSER,
+    description: indexEntry?.description || `Proposal ${proposalId}`,
+  };
+}
+
+/**
+ * Read a proposal's indexer row, tolerating failure.
+ *
+ * Returns null on any error so an indexer outage, or an unconfigured
+ * `GOVERNANCE_INDEXER_URL` (the proxy answers 503), degrades to placeholder
+ * metadata instead of failing the whole proposal fetch.
+ */
+async function fetchProposalIndexEntry({
+  proposalId,
+  governorAddress,
+}: {
+  proposalId: string;
+  governorAddress: string;
+}): Promise<TallyProposalIndexEntry | null> {
+  try {
+    return await getProposalIndexEntry(proposalId, governorAddress);
+  } catch {
+    return null;
+  }
+}
+
 function buildMinimalProposal({
   governor,
   proposalId,
@@ -256,22 +320,24 @@ function buildMinimalProposal({
   snapshotBlock,
   proposalDeadline,
   quorum,
+  metadata,
 }: BuildProposalBaseOptions & {
   snapshotBlock: number;
   proposalDeadline: ethers.BigNumber;
   quorum: string | undefined;
+  metadata: ProposalMetadataFallback;
 }): ParsedProposal {
   return {
     id: proposalId,
     contractAddress: governor.address,
-    proposer: "Unknown",
+    proposer: metadata.proposer,
     targets: [],
     values: [],
     signatures: [],
     calldatas: [],
     startBlock: snapshotBlock.toString(),
     endBlock: proposalDeadline.toString(),
-    description: `Proposal ${proposalId}`,
+    description: metadata.description,
     networkId: String(ARBITRUM_CHAIN_ID),
     state: getStateName(proposalState),
     governorName: governor.name,
@@ -333,7 +399,16 @@ async function fetchProposalFromGovernor({
   });
 
   if (!creationEvent) {
-    const quorum = await fetchQuorum(contract, snapshotBlock);
+    // Neither call depends on the other, and the indexer is the only source
+    // left for the proposer and description.
+    const [quorum, indexEntry] = await Promise.all([
+      fetchQuorum(contract, snapshotBlock),
+      fetchProposalIndexEntry({
+        proposalId,
+        governorAddress: governor.address,
+      }),
+    ]);
+
     return buildMinimalProposal({
       governor,
       proposalId,
@@ -342,6 +417,7 @@ async function fetchProposalFromGovernor({
       snapshotBlock,
       proposalDeadline,
       quorum,
+      metadata: resolveProposalMetadataFallback({ proposalId, indexEntry }),
     });
   }
 
