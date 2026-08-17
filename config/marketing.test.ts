@@ -10,7 +10,7 @@ describe("marketing config", () => {
     });
 
     it("has correct number of nav items", () => {
-      expect(marketingConfig.mainNav).toHaveLength(4);
+      expect(marketingConfig.mainNav).toHaveLength(5);
     });
 
     describe("nav items", () => {
@@ -36,6 +36,14 @@ describe("marketing config", () => {
         );
         expect(delegates).toBeDefined();
         expect(delegates?.href).toBe("/delegates");
+      });
+
+      it("has Drafts nav item", () => {
+        const drafts = marketingConfig.mainNav.find(
+          (item) => item.title === "Drafts"
+        );
+        expect(drafts).toBeDefined();
+        expect(drafts?.href).toBe("/drafts");
       });
 
       it("has About nav item", () => {
