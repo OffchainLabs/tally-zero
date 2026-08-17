@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -46,6 +46,10 @@ import {
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
+import type {
+  ProposalFormSnapshot,
+  RestoredDraftFormState,
+} from "@/lib/drafts/mapping";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import {
   getAddressExplorerUrl,
@@ -76,14 +80,38 @@ interface SubmittedProposalMeta {
   governorAddress: string;
 }
 
-export default function CreateProposalForm() {
+interface CreateProposalFormProps {
+  /**
+   * A stored draft to open the form on, already mapped to form state. When set,
+   * the localStorage restore below stands down — an explicit request for a
+   * specific draft outranks crash-recovery state.
+   */
+  initialDraft?: RestoredDraftFormState | null;
+  /**
+   * Extra buttons for the submit row, given the live form contents.
+   *
+   * A render prop so the server-drafts feature can read the form without this
+   * component knowing anything about SIWE — it stays free of a session, a query
+   * client, and a router, which is also what keeps its tests cheap.
+   */
+  renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
+}
+
+export default function CreateProposalForm({
+  initialDraft,
+  renderDraftActions,
+}: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
-  const [governorType, setGovernorType] = useState<GovernorType>("treasury");
-  const [actions, setActions] = useState<FormProposalAction[]>([
-    createFormProposalAction(),
-  ]);
-  const [description, setDescription] = useState("");
+  const [governorType, setGovernorType] = useState<GovernorType>(
+    initialDraft?.governorType ?? "treasury"
+  );
+  const [actions, setActions] = useState<FormProposalAction[]>(
+    initialDraft?.actions ?? [createFormProposalAction()]
+  );
+  const [description, setDescription] = useState(
+    initialDraft?.description ?? ""
+  );
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submittedProposalMeta, setSubmittedProposalMeta] =
     useState<SubmittedProposalMeta | null>(null);
@@ -146,12 +174,17 @@ export default function CreateProposalForm() {
   });
   const isDraftHydratedRef = useRef(isDraftHydrated);
   const shouldPersistDraftRef = useRef(true);
+  // `initialDraft` seeds state and is deliberately not re-read afterwards, so
+  // the mount-only restore effect below reads it through a ref rather than
+  // claiming it as a dependency it would ignore.
+  const openedOnStoredDraftRef = useRef(Boolean(initialDraft));
 
-  draftSnapshotRef.current = {
+  const draftSnapshot = {
     governorType,
     description,
     actions: proposalActions,
   };
+  draftSnapshotRef.current = draftSnapshot;
   isDraftHydratedRef.current = isDraftHydrated;
   const actionErrors = useMemo(
     () => proposalActions.map(validateAction),
@@ -250,6 +283,13 @@ export default function CreateProposalForm() {
     submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
 
   useEffect(() => {
+    // Opened on a specific stored draft: that is already the initial state, so
+    // restoring the autosave over the top of it would silently discard it.
+    if (openedOnStoredDraftRef.current) {
+      setIsDraftHydrated(true);
+      return;
+    }
+
     try {
       const restoredDraft = parseProposalDraft(
         window.localStorage.getItem(STORAGE_KEYS.PROPOSAL_DRAFT)
@@ -478,6 +518,7 @@ export default function CreateProposalForm() {
           saveDraftDisabled={!isDraftHydrated || submissionPhase !== "idle"}
           onSaveDraft={() => saveDraft({ showToast: true })}
           onSubmit={handleSubmit}
+          draftActions={renderDraftActions?.(draftSnapshot)}
         />
       </div>
 
@@ -917,6 +958,8 @@ interface SubmitSectionProps {
   saveDraftDisabled: boolean;
   onSaveDraft: () => void;
   onSubmit: () => void;
+  /** Rendered ahead of "Save draft"; empty unless server drafts are wired up. */
+  draftActions?: ReactNode;
 }
 
 function SubmitSection({
@@ -936,6 +979,7 @@ function SubmitSection({
   saveDraftDisabled,
   onSaveDraft,
   onSubmit,
+  draftActions,
 }: SubmitSectionProps) {
   return (
     <Card variant="glass">
@@ -1022,6 +1066,7 @@ function SubmitSection({
         )}
 
         <div className="flex flex-wrap justify-end gap-2">
+          {draftActions}
           <Button
             type="button"
             variant="outline"

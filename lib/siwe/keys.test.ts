@@ -53,6 +53,16 @@ describe("siweKeys", () => {
     expect(startsWith(siweKeys.safes("0xsigner"), SAFES_SCOPE)).toBe(true);
   });
 
+  // Subject-scoped keys are built before the session resolves and the fetch is
+  // held back with skipToken. The key still has to land inside the scope, so the
+  // eventual subject switch evicts it, and must not collide with a real
+  // subject's entry.
+  it("keeps an unresolved subject in scope and distinct", () => {
+    const pending = siweKeys.drafts(null);
+    expect(startsWith(pending, SUBJECT_SCOPE)).toBe(true);
+    expect(pending).not.toEqual(siweKeys.drafts("0xsubject"));
+  });
+
   it("keeps public reads free of any identity", () => {
     expect(startsWith(siweKeys.elections, SUBJECT_SCOPE)).toBe(false);
     expect(startsWith(siweKeys.sharedDraft("slug"), SUBJECT_SCOPE)).toBe(false);
