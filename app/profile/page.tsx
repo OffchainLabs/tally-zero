@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignInGate } from "@/components/siwe/SignInGate";
 
@@ -21,6 +23,17 @@ export default function ProfilePage() {
       >
         <ProfileEditor />
       </SignInGate>
+
+      {/* /elections is deliberately not in the main nav — it is only relevant to
+          the handful of addresses standing in an election, and this is the page
+          they already come to for their own details. */}
+      <p className="text-sm text-muted-foreground">
+        Standing in a Security Council election?{" "}
+        <Link href="/elections" className="text-primary hover:underline">
+          Publish your candidate profile
+        </Link>
+        .
+      </p>
     </div>
   );
 }
