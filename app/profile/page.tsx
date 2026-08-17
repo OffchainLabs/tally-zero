@@ -1,4 +1,5 @@
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
+import { SignInGate } from "@/components/siwe/SignInGate";
 
 export const metadata = {
   title: "My Profile | Arbitrum Governance",
@@ -14,7 +15,12 @@ export default function ProfilePage() {
           Sign in with your wallet to manage your delegate profile.
         </p>
       </div>
-      <ProfileEditor />
+      <SignInGate
+        title="Manage your profile"
+        connectPrompt="Connect your wallet to sign in and edit your delegate profile."
+      >
+        <ProfileEditor />
+      </SignInGate>
     </div>
   );
 }

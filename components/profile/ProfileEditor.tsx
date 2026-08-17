@@ -58,18 +58,10 @@ function toPatch(form: FormState): Partial<ProfileFields> {
 }
 
 export function ProfileEditor() {
-  const {
-    isConnected,
-    session,
-    isSignedIn,
-    actingAs,
-    effectiveAddress,
-    signIn,
-    isSigningIn,
-    signInError,
-    signOut,
-    refreshSession,
-  } = useSiwe();
+  // Connecting and signing in belong to SignInGate, which is why this component
+  // can assume a session and only needs the subject it is editing.
+  const { session, actingAs, effectiveAddress, signOut, refreshSession } =
+    useSiwe();
 
   const initial = useMemo(() => toForm(session?.profile), [session]);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -112,52 +104,6 @@ export function ProfileEditor() {
     } finally {
       setSaving(false);
     }
-  }
-
-  if (!isConnected) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Manage your profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Connect your wallet to sign in and edit your delegate profile.
-          </p>
-          {/* Reown connect control; test-wallet path auto-connects. */}
-          <appkit-button />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Sign a message to prove wallet ownership. No transaction, no gas.
-          </p>
-          <Button
-            data-testid="siwe-sign-in"
-            disabled={isSigningIn}
-            onClick={() => {
-              signIn().catch(() => {});
-            }}
-          >
-            {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
-          </Button>
-          {signInError ? (
-            <p className="text-sm text-destructive" data-testid="siwe-error">
-              {signInError.message}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-    );
   }
 
   return (

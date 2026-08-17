@@ -21,6 +21,10 @@ export const marketingConfig: MarketingConfig = {
       href: "/delegates",
     },
     {
+      title: "Drafts",
+      href: "/drafts",
+    },
+    {
       title: "About",
       href: "https://arbitrum.foundation/governance",
     },
