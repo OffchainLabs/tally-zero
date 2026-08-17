@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
+import { useSiwe } from "@/hooks/use-siwe";
 import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
@@ -189,11 +190,13 @@ function SubmittedCard({ draft }: { draft: Draft }) {
 /**
  * Attaches the transaction that put this draft on chain.
  *
- * Unauthenticated, matching the route: whoever submits a proposal is often not
- * its author, and requiring the author to come back and record it would leave
- * most drafts permanently marked unsubmitted.
+ * Reading a shared draft needs no session, but recording a submission does — the
+ * route is behind `requireSession`. It does not require *authorship*, though, so
+ * the delegate who actually submitted the proposal can record it without the
+ * author coming back.
  */
 function MarkSubmittedForm({ slug }: { slug: string }) {
+  const { isSignedIn } = useSiwe();
   const { markSubmitted, isSubmitting, error } = useMarkSubmitted(slug);
   const [transactionHash, setTransactionHash] = useState("");
   const [governorAddress, setGovernorAddress] = useState("");
@@ -230,6 +233,16 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
           If this proposal has been submitted, link the transaction so anyone
           holding this draft can follow it.
         </p>
+
+        {!isSignedIn ? (
+          <p
+            className="text-sm text-amber-400"
+            data-testid="submit-needs-signin"
+          >
+            Sign in with your wallet to record a submission. You do not need to
+            be the draft&apos;s author.
+          </p>
+        ) : null}
 
         <div className="space-y-2">
           <Label htmlFor="draft-tx-hash">Transaction hash</Label>
@@ -284,7 +297,7 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
         <Button
           data-testid="mark-submitted"
           onClick={submit}
-          disabled={!isValid || isSubmitting}
+          disabled={!isSignedIn || !isValid || isSubmitting}
         >
           {isSubmitting ? "Recording…" : "Mark as submitted"}
         </Button>
