@@ -119,9 +119,10 @@ export function useSharedDraft(slug: string) {
 /**
  * Records the on-chain submission of a published draft.
  *
- * Also unauthenticated — anyone with the link can attach the transaction that
- * submitted it, which is deliberate: the person who submits a draft on chain is
- * often not the person who wrote it.
+ * Requires a session but *not* authorship: the route checks `requireSession` and
+ * then only that the draft is published, so any signed-in user can attach the
+ * transaction. That is deliberate — whoever submits a proposal on chain is often
+ * a delegate with enough voting power rather than the person who drafted it.
  */
 export function useMarkSubmitted(slug: string) {
   const queryClient = useQueryClient();

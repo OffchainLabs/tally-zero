@@ -3,8 +3,10 @@ import type { Browser, Page } from "@playwright/test";
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./auth";
 import type { DevWallet } from "./wallets";
 
-// The SIWE sign-in controls live on the profile page.
-const PROFILE_PATH = "/profile";
+// The SIWE sign-in controls live on the delegate registration page — SiweGate
+// renders `siwe-sign-in` there, and the form behind it renders `siwe-address`.
+// /profile was retired in favour of this route.
+const SIGN_IN_PATH = "/delegates/register";
 
 /**
  * Inject a dev key so TestWalletProvider auto-connects it as a signing wallet.
@@ -27,7 +29,7 @@ export async function useWallet(page: Page, wallet: DevWallet): Promise<void> {
  */
 export async function signIn(page: Page, wallet: DevWallet): Promise<void> {
   await useWallet(page, wallet);
-  await page.goto(PROFILE_PATH);
+  await page.goto(SIGN_IN_PATH);
   await page.getByTestId("siwe-sign-in").click();
   await page
     .getByTestId("siwe-address")
@@ -46,7 +48,7 @@ export async function signIn(page: Page, wallet: DevWallet): Promise<void> {
 export async function signedInPage(
   browser: Browser,
   name: AuthWalletName,
-  path = PROFILE_PATH
+  path = SIGN_IN_PATH
 ): Promise<Page> {
   const context = await browser.newContext({ storageState: authFile(name) });
   const page = await context.newPage();

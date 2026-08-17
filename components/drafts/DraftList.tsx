@@ -205,15 +205,21 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
                 </>
               ) : null}
 
-              <Button
-                size="sm"
-                variant="ghost"
-                data-testid="delete-draft"
-                onClick={() => setConfirming("delete")}
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                Delete
-              </Button>
+              {/* Editing, publishing and deleting all require status `draft`:
+                  the API answers 409 not_editable once a draft is published,
+                  because the share link has to keep resolving to what reviewers
+                  were shown. So a published draft offers none of them. */}
+              {isEditable ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="delete-draft"
+                  onClick={() => setConfirming("delete")}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              ) : null}
             </div>
           )}
         </CardContent>
