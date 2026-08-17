@@ -65,6 +65,8 @@ export const siweKeys = {
   /** Public — unauthenticated reads, shared across all viewers. */
   elections: ["siwe", "elections"] as const,
   sharedDraft: (slug: string) => ["siwe", "shared-draft", slug] as const,
-  publicCandidateProfile: (electionId: string, address: string) =>
+  // `electionId` is nullable for the same dependent-query reason as above: a
+  // contender page knows the address up front but discovers the election later.
+  publicCandidateProfile: (electionId: KeyPart, address: string) =>
     ["siwe", "public-candidate-profile", electionId, address] as const,
 };
