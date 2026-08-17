@@ -28,7 +28,16 @@ export const SUBJECT_SCOPE = ["siwe", "subject"] as const;
 /** Root of the signer-scoped Safe recall list. */
 export const SAFES_SCOPE = ["siwe", "safes"] as const;
 
-const subjectKey = (subject: string, ...rest: string[]) =>
+/**
+ * Subject-scoped keys take the subject as `string | null | undefined` for the
+ * same reason `safes` does: the caller builds the key before the session
+ * resolves. Putting the unresolved value straight in the key is the documented
+ * dependent-query shape — pair it with `skipToken` so the fetch cannot run with
+ * a missing subject, and no placeholder segment ever has to be invented.
+ */
+type KeyPart = string | null | undefined;
+
+const subjectKey = (subject: KeyPart, ...rest: KeyPart[]) =>
   [...SUBJECT_SCOPE, subject, ...rest] as const;
 
 export const siweKeys = {
@@ -46,11 +55,11 @@ export const siweKeys = {
   safes: (signer: string | undefined) => [...SAFES_SCOPE, signer] as const,
 
   /** Subject-scoped — all evicted together by SUBJECT_SCOPE. */
-  profile: (subject: string) => subjectKey(subject, "profile"),
-  drafts: (subject: string) => subjectKey(subject, "drafts"),
+  profile: (subject: KeyPart) => subjectKey(subject, "profile"),
+  drafts: (subject: KeyPart) => subjectKey(subject, "drafts"),
   // Nested under drafts() so invalidating the list also refreshes each draft.
-  draft: (subject: string, id: string) => subjectKey(subject, "drafts", id),
-  candidateProfile: (subject: string, electionId: string) =>
+  draft: (subject: KeyPart, id: KeyPart) => subjectKey(subject, "drafts", id),
+  candidateProfile: (subject: KeyPart, electionId: KeyPart) =>
     subjectKey(subject, "candidate-profile", electionId),
 
   /** Public — unauthenticated reads, shared across all viewers. */
