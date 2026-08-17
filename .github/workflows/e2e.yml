@@ -118,9 +118,42 @@ jobs:
           done
           echo "indexer did not become ready"; tail -50 "$GITHUB_WORKSPACE/ponder.log"; exit 1
 
+      # The act-as specs need a real Safe on chain to read getOwners() from, and
+      # they skip themselves without TEST_SAFE_ADDRESS. Deploying here rather
+      # than baking it into the image keeps the image tag fixed: the script is
+      # idempotent (it reuses a Safe whose owners still match) and takes seconds.
+      #
+      # Guarded on the script existing because `indexer-ref` is a workflow input:
+      # the bake script only landed on some refs, so on an older one this step
+      # must no-op and leave the act-as Safe tests skipping rather than fail the
+      # whole run.
+      - name: Deploy the act-as test Safe
+        id: safe
+        working-directory: ${{ env.INDEXER_DIR }}
+        env:
+          ARBITRUM_TESTNODE_CONFIG_DIR: ${{ github.workspace }}/${{ env.INDEXER_DIR }}/.testnode/config
+        run: |
+          if ! grep -q '"testnode:safe"' package.json; then
+            echo "testnode:safe not available on this indexer ref; skipping"
+            exit 0
+          fi
+          pnpm testnode:safe | tee safe.log
+          address=$(grep -o 'TEST_SAFE_ADDRESS=0x[0-9a-fA-F]\{40\}' safe.log | tail -1 | cut -d= -f2)
+          if [ -z "$address" ]; then
+            echo "bake:safe printed no address"; exit 1
+          fi
+          echo "address=$address" >> "$GITHUB_OUTPUT"
+          echo "test Safe at $address"
+
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
+      # No `reset:siwe` step and no per-run PONDER_SCHEMA: the Postgres service
+      # container is created fresh for every job, so both the ponder schema and
+      # the SIWE `app` tables start empty. Those two are needed against a
+      # long-lived local database — where a chain reboot rewinds the head under a
+      # schema that recorded a later block, and where act-as leaves session rows
+      # behind between runs — neither of which can happen here.
       - name: Run e2e
         env:
           CI: "true"
@@ -128,6 +161,7 @@ jobs:
           NEXT_PUBLIC_SIWE_CHAIN_ID: "412346"
           NEXT_PUBLIC_REOWN_PROJECT_ID: test
           STORAGE_DRIVER: local
+          TEST_SAFE_ADDRESS: ${{ steps.safe.outputs.address }}
         run: pnpm test:e2e
 
       - name: Upload report on failure
