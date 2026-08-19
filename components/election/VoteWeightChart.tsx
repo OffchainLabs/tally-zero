@@ -12,18 +12,11 @@ import {
   YAxis,
 } from "recharts";
 
-const FULL_WEIGHT_DAYS = 7;
-const TOTAL_DAYS = 21;
+import { FULL_WEIGHT_DAYS, getWeight, TOTAL_DAYS } from "@/lib/election-weight";
 
 interface VoteWeightChartProps {
   currentPct: number | undefined;
   currentDay: number | undefined;
-}
-
-function getWeight(day: number): number {
-  if (day <= FULL_WEIGHT_DAYS) return 100;
-  if (day >= TOTAL_DAYS) return 0;
-  return ((TOTAL_DAYS - day) / (TOTAL_DAYS - FULL_WEIGHT_DAYS)) * 100;
 }
 
 export function VoteWeightChart({

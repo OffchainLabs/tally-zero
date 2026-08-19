@@ -3,6 +3,7 @@ import {
   L2_TIMELOCK_DAYS,
 } from "@/config/arbitrum-governance";
 import type { GovernorType } from "@/config/governors";
+import type { StageMetadataWithType } from "@/hooks/use-proposal-stages";
 import {
   createGoogleCalendarUrl,
   formatDateRange,
@@ -111,6 +112,73 @@ export function getStageEstimatedDays(
     return L2_TIMELOCK_DAYS.treasury;
   }
   return baseEstimatedDays;
+}
+
+/** Stages that only exist for Security Council election proposals. */
+const ELECTION_STAGE_TYPES: StageType[] = [
+  "CREATE_ELECTION",
+  "NOMINEE_ELECTION",
+  "NOMINEE_VETTING",
+  "MEMBER_ELECTION",
+];
+
+export interface SelectRelevantStageTypesInput {
+  /** The full, ordered stage list from gov-tracker. */
+  allStageTypes: StageMetadataWithType[];
+  isElection: boolean;
+  isDefeated: boolean;
+  isTreasury: boolean;
+  governorType: GovernorType;
+}
+
+/**
+ * Narrow gov-tracker's full stage list to the stages a given proposal will
+ * actually go through, and apply the Treasury timelock override.
+ *
+ * Three independent filters, in precedence order:
+ *  - non-election proposals drop the four election-only stages;
+ *  - a defeated proposal stops at VOTING_ACTIVE — it will never execute;
+ *  - a Treasury proposal stops at L2_TIMELOCK — it has no L1 round-trip.
+ *
+ * Defeated is checked before Treasury, so a defeated Treasury proposal stops at
+ * voting rather than at the timelock.
+ */
+export function selectRelevantStageTypes({
+  allStageTypes,
+  isElection,
+  isDefeated,
+  isTreasury,
+  governorType,
+}: SelectRelevantStageTypesInput): StageMetadataWithType[] {
+  // Index map for O(1) lookups instead of repeated findIndex calls.
+  const stageTypeToIndex = new Map(
+    allStageTypes.map((s, idx) => [s.type, idx])
+  );
+  const votingIdx = stageTypeToIndex.get("VOTING_ACTIVE") ?? -1;
+  const l2ExecutedIdx = stageTypeToIndex.get("L2_TIMELOCK") ?? -1;
+
+  return allStageTypes
+    .filter((meta) => {
+      if (!isElection && ELECTION_STAGE_TYPES.includes(meta.type)) {
+        return false;
+      }
+
+      const currentIdx = stageTypeToIndex.get(meta.type) ?? -1;
+
+      if (isDefeated) {
+        return currentIdx <= votingIdx;
+      }
+      if (isTreasury) {
+        return currentIdx <= l2ExecutedIdx;
+      }
+      return true;
+    })
+    .map((meta) => ({
+      ...meta,
+      estimatedDays:
+        getStageEstimatedDays(meta.type, meta.estimatedDays, governorType) ??
+        meta.estimatedDays,
+    }));
 }
 
 export interface BlockBasedTiming {

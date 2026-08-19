@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { L1_SECONDS_PER_BLOCK } from "@/config/arbitrum-governance";
+import { getAllStageTypes } from "@/hooks/use-proposal-stages";
 import { formatDateRange, formatDateShort, MS_PER_DAY } from "@/lib/date-utils";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
 import {
@@ -16,7 +17,9 @@ import {
   getStageTxExplorerUrl,
   isVotingExtensionStillPossible,
   resolveMinedBlockNumbers,
+  selectRelevantStageTypes,
   VOTING_EXTENSION_DAYS,
+  type SelectRelevantStageTypesInput,
   type VotingTimeRange,
 } from "./stage-utils";
 
@@ -511,5 +514,130 @@ describe("calculateEstimatedCompletionTimes", () => {
     const votingTime = estimatedTimes.get("VOTING_ACTIVE")!;
     const expectedMinMs = referenceTimestamp * 1000 + 16 * MS_PER_DAY;
     expect(votingTime.minDate.getTime()).toBe(expectedMinMs);
+  });
+});
+
+describe("selectRelevantStageTypes", () => {
+  // Fed the real gov-tracker list on purpose: hand-rolling it would stop these
+  // tests noticing an SDK change, which is half their value.
+  const allStageTypes = getAllStageTypes();
+  const types = (stages: { type: StageType }[]) => stages.map((s) => s.type);
+
+  const select = (
+    overrides: Partial<
+      Omit<SelectRelevantStageTypesInput, "allStageTypes">
+    > = {}
+  ) =>
+    selectRelevantStageTypes({
+      allStageTypes,
+      isElection: false,
+      isDefeated: false,
+      isTreasury: false,
+      governorType: "core",
+      ...overrides,
+    });
+
+  it("gives a live core proposal the full 7-stage L1 round-trip", () => {
+    expect(types(select())).toEqual([
+      "PROPOSAL_CREATED",
+      "VOTING_ACTIVE",
+      "PROPOSAL_QUEUED",
+      "L2_TIMELOCK",
+      "L2_TO_L1_MESSAGE",
+      "L1_TIMELOCK",
+      "RETRYABLE_EXECUTED",
+    ]);
+  });
+
+  it("stops a live treasury proposal at the L2 timelock", () => {
+    const result = select({ isTreasury: true, governorType: "treasury" });
+    expect(types(result)).toEqual([
+      "PROPOSAL_CREATED",
+      "VOTING_ACTIVE",
+      "PROPOSAL_QUEUED",
+      "L2_TIMELOCK",
+    ]);
+    // A treasury proposal has no L1 round-trip at all.
+    expect(types(result)).not.toContain("L2_TO_L1_MESSAGE");
+    expect(types(result)).not.toContain("L1_TIMELOCK");
+    expect(types(result)).not.toContain("RETRYABLE_EXECUTED");
+  });
+
+  it("stops a defeated proposal at voting", () => {
+    const result = select({ isDefeated: true });
+    expect(types(result)).toEqual(["PROPOSAL_CREATED", "VOTING_ACTIVE"]);
+    expect(types(result)).not.toContain("L2_TIMELOCK");
+  });
+
+  it("lets defeated win over treasury", () => {
+    // Precedence is invisible in the implementation (two sequential ifs), so pin
+    // it: a defeated treasury proposal stops at voting, not at the timelock.
+    const result = select({
+      isDefeated: true,
+      isTreasury: true,
+      governorType: "treasury",
+    });
+    expect(types(result)).toEqual(["PROPOSAL_CREATED", "VOTING_ACTIVE"]);
+  });
+
+  it("drops the election-only stages for a non-election proposal", () => {
+    const result = types(select());
+    for (const electionStage of [
+      "CREATE_ELECTION",
+      "NOMINEE_ELECTION",
+      "NOMINEE_VETTING",
+      "MEMBER_ELECTION",
+    ]) {
+      expect(result).not.toContain(electionStage);
+    }
+  });
+
+  it("keeps the election-only stages for an election proposal", () => {
+    const result = types(select({ isElection: true }));
+    expect(result).toContain("CREATE_ELECTION");
+    expect(result).toContain("NOMINEE_ELECTION");
+    expect(result).toContain("NOMINEE_VETTING");
+    expect(result).toContain("MEMBER_ELECTION");
+  });
+
+  it("overrides the L2 timelock estimate for treasury only", () => {
+    // gov-tracker reports the 8-day Constitutional timelock for every proposal;
+    // treasury proposals actually wait 3 days.
+    const core = select().find((s) => s.type === "L2_TIMELOCK");
+    const treasury = select({
+      isTreasury: true,
+      governorType: "treasury",
+    }).find((s) => s.type === "L2_TIMELOCK");
+    expect(core?.estimatedDays).toBe(8);
+    expect(treasury?.estimatedDays).toBe(3);
+  });
+
+  it("leaves every other stage's estimate untouched", () => {
+    const core = select();
+    const treasury = select({ isTreasury: true, governorType: "treasury" });
+    for (const stage of treasury) {
+      if (stage.type === "L2_TIMELOCK") continue;
+      const counterpart = core.find((s) => s.type === stage.type);
+      expect(stage.estimatedDays).toBe(counterpart?.estimatedDays);
+    }
+  });
+
+  it("preserves the SDK's ordering", () => {
+    const selected = types(select({ isElection: true }));
+    const canonical = types(allStageTypes).filter((t) => selected.includes(t));
+    expect(selected).toEqual(canonical);
+  });
+
+  it("returns an empty list for an empty input without throwing", () => {
+    // Guards the `?? -1` index fallbacks.
+    expect(
+      selectRelevantStageTypes({
+        allStageTypes: [],
+        isElection: false,
+        isDefeated: false,
+        isTreasury: false,
+        governorType: "core",
+      })
+    ).toEqual([]);
   });
 });

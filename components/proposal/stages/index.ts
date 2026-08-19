@@ -15,9 +15,11 @@ export {
   getStageTxExplorerUrl,
   isVotingExtensionStillPossible,
   resolveMinedBlockNumbers,
+  selectRelevantStageTypes,
   type BlockBasedTiming,
   type EstimatedTimesResult,
   type EstimatedVotingPeriod,
+  type SelectRelevantStageTypesInput,
   type VotingTimeRange,
 } from "./stage-utils";
 export { StageItem, type StageItemProps } from "./StageItem";
