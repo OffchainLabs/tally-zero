@@ -20,13 +20,22 @@ test.describe("candidate profiles", () => {
       "candidates",
       "/profile/candidate"
     );
-    const res = await page.request.get("/api/governance-indexer/api/elections");
-    const { elections } = (await res.json()) as { elections: unknown[] };
 
-    test.skip(
-      elections.length > 0,
-      "an election is indexed, so the empty state is not the case under test"
+    // Serve an empty election list rather than branching on whatever the local
+    // stack happens to have indexed. This used to skip whenever an election
+    // existed, which made it the inverted twin of the test below — exactly one
+    // of the pair could ever run. Stubbing the read makes the empty state a
+    // case we can always exercise, and it is a pure read so nothing else in the
+    // suite is affected.
+    await page.route("**/api/governance-indexer/api/elections", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ elections: [] }),
+      })
     );
+    // signedInPage has already navigated, so re-fetch through the stub.
+    await page.reload();
 
     await expect(
       page.getByText(/No elections have been indexed yet/)

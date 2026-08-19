@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { useLocalStack } from "./fixtures/network";
 import { signedInPage } from "./fixtures/session";
 
 // 1x1 transparent PNG — small enough to be well under the 2MB cap, and real PNG
@@ -59,6 +60,7 @@ test.describe("avatar upload gate", () => {
 
   test("requires a session (401)", async ({ browser }) => {
     const context = await browser.newContext();
+    await useLocalStack(context);
     const page = await context.newPage();
 
     const res = await page.request.post("/api/profile/avatar", {

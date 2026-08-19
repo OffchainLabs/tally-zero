@@ -1,6 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./auth";
+import { useLocalStack } from "./network";
 import type { DevWallet } from "./wallets";
 
 // The SIWE sign-in controls live on the delegate registration page — SiweGate
@@ -51,6 +52,7 @@ export async function signedInPage(
   path = SIGN_IN_PATH
 ): Promise<Page> {
   const context = await browser.newContext({ storageState: authFile(name) });
+  await useLocalStack(context);
   const page = await context.newPage();
   await useWallet(page, AUTH_WALLETS[name]);
   await page.goto(path);
