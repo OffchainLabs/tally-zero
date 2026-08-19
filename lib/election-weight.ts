@@ -1,5 +1,21 @@
 import type { SerializableMemberDetails } from "@gzeoneth/gov-tracker";
 
+/** Days of the member election that carry undecayed weight. */
+export const FULL_WEIGHT_DAYS = 7;
+/** Total member-election span in days. */
+export const TOTAL_DAYS = 21;
+
+/**
+ * The same decay curve as `computeWeightInfo`, expressed over days instead of
+ * L1 blocks, for plotting. Kept beside `computeWeightInfo` so the two cannot
+ * drift out of sight of each other; `election-weight.test.ts` asserts they agree.
+ */
+export function getWeight(day: number): number {
+  if (day <= FULL_WEIGHT_DAYS) return 100;
+  if (day >= TOTAL_DAYS) return 0;
+  return ((TOTAL_DAYS - day) / (TOTAL_DAYS - FULL_WEIGHT_DAYS)) * 100;
+}
+
 export interface WeightInfo {
   pct: number;
   remaining: bigint;
@@ -36,6 +52,8 @@ export function computeWeightInfo(
   const startBlock = endBlock - totalBlocks;
   const elapsed =
     currentL1Block > startBlock ? currentL1Block - startBlock : BigInt(0);
+  // The Math.min is defensive only: on every path where the ratio could exceed
+  // 1, the `currentL1Block >= endBlock` branch below has already returned 21.
   const elapsedDays = Math.min(
     21,
     (Number(elapsed) / Number(totalBlocks)) * 21

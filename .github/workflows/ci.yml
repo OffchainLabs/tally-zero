@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Separate steps rather than separate jobs: the three gates total ~15s, so
+  # parallel jobs would spend more time on checkout+install than on the work,
+  # while steps still name which gate failed.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Deliberately not `pnpm lint` / `pnpm test`: those run `eslint --fix .`,
+      # which repairs fixable violations and exits 0, so drift never surfaces on
+      # a gate. The pre-commit hook keeps `--fix` for local convenience.
+      - name: Lint
+        run: pnpm exec eslint .
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm exec vitest run
+
+  # Separate job: unlike the ~15s gates above, this prerenders ~240 pages
+  # (proposals + contenders) and the tracked data/delegates-*.json make checkout
+  # heavy, so it must not delay the fast required checks.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # env.ts requires this one; every other key is optional.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_REOWN_PROJECT_ID: test

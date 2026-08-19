@@ -22,9 +22,9 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 
 import {
   calculateEstimatedCompletionTimes,
-  getStageEstimatedDays,
   LoadingSkeleton,
   resolveMinedBlockNumbers,
+  selectRelevantStageTypes,
   StageItem,
 } from "./stages";
 
@@ -83,49 +83,17 @@ export default function ProposalStages({
     ? isElectionProposal(result.proposalType)
     : false;
 
-  const relevantStageTypes = useMemo(() => {
-    // Election stage types to filter out for non-election proposals
-    const electionStageTypes: StageType[] = [
-      "CREATE_ELECTION",
-      "NOMINEE_ELECTION",
-      "NOMINEE_VETTING",
-      "MEMBER_ELECTION",
-    ];
-
-    // Pre-compute index map for O(1) lookups instead of repeated findIndex calls
-    const stageTypeToIndex = new Map(
-      allStageTypes.map((s, idx) => [s.type, idx])
-    );
-    const votingIdx = stageTypeToIndex.get("VOTING_ACTIVE") ?? -1;
-    const l2ExecutedIdx = stageTypeToIndex.get("L2_TIMELOCK") ?? -1;
-
-    return allStageTypes
-      .filter((meta) => {
-        // Filter out election stages for non-election proposals
-        if (!isElection && electionStageTypes.includes(meta.type)) {
-          return false;
-        }
-
-        const currentIdx = stageTypeToIndex.get(meta.type) ?? -1;
-
-        if (isDefeated) {
-          return currentIdx <= votingIdx;
-        }
-        if (isTreasuryProposal) {
-          return currentIdx <= l2ExecutedIdx;
-        }
-        return true;
-      })
-      .map((meta) => ({
-        // gov-tracker reports the 8-day Constitutional L2 timelock for every
-        // proposal; override it so treasury (non-Constitutional) proposals use
-        // their 3-day L2 waiting period in completion estimates.
-        ...meta,
-        estimatedDays:
-          getStageEstimatedDays(meta.type, meta.estimatedDays, governorType) ??
-          meta.estimatedDays,
-      }));
-  }, [allStageTypes, isDefeated, isTreasuryProposal, isElection, governorType]);
+  const relevantStageTypes = useMemo(
+    () =>
+      selectRelevantStageTypes({
+        allStageTypes,
+        isElection,
+        isDefeated,
+        isTreasury: isTreasuryProposal,
+        governorType,
+      }),
+    [allStageTypes, isDefeated, isTreasuryProposal, isElection, governorType]
+  );
 
   // Real timestamps for already-mined voting boundary blocks, so past
   // voting dates are exact instead of extrapolated at 12s per block.
