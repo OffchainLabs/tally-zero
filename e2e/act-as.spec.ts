@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signedInPage } from "./fixtures/session";
+import { TEST_SAFE_ADDRESS } from "./fixtures/testnode";
 import { DEV_WALLETS } from "./fixtures/wallets";
 
 // Covers GET /api/auth/safes and POST/DELETE /api/auth/act-as.
@@ -61,16 +62,17 @@ test.describe("act as a Safe", () => {
     await expect(page.getByTestId("act-as-submit")).toBeDisabled();
   });
 
-  // Unskip once the testnode bakes a Safe owned by dev keys #1/#2 and exposes
-  // it as contracts.testSafe in governance.json (Workstream A).
+  // Resolved from TEST_SAFE_ADDRESS or the testnode's governance.json, so these
+  // run against any stack that has baked a Safe rather than only when the env
+  // var happens to be exported.
   test.describe("with a Safe on chain", () => {
     test.skip(
-      !process.env.TEST_SAFE_ADDRESS,
-      "needs TEST_SAFE_ADDRESS from the baked testnode image"
+      !TEST_SAFE_ADDRESS,
+      "no testSafe baked on this stack - run `pnpm testnode:safe` in the indexer repo"
     );
 
     test("switches subject, banners it, and reverts", async ({ browser }) => {
-      const safe = process.env.TEST_SAFE_ADDRESS as string;
+      const safe = TEST_SAFE_ADDRESS as string;
       const page = await signedInPage(browser, "profile");
 
       await page.getByTestId("act-as-trigger").click();
@@ -113,7 +115,7 @@ test.describe("act as a Safe", () => {
     test("refuses a Safe the signer does not own (403 not_an_owner)", async ({
       browser,
     }) => {
-      const safe = process.env.TEST_SAFE_ADDRESS as string;
+      const safe = TEST_SAFE_ADDRESS as string;
       // Key #4 is not among the baked Safe's owners (#1 and #2).
       const page = await signedInPage(browser, "candidates");
 

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { useLocalStack } from "./fixtures/network";
 import { descriptionInput } from "./fixtures/proposal-form";
 import { signedInPage } from "./fixtures/session";
 
@@ -70,6 +71,7 @@ test("draft lifecycle: save, reopen, publish, share, mark submitted", async ({
   // A fresh context with no session: the slug alone is enough to *read* the
   // draft, which is the whole point of publishing.
   const anonContext = await browser.newContext();
+  await useLocalStack(anonContext);
   const anonPage = await anonContext.newPage();
   await anonPage.goto(`/drafts/shared/${slug}`);
   await expect(anonPage.getByTestId("shared-draft-title")).toHaveText(marker);
@@ -154,6 +156,7 @@ test("an unknown share slug reports itself rather than 500ing", async ({
   browser,
 }) => {
   const context = await browser.newContext();
+  await useLocalStack(context);
   const page = await context.newPage();
 
   await page.goto("/drafts/shared/definitely-not-a-real-slug");

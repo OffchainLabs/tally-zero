@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { type Browser, test as setup } from "@playwright/test";
 
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./fixtures/auth";
+import { useLocalStack } from "./fixtures/network";
 import { signIn } from "./fixtures/session";
 
 // Runs once before the suite as the `setup` project. Each wallet signs in
@@ -21,6 +22,7 @@ async function sessionStillValid(
 ): Promise<boolean> {
   if (!existsSync(authFile(name))) return false;
   const context = await browser.newContext({ storageState: authFile(name) });
+  await useLocalStack(context);
   try {
     // 200 means the cookie still resolves to a live session; 401 means expired
     // or truncated away (e.g. by `pnpm reset:siwe`).

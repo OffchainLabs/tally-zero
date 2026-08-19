@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { useLocalStack } from "./fixtures/network";
+
 // anvil dev key #1 (funded + DELEGATED on the local governance testnode — it has
 // voting power, which the avatar-upload gate requires; a zero-power key would 403).
 // A distinct key keeps this test's profile isolated from other local experiments.
@@ -14,6 +16,7 @@ const PNG = Buffer.from(
 );
 
 test("user signs in and manages their profile end-to-end", async ({ page }) => {
+  await useLocalStack(page);
   // Inject a deterministic test wallet; TestWalletProvider auto-connects it.
   await page.addInitScript((key) => {
     (
