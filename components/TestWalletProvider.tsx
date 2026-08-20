@@ -1,5 +1,6 @@
 "use client";
 
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { createClient, custom, http, type Hex } from "viem";
@@ -15,6 +16,21 @@ import {
 
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
+import { APPKIT_NETWORKS, createGovernanceAppKit } from "@/lib/appkit";
+
+// Shared components (e.g. the nav) call useAppKit(), which throws unless
+// createAppKit() has run. In normal mode Web3ModalProviderInner does that; the
+// test-wallet path bypasses it, so initialize the same AppKit singleton here
+// with a throwaway adapter (wagmi hooks are still governed by the test config
+// below — this only satisfies the AppKit modal singleton).
+function ensureAppKit() {
+  // eslint-disable-next-line no-process-env
+  const projectId = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || "test";
+  createGovernanceAppKit(
+    projectId,
+    new WagmiAdapter({ projectId, networks: APPKIT_NETWORKS })
+  );
+}
 
 declare global {
   interface Window {
@@ -299,6 +315,7 @@ export default function TestWalletProvider({
   >(() => {
     if (typeof window === "undefined") return { mode: "normal" };
     if (window.__TEST_WALLET_KEY__?.startsWith("0x")) {
+      ensureAppKit();
       return {
         mode: "test",
         config: createTestConfig(window.__TEST_WALLET_KEY__ as `0x${string}`),
@@ -315,6 +332,7 @@ export default function TestWalletProvider({
         }
       })();
     if (readOnlyAddress?.startsWith("0x")) {
+      ensureAppKit();
       return {
         mode: "test",
         config: createReadOnlyConfig(readOnlyAddress as `0x${string}`),

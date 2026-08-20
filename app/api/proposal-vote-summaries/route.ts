@@ -1,3 +1,4 @@
+import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 import type {
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
@@ -5,8 +6,6 @@ import type {
 } from "@/lib/tally-data/types";
 
 export const dynamic = "force-dynamic";
-
-const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * Server-to-indexer fan-out width. The whole point of this route is to lift
@@ -16,28 +15,12 @@ const FETCH_TIMEOUT_MS = 10_000;
  */
 const UPSTREAM_CONCURRENCY = 16;
 
-function getIndexerUrl(): string | null {
-  // eslint-disable-next-line no-process-env
-  const value = process.env.GOVERNANCE_INDEXER_URL?.trim();
-  return value ? value.replace(/\/+$/, "") : null;
-}
-
-async function fetchUpstream<T>(url: string): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) {
-      throw new Error(`Indexer request failed: ${response.status}`);
-    }
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timer);
+async function fetchUpstream<T>(path: string): Promise<T> {
+  const response = await indexerFetch(path);
+  if (!response.ok) {
+    throw new Error(`Indexer request failed: ${response.status}`);
   }
+  return (await response.json()) as T;
 }
 
 /**
@@ -45,17 +28,9 @@ async function fetchUpstream<T>(url: string): Promise<T> {
  * the client fills all vote bars with a single request instead of N.
  */
 export async function GET(): Promise<Response> {
-  const indexerUrl = getIndexerUrl();
-  if (!indexerUrl) {
-    return Response.json(
-      { error: "Governance indexer is not configured." },
-      { status: 503 }
-    );
-  }
-
   try {
     const entries = await fetchUpstream<TallyProposalIndexEntry[]>(
-      `${indexerUrl}/api/tally/proposals`
+      "/api/tally/proposals"
     );
 
     const summaries: TallyProposalVoteSummaryEntry[] = [];
@@ -65,7 +40,7 @@ export async function GET(): Promise<Response> {
         batch.map(async (entry) => {
           const governorAddress = entry.governorAddress.toLowerCase();
           const voteSummary = await fetchUpstream<TallyProposalVoteSummary>(
-            `${indexerUrl}/api/tally/proposals/${encodeURIComponent(
+            `/api/tally/proposals/${encodeURIComponent(
               governorAddress
             )}/${encodeURIComponent(entry.proposalId)}/vote-summary`
           ).catch(() => null);
@@ -93,7 +68,7 @@ export async function GET(): Promise<Response> {
     );
 
     return new Response(JSON.stringify(summaries), { status: 200, headers });
-  } catch {
-    return Response.json({ error: "Indexer upstream error." }, { status: 502 });
+  } catch (error) {
+    return indexerErrorResponse(error);
   }
 }

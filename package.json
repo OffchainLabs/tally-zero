@@ -13,7 +13,8 @@
     "audit:ci": "audit-ci --config ./audit-ci.jsonc",
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e": "playwright test"
   },
   "prettier": {
     "semi": true,
@@ -53,6 +54,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@uiw/react-md-editor": "^4.1.0",
     "@vercel/analytics": "^1.1.2",
+    "@vercel/blob": "^2.6.1",
     "addreth": "^1.2.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",

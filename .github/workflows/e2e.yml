@@ -1,0 +1,143 @@
+name: Full-stack SIWE e2e
+
+# Boots the whole stack in CI — local governance testnode chain (prebaked GHCR
+# image) + the indexer under `ponder start` against a Postgres service + this
+# Next.js frontend — and runs the Playwright profile-management suite.
+#
+# Cross-repo: the chain/indexer live in OffchainLabs/arbitrum-governance-indexer
+# and the boot engine in OffchainLabs/arbitrum-litro, so this checks both out.
+# Requires a token with read access to those repos in secrets.E2E_REPO_TOKEN
+# (the default GITHUB_TOKEN only covers this repo).
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: Prebaked testnode image tag in GHCR
+        required: true
+        default: v0.1.0-rc9
+        type: string
+      indexer-ref:
+        description: arbitrum-governance-indexer ref
+        required: true
+        default: feat/governance-testnode
+        type: string
+      engine-ref:
+        description: arbitrum-litro engine ref
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/offchainlabs/arbitrum-governance-indexer/testnode
+  INDEXER_DIR: indexer
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - name: Checkout frontend (tally-zero)
+        uses: actions/checkout@v7
+
+      - name: Checkout indexer
+        uses: actions/checkout@v7
+        with:
+          repository: OffchainLabs/arbitrum-governance-indexer
+          ref: ${{ inputs.indexer-ref }}
+          path: ${{ env.INDEXER_DIR }}
+          token: ${{ secrets.E2E_REPO_TOKEN }}
+
+      - name: Checkout testnode engine
+        uses: actions/checkout@v7
+        with:
+          repository: OffchainLabs/arbitrum-litro
+          ref: ${{ inputs.engine-ref }}
+          path: ${{ env.INDEXER_DIR }}/.testnode-engine
+          token: ${{ secrets.E2E_REPO_TOKEN }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # This job installs deps in two checkouts pinned to different pnpm
+      # majors: the indexer is packageManager pnpm@9.15.0, this frontend is
+      # pnpm@10.33.0. corepack resolves packageManager per working directory,
+      # so one step covers both. pnpm/action-setup (used by audit.yml, where
+      # there is a single lockfile) installs one global pnpm, so it would need
+      # a second invocation interleaved between the two install steps.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install indexer deps
+        working-directory: ${{ env.INDEXER_DIR }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Boot governance testnode chain
+        uses: ./indexer/.testnode-engine
+        with:
+          version: v0.0.0
+          image-ref: ${{ env.IMAGE_REPOSITORY }}:${{ inputs.image-tag }}
+          output-dir: ${{ github.workspace }}/${{ env.INDEXER_DIR }}/.testnode
+          startup-timeout-seconds: "300"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start indexer (ponder start + Postgres, local mode)
+        working-directory: ${{ env.INDEXER_DIR }}
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          GOVERNANCE_ADDRESSES_FILE: ${{ github.workspace }}/${{ env.INDEXER_DIR }}/.testnode/config/governance.json
+          PONDER_RPC_URL_LOCAL: http://127.0.0.1:8547
+          SIWE_CHAIN_ID: "412346"
+          PONDER_SCHEMA: gov_ci
+        run: |
+          nohup pnpm start:indexer > "$GITHUB_WORKSPACE/ponder.log" 2>&1 &
+          echo "waiting for indexer to serve the SIWE mount..."
+          for i in $(seq 1 60); do
+            health=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:42069/api/health || true)
+            nonce=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:42069/api/auth/nonce || true)
+            if [ "$health" = "200" ] && [ "$nonce" = "201" ]; then
+              echo "indexer ready"; exit 0
+            fi
+            sleep 3
+          done
+          echo "indexer did not become ready"; tail -50 "$GITHUB_WORKSPACE/ponder.log"; exit 1
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run e2e
+        env:
+          CI: "true"
+          GOVERNANCE_INDEXER_URL: http://localhost:42069
+          NEXT_PUBLIC_SIWE_CHAIN_ID: "412346"
+          NEXT_PUBLIC_REOWN_PROJECT_ID: test
+          STORAGE_DRIVER: local
+        run: pnpm test:e2e
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
