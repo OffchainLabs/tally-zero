@@ -54,10 +54,10 @@ jobs:
 
     steps:
       - name: Checkout frontend (tally-zero)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout indexer
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: OffchainLabs/arbitrum-governance-indexer
           ref: ${{ inputs.indexer-ref }}
@@ -65,19 +65,23 @@ jobs:
           token: ${{ secrets.E2E_REPO_TOKEN }}
 
       - name: Checkout testnode engine
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: OffchainLabs/arbitrum-litro
           ref: ${{ inputs.engine-ref }}
           path: ${{ env.INDEXER_DIR }}/.testnode-engine
           token: ${{ secrets.E2E_REPO_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
-      # corepack honors each repo's own packageManager field (the indexer pins
-      # pnpm 9.x, this frontend pins pnpm 10.x).
+      # This job installs deps in two checkouts pinned to different pnpm
+      # majors: the indexer is packageManager pnpm@9.15.0, this frontend is
+      # pnpm@10.33.0. corepack resolves packageManager per working directory,
+      # so one step covers both. pnpm/action-setup (used by audit.yml, where
+      # there is a single lockfile) installs one global pnpm, so it would need
+      # a second invocation interleaved between the two install steps.
       - name: Enable corepack
         run: corepack enable
 
@@ -132,7 +136,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
