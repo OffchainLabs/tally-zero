@@ -34,7 +34,8 @@ test("user signs in and manages their profile end-to-end", async ({ page }) => {
   await page.getByTestId("profile-bio").fill("Bio set via Playwright e2e.");
   await page.getByTestId("profile-twitter").fill("e2e_delegate");
 
-  // Upload an avatar → hosted via the storage driver, preview renders.
+  // Upload an avatar → the route stores it and commits `picture` itself, so the
+  // preview renders from the refreshed session rather than from form state.
   // The input is visually hidden behind an "Upload" button, so target it directly.
   await page.getByTestId("profile-avatar-input").setInputFiles({
     name: "avatar.png",
@@ -43,18 +44,21 @@ test("user signs in and manages their profile end-to-end", async ({ page }) => {
   });
   await expect(page.getByTestId("profile-avatar-preview")).toBeVisible();
 
-  // Avatar + display name are the two required fields; submit navigates to the
-  // public profile on success.
+  // Display name is the only required field; submit navigates to the public
+  // profile on success.
   await page.getByTestId("profile-save").click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
   await expect(page).toHaveURL(
     new RegExp(`/delegates/${TEST_WALLET_ADDRESS}`, "i")
   );
 
-  // Persistence: go back (session cookie survives) and the values are rehydrated.
+  // Persistence: submit redirects away, so come back (the session cookie
+  // survives) and then reload, which is what a returning delegate does.
   await page.goto("/delegates/register");
   await expect(page.getByTestId("profile-name")).toHaveValue(name);
   await expect(page.getByTestId("profile-avatar-preview")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("profile-name")).toHaveValue(name);
 
   // And the public resolved profile reflects the owned edits + hosted avatar.
   const res = await page.request.get(

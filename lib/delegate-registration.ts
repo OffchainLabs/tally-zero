@@ -3,8 +3,12 @@ import type { ProfileFields } from "@/lib/siwe/types";
 /** Focus areas a delegate may pick, per the registration design. */
 export const MAX_FOCUS_AREAS = 3;
 
+/**
+ * The editable form. `picture` is deliberately absent: the avatar upload route
+ * commits it server-side, so the form reads it from the session rather than
+ * holding a second, divergent copy.
+ */
 export type DelegateRegistrationForm = {
-  picture: string;
   name: string;
   twitter: string;
   discourseUsername: string;
@@ -15,7 +19,6 @@ export type DelegateRegistrationForm = {
 };
 
 export const EMPTY_REGISTRATION_FORM: DelegateRegistrationForm = {
-  picture: "",
   name: "",
   twitter: "",
   discourseUsername: "",
@@ -25,7 +28,7 @@ export const EMPTY_REGISTRATION_FORM: DelegateRegistrationForm = {
   isSeekingDelegation: false,
 };
 
-export type RegistrationErrors = Partial<Record<"picture" | "name", string>>;
+export type RegistrationErrors = Partial<Record<"name", string>>;
 
 /**
  * Hydrate the form from a resolved profile. Nullable indexer fields collapse to
@@ -35,7 +38,6 @@ export function toRegistrationForm(
   profile: Partial<ProfileFields> | undefined
 ): DelegateRegistrationForm {
   return {
-    picture: profile?.picture ?? "",
     name: profile?.name ?? "",
     twitter: profile?.twitter ?? "",
     discourseUsername: profile?.discourseUsername ?? "",
@@ -59,7 +61,6 @@ export function toProfilePatch(
   };
 
   return {
-    picture: str(form.picture),
     name: str(form.name),
     twitter: str(form.twitter),
     discourseUsername: str(form.discourseUsername),
@@ -71,46 +72,33 @@ export function toProfilePatch(
 }
 
 /**
- * Client-side validation for the two fields the design marks required.
- * `ProfileFields` types both as nullable, so the `*` markers are only
- * enforced here.
+ * Client-side validation. Only the display name is required: an avatar cannot
+ * be, because uploading one requires delegated voting power the registrant may
+ * not have yet.
  */
 export function validateRegistrationForm(
   form: DelegateRegistrationForm
 ): RegistrationErrors {
   const errors: RegistrationErrors = {};
-
-  if (form.picture.trim() === "") {
-    errors.picture = "Upload an avatar.";
-  }
   if (form.name.trim() === "") {
     errors.name = "Display name is required.";
   }
   return errors;
 }
 
-export function isRegistrationValid(form: DelegateRegistrationForm): boolean {
-  return Object.keys(validateRegistrationForm(form)).length === 0;
-}
-
 /**
  * Append a focus area, ignoring blanks, case-insensitive duplicates, and
- * anything beyond the cap. Returns the original array when nothing changes so
- * callers can skip a re-render.
+ * anything beyond the cap.
  */
 export function addFocusArea(focusAreas: string[], value: string): string[] {
   const trimmed = value.trim();
-  if (trimmed === "") return focusAreas;
-  if (focusAreas.length >= MAX_FOCUS_AREAS) return focusAreas;
+  if (trimmed === "") return [...focusAreas];
+  if (focusAreas.length >= MAX_FOCUS_AREAS) return [...focusAreas];
 
   const exists = focusAreas.some(
     (area) => area.toLowerCase() === trimmed.toLowerCase()
   );
-  if (exists) return focusAreas;
+  if (exists) return [...focusAreas];
 
   return [...focusAreas, trimmed];
-}
-
-export function removeFocusArea(focusAreas: string[], value: string): string[] {
-  return focusAreas.filter((area) => area !== value);
 }
