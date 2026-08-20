@@ -12,26 +12,29 @@ interface SideMenuItem {
   icon: typeof Users;
 }
 
-const MY_DELEGATION_PATH = "/delegates/my-delegation";
-const REGISTER_PATH = "/delegates/register";
-
 const items: SideMenuItem[] = [
   { href: "/delegates", title: "Delegates", icon: Users },
-  { href: MY_DELEGATION_PATH, title: "My Delegation", icon: Vote },
-  { href: REGISTER_PATH, title: "Create Delegate Profile", icon: UserPlus },
+  { href: "/delegates/my-delegation", title: "My Delegation", icon: Vote },
+  {
+    href: "/delegates/register",
+    title: "Create Delegate Profile",
+    icon: UserPlus,
+  },
 ];
 
 export function DelegatesSideMenu() {
   const pathname = usePathname();
 
-  // "Delegates" is the catch-all: it stays active on the explorer and on any
-  // individual delegate page, but not on the sibling routes above.
-  const isActive = (item: SideMenuItem) => {
-    if (item.href === MY_DELEGATION_PATH || item.href === REGISTER_PATH) {
-      return pathname === item.href;
-    }
-    return pathname !== MY_DELEGATION_PATH && pathname !== REGISTER_PATH;
-  };
+  // Longest matching href wins, so "/delegates" stays active on the explorer
+  // and on individual delegate pages while its siblings claim their own routes.
+  // Adding a route is a one-line edit to `items` above.
+  const activeHref = items.reduce(
+    (best, item) =>
+      pathname.startsWith(item.href) && item.href.length > best.length
+        ? item.href
+        : best,
+    items[0].href
+  );
 
   const linkClassName = (active: boolean) =>
     cn(
@@ -48,7 +51,7 @@ export function DelegatesSideMenu() {
       className="glass-subtle backdrop-blur rounded-xl p-2 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible"
     >
       {items.map((item) => {
-        const active = isActive(item);
+        const active = item.href === activeHref;
         const Icon = item.icon;
 
         return (

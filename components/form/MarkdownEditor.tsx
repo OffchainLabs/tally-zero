@@ -104,6 +104,11 @@ async function loadExtraCommands(): Promise<ICommand[]> {
   ];
 }
 
+// Stable across renders, so MDEditor isn't handed a new previewOptions identity
+// on every keystroke.
+const REMARK_PLUGINS = getProposalPreviewRemarkPlugins();
+const REHYPE_PLUGINS = getProposalPreviewRehypePlugins();
+
 export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -111,7 +116,6 @@ export interface MarkdownEditorProps {
   height?: number;
   disabled?: boolean;
   onBlur?: () => void;
-  preview?: "live" | "edit" | "preview";
 }
 
 /**
@@ -126,7 +130,6 @@ export function MarkdownEditor({
   height = 600,
   disabled,
   onBlur,
-  preview = "live",
 }: MarkdownEditorProps) {
   const { resolvedTheme } = useTheme();
   const [commands, setCommands] = useState<ICommand[]>();
@@ -178,13 +181,13 @@ export function MarkdownEditor({
       <MDEditor
         value={value}
         onChange={(next) => onChange(next ?? "")}
-        preview={preview}
+        preview="live"
         height={height}
         commands={commands}
         extraCommands={extraCommands}
         previewOptions={{
-          remarkPlugins: getProposalPreviewRemarkPlugins(),
-          rehypePlugins: getProposalPreviewRehypePlugins(),
+          remarkPlugins: REMARK_PLUGINS,
+          rehypePlugins: REHYPE_PLUGINS,
         }}
         textareaProps={{
           placeholder,
