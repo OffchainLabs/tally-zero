@@ -39,7 +39,15 @@ function extractError(
 
 async function parse<T>(res: Response): Promise<T> {
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  // A failing route can answer with Next's HTML error page rather than JSON, so
+  // a parse failure must surface as the HTTP status, not a raw SyntaxError.
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    if (res.ok)
+      throw new SiweApiError(res.status, "error", "Malformed response.");
+  }
   if (!res.ok) {
     const { code, message } = extractError(body, res.statusText);
     throw new SiweApiError(res.status, code, message);
@@ -78,6 +86,18 @@ export const siweApi = {
       body: JSON.stringify(patch),
     });
     return parse<ProfilePatchResult>(res);
+  },
+
+  /**
+   * Upload an avatar. Unlike the calls above this hits our own route (which
+   * authorizes at the indexer, stores the image and commits the profile's
+   * `picture`), but it shares the same error handling.
+   */
+  async uploadAvatar(file: File): Promise<{ url: string }> {
+    const body = new FormData();
+    body.set("file", file);
+    const res = await fetch("/api/profile/avatar", { method: "POST", body });
+    return parse<{ url: string }>(res);
   },
 
   async logout(): Promise<void> {
