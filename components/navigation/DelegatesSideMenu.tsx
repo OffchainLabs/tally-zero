@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, UserPlus, Users, Vote } from "lucide-react";
+import { UserPlus, Users, Vote } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,31 +10,27 @@ interface SideMenuItem {
   href: string;
   title: string;
   icon: typeof Users;
-  external?: boolean;
 }
+
+const MY_DELEGATION_PATH = "/delegates/my-delegation";
+const REGISTER_PATH = "/delegates/register";
 
 const items: SideMenuItem[] = [
   { href: "/delegates", title: "Delegates", icon: Users },
-  { href: "/delegates/my-delegation", title: "My Delegation", icon: Vote },
-  {
-    href: "https://github.com/OffchainLabs/tally-zero/issues/new?template=delegate-profile-registration.yml",
-    title: "Create Delegate Profile",
-    icon: UserPlus,
-    external: true,
-  },
+  { href: MY_DELEGATION_PATH, title: "My Delegation", icon: Vote },
+  { href: REGISTER_PATH, title: "Create Delegate Profile", icon: UserPlus },
 ];
-
-const MY_DELEGATION_PATH = "/delegates/my-delegation";
 
 export function DelegatesSideMenu() {
   const pathname = usePathname();
 
+  // "Delegates" is the catch-all: it stays active on the explorer and on any
+  // individual delegate page, but not on the sibling routes above.
   const isActive = (item: SideMenuItem) => {
-    if (item.external) return false;
-    if (item.href === MY_DELEGATION_PATH) {
-      return pathname === MY_DELEGATION_PATH;
+    if (item.href === MY_DELEGATION_PATH || item.href === REGISTER_PATH) {
+      return pathname === item.href;
     }
-    return pathname !== MY_DELEGATION_PATH;
+    return pathname !== MY_DELEGATION_PATH && pathname !== REGISTER_PATH;
   };
 
   const linkClassName = (active: boolean) =>
@@ -54,29 +50,6 @@ export function DelegatesSideMenu() {
       {items.map((item) => {
         const active = isActive(item);
         const Icon = item.icon;
-        const content = (
-          <>
-            <Icon className="h-4 w-4 shrink-0" />
-            <span>{item.title}</span>
-            {item.external && (
-              <ExternalLink className="h-3 w-3 opacity-60" aria-hidden />
-            )}
-          </>
-        );
-
-        if (item.external) {
-          return (
-            <a
-              key={item.href}
-              href={item.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={linkClassName(active)}
-            >
-              {content}
-            </a>
-          );
-        }
 
         return (
           <Link
@@ -85,7 +58,8 @@ export function DelegatesSideMenu() {
             aria-current={active ? "page" : undefined}
             className={linkClassName(active)}
           >
-            {content}
+            <Icon className="h-4 w-4 shrink-0" />
+            <span>{item.title}</span>
           </Link>
         );
       })}

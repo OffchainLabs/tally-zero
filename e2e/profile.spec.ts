@@ -21,7 +21,7 @@ test("user signs in and manages their profile end-to-end", async ({ page }) => {
     ).__TEST_WALLET_KEY__ = key;
   }, TEST_WALLET_KEY);
 
-  await page.goto("/profile");
+  await page.goto("/delegates/register");
 
   // Connected → sign in with a wallet signature (no gas, no tx).
   await page.getByTestId("siwe-sign-in").click();
@@ -35,6 +35,7 @@ test("user signs in and manages their profile end-to-end", async ({ page }) => {
   await page.getByTestId("profile-twitter").fill("e2e_delegate");
 
   // Upload an avatar → hosted via the storage driver, preview renders.
+  // The input is visually hidden behind an "Upload" button, so target it directly.
   await page.getByTestId("profile-avatar-input").setInputFiles({
     name: "avatar.png",
     mimeType: "image/png",
@@ -42,11 +43,16 @@ test("user signs in and manages their profile end-to-end", async ({ page }) => {
   });
   await expect(page.getByTestId("profile-avatar-preview")).toBeVisible();
 
+  // Avatar + display name are the two required fields; submit navigates to the
+  // public profile on success.
   await page.getByTestId("profile-save").click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/delegates/${TEST_WALLET_ADDRESS}`, "i")
+  );
 
-  // Persistence: reload (session cookie survives) and the values are rehydrated.
-  await page.reload();
+  // Persistence: go back (session cookie survives) and the values are rehydrated.
+  await page.goto("/delegates/register");
   await expect(page.getByTestId("profile-name")).toHaveValue(name);
   await expect(page.getByTestId("profile-avatar-preview")).toBeVisible();
 

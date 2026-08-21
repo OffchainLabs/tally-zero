@@ -1,37 +1,14 @@
 "use client";
 
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { keepPreviousData } from "@tanstack/react-query";
-import type { ICommand } from "@uiw/react-md-editor";
 import {
   ArrowRight,
-  Bold,
   CheckCircle2,
-  CircleQuestionMark,
-  Code,
-  Columns2,
   ExternalLink,
-  Eye,
-  Heading,
-  Image as ImageIcon,
-  Italic,
-  Link2,
-  List,
-  ListChecks,
-  ListOrdered,
-  Maximize2,
-  MessageSquare,
-  Minus,
   Plus,
-  Quote,
-  SquareCode,
-  Strikethrough,
-  Table,
   Trash2,
   Upload,
 } from "lucide-react";
-import { useTheme } from "next-themes";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -43,87 +20,13 @@ import {
   useWriteContract,
 } from "wagmi";
 
-// Client-only: the editor touches `window`/`document` at import, which would
-// break the static export build.
-const MDEditor = dynamic(
-  () => import("@uiw/react-md-editor").then((m) => m.default),
-  {
-    ssr: false,
-    loading: () => <div className="h-[280px] rounded-md glass-subtle" />,
-  }
-);
-
-// Lazy-built once on the client to keep the MDEditor module off the SSR path.
-// Replaces the default SVG icons on both the main toolbar and the right-side
-// (edit/live/preview/fullscreen) toolbar with lucide equivalents so the editor
-// matches the rest of the app's icon set.
-const iconClass = "h-4 w-4";
-
-function withIcon(cmd: ICommand, icon: React.ReactElement): ICommand {
-  return { ...cmd, icon };
-}
-
-async function loadCommands(): Promise<ICommand[]> {
-  const { commands, group } = await import("@uiw/react-md-editor");
-  return [
-    withIcon(commands.bold, <Bold className={iconClass} />),
-    withIcon(commands.italic, <Italic className={iconClass} />),
-    withIcon(commands.strikethrough, <Strikethrough className={iconClass} />),
-    withIcon(commands.hr, <Minus className={iconClass} />),
-    group(
-      [
-        commands.title1,
-        commands.title2,
-        commands.title3,
-        commands.title4,
-        commands.title5,
-        commands.title6,
-      ],
-      {
-        name: "title",
-        groupName: "title",
-        buttonProps: { "aria-label": "Insert title", title: "Insert title" },
-        icon: <Heading className={iconClass} />,
-      }
-    ),
-    commands.divider,
-    withIcon(commands.link, <Link2 className={iconClass} />),
-    withIcon(commands.quote, <Quote className={iconClass} />),
-    withIcon(commands.code, <Code className={iconClass} />),
-    withIcon(commands.codeBlock, <SquareCode className={iconClass} />),
-    withIcon(commands.comment, <MessageSquare className={iconClass} />),
-    withIcon(commands.image, <ImageIcon className={iconClass} />),
-    withIcon(commands.table, <Table className={iconClass} />),
-    commands.divider,
-    withIcon(commands.unorderedListCommand, <List className={iconClass} />),
-    withIcon(
-      commands.orderedListCommand,
-      <ListOrdered className={iconClass} />
-    ),
-    withIcon(commands.checkedListCommand, <ListChecks className={iconClass} />),
-    commands.divider,
-    withIcon(commands.help, <CircleQuestionMark className={iconClass} />),
-  ];
-}
-
-async function loadExtraCommands(): Promise<ICommand[]> {
-  const { commands } = await import("@uiw/react-md-editor");
-  return [
-    withIcon(commands.codeLive, <Columns2 className={iconClass} />),
-    withIcon(commands.codePreview, <Eye className={iconClass} />),
-    commands.divider,
-    withIcon(commands.fullscreen, <Maximize2 className={iconClass} />),
-  ];
-}
-
-import { useGovernanceClock } from "@/hooks/use-governance-clock";
-
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
 
+import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
@@ -137,8 +40,6 @@ import {
   createFormProposalAction,
   createProposalDraft,
   getProposalEligibility,
-  getProposalPreviewRehypePlugins,
-  getProposalPreviewRemarkPlugins,
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
@@ -162,8 +63,10 @@ import {
 } from "@/lib/propose-utils";
 import { cn } from "@/lib/utils";
 
+import { useGovernanceClock } from "@/hooks/use-governance-clock";
 import OzGovernorABI from "@data/OzGovernor_ABI.json";
 import { readVotingPower } from "@gzeoneth/gov-tracker";
+import { keepPreviousData } from "@tanstack/react-query";
 import { zeroAddress, type Abi } from "viem";
 
 const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
@@ -964,47 +867,6 @@ function DescriptionEditor({
   onOpenUpload,
   onBlur,
 }: DescriptionEditorProps) {
-  const { resolvedTheme } = useTheme();
-  const [commands, setCommands] = useState<ICommand[]>();
-  const [extraCommands, setExtraCommands] = useState<ICommand[]>();
-  const [editorWrapper, setEditorWrapper] = useState<HTMLDivElement | null>(
-    null
-  );
-
-  useEffect(() => {
-    loadCommands().then(setCommands);
-    loadExtraCommands().then(setExtraCommands);
-  }, []);
-
-  // MDEditor sets `title` on toolbar buttons, which triggers the slow native
-  // tooltip. Copy it to `data-tooltip` (used by our CSS hover tooltip) and
-  // strip `title` so the native one stays out of the way. A MutationObserver
-  // covers future re-renders (mode toggles, commands list changes).
-  useEffect(() => {
-    if (!editorWrapper) return;
-    const migrate = () => {
-      editorWrapper
-        .querySelectorAll<HTMLButtonElement>(
-          ".w-md-editor-toolbar button[title]"
-        )
-        .forEach((btn) => {
-          const title = btn.getAttribute("title");
-          if (!title) return;
-          btn.setAttribute("data-tooltip", title);
-          btn.removeAttribute("title");
-        });
-    };
-    migrate();
-    const observer = new MutationObserver(migrate);
-    observer.observe(editorWrapper, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["title"],
-    });
-    return () => observer.disconnect();
-  }, [editorWrapper]);
-
   return (
     <Card variant="glass">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -1021,30 +883,15 @@ function DescriptionEditor({
         </Button>
       </CardHeader>
       <CardContent>
-        <div
-          ref={setEditorWrapper}
-          data-color-mode={resolvedTheme === "dark" ? "dark" : "light"}
-          className="rounded-md"
-        >
-          <MDEditor
-            value={value}
-            onChange={(next) => onChange(next ?? "")}
-            preview="live"
-            height={600}
-            commands={commands}
-            extraCommands={extraCommands}
-            previewOptions={{
-              remarkPlugins: getProposalPreviewRemarkPlugins(),
-              rehypePlugins: getProposalPreviewRehypePlugins(),
-            }}
-            textareaProps={{
-              placeholder:
-                "# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported.",
-              disabled,
-              onBlur,
-            }}
-          />
-        </div>
+        <MarkdownEditor
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          onBlur={onBlur}
+          placeholder={
+            "# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported."
+          }
+        />
         {showError && (
           <p className="text-xs text-red-400 mt-2">Description is required</p>
         )}

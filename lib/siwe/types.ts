@@ -1,4 +1,5 @@
-// Mirrors the indexer SIWE contract (packages/indexer/src/siwe/types.ts).
+// Profile contract consumed by this UI. Keep the session response below as a
+// narrow projection instead of mirroring unrelated indexer fields.
 export type ProfileFields = {
   name: string | null;
   bio: string | null;
@@ -20,11 +21,7 @@ export type ResolvedProfile = ProfileFields & {
 // GET /api/me
 export type MeResponse = {
   address: string;
-  actingAs: string | null;
-  effectiveAddress: string;
   profile: ResolvedProfile;
-  ownedFields: string[];
-  safes: unknown[];
 };
 
 // PATCH /api/me/profile
