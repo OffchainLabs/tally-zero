@@ -20,6 +20,18 @@ describe("date-utils", () => {
   // Mock current time for consistent testing
   const mockNow = new Date("2024-12-15T12:00:00Z");
 
+  /**
+   * Local midnight `dayOffset` days from the mocked now. The relative-date
+   * labels are calendar based, so cases that straddle a day boundary have to
+   * be anchored to local midnight to hold in every time zone.
+   */
+  const localMidnight = (dayOffset: number): Date => {
+    const midnight = new Date(mockNow);
+    midnight.setHours(0, 0, 0, 0);
+    midnight.setDate(midnight.getDate() + dayOffset);
+    return midnight;
+  };
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(mockNow);
@@ -98,6 +110,15 @@ describe("date-utils", () => {
       expect(formatRelativeTimestamp(yesterdayTimestamp)).toBe("Yesterday");
     });
 
+    it('returns "Yesterday" for late yesterday, under 24h ago', () => {
+      const lastEvening = new Date(
+        localMidnight(0).getTime() - 3 * MS_PER_HOUR
+      );
+      expect(formatRelativeTimestamp(lastEvening.getTime() / 1000)).toBe(
+        "Yesterday"
+      );
+    });
+
     it('returns "X days ago" for recent days', () => {
       const threeDaysAgo =
         Math.floor(mockNow.getTime() / 1000) - 3 * 24 * 60 * 60;
@@ -169,6 +190,28 @@ describe("date-utils", () => {
       yesterday.setDate(yesterday.getDate() - 2);
       const result = formatDateShort(yesterday);
       expect(result).toMatch(/\w{3} \d+/);
+    });
+
+    it('keeps "Today at" for an earlier hour of the same calendar date', () => {
+      // Local midnight: same calendar date as now, and always in the past
+      expect(formatDateShort(localMidnight(0))).toMatch(/Today at/);
+    });
+
+    it("does not call the previous calendar date today", () => {
+      // A voting period that opened yesterday at 21:00 is under 24h old but
+      // belongs to the previous date, so it must not read "Today at"
+      const lastEvening = new Date(
+        localMidnight(0).getTime() - 3 * MS_PER_HOUR
+      );
+      const result = formatDateShort(lastEvening);
+      expect(result).not.toMatch(/Today/);
+      expect(result).not.toMatch(/Tomorrow/);
+    });
+
+    it('says "Tomorrow at" late on the next calendar date', () => {
+      // 23:00 tomorrow: over 24h away, yet still "Tomorrow"
+      const tomorrowLate = new Date(localMidnight(2).getTime() - MS_PER_HOUR);
+      expect(formatDateShort(tomorrowLate)).toMatch(/Tomorrow at/);
     });
   });
 
