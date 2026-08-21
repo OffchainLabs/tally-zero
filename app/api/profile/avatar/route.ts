@@ -1,10 +1,6 @@
 import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
-import {
-  deleteManagedAvatar,
-  deleteStoredImage,
-  putAvatar,
-  type StoredImage,
-} from "@/lib/storage";
+import { commitAvatar } from "@/lib/profile/avatar";
+import type { MeResponse } from "@/lib/siwe/types";
 
 export const dynamic = "force-dynamic";
 
@@ -38,29 +34,61 @@ function sniffImage(bytes: Uint8Array): ImageContentType | null {
 // Authenticated avatar upload. Auth + anti-spam are delegated to the indexer's
 // SIWE surface: POST /api/me/avatar-intent verifies the session, requires the
 // address to hold delegated voting power (403), and rate-limits per address
-// (429). The route then stages a content-addressed image and updates the
-// profile itself. If the profile update fails, the staged image is removed so
-// callers never observe an upload as successful while the profile is stale.
+// (429). This route is the HTTP boundary only — staging the image, updating the
+// profile and collecting the superseded copy all live in `commitAvatar`.
 export async function POST(request: Request): Promise<Response> {
   const cookie = request.headers.get("cookie");
   if (!cookie) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  // Authorize (session + delegated-ARB gate + rate limit) at the indexer.
+  const authorized = await authorize(cookie);
+  if (authorized instanceof Response) return authorized;
+
+  const image = await readImage(request);
+  if (image instanceof Response) return image;
+
+  const commit = await commitAvatar({ cookie, ...authorized, ...image });
+  switch (commit.kind) {
+    case "unreachable":
+      return indexerErrorResponse(commit.error);
+    case "rejected":
+      return Response.json(
+        {
+          error:
+            commit.status === 401
+              ? "Not signed in."
+              : "Avatar profile update failed.",
+        },
+        { status: commit.status < 500 ? commit.status : 502 }
+      );
+    case "committed":
+      return Response.json(
+        { url: commit.url },
+        { headers: { "cache-control": "no-store" } }
+      );
+  }
+}
+
+/**
+ * Authorize the upload at the indexer (session + delegated-ARB gate + rate
+ * limit) and read the profile's current picture, which is what the commit will
+ * supersede. Returns the error `Response` to send when either call fails.
+ */
+async function authorize(
+  cookie: string
+): Promise<{ address: string; previousPicture: string | null } | Response> {
   let intent: Response;
-  let currentProfile: Response;
+  let profile: Response;
   try {
-    [intent, currentProfile] = await Promise.all([
-      indexerFetch("/api/me/avatar-intent", {
-        method: "POST",
-        cookie,
-      }),
+    [intent, profile] = await Promise.all([
+      indexerFetch("/api/me/avatar-intent", { method: "POST", cookie }),
       indexerFetch("/api/me", { cookie }),
     ]);
   } catch (error) {
     return indexerErrorResponse(error);
   }
+
   if (intent.status === 401) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
@@ -79,16 +107,22 @@ export async function POST(request: Request): Promise<Response> {
   if (intent.status !== 200) {
     return Response.json({ error: "Upload not authorized." }, { status: 502 });
   }
-  const { address } = (await intent.json()) as { address: string };
-
-  if (!currentProfile.ok) {
+  if (!profile.ok) {
     return Response.json(
       { error: "Unable to read the current profile." },
-      { status: currentProfile.status < 500 ? currentProfile.status : 502 }
+      { status: profile.status < 500 ? profile.status : 502 }
     );
   }
-  const previousPicture = readPreviousPicture(await currentProfile.json());
 
+  const { address } = (await intent.json()) as { address: string };
+  const me = (await profile.json()) as MeResponse;
+  return { address, previousPicture: me.profile.picture };
+}
+
+/** Read the uploaded file, or the error `Response` explaining why we can't. */
+async function readImage(
+  request: Request
+): Promise<{ bytes: Uint8Array; contentType: ImageContentType } | Response> {
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
@@ -109,73 +143,5 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
   }
-
-  const stored = await putAvatar(address, bytes, contentType);
-
-  let profileUpdate: Response;
-  try {
-    profileUpdate = await indexerFetch("/api/me/profile", {
-      method: "PATCH",
-      cookie,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ picture: stored.url }),
-    });
-  } catch (error) {
-    await rollback(stored, previousPicture);
-    return indexerErrorResponse(error);
-  }
-
-  if (!profileUpdate.ok) {
-    await rollback(stored, previousPicture);
-    return Response.json(
-      {
-        error:
-          profileUpdate.status === 401
-            ? "Not signed in."
-            : "Avatar profile update failed.",
-      },
-      { status: profileUpdate.status < 500 ? profileUpdate.status : 502 }
-    );
-  }
-
-  if (typeof previousPicture === "string" && previousPicture !== stored.url) {
-    try {
-      await deleteManagedAvatar(address, previousPicture);
-    } catch (error) {
-      console.error("Failed to remove the previous managed avatar.", error);
-    }
-  }
-
-  return Response.json(
-    { url: stored.url },
-    { headers: { "cache-control": "no-store" } }
-  );
-}
-
-async function rollback(
-  image: StoredImage,
-  previousPicture: unknown
-): Promise<void> {
-  if (previousPicture === image.url) return;
-
-  try {
-    await deleteStoredImage(image);
-  } catch (error) {
-    console.error("Failed to roll back staged avatar.", error);
-  }
-}
-
-function readPreviousPicture(body: unknown): unknown {
-  if (typeof body !== "object" || body === null || !("profile" in body)) {
-    return undefined;
-  }
-  const profile = body.profile;
-  if (
-    typeof profile !== "object" ||
-    profile === null ||
-    !("picture" in profile)
-  ) {
-    return undefined;
-  }
-  return profile.picture;
+  return { bytes, contentType };
 }

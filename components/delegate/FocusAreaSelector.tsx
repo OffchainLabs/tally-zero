@@ -6,11 +6,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import {
-  addFocusArea,
-  MAX_FOCUS_AREAS,
-  removeFocusArea,
-} from "@/lib/delegate-registration";
+import { addFocusArea, MAX_FOCUS_AREAS } from "@/lib/delegate-registration";
 
 interface FocusAreaSelectorProps {
   value: string[];
@@ -29,8 +25,7 @@ export function FocusAreaSelector({
   const atCapacity = value.length >= MAX_FOCUS_AREAS;
 
   function commitDraft() {
-    const next = addFocusArea(value, draft);
-    if (next !== value) onChange(next);
+    onChange(addFocusArea(value, draft));
     setDraft("");
     setIsAdding(false);
   }
@@ -69,7 +64,7 @@ export function FocusAreaSelector({
                   type="button"
                   aria-label={`Remove ${area}`}
                   disabled={disabled}
-                  onClick={() => onChange(removeFocusArea(value, area))}
+                  onClick={() => onChange(value.filter((a) => a !== area))}
                   className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                 >
                   <X className="h-3 w-3" />

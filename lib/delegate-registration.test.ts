@@ -4,7 +4,6 @@ import {
   addFocusArea,
   EMPTY_REGISTRATION_FORM,
   MAX_FOCUS_AREAS,
-  removeFocusArea,
   toProfilePatch,
   toRegistrationForm,
   validateRegistrationForm,
@@ -17,7 +16,7 @@ function form(
   return { ...EMPTY_REGISTRATION_FORM, ...overrides };
 }
 
-const VALID = form({ picture: "https://cdn.example/a.png", name: "Delegate" });
+const VALID = form({ name: "Delegate" });
 
 describe("toRegistrationForm", () => {
   it("collapses nullable profile fields to empty strings", () => {
@@ -39,7 +38,7 @@ describe("toRegistrationForm", () => {
     expect(toRegistrationForm(undefined)).toEqual(EMPTY_REGISTRATION_FORM);
   });
 
-  it("hydrates every field from a populated profile", () => {
+  it("hydrates every editable field from a populated profile", () => {
     expect(
       toRegistrationForm({
         name: "Delegate",
@@ -54,7 +53,6 @@ describe("toRegistrationForm", () => {
     ).toEqual({
       name: "Delegate",
       bio: "Bio",
-      picture: "https://cdn.example/a.png",
       twitter: "handle",
       discourseUsername: "forum_user",
       statement: "# Statement",
@@ -62,31 +60,29 @@ describe("toRegistrationForm", () => {
       focusAreas: ["Treasury"],
     });
   });
+
+  it("leaves the avatar out of the form, since the upload route owns it", () => {
+    expect(
+      toRegistrationForm({ picture: "https://cdn.example/a.png" })
+    ).not.toHaveProperty("picture");
+  });
 });
 
 describe("validateRegistrationForm", () => {
-  it("accepts a form with an avatar and a display name", () => {
+  it("accepts a form with a display name", () => {
     expect(validateRegistrationForm(VALID)).toEqual({});
   });
 
-  it("requires an avatar", () => {
-    expect(validateRegistrationForm(form({ name: "Delegate" }))).toHaveProperty(
-      "picture"
-    );
-  });
-
   it("requires a display name", () => {
-    expect(
-      validateRegistrationForm(form({ picture: "https://cdn.example/a.png" }))
-    ).toHaveProperty("name");
+    expect(validateRegistrationForm(form())).toHaveProperty("name");
   });
 
-  it("treats whitespace-only values as missing", () => {
-    const errors = validateRegistrationForm(
-      form({ picture: "   ", name: "  " })
-    );
-    expect(errors.picture).toBeDefined();
-    expect(errors.name).toBeDefined();
+  it("treats a whitespace-only name as missing", () => {
+    expect(validateRegistrationForm(form({ name: "  " })).name).toBeDefined();
+  });
+
+  it("does not require an avatar, which needs voting power to upload", () => {
+    expect(validateRegistrationForm(VALID)).not.toHaveProperty("picture");
   });
 });
 
@@ -97,6 +93,10 @@ describe("toProfilePatch", () => {
     expect(patch.twitter).toBeNull();
     expect(patch.statement).toBeNull();
     expect(patch.issues).toBeNull();
+  });
+
+  it("never writes the avatar, which the upload route already committed", () => {
+    expect(toProfilePatch(VALID)).not.toHaveProperty("picture");
   });
 
   it("trims values it does send", () => {
@@ -127,30 +127,23 @@ describe("addFocusArea", () => {
   });
 
   it("ignores blank input", () => {
-    const existing = ["Treasury"];
-    expect(addFocusArea(existing, "   ")).toBe(existing);
+    expect(addFocusArea(["Treasury"], "   ")).toEqual(["Treasury"]);
   });
 
   it("ignores case-insensitive duplicates", () => {
-    const existing = ["Treasury"];
-    expect(addFocusArea(existing, "treasury")).toBe(existing);
+    expect(addFocusArea(["Treasury"], "treasury")).toEqual(["Treasury"]);
   });
 
   it(`caps the list at ${MAX_FOCUS_AREAS}`, () => {
     const full = ["Treasury", "Security", "Grants"];
     expect(full).toHaveLength(MAX_FOCUS_AREAS);
-    expect(addFocusArea(full, "Growth")).toBe(full);
-  });
-});
-
-describe("removeFocusArea", () => {
-  it("drops the matching entry and leaves the rest", () => {
-    expect(removeFocusArea(["Treasury", "Grants"], "Treasury")).toEqual([
-      "Grants",
-    ]);
+    expect(addFocusArea(full, "Growth")).toEqual(full);
   });
 
-  it("is a no-op for an unknown value", () => {
-    expect(removeFocusArea(["Treasury"], "Grants")).toEqual(["Treasury"]);
+  it("never mutates or returns the input array", () => {
+    const existing = ["Treasury"];
+    expect(addFocusArea(existing, "Grants")).not.toBe(existing);
+    expect(addFocusArea(existing, "   ")).not.toBe(existing);
+    expect(existing).toEqual(["Treasury"]);
   });
 });
