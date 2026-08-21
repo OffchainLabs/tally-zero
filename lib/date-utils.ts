@@ -19,6 +19,31 @@ export const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 export const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR;
 
 /**
+ * Number of calendar days from `from` to `to` in the viewer's local time
+ * zone: 0 for the same calendar date, 1 for the next date, -1 for the
+ * previous one, regardless of how many hours actually separate them.
+ *
+ * Labels like "Today" and "Yesterday" are about the calendar, not about
+ * elapsed time: 21:18 yesterday is "Yesterday" at 11:46 the next morning
+ * even though only 14 hours have passed. Comparing midnights (and rounding,
+ * so DST shifts of an hour cannot bleed into the neighbouring day) is the
+ * only way to get that boundary right.
+ */
+function calendarDaysBetween(from: Date, to: Date): number {
+  const fromMidnight = new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate()
+  ).getTime();
+  const toMidnight = new Date(
+    to.getFullYear(),
+    to.getMonth(),
+    to.getDate()
+  ).getTime();
+  return Math.round((toMidnight - fromMidnight) / MS_PER_DAY);
+}
+
+/**
  * Format a timestamp to a relative time string
  *
  * @param timestamp - Unix timestamp in seconds
@@ -32,8 +57,10 @@ export function formatRelativeTimestamp(timestamp?: number): string {
   if (!timestamp) return "";
   const date = new Date(timestamp * MS_PER_SECOND);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / MS_PER_DAY);
+  // Callers pass timestamps of things that already happened, so a negative
+  // count only shows up for clock skew; treat it as today rather than
+  // rendering "-1 days ago"
+  const diffDays = Math.max(0, calendarDaysBetween(date, now));
 
   if (diffDays === 0) {
     return "Today";
@@ -76,6 +103,10 @@ export function formatEtaTimestamp(eta?: string): string {
 /**
  * Format a date relative to the current time (for future dates)
  *
+ * Buckets by calendar date, not by elapsed hours: a date earlier today is
+ * "Today at ...", and one from yesterday evening reads as a past date even
+ * when fewer than 24 hours have passed.
+ *
  * @param date - Date to format
  * @returns Formatted string like "Today at 2:00 PM", "Tomorrow at...", "Mon, Dec 25", etc.
  *
@@ -84,10 +115,9 @@ export function formatEtaTimestamp(eta?: string): string {
  */
 export function formatDateShort(date: Date): string {
   const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / MS_PER_DAY);
+  const diffDays = calendarDaysBetween(now, date);
 
-  // If in the past
+  // If on an earlier calendar date
   if (diffDays < 0) {
     return date.toLocaleDateString(undefined, {
       month: "short",
