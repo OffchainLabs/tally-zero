@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { proposalSchema } from "@/config/schema";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
+import { useProposalRoundTrip } from "@/hooks/use-proposal-round-trip";
 import {
   buildGovernorId,
   buildProposalPath,
@@ -190,6 +191,7 @@ function ProposalPageContent({
     {}
   );
   const [showFullId, setShowFullId] = useState(false);
+  const roundTrip = useProposalRoundTrip(proposal);
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -216,7 +218,11 @@ function ProposalPageContent({
     );
   }
 
-  const stateValue = findStateByValue(proposal.state);
+  // A Core proposal reads "Executed" from the governor as soon as the L2
+  // timelock fires the L2→L1 withdrawal, ~10 days before the payload lands.
+  const stateValue = findStateByValue(
+    roundTrip?.status === "pending" ? "Executing" : proposal.state
+  );
   if (!stateValue) {
     return (
       <ProposalPageError

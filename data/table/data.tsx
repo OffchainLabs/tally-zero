@@ -38,6 +38,16 @@ export const states = [
     icon: CheckCircledIcon,
   },
   {
+    // Display-only: a Core proposal the governor already calls "Executed" whose
+    // L1 round-trip has not landed. Never an on-chain state, so it is absent
+    // from the status filter's options.
+    value: "Executing",
+    label: "Executing",
+    bgColor:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
+    icon: ClockIcon,
+  },
+  {
     value: "Executed",
     label: "Executed",
     bgColor:

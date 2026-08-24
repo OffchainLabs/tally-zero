@@ -14,6 +14,10 @@ import {
 import { useVotingPeriod } from "@/hooks/use-voting-period";
 import { buildLookupMap } from "@/lib/collection-utils";
 import {
+  describeRoundTripPhase,
+  roundTripFromStages,
+} from "@/lib/proposal-round-trip";
+import {
   getStageData,
   type ProposalStage,
   type StageType,
@@ -167,6 +171,13 @@ export default function ProposalStages({
   });
   const displayVotingTimeRange = votingPeriod?.range ?? votingTimeRange;
 
+  // This tab already holds the full stage list, so no extra tracking session.
+  const roundTrip = useMemo(
+    () => roundTripFromStages(stages, governorAddress),
+    [stages, governorAddress]
+  );
+  const roundTripDetail = describeRoundTripPhase(roundTrip);
+
   if (error) {
     return (
       <div className="p-4 text-center glass-subtle backdrop-blur rounded-xl">
@@ -206,7 +217,16 @@ export default function ProposalStages({
         <h3 className="text-sm font-semibold">Governance Lifecycle</h3>
         {result?.currentState && (
           <p className="text-xs text-muted-foreground">
-            Current state: {result.currentState}
+            Current state:{" "}
+            {roundTrip?.status === "pending"
+              ? "Executing"
+              : result.currentState}
+            {roundTripDetail && (
+              <span className="text-amber-600 dark:text-amber-400">
+                {" "}
+                · {roundTripDetail}
+              </span>
+            )}
           </p>
         )}
       </div>
