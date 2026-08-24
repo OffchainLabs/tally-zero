@@ -77,7 +77,11 @@ describe("profile avatar upload", () => {
   });
 
   it.each([
-    [403, "Only delegates with voting power can upload an avatar."],
+    [
+      403,
+      "Uploading an avatar requires at least 5,000 ARB of voting power. " +
+        "Your delegated ARB is below that threshold.",
+    ],
     [429, "Too many avatar uploads; try again later."],
     [401, "Not signed in."],
   ])("relays a %i from the avatar-intent gate", async (status, error) => {
