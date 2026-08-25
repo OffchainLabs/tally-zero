@@ -15,6 +15,7 @@ import {
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getBundledProposalCreationTxHash } from "@/lib/bundled-cache-loader";
 import { getProposalIndexEntry } from "@/lib/delegate-cache";
+import { getL2BlockRangeForL1Blocks } from "@/lib/l2-block-range";
 import {
   proposalCreatedEventDataFromArgs,
   queryProposalCreatedEventsUntruncated,
@@ -32,11 +33,27 @@ import OZGovernor_ABI from "@data/OzGovernor_ABI.json";
 // governor contract and its ProposalCreated events live on L2 Arbitrum. Search
 // a recent L2 block window to cover proposals that are not yet in the
 // hardcoded list or the bundled gov-tracker cache.
+//
+// Last resort only: ten million Arbitrum One blocks is about four weeks, so a
+// proposal older than that falls out of this window entirely. That is what the
+// snapshot anchor below exists to avoid.
 const L2_CREATION_SEARCH_WINDOW_BLOCKS = 10_000_000;
+
+// How many L1 blocks either side of the derived creation block the anchored
+// scan covers.
+//
+// `votingDelay()` is read at head, so a governance change to it since the
+// proposal was created would shift the derived block. This margin absorbs a
+// small drift; a large one falls through to the recent-window scan.
+const CREATION_ANCHOR_L1_BLOCK_MARGIN = 5;
 
 // Proposals that the bundled gov-tracker cache does not yet cover. The hash
 // here lets us skip log scanning and parse the ProposalCreated event straight
 // from the transaction receipt.
+//
+// A fast path, not a requirement: since the snapshot anchor was added, a
+// proposal missing from this list is found by deriving its creation block
+// rather than by scanning from head. New entries are not needed here.
 const PROPOSAL_CREATION_TX_HASHES_BY_CHAIN_ID: Record<
   number,
   Record<string, string>
@@ -190,16 +207,73 @@ async function findProposalCreatedEventByLogScan({
   );
 }
 
+/**
+ * Find `ProposalCreated` by deriving the block the proposal was created in,
+ * rather than by scanning back from head.
+ *
+ * The governor already knows when voting opened: `proposalSnapshot` is the L1
+ * block, and `votingDelay` is how many L1 blocks after creation that was. Their
+ * difference is the L1 block the proposal was created in, which
+ * {@link getL2BlockRangeForL1Blocks} turns into the few hundred L2 blocks the
+ * event has to be in.
+ *
+ * This is what makes an old proposal findable at all. The window scan reaches
+ * about four weeks back, so every proposal eventually ages out of it; the
+ * anchor is a fixed cost that does not care how old the proposal is, and it
+ * reads a few hundred blocks of logs instead of ten million.
+ */
+async function findProposalCreatedEventBySnapshotAnchor({
+  provider,
+  contract,
+  proposalId,
+  snapshotBlock,
+}: {
+  provider: ethers.providers.Provider;
+  contract: ethers.Contract;
+  proposalId: string;
+  snapshotBlock: number;
+}): Promise<ProposalCreatedEventData | null> {
+  let creationL1Block: number;
+  try {
+    const votingDelay = await contract.votingDelay();
+    creationL1Block = snapshotBlock - votingDelay.toNumber();
+  } catch {
+    return null;
+  }
+
+  if (!Number.isInteger(creationL1Block) || creationL1Block <= 0) return null;
+
+  const range = await getL2BlockRangeForL1Blocks({
+    provider,
+    fromL1Block: Math.max(creationL1Block - CREATION_ANCHOR_L1_BLOCK_MARGIN, 0),
+    toL1Block: creationL1Block + CREATION_ANCHOR_L1_BLOCK_MARGIN,
+  });
+  if (!range) return null;
+
+  try {
+    const events = await queryProposalCreatedEventsUntruncated({
+      contract,
+      fromBlock: range.fromBlock,
+      toBlock: range.toBlock,
+    });
+    return events.find((event) => event.proposalId === proposalId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function findProposalCreatedEvent({
   provider,
   contract,
   governorAddress,
   proposalId,
+  snapshotBlock,
 }: {
   provider: ethers.providers.Provider;
   contract: ethers.Contract;
   governorAddress: string;
   proposalId: string;
+  snapshotBlock: number;
 }): Promise<ProposalCreatedEventData | null> {
   const creationTxHash = await resolveCreationTxHash({
     proposalId,
@@ -217,8 +291,17 @@ async function findProposalCreatedEvent({
     if (fromReceipt) return fromReceipt;
   }
 
-  // Last resort: scan the recent L2 block window for proposals that aren't
-  // in the hardcoded list or the bundled cache yet (e.g. freshly created).
+  const fromAnchor = await findProposalCreatedEventBySnapshotAnchor({
+    provider,
+    contract,
+    proposalId,
+    snapshotBlock,
+  });
+  if (fromAnchor) return fromAnchor;
+
+  // Last resort, for when the anchor is unavailable: an RPC that does not serve
+  // NodeInterface, or a `votingDelay()` that has moved further than the margin
+  // since the proposal was created.
   return findProposalCreatedEventByLogScan({
     provider,
     contract,
@@ -402,6 +485,7 @@ export async function fetchProposalFromGovernor({
     contract,
     governorAddress: governor.address,
     proposalId,
+    snapshotBlock,
   });
 
   if (!creationEvent) {
