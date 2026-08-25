@@ -58,16 +58,24 @@ const DEFAULT_BLOCK_RANGE = 10000000;
 const UNKNOWN_PROPOSER = "0x0000000000000000000000000000000000000000";
 
 /**
- * The indexer watermark always trails the chain head slightly (Arbitrum
- * produces a block every ~250ms and the indexer API responses are cached for
- * up to 30s), so a strict `watermark >= head` check would never pass. Treat
- * the indexer as caught up when the watermark is within this many blocks of
- * the head and skip the RPC gap scan entirely.
+ * How far back the RPC pass always scans for `ProposalCreated` events, in days,
+ * regardless of how far the indexer has caught up.
+ *
+ * A Core proposal needs roughly 38 days to go from creation to a redeemed
+ * retryable (3 voting delay + 14 voting + 8 L2 timelock + ~7 L2-to-L1 challenge
+ * + 3 L1 timelock), and nobody queues or executes the moment they are able to,
+ * so 75 days is a generous cover for every proposal that could still be moving.
+ *
+ * Scanning them is what gives those rows a `creationTxHash` — the indexer index
+ * carries none — which is the only handle the lifecycle tracker has for
+ * deciding whether a Core proposal reported as `Executed` has actually finished
+ * its L1 round trip. It also re-reads their state and votes from the governor.
+ * At the default 10M block range this is 3 chunked `eth_getLogs` per governor,
+ * once per session, in the background.
  */
-const WATERMARK_TOLERANCE_MINUTES = 5;
-const WATERMARK_TOLERANCE_BLOCKS = Math.ceil(
-  (BLOCKS_PER_DAY.arbitrum / (24 * 60)) * WATERMARK_TOLERANCE_MINUTES
-);
+const RECENT_LIFECYCLE_SCAN_DAYS = 75;
+const RECENT_LIFECYCLE_SCAN_BLOCKS =
+  RECENT_LIFECYCLE_SCAN_DAYS * BLOCKS_PER_DAY.arbitrum;
 
 /**
  * Vote summaries are one request per proposal; fetch them in small batches so
@@ -615,29 +623,30 @@ export function useMultiGovernorSearch({
           if (!data.sourceInfo.indexerAvailable) {
             gapStartBlock = userStartBlock;
           } else {
-            const indexerCaughtUp =
-              watermarkBlock > 0 &&
-              currentBlock - watermarkBlock <= WATERMARK_TOLERANCE_BLOCKS;
-            const rpcStartBlock = Math.max(watermarkBlock + 1, userStartBlock);
+            // The watermark gap covers proposals the indexer has not seen at
+            // all; the lifecycle window covers proposals it has seen but may
+            // report a stale state for, and which the table needs a creation
+            // tx hash for. Scan from whichever reaches further back.
+            const watermarkGapStart = Math.max(
+              watermarkBlock + 1,
+              userStartBlock
+            );
+            const lifecycleStart = Math.max(
+              currentBlock - RECENT_LIFECYCLE_SCAN_BLOCKS,
+              0
+            );
+            const rpcStartBlock = Math.min(watermarkGapStart, lifecycleStart);
 
-            gapStartBlock =
-              !indexerCaughtUp && rpcStartBlock < currentBlock
-                ? rpcStartBlock
-                : null;
+            gapStartBlock = rpcStartBlock < currentBlock ? rpcStartBlock : null;
           }
         }
 
         if (gapStartBlock !== null) {
           debug.search(
-            "gap-scanning RPC blocks %d to %d",
+            "scanning RPC blocks %d to %d (indexer watermark %d)",
             gapStartBlock,
-            currentBlock
-          );
-        } else if (needsGapScan) {
-          debug.search(
-            "skipping RPC gap scan - watermark %d within tolerance of head %d",
-            watermarkBlock,
-            currentBlock
+            currentBlock,
+            watermarkBlock
           );
         }
 
