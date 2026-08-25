@@ -60,14 +60,21 @@ describe("proposal-utils", () => {
       }
     });
 
-    it("never re-reads states that need an event or a settled tally", () => {
-      for (const state of [
-        "Canceled",
-        "Succeeded",
-        "Queued",
-        "Expired",
-        "EXECUTED",
-      ]) {
+    // queue() and execute() move these on-chain at any moment, and the indexer
+    // reports whichever it last saw, which is what makes the newest rows wrong.
+    it("re-reads the post-vote states the governor can still advance", () => {
+      for (const state of ["Succeeded", "queued", "QUEUED"]) {
+        expect(
+          needsOnChainStateRefresh(
+            { state, startBlock: String(SNAPSHOT_BLOCK) },
+            L1_HEAD
+          )
+        ).toBe(true);
+      }
+    });
+
+    it("never re-reads the states the governor never leaves", () => {
+      for (const state of ["Canceled", "Expired", "EXECUTED"]) {
         expect(
           needsOnChainStateRefresh(
             { state, startBlock: String(SNAPSHOT_BLOCK) },

@@ -1,5 +1,5 @@
 import {
-  IN_FLIGHT_PROPOSAL_STATES,
+  ADVANCEABLE_PROPOSAL_STATES,
   normalizeProposalStateName,
 } from "@/lib/state-utils";
 import type { ParsedProposal } from "@/types/proposal";
@@ -62,7 +62,10 @@ export function getScheduledVoteEndBlock({
  * Whether a proposal's state should be re-read from the governor contract
  * rather than trusted as the indexer reported it.
  *
- * `Pending` / `Active` / `Unknown` are always re-read; they are in flight.
+ * Every state the governor can still move the proposal out of is re-read: the
+ * in-flight ones (`Pending` / `Active` / `Unknown`) and the two post-vote ones
+ * (`Succeeded` / `Queued`), which advance whenever someone calls `queue()` or
+ * `execute()`. See {@link ADVANCEABLE_PROPOSAL_STATES}.
  *
  * `Defeated` is re-read only while the voting period ended within the last
  * {@link DEFEAT_RECHECK_WINDOW_DAYS} days (or has not ended yet). It needs
@@ -73,8 +76,8 @@ export function getScheduledVoteEndBlock({
  * `ProposalCreated` event's scheduled `endBlock` therefore reports Defeated
  * while the extended vote is still Active.
  *
- * Every other state requires an on-chain event (Canceled, Queued, Executed) or a
- * settled tally (Succeeded, Expired) to be reached, so it cannot flip back.
+ * `Canceled`, `Expired` and `Executed` are the only remaining states, and the
+ * governor never leaves them, so they are taken as reported.
  *
  * @param proposal - State plus the blocks needed to locate the voting period
  * @param currentGovernorBlock - Current governor-clock block, i.e. the L1 block
@@ -88,7 +91,7 @@ export function needsOnChainStateRefresh(
   const state = normalizeProposalStateName(proposal.state);
 
   if (state !== "Defeated") {
-    return IN_FLIGHT_PROPOSAL_STATES.includes(state);
+    return ADVANCEABLE_PROPOSAL_STATES.includes(state);
   }
 
   if (currentGovernorBlock === null) return false;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ADVANCEABLE_PROPOSAL_STATES,
   findStateByValue,
   getStateName,
   IN_FLIGHT_PROPOSAL_STATES,
@@ -172,6 +173,24 @@ describe("state-utils", () => {
 
     it("excludes Defeated, which is windowed separately", () => {
       expect(IN_FLIGHT_PROPOSAL_STATES).not.toContain("Defeated");
+    });
+  });
+
+  describe("ADVANCEABLE_PROPOSAL_STATES", () => {
+    it("adds the post-vote states that queue() and execute() move on", () => {
+      expect([...ADVANCEABLE_PROPOSAL_STATES].sort()).toEqual([
+        "Active",
+        "Pending",
+        "Queued",
+        "Succeeded",
+        "Unknown",
+      ]);
+    });
+
+    it("excludes the states the governor never leaves", () => {
+      for (const state of ["Canceled", "Expired", "Executed"] as const) {
+        expect(ADVANCEABLE_PROPOSAL_STATES).not.toContain(state);
+      }
     });
   });
 });
