@@ -21,9 +21,46 @@ vi.mock("ethers", () => {
           queryFilter: vi.fn().mockResolvedValue([]),
         };
       },
+      utils: {
+        // The multicall path decodes proposalVotes through the interface. The
+        // encoded form here is "<fn>:<arg>", matching the encodeCall mock.
+        Interface: function MockInterface() {
+          return {
+            encodeFunctionData: (fn: string, args: unknown[]) =>
+              `${fn}:${args[0]}`,
+            decodeFunctionResult: (fn: string, data: string) => {
+              const [, value] = data.split(":");
+              if (fn === "proposalVotes") {
+                const [forVotes, againstVotes, abstainVotes] = value.split(",");
+                return {
+                  forVotes: { toString: () => forVotes },
+                  againstVotes: { toString: () => againstVotes },
+                  abstainVotes: { toString: () => abstainVotes },
+                };
+              }
+              return [value];
+            },
+          };
+        },
+      },
     },
   };
 });
+
+const multicallMocks = vi.hoisted(() => ({ multicall: vi.fn() }));
+
+vi.mock("@/lib/multicall", () => ({
+  multicall: multicallMocks.multicall,
+  encodeCall: (
+    _iface: unknown,
+    functionName: string,
+    args: unknown[]
+  ): string => `${functionName}:${args[0]}`,
+  decodeResult: (_iface: unknown, fn: string, data: string) => {
+    const [, value] = data.split(":");
+    return fn === "state" ? Number(value) : { toString: () => value };
+  },
+}));
 
 // Mock dependencies
 vi.mock("@/lib/debug", () => ({
@@ -77,7 +114,11 @@ vi.mock("@config/arbitrum-governance", () => ({
 }));
 
 // Import after mocks are set up
-import { fetchProposalStateAndVotes, parseProposals } from "./search-utils";
+import {
+  fetchProposalStateAndVotes,
+  parseProposals,
+  refreshProposalStates,
+} from "./search-utils";
 
 // Helper to create mock contract for tests
 function createMockContract(overrides?: {
@@ -346,6 +387,108 @@ describe("search-utils", () => {
       };
 
       expect(stateData.quorum).toBeUndefined();
+    });
+  });
+  describe("refreshProposalStates", () => {
+    function makeProposal(
+      overrides: Partial<ParsedProposal> & Pick<ParsedProposal, "id">
+    ): ParsedProposal {
+      return {
+        contractAddress: "0xCore" as ParsedProposal["contractAddress"],
+        proposer: "0xproposer",
+        targets: [],
+        values: [],
+        signatures: [],
+        calldatas: [],
+        startBlock: "25547165",
+        endBlock: "0",
+        description: "A proposal",
+        networkId: "42161",
+        state: "Queued",
+        governorName: "Core Governor",
+        ...overrides,
+      };
+    }
+
+    const provider = {} as Parameters<typeof refreshProposalStates>[0];
+
+    beforeEach(() => {
+      multicallMocks.multicall.mockReset();
+    });
+
+    // The table withholds these rows' statuses until this answers, so the whole
+    // refresh is one round trip rather than two per proposal.
+    it("reads every proposal in a single multicall", async () => {
+      multicallMocks.multicall.mockResolvedValue([
+        { success: true, returnData: "state:7" },
+        { success: true, returnData: "proposalVotes:1000,500,200" },
+        { success: true, returnData: "quorum:5000" },
+        { success: true, returnData: "state:1" },
+        { success: true, returnData: "proposalVotes:10,20,30" },
+        { success: true, returnData: "quorum:6000" },
+      ]);
+
+      const refreshed = await refreshProposalStates(provider, [
+        makeProposal({ id: "9950" }),
+        makeProposal({ id: "7191" }),
+      ]);
+
+      expect(multicallMocks.multicall).toHaveBeenCalledTimes(1);
+      expect(refreshed[0].state).toBe("Executed");
+      expect(refreshed[0].votes).toEqual({
+        forVotes: "1000",
+        againstVotes: "500",
+        abstainVotes: "200",
+        quorum: "5000",
+      });
+      expect(refreshed[1].state).toBe("Active");
+      expect(refreshed[1].votes?.quorum).toBe("6000");
+    });
+
+    it("keeps the cached proposal when the governor call reverts", async () => {
+      // aggregate3 absorbs the revert with allowFailure, so the batch still
+      // returns and only this proposal is left as it was.
+      multicallMocks.multicall.mockResolvedValue([
+        { success: false, returnData: "0x" },
+        { success: false, returnData: "0x" },
+        { success: false, returnData: "0x" },
+      ]);
+
+      const cached = makeProposal({ id: "9950", state: "Queued" });
+      const refreshed = await refreshProposalStates(provider, [cached]);
+
+      expect(refreshed[0]).toBe(cached);
+    });
+
+    it("skips the quorum call when there is no usable snapshot block", async () => {
+      multicallMocks.multicall.mockResolvedValue([
+        { success: true, returnData: "state:7" },
+        { success: true, returnData: "proposalVotes:1000,500,200" },
+      ]);
+
+      const refreshed = await refreshProposalStates(provider, [
+        makeProposal({ id: "9950", startBlock: "0" }),
+      ]);
+
+      expect(multicallMocks.multicall.mock.calls[0][1]).toHaveLength(2);
+      expect(refreshed[0].votes?.quorum).toBeUndefined();
+    });
+
+    it("falls back to per-proposal reads when the multicall fails", async () => {
+      multicallMocks.multicall.mockRejectedValue(new Error("no multicall3"));
+
+      const refreshed = await refreshProposalStates(provider, [
+        makeProposal({ id: "9950" }),
+      ]);
+
+      // The mocked contract answers state 1 / 1000-500-200 / quorum 5000
+      expect(refreshed[0].state).toBe("Active");
+      expect(refreshed[0].votes).toEqual({
+        forVotes: "1000",
+        againstVotes: "500",
+        abstainVotes: "200",
+        quorum: "5000",
+      });
     });
   });
 });

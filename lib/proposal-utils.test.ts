@@ -167,6 +167,7 @@ describe("proposal-utils", () => {
     const RECONCILING: StateVerificationProgress = {
       currentGovernorBlock: L1_HEAD,
       governorClockPending: false,
+      statesRefreshed: false,
       reconciled: false,
       reconcileFailed: false,
     };

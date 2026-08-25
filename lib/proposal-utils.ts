@@ -128,6 +128,8 @@ export type StateVerificationProgress = {
   currentGovernorBlock: number | null;
   /** Whether the governor clock lookup is still in flight */
   governorClockPending: boolean;
+  /** Whether the governor has answered for the states that needed re-reading */
+  statesRefreshed: boolean;
   /** Whether the background reconciliation pass has completed */
   reconciled: boolean;
   /** Whether reconciliation gave up, leaving the indexed state as the best answer */
@@ -156,28 +158,38 @@ export type StateVerificationProgress = {
  * `Pending` and `Active` are shown immediately, as before: they are accurate
  * enough on arrival and only their tallies move. Everything else is terminal.
  *
+ * Each case waits only on the half of the pass that answers it. A state
+ * question is settled by the governor read, which is one multicall; only the
+ * `Executed` case waits for the whole pass, because what it is really waiting
+ * for is the creation transaction hash the log scan discovers, without which
+ * the lifecycle cannot be traced at all.
+ *
  * Falls back to showing the indexed state as soon as there is no better answer
- * coming: once reconciliation finishes, once it fails, or when the governor clock
- * is unavailable so the windows cannot be evaluated at all.
+ * coming: once its half of the pass finishes, once the pass fails, or when the
+ * governor clock is unavailable so the windows cannot be evaluated at all.
  */
 export function isProposalStateUnverified(
   proposal: ProposalStateSource,
   {
     currentGovernorBlock,
     governorClockPending,
+    statesRefreshed,
     reconciled,
     reconcileFailed,
   }: StateVerificationProgress
 ): boolean {
-  if (reconciled || reconcileFailed) return false;
+  if (reconcileFailed) return false;
 
   const state = normalizeProposalStateName(proposal.state);
 
-  if (state === "Succeeded" || state === "Queued") return true;
-
   if (state === "Executed") {
+    if (reconciled) return false;
     return isWithinLifecycleWindow(proposal, currentGovernorBlock);
   }
+
+  if (statesRefreshed || reconciled) return false;
+
+  if (state === "Succeeded" || state === "Queued") return true;
 
   if (state !== "Defeated") return false;
 

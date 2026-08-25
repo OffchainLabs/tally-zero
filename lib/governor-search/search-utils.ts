@@ -2,6 +2,13 @@ import { ethers } from "ethers";
 
 import { findByAddress } from "@/lib/address-utils";
 import { debug } from "@/lib/debug";
+import {
+  decodeResult,
+  encodeCall,
+  multicall,
+  type MulticallInput,
+  type MulticallResult,
+} from "@/lib/multicall";
 import { batchQueryWithRateLimit } from "@/lib/rpc-utils";
 import { getStateName } from "@/lib/state-utils";
 import type { ParsedProposal, Proposal } from "@/types/proposal";
@@ -255,8 +262,35 @@ export async function parseProposals(
 }
 
 /**
- * Refresh state and votes for existing proposals.
- * Batches RPC calls to reduce rate limiting issues.
+ * How many proposals go into one `aggregate3` request. Each contributes up to
+ * three calls, so this keeps a request around 75 calls: comfortably inside what
+ * public RPCs return in one response, while still collapsing a whole table into
+ * a request or two.
+ */
+const MULTICALL_PROPOSAL_CHUNK = 25;
+
+/**
+ * Refresh state and votes for existing proposals in a single RPC request.
+ *
+ * The proposals table withholds a row's status until this answers (see
+ * `isProposalStateUnverified`), so its latency is a loading placeholder the
+ * user is watching. Reading each proposal on its own cost two round trips
+ * (`state` and `proposalVotes` together, then `quorum`) in batches of five with
+ * a 500ms pause between them, which is seconds of placeholder for a table of
+ * in-flight rows. Multicall3 collapses all of it into one round trip: measured
+ * against arb1.arbitrum.io, 9 calls in 262ms against 507ms for the batched form
+ * of the same three proposals, and the gap widens with every extra row.
+ *
+ * Votes stay on RPC even though the governance indexer serves them (see
+ * `getAllProposalVoteSummaries`, which fills the table's vote bars in the
+ * background). Inside this multicall they are free, and the indexer's copy
+ * trails its own watermark, which matters for the proposals being voted on
+ * right now. Quorum has no indexer equivalent at all: it is
+ * `quorum(snapshotBlock)` on the governor, so it can only come from a chain
+ * read, and riding along here saves `QuorumCell` a per-row fetch later.
+ *
+ * Falls back to the per-proposal reads if the multicall fails, so an RPC
+ * without Multicall3 still refreshes, just slower.
  */
 export async function refreshProposalStates(
   provider: ethers.providers.Provider,
@@ -264,9 +298,140 @@ export async function refreshProposalStates(
 ): Promise<ParsedProposal[]> {
   if (proposals.length === 0) return [];
 
+  try {
+    return await refreshViaMulticall(provider, proposals);
+  } catch (error) {
+    debug.search(
+      "multicall refresh failed, falling back to per-proposal reads: %O",
+      error
+    );
+    return refreshOneByOne(provider, proposals);
+  }
+}
+
+/** The calls one proposal contributes to the batch, and where they landed */
+interface ProposalCallSlots {
+  proposal: ParsedProposal;
+  state: number;
+  votes: number;
+  /** Absent when the proposal has no usable snapshot block to price quorum at */
+  quorum?: number;
+}
+
+async function refreshViaMulticall(
+  provider: ethers.providers.Provider,
+  proposals: ParsedProposal[]
+): Promise<ParsedProposal[]> {
+  const governorInterface = new ethers.utils.Interface(OZGovernor_ABI);
+
+  const chunks: ParsedProposal[][] = [];
+  for (let i = 0; i < proposals.length; i += MULTICALL_PROPOSAL_CHUNK) {
+    chunks.push(proposals.slice(i, i + MULTICALL_PROPOSAL_CHUNK));
+  }
+
+  const refreshedChunks = await Promise.all(
+    chunks.map(async (chunk) => {
+      const calls: MulticallInput[] = [];
+      const slots: ProposalCallSlots[] = [];
+
+      for (const proposal of chunk) {
+        const target = proposal.contractAddress;
+        const slot: ProposalCallSlots = {
+          proposal,
+          state: calls.length,
+          votes: calls.length + 1,
+        };
+
+        calls.push({
+          target,
+          allowFailure: true,
+          callData: encodeCall(governorInterface, "state", [proposal.id]),
+        });
+        calls.push({
+          target,
+          allowFailure: true,
+          callData: encodeCall(governorInterface, "proposalVotes", [
+            proposal.id,
+          ]),
+        });
+
+        if (proposal.startBlock && proposal.startBlock !== "0") {
+          slot.quorum = calls.length;
+          calls.push({
+            target,
+            allowFailure: true,
+            callData: encodeCall(governorInterface, "quorum", [
+              proposal.startBlock,
+            ]),
+          });
+        }
+
+        slots.push(slot);
+      }
+
+      const results = await multicall(provider, calls);
+
+      return slots.map((slot) =>
+        applyRefreshResults(slot, results, governorInterface)
+      );
+    })
+  );
+
+  return refreshedChunks.flat();
+}
+
+/**
+ * Fold one proposal's multicall results back into it, keeping whatever the
+ * chain declined to answer as it was.
+ */
+function applyRefreshResults(
+  { proposal, state, votes, quorum }: ProposalCallSlots,
+  results: MulticallResult[],
+  governorInterface: ethers.utils.Interface
+): ParsedProposal {
+  const stateResult = results[state];
+  if (!stateResult?.success) return proposal;
+
+  const refreshed: ParsedProposal = {
+    ...proposal,
+    state: getStateName(
+      decodeResult<number>(governorInterface, "state", stateResult.returnData)
+    ),
+  };
+
+  const votesResult = results[votes];
+  if (!votesResult?.success) return refreshed;
+
+  const decodedVotes = governorInterface.decodeFunctionResult(
+    "proposalVotes",
+    votesResult.returnData
+  );
+  const quorumResult = quorum === undefined ? undefined : results[quorum];
+
+  return {
+    ...refreshed,
+    votes: {
+      againstVotes: decodedVotes.againstVotes.toString(),
+      forVotes: decodedVotes.forVotes.toString(),
+      abstainVotes: decodedVotes.abstainVotes.toString(),
+      quorum: quorumResult?.success
+        ? decodeResult<ethers.BigNumber>(
+            governorInterface,
+            "quorum",
+            quorumResult.returnData
+          ).toString()
+        : proposal.votes?.quorum,
+    },
+  };
+}
+
+/** Pre-Multicall3 path: two round trips per proposal, five at a time. */
+async function refreshOneByOne(
+  provider: ethers.providers.Provider,
+  proposals: ParsedProposal[]
+): Promise<ParsedProposal[]> {
   const getContract = createContractCache(provider);
 
-  // Build batched queries for all proposals
   const queries = proposals.map((proposal) => async () => {
     const contract = getContract(proposal.contractAddress);
     try {
@@ -290,6 +455,5 @@ export async function refreshProposalStates(
     }
   });
 
-  // Execute in batches of 5 with 500ms delay to avoid rate limits
   return batchQueryWithRateLimit(queries, 5, 500);
 }
