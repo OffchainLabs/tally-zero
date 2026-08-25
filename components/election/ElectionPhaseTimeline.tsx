@@ -27,9 +27,11 @@ import { getOrCreateProvider } from "@/lib/rpc-utils";
 
 import {
   formatDuration,
+  getPhaseDescription,
   PHASE_METADATA,
   PHASE_TO_STAGE_TYPES,
 } from "@/config/security-council";
+import { useNomineeQuorumPercentLabel } from "@/hooks/use-nominee-quorum-percent";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase } from "@/types/election";
 
@@ -278,6 +280,7 @@ export function ElectionPhaseTimeline({
   const { openTimelock } = useDeepLink();
   const { l2Rpc } = useRpcSettings();
   const { nomineeGovernorAddress, chainId } = useElectionContracts();
+  const quorumPercentLabel = useNomineeQuorumPercentLabel();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages, memberExecuteTxHash);
 
@@ -364,7 +367,7 @@ export function ElectionPhaseTimeline({
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {metadata.description}
+                  {getPhaseDescription(phase, { quorumPercentLabel })}
                 </p>
                 {eta && (
                   <p

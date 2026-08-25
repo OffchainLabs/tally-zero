@@ -17,6 +17,7 @@ import {
 import { TARGET_COHORT_SIZE } from "@/config/security-council";
 import { SECONDS_PER_DAY } from "@/lib/date-utils";
 import { debug } from "@/lib/debug";
+import { deriveCadenceMonths } from "@/lib/security-council/helpers";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 
 class SecurityCouncilSnapshotError extends Error {
@@ -38,6 +39,8 @@ export interface SecurityCouncilSnapshot {
   secondCohort: CouncilMember[];
   firstCohortTermEnd: number | null;
   secondCohortTermEnd: number | null;
+  /** Months between elections, derived on chain. Null when unreadable. */
+  electionCadenceMonths: number | null;
 }
 
 const scManagerAbi = parseAbi(SECURITY_COUNCIL_MANAGER_ABI);
@@ -196,6 +199,10 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
         onChain.secondNextTs !== null
           ? onChain.secondNextTs + electionWindowSeconds
           : null,
+      electionCadenceMonths: deriveCadenceMonths(
+        onChain.firstNextTs,
+        onChain.secondNextTs
+      ),
     };
   } catch (err) {
     debug.app("Failed to fetch Security Council snapshot: %O", err);
@@ -210,6 +217,6 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
 
 export const getCachedSecurityCouncilSnapshot = unstable_cache(
   fetchSecurityCouncilSnapshot,
-  ["tally-zero-security-council-snapshot-v3"],
+  ["tally-zero-security-council-snapshot-v4"],
   { revalidate: false }
 );

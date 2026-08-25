@@ -26,6 +26,25 @@ export const ELECTION_DURATIONS = {
   TOTAL: ELECTION_TIMING.TOTAL_ELECTION_DAYS,
 } as const;
 
+/** DAO Constitution section covering the Security Council election process. */
+export const DAO_CONSTITUTION_ELECTIONS_URL =
+  "https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections";
+
+/**
+ * How late into the compliance phase a candidate may still rotate the signer
+ * key they registered with. The rotation must land at least this many days
+ * before the phase ends so the Arbitrum Foundation can veto a rotation that
+ * skipped the correct procedure.
+ */
+export const CANDIDATE_ROTATION_CUTOFF_DAYS = 3;
+
+/**
+ * Governance timelock a sitting member's self-service key rotation goes
+ * through (L2 timelock, L2 to L1 message, L1 timelock) before the new signer
+ * is registered in the Security Council multisigs.
+ */
+export const MEMBER_ROTATION_TIMELOCK_DAYS = 18;
+
 export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOT_STARTED: {
     name: "Not Started",
@@ -43,14 +62,13 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOMINEE_SELECTION: {
     name: "Nominee Selection",
     description:
-      "Delegates must endorse contenders with 0.2% of votable tokens for contenders to be nominated for the Member Election.",
+      "Delegates endorse contenders so they can be nominated for the Member Election.",
     durationDays: ELECTION_DURATIONS.NOMINEE_SELECTION,
     colorClass: "text-blue-500",
   },
   VETTING_PERIOD: {
     name: "Compliance Check",
-    description:
-      "The Arbitrum Foundation vets nominees for compliance before the member election.",
+    description: `The Arbitrum Foundation vets nominees for compliance before the member election. Candidates can rotate their signer key until ${CANDIDATE_ROTATION_CUTOFF_DAYS} days before this phase ends.`,
     durationDays: ELECTION_DURATIONS.VETTING_PERIOD,
     colorClass: "text-yellow-500",
   },
@@ -96,7 +114,56 @@ export const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
   COMPLETED: [],
 };
 
-export const NOMINEE_QUORUM_PERCENT = 0.2;
+/**
+ * Nominee qualification threshold as a percentage of votable ARB. Only a
+ * fallback for when the governor's `quorumNumerator`/`quorumDenominator` reads
+ * are unavailable: the on-chain fraction is authoritative. The DAO lowered it
+ * from 0.2% to 0.1% in the "Security Council Election Process Improvements"
+ * AIP, which takes effect when that upgrade reaches the governor.
+ */
+export const NOMINEE_QUORUM_PERCENT = 0.1;
+
+const PERCENT_SCALE = 100;
+const MAX_PERCENT_DECIMALS = 3;
+
+/**
+ * Formats the governor's quorum fraction as a percentage label, e.g. "0.1%".
+ * Falls back to {@link NOMINEE_QUORUM_PERCENT} when either read is missing or
+ * unusable, so the copy never renders a blank or a bogus threshold.
+ */
+export function formatQuorumPercent(
+  numerator?: bigint | number,
+  denominator?: bigint | number
+): string {
+  const fallback = `${NOMINEE_QUORUM_PERCENT}%`;
+  if (numerator === undefined || denominator === undefined) return fallback;
+
+  const numeratorValue = Number(numerator);
+  const denominatorValue = Number(denominator);
+  if (!Number.isFinite(numeratorValue) || !Number.isFinite(denominatorValue)) {
+    return fallback;
+  }
+  if (denominatorValue <= 0 || numeratorValue <= 0) return fallback;
+
+  const percent = (numeratorValue / denominatorValue) * PERCENT_SCALE;
+  return `${parseFloat(percent.toFixed(MAX_PERCENT_DECIMALS))}%`;
+}
+
+/**
+ * Phase description with the live qualification threshold folded in. The
+ * threshold is a governance parameter that the DAO can change without a code
+ * change, so it is never baked into {@link PHASE_METADATA}.
+ */
+export function getPhaseDescription(
+  phase: ElectionPhase,
+  options?: { quorumPercentLabel?: string }
+): string {
+  const base = PHASE_METADATA[phase].description;
+  if (phase !== "NOMINEE_SELECTION") return base;
+
+  const label = options?.quorumPercentLabel ?? `${NOMINEE_QUORUM_PERCENT}%`;
+  return `${base} A contender qualifies once its pledged votes reach ${label} of votable ARB.`;
+}
 
 export function getPhaseColor(phase: ElectionPhase): string {
   return PHASE_METADATA[phase].colorClass;

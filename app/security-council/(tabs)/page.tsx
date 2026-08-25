@@ -1,4 +1,6 @@
 import { CurrentCouncilOverview } from "@/components/election/CurrentCouncilOverview";
+import { KeyRotationInfo } from "@/components/security-council/KeyRotationInfo";
+import { describeElectionCadence } from "@/lib/security-council/helpers";
 import { getCachedSecurityCouncilSnapshot } from "@/lib/security-council/server";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 import ElectionPageClient from "./ElectionPageClient";
@@ -22,10 +24,12 @@ export default async function ElectionsPage() {
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground">
         The Arbitrum Security Council consists of 12 members split into two
-        cohorts. Elections occur every 6 months, alternating between cohorts.
+        cohorts. {describeElectionCadence(council.electionCadenceMonths)}
       </p>
 
       <CurrentCouncilOverview council={council} />
+
+      <KeyRotationInfo />
 
       <ElectionPageClient initialDisplayRecords={initialDisplayRecords} />
     </div>
