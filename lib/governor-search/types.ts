@@ -33,6 +33,12 @@ export interface ProposalSourceInfo {
   rpcFreshCount: number;
   /** Last block the indexer had synced when loaded */
   watermarkBlock: number;
+  /**
+   * Whether the governor has answered for the states that needed re-reading.
+   * Lands ahead of `reconciled`: it is one multicall, while the pass it belongs
+   * to also waits on a multi-chunk log scan.
+   */
+  statesRefreshed: boolean;
   /** Whether the background RPC reconciliation has completed */
   reconciled: boolean;
   /** Human-readable description of search range */

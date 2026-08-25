@@ -4,7 +4,8 @@ import { getStateName } from "@/lib/state-utils";
 import type { ParsedProposal } from "@/types/proposal";
 
 import {
-  applyReconciliation,
+  applyGapScan,
+  applyStateRefresh,
   type ProposalSearchData,
 } from "./use-multi-governor-search";
 
@@ -38,19 +39,13 @@ function makeSearchData(proposals: ParsedProposal[]): ProposalSearchData {
       indexedCount: proposals.length,
       rpcFreshCount: 0,
       watermarkBlock: 489_000_000,
+      statesRefreshed: false,
       reconciled: false,
     },
   };
 }
 
-const NO_GAP_SCAN = {
-  gapProposals: [],
-  scanStartBlock: null,
-  currentBlock: 489_679_793,
-  watermarkBlock: 489_000_000,
-};
-
-describe("applyReconciliation", () => {
+describe("applyStateRefresh", () => {
   // The indexer computes the deadline from the ProposalCreated event's
   // scheduled endBlock, so a proposal whose voting period was extended from 7
   // to 9 days by a late-quorum extension is reported DEFEATED while the
@@ -71,13 +66,13 @@ describe("applyReconciliation", () => {
       },
     });
 
-    const next = applyReconciliation(prev, {
-      refreshed: [refreshed],
-      ...NO_GAP_SCAN,
-    });
+    const next = applyStateRefresh(prev, [refreshed]);
 
     expect(next.proposals[0].state).toBe("Active");
-    expect(next.sourceInfo.reconciled).toBe(true);
+    // The scan half of the pass has not landed, and does not need to for a
+    // status to be shown: statesRefreshed is what un-withholds these rows.
+    expect(next.sourceInfo.statesRefreshed).toBe(true);
+    expect(next.sourceInfo.reconciled).toBe(false);
   });
 
   it("sorts a corrected proposal ahead of settled ones", () => {
@@ -90,10 +85,9 @@ describe("applyReconciliation", () => {
       makeProposal({ id: "7191", state: "Defeated", startBlock: "25547165" }),
     ]);
 
-    const next = applyReconciliation(prev, {
-      refreshed: [makeProposal({ id: "7191", state: getStateName(1) })],
-      ...NO_GAP_SCAN,
-    });
+    const next = applyStateRefresh(prev, [
+      makeProposal({ id: "7191", state: getStateName(1) }),
+    ]);
 
     // sortProposals compares against the capitalized "Active", so a lowercase
     // state from the RPC path would leave this row buried below Executed rows.
@@ -108,10 +102,9 @@ describe("applyReconciliation", () => {
       makeProposal({ id: "7191", state: "Defeated" }),
     ]);
 
-    const next = applyReconciliation(prev, {
-      refreshed: [makeProposal({ id: "7191", state: getStateName(3) })],
-      ...NO_GAP_SCAN,
-    });
+    const next = applyStateRefresh(prev, [
+      makeProposal({ id: "7191", state: getStateName(3) }),
+    ]);
 
     expect(next.proposals[0].state).toBe("Defeated");
   });
@@ -121,10 +114,7 @@ describe("applyReconciliation", () => {
     const indexed = makeProposal({ id: "7191", state: "Defeated" });
     const prev = makeSearchData([indexed]);
 
-    const next = applyReconciliation(prev, {
-      refreshed: [indexed],
-      ...NO_GAP_SCAN,
-    });
+    const next = applyStateRefresh(prev, [indexed]);
 
     expect(next.proposals[0].state).toBe("Defeated");
   });
@@ -135,27 +125,25 @@ describe("applyReconciliation", () => {
       ...makeSearchData([indexed]),
       sourceInfo: {
         ...makeSearchData([indexed]).sourceInfo,
-        reconciled: true,
+        statesRefreshed: true,
       },
     };
 
-    const next = applyReconciliation(prev, {
-      refreshed: [indexed],
-      ...NO_GAP_SCAN,
-    });
+    const next = applyStateRefresh(prev, [indexed]);
 
     // Referential equality matters: a new object would re-run the effect that
     // wrote it, and each re-run costs another round of governor calls.
     expect(next).toBe(prev);
   });
+});
 
+describe("applyGapScan", () => {
   it("counts gap-scanned proposals as fresh and canonicalizes their state", () => {
     const prev = makeSearchData([
       makeProposal({ id: "7191", state: "Defeated" }),
     ]);
 
-    const next = applyReconciliation(prev, {
-      refreshed: [],
+    const next = applyGapScan(prev, {
       gapProposals: [
         makeProposal({
           id: "brand-new",
@@ -173,5 +161,32 @@ describe("applyReconciliation", () => {
       "Pending"
     );
     expect(next.sourceInfo.rangeInfo).toContain("RPC scan");
+    expect(next.sourceInfo.reconciled).toBe(true);
+  });
+
+  // The scan is what supplies creation transaction hashes, so a Core proposal
+  // waiting to be traced stays withheld until this half lands, even though the
+  // governor answered earlier.
+  it("carries the creation transaction hash onto an existing row", () => {
+    const prev = makeSearchData([
+      makeProposal({ id: "9950", state: "Executed" }),
+    ]);
+
+    const next = applyGapScan(prev, {
+      gapProposals: [
+        makeProposal({
+          id: "9950",
+          state: getStateName(7),
+          creationTxHash: "0x1f70",
+        }),
+      ],
+      scanStartBlock: 472_314_630,
+      currentBlock: 498_234_630,
+      watermarkBlock: 489_000_000,
+    });
+
+    expect(next.proposals[0].creationTxHash).toBe("0x1f70");
+    // Already known to the indexer, so not a new proposal
+    expect(next.sourceInfo.rpcFreshCount).toBe(0);
   });
 });

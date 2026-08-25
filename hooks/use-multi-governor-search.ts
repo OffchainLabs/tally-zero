@@ -35,6 +35,7 @@ import {
 } from "@/lib/proposal-tracker-manager";
 import {
   isProposalStateUnverified,
+  LIFECYCLE_WINDOW_DAYS,
   needsOnChainStateRefresh,
   type StateVerificationProgress,
 } from "@/lib/proposal-utils";
@@ -58,16 +59,19 @@ const DEFAULT_BLOCK_RANGE = 10000000;
 const UNKNOWN_PROPOSER = "0x0000000000000000000000000000000000000000";
 
 /**
- * The indexer watermark always trails the chain head slightly (Arbitrum
- * produces a block every ~250ms and the indexer API responses are cached for
- * up to 30s), so a strict `watermark >= head` check would never pass. Treat
- * the indexer as caught up when the watermark is within this many blocks of
- * the head and skip the RPC gap scan entirely.
+ * How far back the RPC pass always scans for `ProposalCreated` events,
+ * regardless of how far the indexer has caught up.
+ *
+ * {@link LIFECYCLE_WINDOW_DAYS} covers every proposal that could still be
+ * moving. Scanning them is what gives those rows a `creationTxHash` — the
+ * indexer index carries none — which is the only handle the lifecycle tracker
+ * has for deciding whether a Core proposal reported as `Executed` has actually
+ * finished its L1 round trip. It also re-reads their state and votes from the
+ * governor. At the default 10M block range this is 3 chunked `eth_getLogs` per
+ * governor, once per session, in the background.
  */
-const WATERMARK_TOLERANCE_MINUTES = 5;
-const WATERMARK_TOLERANCE_BLOCKS = Math.ceil(
-  (BLOCKS_PER_DAY.arbitrum / (24 * 60)) * WATERMARK_TOLERANCE_MINUTES
-);
+const RECENT_LIFECYCLE_SCAN_BLOCKS =
+  LIFECYCLE_WINDOW_DAYS * BLOCKS_PER_DAY.arbitrum;
 
 /**
  * Vote summaries are one request per proposal; fetch them in small batches so
@@ -88,10 +92,8 @@ export interface ProposalSearchData {
   sourceInfo: ProposalSourceInfo;
 }
 
-/** Everything a finished reconciliation pass folds back into the cache */
-export interface ReconciliationResult {
-  /** Proposals re-read from the governor with `state()` / `proposalVotes()` */
-  refreshed: ParsedProposal[];
+/** What the log-scan half of a reconciliation pass folds back into the cache */
+export interface GapScanResult {
   /** Proposals discovered by the watermark-to-head log scan */
   gapProposals: ParsedProposal[];
   /** First block of the gap scan, or null when it was skipped */
@@ -161,6 +163,11 @@ function proposalFromSqliteIndexEntry(
     networkId: String(ARBITRUM_CHAIN_ID),
     state: normalizeProposalStateName(entry.state),
     governorName: governor?.name ?? "Unknown",
+    // Carries the lifecycle tracker straight past the log scan when the
+    // indexer serves it, which is the difference between a Core proposal's
+    // status resolving from a cached checkpoint on load and waiting seconds
+    // to rediscover a transaction hash the indexer already had.
+    creationTxHash: entry.creationTxHash ?? undefined,
     votes: voteSummaryToProposalVotes(voteSummary),
   };
 }
@@ -236,44 +243,65 @@ function sameStateAndVotes(a: ParsedProposal, b: ParsedProposal): boolean {
 }
 
 /**
- * Fold a finished reconciliation pass into the cached search data.
+ * Fold freshly re-read governor states into the cached search data.
  *
  * This is where an indexed state that lost to the chain gets corrected, so a
  * `Defeated` proposal whose deadline was extended by a late-quorum extension
  * becomes `Active` here and sorts back to the top of the table.
  *
+ * Applied on its own, ahead of the log scan it shares a pass with: it is one
+ * multicall against the governors, while the scan is several chunked
+ * `eth_getLogs`, and the rows whose status is being withheld are waiting on
+ * this half alone (see `isProposalStateUnverified`). Making them wait for the
+ * scan too would hold a placeholder on screen for a second longer than the
+ * answer took to arrive.
+ *
  * Returns `prev` unchanged when nothing differs, so the query cache does not
  * churn (and the effect that wrote it does not re-run).
  */
-export function applyReconciliation(
+export function applyStateRefresh(
   prev: ProposalSearchData,
-  {
-    refreshed,
-    gapProposals,
-    scanStartBlock,
-    currentBlock,
-    watermarkBlock,
-  }: ReconciliationResult
+  refreshed: ParsedProposal[]
 ): ProposalSearchData {
   const refreshedMap = buildLookupMap(
     refreshed.map(withCanonicalState),
     proposalKey
   );
 
+  let changed = !prev.sourceInfo.statesRefreshed;
+
+  const proposals = prev.proposals.map((proposal) => {
+    const updated = refreshedMap.get(proposalKey(proposal));
+    if (!updated || sameStateAndVotes(updated, proposal)) return proposal;
+
+    changed = true;
+    return mergeProposal(proposal, updated);
+  });
+
+  if (!changed) return prev;
+
+  return {
+    proposals: sortProposals(proposals),
+    sourceInfo: { ...prev.sourceInfo, statesRefreshed: true },
+  };
+}
+
+/**
+ * Fold the watermark-to-head log scan into the cached search data, and close
+ * out the pass.
+ *
+ * Carries the proposals the indexer has not seen, and the creation transaction
+ * hashes that let the lifecycle tracker run at all.
+ */
+export function applyGapScan(
+  prev: ProposalSearchData,
+  { gapProposals, scanStartBlock, currentBlock, watermarkBlock }: GapScanResult
+): ProposalSearchData {
   let changed = !prev.sourceInfo.reconciled;
 
   const proposalsByKey = new Map<string, ParsedProposal>();
   for (const proposal of prev.proposals) {
-    const updated = refreshedMap.get(proposalKey(proposal));
-    if (updated && !sameStateAndVotes(updated, proposal)) {
-      changed = true;
-      proposalsByKey.set(
-        proposalKey(proposal),
-        mergeProposal(proposal, updated)
-      );
-    } else {
-      proposalsByKey.set(proposalKey(proposal), proposal);
-    }
+    proposalsByKey.set(proposalKey(proposal), proposal);
   }
 
   let rpcFreshCount = prev.sourceInfo.rpcFreshCount;
@@ -369,6 +397,7 @@ export function useMultiGovernorSearch({
             indexedCount: proposalsByKey.size,
             rpcFreshCount: 0,
             watermarkBlock,
+            statesRefreshed: false,
             reconciled: false,
           },
         };
@@ -384,6 +413,7 @@ export function useMultiGovernorSearch({
             indexedCount: 0,
             rpcFreshCount: 0,
             watermarkBlock: 0,
+            statesRefreshed: false,
             reconciled: false,
           },
         };
@@ -615,74 +645,93 @@ export function useMultiGovernorSearch({
           if (!data.sourceInfo.indexerAvailable) {
             gapStartBlock = userStartBlock;
           } else {
-            const indexerCaughtUp =
-              watermarkBlock > 0 &&
-              currentBlock - watermarkBlock <= WATERMARK_TOLERANCE_BLOCKS;
-            const rpcStartBlock = Math.max(watermarkBlock + 1, userStartBlock);
+            // The watermark gap covers proposals the indexer has not seen at
+            // all; the lifecycle window covers proposals it has seen but may
+            // report a stale state for, and which the table needs a creation
+            // tx hash for. Scan from whichever reaches further back.
+            const watermarkGapStart = Math.max(
+              watermarkBlock + 1,
+              userStartBlock
+            );
+            const lifecycleStart = Math.max(
+              currentBlock - RECENT_LIFECYCLE_SCAN_BLOCKS,
+              0
+            );
+            const rpcStartBlock = Math.min(watermarkGapStart, lifecycleStart);
 
-            gapStartBlock =
-              !indexerCaughtUp && rpcStartBlock < currentBlock
-                ? rpcStartBlock
-                : null;
+            gapStartBlock = rpcStartBlock < currentBlock ? rpcStartBlock : null;
           }
         }
 
         if (gapStartBlock !== null) {
           debug.search(
-            "gap-scanning RPC blocks %d to %d",
+            "scanning RPC blocks %d to %d (indexer watermark %d)",
             gapStartBlock,
-            currentBlock
-          );
-        } else if (needsGapScan) {
-          debug.search(
-            "skipping RPC gap scan - watermark %d within tolerance of head %d",
-            watermarkBlock,
-            currentBlock
+            currentBlock,
+            watermarkBlock
           );
         }
 
         const scanStartBlock = gapStartBlock;
-        const [refreshed, gapProposals] = await Promise.all([
-          proposalsNeedingRefresh.length > 0
-            ? refreshProposalStates(provider, proposalsNeedingRefresh)
-            : Promise.resolve([] as ParsedProposal[]),
-          scanStartBlock !== null
-            ? (async () => {
-                const searchResults = await Promise.all(
-                  ARBITRUM_GOVERNORS.map((governor) =>
-                    searchGovernor(
-                      provider,
-                      governor.address,
-                      scanStartBlock,
-                      currentBlock,
-                      blockRange,
-                      () => {}
-                    )
-                  )
-                );
-                const rawProposals = searchResults.flat();
-                return rawProposals.length > 0
-                  ? parseProposals(provider, rawProposals)
-                  : [];
-              })()
-            : Promise.resolve([] as ParsedProposal[]),
-        ]);
 
-        if (!isCurrentRun()) return;
+        // Both halves write as they land rather than at a shared barrier. The
+        // state refresh is one multicall and the scan is several chunked log
+        // queries, so pairing them would hold every withheld status behind the
+        // slower of the two for no reason.
+        const refreshPass = (async () => {
+          const refreshed =
+            proposalsNeedingRefresh.length > 0
+              ? await refreshProposalStates(provider, proposalsNeedingRefresh)
+              : [];
 
-        queryClient.setQueryData<ProposalSearchData>(
-          proposalKeys.indexer(),
-          (prev) =>
-            prev
-              ? applyReconciliation(prev, {
-                  refreshed,
-                  gapProposals,
+          if (!isCurrentRun()) return;
+
+          queryClient.setQueryData<ProposalSearchData>(
+            proposalKeys.indexer(),
+            (prev) => (prev ? applyStateRefresh(prev, refreshed) : prev)
+          );
+        })();
+
+        const scanPass = (async () => {
+          let gapProposals: ParsedProposal[] = [];
+
+          if (scanStartBlock !== null) {
+            const searchResults = await Promise.all(
+              ARBITRUM_GOVERNORS.map((governor) =>
+                searchGovernor(
+                  provider,
+                  governor.address,
                   scanStartBlock,
                   currentBlock,
-                  watermarkBlock,
-                })
-              : prev
-        );
+                  blockRange,
+                  () => {}
+                )
+              )
+            );
+            const rawProposals = searchResults.flat();
+            gapProposals =
+              rawProposals.length > 0
+                ? await parseProposals(provider, rawProposals)
+                : [];
+          }
+
+          if (!isCurrentRun()) return;
+
+          queryClient.setQueryData<ProposalSearchData>(
+            proposalKeys.indexer(),
+            (prev) =>
+              prev
+                ? applyGapScan(prev, {
+                    gapProposals,
+                    scanStartBlock,
+                    currentBlock,
+                    watermarkBlock,
+                  })
+                : prev
+          );
+        })();
+
+        await Promise.all([refreshPass, scanPass]);
       } catch (error) {
         debug.search("background reconciliation failed: %O", error);
         if (isCurrentRun()) setRpcError(error as Error);
@@ -719,9 +768,9 @@ export function useMultiGovernorSearch({
       : null;
 
   // Flag the rows whose indexed state the governor has not confirmed yet, so the
-  // status cells can withhold a "Defeated" that reconciliation may overturn.
-  // Derived on read rather than stored, so the query cache keeps holding plain
-  // proposal data.
+  // status cells can withhold a status the chain is about to overturn. Derived
+  // on read rather than stored, so the query cache keeps holding plain proposal
+  // data.
   const proposals = useMemo(() => {
     if (!data?.proposals.length) return data?.proposals ?? [];
 
@@ -729,6 +778,7 @@ export function useMultiGovernorSearch({
     const progress: StateVerificationProgress = {
       currentGovernorBlock: currentL1Block,
       governorClockPending: isL1BlockLoading,
+      statesRefreshed: data.sourceInfo.statesRefreshed,
       reconciled: data.sourceInfo.reconciled,
       reconcileFailed: rpcError !== null,
     };

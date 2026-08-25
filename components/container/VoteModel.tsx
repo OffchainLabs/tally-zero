@@ -28,6 +28,7 @@ import {
   DrawerTitle,
 } from "@components/ui/Drawer";
 import { ErrorBoundary } from "@components/ui/ErrorBoundary";
+import { Skeleton } from "@components/ui/Skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/Tabs";
 
 import {
@@ -230,21 +231,27 @@ function ProposalTabsContent({
 
 interface ProposalHeaderProps {
   stateValue: StateValue;
+  /** The status is still being read from the chain; see isStateResolving */
+  isStateResolving?: boolean;
 }
 
-function ProposalHeader({ stateValue }: ProposalHeaderProps) {
+function ProposalHeader({ stateValue, isStateResolving }: ProposalHeaderProps) {
   return (
     <div className="flex items-center justify-between py-2">
       <span>Proposal</span>
-      <Badge
-        className={cn(
-          "text-xs font-semibold inline-flex items-center",
-          stateValue.bgColor
-        )}
-      >
-        <stateValue.icon className="mr-1" style={{ strokeWidth: "2" }} />
-        {stateValue.label}
-      </Badge>
+      {isStateResolving ? (
+        <Skeleton className="h-5 w-20 rounded-full" />
+      ) : (
+        <Badge
+          className={cn(
+            "text-xs font-semibold inline-flex items-center",
+            stateValue.bgColor
+          )}
+        >
+          <stateValue.icon className="mr-1" style={{ strokeWidth: "2" }} />
+          {stateValue.label}
+        </Badge>
+      )}
     </div>
   );
 }
@@ -307,6 +314,7 @@ function ProposalDelegateVotesLoading() {
 export default function VoteModel({
   proposal,
   stateValue,
+  isStateResolving,
   isDesktop,
   variant = "modal",
   defaultTab = "description",
@@ -317,6 +325,11 @@ export default function VoteModel({
 }: {
   proposal: z.infer<typeof proposalSchema>;
   stateValue: StateValue;
+  /**
+   * The status is still being read from the chain, so the header shows a
+   * placeholder instead of a label that is about to be replaced.
+   */
+  isStateResolving?: boolean;
   isDesktop: boolean;
   variant?: "modal" | "page";
   defaultTab?: ProposalTab;
@@ -444,7 +457,10 @@ export default function VoteModel({
         className={`glass md:rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5 ${className}`}
       >
         <div className="mb-4">
-          <ProposalHeader stateValue={stateValue} />
+          <ProposalHeader
+            stateValue={stateValue}
+            isStateResolving={isStateResolving}
+          />
         </div>
 
         <Tabs
@@ -471,7 +487,10 @@ export default function VoteModel({
       <DialogContent className="sm:max-w-[1000px] max-w-sm max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>
-            <ProposalHeader stateValue={stateValue} />
+            <ProposalHeader
+              stateValue={stateValue}
+              isStateResolving={isStateResolving}
+            />
           </DialogTitle>
         </DialogHeader>
 
@@ -498,7 +517,10 @@ export default function VoteModel({
     <DrawerContent className="sm:max-w-[700px] px-4 py-4 max-h-[85vh]">
       <DrawerHeader className="flex-shrink-0">
         <DrawerTitle>
-          <ProposalHeader stateValue={stateValue} />
+          <ProposalHeader
+            stateValue={stateValue}
+            isStateResolving={isStateResolving}
+          />
         </DrawerTitle>
       </DrawerHeader>
 

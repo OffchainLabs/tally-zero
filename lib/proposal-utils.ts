@@ -1,10 +1,28 @@
+import { isCoreGovernor } from "@/config/governors";
 import {
-  IN_FLIGHT_PROPOSAL_STATES,
+  ADVANCEABLE_PROPOSAL_STATES,
   normalizeProposalStateName,
 } from "@/lib/state-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import { GOVERNOR_VOTING_PERIOD_BLOCKS } from "@config/arbitrum-governance";
 import { BLOCKS_PER_DAY } from "@config/block-times";
+
+/**
+ * How far back a proposal can have started and still be moving through its
+ * lifecycle, in days.
+ *
+ * A Core proposal takes about 38 days from creation to a redeemed retryable
+ * (3 voting delay + 14 voting + 8 L2 timelock + ~7 L2-to-L1 challenge + 3 L1
+ * timelock), and nobody queues or executes the moment they are able to, so 75
+ * days is a generous cover.
+ *
+ * Shared with the RPC scan in `useMultiGovernorSearch`, which reads
+ * `ProposalCreated` logs over the same window: the rows inside it are exactly
+ * the ones that get a creation transaction hash, and therefore the only ones
+ * whose lifecycle can be traced.
+ */
+export const LIFECYCLE_WINDOW_DAYS = 75;
+const LIFECYCLE_WINDOW_BLOCKS = LIFECYCLE_WINDOW_DAYS * BLOCKS_PER_DAY.ethereum;
 
 /**
  * How long after a proposal's voting period ends a `Defeated` verdict is still
@@ -27,7 +45,17 @@ type ProposalStateSource = {
   startBlock?: string | null;
   /** Scheduled vote end block; "0" when the indexer did not supply one */
   endBlock?: string | null;
+  /** Governor contract address, which decides whether an L1 round trip follows */
+  contractAddress?: string | null;
+  /** Present once the row can be traced, from the indexer or the RPC scan */
+  creationTxHash?: string | null;
 };
+
+function isCoreGovernorProposal({
+  contractAddress,
+}: ProposalStateSource): boolean {
+  return Boolean(contractAddress) && isCoreGovernor(contractAddress!);
+}
 
 function parseBlockNumber(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -62,7 +90,10 @@ export function getScheduledVoteEndBlock({
  * Whether a proposal's state should be re-read from the governor contract
  * rather than trusted as the indexer reported it.
  *
- * `Pending` / `Active` / `Unknown` are always re-read; they are in flight.
+ * Every state the governor can still move the proposal out of is re-read: the
+ * in-flight ones (`Pending` / `Active` / `Unknown`) and the two post-vote ones
+ * (`Succeeded` / `Queued`), which advance whenever someone calls `queue()` or
+ * `execute()`. See {@link ADVANCEABLE_PROPOSAL_STATES}.
  *
  * `Defeated` is re-read only while the voting period ended within the last
  * {@link DEFEAT_RECHECK_WINDOW_DAYS} days (or has not ended yet). It needs
@@ -73,8 +104,8 @@ export function getScheduledVoteEndBlock({
  * `ProposalCreated` event's scheduled `endBlock` therefore reports Defeated
  * while the extended vote is still Active.
  *
- * Every other state requires an on-chain event (Canceled, Queued, Executed) or a
- * settled tally (Succeeded, Expired) to be reached, so it cannot flip back.
+ * `Canceled`, `Expired` and `Executed` are the only remaining states, and the
+ * governor never leaves them, so they are taken as reported.
  *
  * @param proposal - State plus the blocks needed to locate the voting period
  * @param currentGovernorBlock - Current governor-clock block, i.e. the L1 block
@@ -88,7 +119,7 @@ export function needsOnChainStateRefresh(
   const state = normalizeProposalStateName(proposal.state);
 
   if (state !== "Defeated") {
-    return IN_FLIGHT_PROPOSAL_STATES.includes(state);
+    return ADVANCEABLE_PROPOSAL_STATES.includes(state);
   }
 
   if (currentGovernorBlock === null) return false;
@@ -105,6 +136,8 @@ export type StateVerificationProgress = {
   currentGovernorBlock: number | null;
   /** Whether the governor clock lookup is still in flight */
   governorClockPending: boolean;
+  /** Whether the governor has answered for the states that needed re-reading */
+  statesRefreshed: boolean;
   /** Whether the background reconciliation pass has completed */
   reconciled: boolean;
   /** Whether reconciliation gave up, leaving the indexed state as the best answer */
@@ -115,33 +148,97 @@ export type StateVerificationProgress = {
  * Whether a proposal's state is still awaiting confirmation from the governor
  * and should therefore not be rendered yet.
  *
- * Only `Defeated` qualifies. It is the state the indexer can be wrong about
- * (see {@link needsOnChainStateRefresh}), and showing it on load means a row can
- * read "Defeated" for a second and then flip to "Active" once the governor
- * answers. The in-flight states are not withheld: `Pending` / `Active` are
- * accurate enough to show immediately and only their tallies move.
+ * A row whose status is about to be corrected should show a loading placeholder,
+ * not a sequence of answers. Reading "Queued", then "Executed", then "Executing"
+ * over a few seconds tells the reader less than showing nothing would, and it
+ * looks like the page cannot make up its mind.
+ *
+ * Three cases qualify, all of them bounded to the rows that can actually change:
+ *
+ * - `Defeated`, inside the recheck window. It is the one final-looking state a
+ *   deadline miscalculation can fabricate (see {@link needsOnChainStateRefresh}).
+ * - `Succeeded` and `Queued`, which `queue()` and `execute()` advance without
+ *   the indexer necessarily having seen it.
+ * - `Executed` on the Core Governor, for a proposal recent enough to still be in
+ *   its L1 round trip. That row is about to be traced, and the trace is what
+ *   decides between `Executed` and `Executing`.
+ *
+ * `Pending` and `Active` are shown immediately, as before: they are accurate
+ * enough on arrival and only their tallies move. Everything else is terminal.
+ *
+ * Each case waits only on the half of the pass that answers it. A state
+ * question is settled by the governor read, which is one multicall; only the
+ * `Executed` case waits for the whole pass, because what it is really waiting
+ * for is the creation transaction hash the log scan discovers, without which
+ * the lifecycle cannot be traced at all.
  *
  * Falls back to showing the indexed state as soon as there is no better answer
- * coming: once reconciliation finishes, once it fails, or when the governor clock
- * is unavailable so the recheck window cannot be evaluated at all.
+ * coming: once its half of the pass finishes, once the pass fails, or when the
+ * governor clock is unavailable so the windows cannot be evaluated at all.
  */
 export function isProposalStateUnverified(
   proposal: ProposalStateSource,
   {
     currentGovernorBlock,
     governorClockPending,
+    statesRefreshed,
     reconciled,
     reconcileFailed,
   }: StateVerificationProgress
 ): boolean {
-  if (normalizeProposalStateName(proposal.state) !== "Defeated") return false;
-  if (reconciled || reconcileFailed) return false;
+  if (reconcileFailed) return false;
+
+  const state = normalizeProposalStateName(proposal.state);
+
+  if (state === "Executed") {
+    // The wait here is for a creation transaction to trace with. Once the row
+    // has one, whether from the indexer or from the scan, the trace takes over
+    // and reports its own progress; see `isResolving`.
+    if (reconciled || proposal.creationTxHash) return false;
+    // The window needs the clock, and only a Core proposal has a round trip to
+    // be in the middle of, so only those wait for it.
+    if (governorClockPending) return isCoreGovernorProposal(proposal);
+    return couldBeMidRoundTrip(proposal, currentGovernorBlock);
+  }
+
+  if (statesRefreshed || reconciled) return false;
+
+  if (state === "Succeeded" || state === "Queued") return true;
+
+  if (state !== "Defeated") return false;
 
   // The window needs the clock. While it is still loading, withhold rather than
   // flash a state that a moment later turns out to have been worth rechecking.
   if (governorClockPending) return true;
 
   return needsOnChainStateRefresh(proposal, currentGovernorBlock);
+}
+
+/**
+ * Whether a proposal could still be moving through its L1 round trip, which is
+ * the only case where a lifecycle trace can tell the reader something the
+ * governor's own `state()` does not.
+ *
+ * Measured from the vote snapshot, the only timestamp-like field an indexer row
+ * carries, against {@link LIFECYCLE_WINDOW_DAYS}. Older Core rows, and every
+ * Treasury row, are settled: a Treasury proposal never leaves L2, and a Core
+ * proposal from beyond the window has long since finished, so tracing either
+ * one spends seconds to confirm the `Executed` already on screen.
+ *
+ * This is the gate on both withholding a status and spending a trace on it, so
+ * the rows that hold back are exactly the rows something is coming for.
+ */
+export function couldBeMidRoundTrip(
+  { startBlock, contractAddress }: ProposalStateSource,
+  currentGovernorBlock: number | null
+): boolean {
+  if (!contractAddress || !isCoreGovernor(contractAddress)) return false;
+  if (currentGovernorBlock === null) return false;
+
+  const snapshot = parseBlockNumber(startBlock);
+  if (snapshot === null) return false;
+
+  return currentGovernorBlock - snapshot <= LIFECYCLE_WINDOW_BLOCKS;
 }
 
 export function isIncompleteProposalState(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { GOVERNORS } from "@/config/governors";
 import { GOVERNOR_VOTING_PERIOD_BLOCKS } from "@config/arbitrum-governance";
 import { BLOCKS_PER_DAY } from "@config/block-times";
 
@@ -7,6 +8,7 @@ import {
   getScheduledVoteEndBlock,
   isIncompleteProposalState,
   isProposalStateUnverified,
+  LIFECYCLE_WINDOW_DAYS,
   mergeProposalData,
   needsOnChainStateRefresh,
   type StateVerificationProgress,
@@ -60,14 +62,21 @@ describe("proposal-utils", () => {
       }
     });
 
-    it("never re-reads states that need an event or a settled tally", () => {
-      for (const state of [
-        "Canceled",
-        "Succeeded",
-        "Queued",
-        "Expired",
-        "EXECUTED",
-      ]) {
+    // queue() and execute() move these on-chain at any moment, and the indexer
+    // reports whichever it last saw, which is what makes the newest rows wrong.
+    it("re-reads the post-vote states the governor can still advance", () => {
+      for (const state of ["Succeeded", "queued", "QUEUED"]) {
+        expect(
+          needsOnChainStateRefresh(
+            { state, startBlock: String(SNAPSHOT_BLOCK) },
+            L1_HEAD
+          )
+        ).toBe(true);
+      }
+    });
+
+    it("never re-reads the states the governor never leaves", () => {
+      for (const state of ["Canceled", "Expired", "EXECUTED"]) {
         expect(
           needsOnChainStateRefresh(
             { state, startBlock: String(SNAPSHOT_BLOCK) },
@@ -158,6 +167,7 @@ describe("proposal-utils", () => {
     const RECONCILING: StateVerificationProgress = {
       currentGovernorBlock: L1_HEAD,
       governorClockPending: false,
+      statesRefreshed: false,
       reconciled: false,
       reconcileFailed: false,
     };
@@ -222,8 +232,78 @@ describe("proposal-utils", () => {
       ).toBe(false);
     });
 
-    it("never withholds states other than Defeated", () => {
-      for (const state of ["Active", "Pending", "Executed", "Succeeded"]) {
+    // Showing "Queued", then "Executed", then "Executing" over a few seconds
+    // reads as three answers rather than one being refined.
+    it("withholds the post-vote states that queue() and execute() advance", () => {
+      for (const state of ["Succeeded", "Queued"]) {
+        expect(
+          isProposalStateUnverified({ state, endBlock: "0" }, RECONCILING)
+        ).toBe(true);
+      }
+    });
+
+    it("withholds Executed on a Core proposal that could still be in flight", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.core.address,
+          },
+          RECONCILING
+        )
+      ).toBe(true);
+    });
+
+    // The wait is for something to trace with, so a row that arrives from the
+    // indexer already carrying one does not wait for the scan to find it.
+    it("shows Executed as soon as the row has a creation transaction", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.core.address,
+            creationTxHash: "0x1f70",
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
+    it("shows Executed once the proposal is past the lifecycle window", () => {
+      const oldSnapshot =
+        L1_HEAD - (LIFECYCLE_WINDOW_DAYS + 1) * BLOCKS_PER_DAY.ethereum;
+
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(oldSnapshot),
+            contractAddress: GOVERNORS.core.address,
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
+    // Treasury proposals never leave L2, so their Executed cannot become
+    // Executing and there is nothing to wait for.
+    it("shows Executed immediately for a Treasury proposal", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.treasury.address,
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
+    it("shows the pre-vote states immediately", () => {
+      for (const state of ["Active", "Pending", "Canceled", "Expired"]) {
         expect(
           isProposalStateUnverified({ state, endBlock: "0" }, RECONCILING)
         ).toBe(false);
