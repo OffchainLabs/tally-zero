@@ -47,6 +47,8 @@ type ProposalStateSource = {
   endBlock?: string | null;
   /** Governor contract address, which decides whether an L1 round trip follows */
   contractAddress?: string | null;
+  /** Present once the row can be traced, from the indexer or the RPC scan */
+  creationTxHash?: string | null;
 };
 
 function parseBlockNumber(value: string | null | undefined): number | null {
@@ -183,7 +185,10 @@ export function isProposalStateUnverified(
   const state = normalizeProposalStateName(proposal.state);
 
   if (state === "Executed") {
-    if (reconciled) return false;
+    // The wait here is for a creation transaction to trace with. Once the row
+    // has one, whether from the indexer or from the scan, the trace takes over
+    // and reports its own progress; see `isResolving`.
+    if (reconciled || proposal.creationTxHash) return false;
     return isWithinLifecycleWindow(proposal, currentGovernorBlock);
   }
 

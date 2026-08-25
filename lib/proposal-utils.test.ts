@@ -255,6 +255,22 @@ describe("proposal-utils", () => {
       ).toBe(true);
     });
 
+    // The wait is for something to trace with, so a row that arrives from the
+    // indexer already carrying one does not wait for the scan to find it.
+    it("shows Executed as soon as the row has a creation transaction", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.core.address,
+            creationTxHash: "0x1f70",
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
     it("shows Executed once the proposal is past the lifecycle window", () => {
       const oldSnapshot =
         L1_HEAD - (LIFECYCLE_WINDOW_DAYS + 1) * BLOCKS_PER_DAY.ethereum;

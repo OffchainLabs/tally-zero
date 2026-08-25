@@ -163,6 +163,11 @@ function proposalFromSqliteIndexEntry(
     networkId: String(ARBITRUM_CHAIN_ID),
     state: normalizeProposalStateName(entry.state),
     governorName: governor?.name ?? "Unknown",
+    // Carries the lifecycle tracker straight past the log scan when the
+    // indexer serves it, which is the difference between a Core proposal's
+    // status resolving from a cached checkpoint on load and waiting seconds
+    // to rediscover a transaction hash the indexer already had.
+    creationTxHash: entry.creationTxHash ?? undefined,
     votes: voteSummaryToProposalVotes(voteSummary),
   };
 }

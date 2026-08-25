@@ -124,6 +124,13 @@ export type TallyProposalIndexEntry = {
   state: string | null;
   proposer: string | null;
   description: string | null;
+  /**
+   * Transaction that emitted `ProposalCreated`, which is the only handle the
+   * lifecycle tracker has on a proposal. Optional because an older indexer
+   * deployment may not serve it; without it the table falls back to finding the
+   * hash by scanning `ProposalCreated` logs over the recent window.
+   */
+  creationTxHash?: string | null;
 };
 
 export type TallyAddressDisplayRecord = {

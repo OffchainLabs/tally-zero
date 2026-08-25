@@ -262,10 +262,10 @@ export async function parseProposals(
 }
 
 /**
- * How many proposals go into one `aggregate3` request. Each contributes up to
- * three calls, so this keeps a request around 75 calls: comfortably inside what
- * public RPCs return in one response, while still collapsing a whole table into
- * a request or two.
+ * How many proposals go into one `aggregate3` request. Each contributes two
+ * calls, so this keeps a request at 50 calls: comfortably inside what public
+ * RPCs return in one response, while still collapsing a whole table into a
+ * request or two.
  */
 const MULTICALL_PROPOSAL_CHUNK = 25;
 
@@ -277,17 +277,24 @@ const MULTICALL_PROPOSAL_CHUNK = 25;
  * user is watching. Reading each proposal on its own cost two round trips
  * (`state` and `proposalVotes` together, then `quorum`) in batches of five with
  * a 500ms pause between them, which is seconds of placeholder for a table of
- * in-flight rows. Multicall3 collapses all of it into one round trip: measured
- * against arb1.arbitrum.io, 9 calls in 262ms against 507ms for the batched form
- * of the same three proposals, and the gap widens with every extra row.
+ * in-flight rows. Multicall3 collapses all of it into one round trip.
  *
- * Votes stay on RPC even though the governance indexer serves them (see
- * `getAllProposalVoteSummaries`, which fills the table's vote bars in the
- * background). Inside this multicall they are free, and the indexer's copy
- * trails its own watermark, which matters for the proposals being voted on
- * right now. Quorum has no indexer equivalent at all: it is
- * `quorum(snapshotBlock)` on the governor, so it can only come from a chain
- * read, and riding along here saves `QuorumCell` a per-row fetch later.
+ * What goes in the request is decided by what the status waits on. Measured
+ * against arb1.arbitrum.io over 12 proposals, median of three runs:
+ *
+ * | calls                    | median |
+ * | ------------------------ | ------ |
+ * | state                    | 384ms  |
+ * | state + proposalVotes    | 391ms  |
+ * | + quorum                 | 502ms  |
+ *
+ * Votes are free at this size, so they ride along and stay fresher than the
+ * governance indexer's copy, which trails its own watermark on exactly the
+ * proposals being voted on right now. Quorum is not free: `quorum(snapshot)`
+ * walks the token's checkpoints at a historical block, and it costs a fifth of
+ * the wait for a number no status depends on. `QuorumCell` fetches it for the
+ * rows that display it, once they scroll into view, and caches it for the
+ * session.
  *
  * Falls back to the per-proposal reads if the multicall fails, so an RPC
  * without Multicall3 still refreshes, just slower.
@@ -314,8 +321,6 @@ interface ProposalCallSlots {
   proposal: ParsedProposal;
   state: number;
   votes: number;
-  /** Absent when the proposal has no usable snapshot block to price quorum at */
-  quorum?: number;
 }
 
 async function refreshViaMulticall(
@@ -355,17 +360,6 @@ async function refreshViaMulticall(
           ]),
         });
 
-        if (proposal.startBlock && proposal.startBlock !== "0") {
-          slot.quorum = calls.length;
-          calls.push({
-            target,
-            allowFailure: true,
-            callData: encodeCall(governorInterface, "quorum", [
-              proposal.startBlock,
-            ]),
-          });
-        }
-
         slots.push(slot);
       }
 
@@ -385,7 +379,7 @@ async function refreshViaMulticall(
  * chain declined to answer as it was.
  */
 function applyRefreshResults(
-  { proposal, state, votes, quorum }: ProposalCallSlots,
+  { proposal, state, votes }: ProposalCallSlots,
   results: MulticallResult[],
   governorInterface: ethers.utils.Interface
 ): ParsedProposal {
@@ -406,7 +400,6 @@ function applyRefreshResults(
     "proposalVotes",
     votesResult.returnData
   );
-  const quorumResult = quorum === undefined ? undefined : results[quorum];
 
   return {
     ...refreshed,
@@ -414,13 +407,9 @@ function applyRefreshResults(
       againstVotes: decodedVotes.againstVotes.toString(),
       forVotes: decodedVotes.forVotes.toString(),
       abstainVotes: decodedVotes.abstainVotes.toString(),
-      quorum: quorumResult?.success
-        ? decodeResult<ethers.BigNumber>(
-            governorInterface,
-            "quorum",
-            quorumResult.returnData
-          ).toString()
-        : proposal.votes?.quorum,
+      // Left as it was: this refresh does not read quorum, and QuorumCell
+      // fills it in for the rows that show it.
+      quorum: proposal.votes?.quorum,
     },
   };
 }

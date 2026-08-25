@@ -422,10 +422,8 @@ describe("search-utils", () => {
       multicallMocks.multicall.mockResolvedValue([
         { success: true, returnData: "state:7" },
         { success: true, returnData: "proposalVotes:1000,500,200" },
-        { success: true, returnData: "quorum:5000" },
         { success: true, returnData: "state:1" },
         { success: true, returnData: "proposalVotes:10,20,30" },
-        { success: true, returnData: "quorum:6000" },
       ]);
 
       const refreshed = await refreshProposalStates(provider, [
@@ -439,10 +437,35 @@ describe("search-utils", () => {
         forVotes: "1000",
         againstVotes: "500",
         abstainVotes: "200",
-        quorum: "5000",
+        quorum: undefined,
       });
       expect(refreshed[1].state).toBe("Active");
-      expect(refreshed[1].votes?.quorum).toBe("6000");
+      expect(refreshed[1].votes?.forVotes).toBe("10");
+    });
+
+    // quorum(snapshot) walks token checkpoints at a historical block and costs
+    // a fifth of the wait, for a number no status depends on. QuorumCell reads
+    // it for the rows that display it.
+    it("does not read quorum, and keeps any the row already had", async () => {
+      multicallMocks.multicall.mockResolvedValue([
+        { success: true, returnData: "state:7" },
+        { success: true, returnData: "proposalVotes:1000,500,200" },
+      ]);
+
+      const refreshed = await refreshProposalStates(provider, [
+        makeProposal({
+          id: "9950",
+          votes: {
+            forVotes: "1",
+            againstVotes: "2",
+            abstainVotes: "3",
+            quorum: "5000",
+          },
+        }),
+      ]);
+
+      expect(multicallMocks.multicall.mock.calls[0][1]).toHaveLength(2);
+      expect(refreshed[0].votes?.quorum).toBe("5000");
     });
 
     it("keeps the cached proposal when the governor call reverts", async () => {
@@ -458,20 +481,6 @@ describe("search-utils", () => {
       const refreshed = await refreshProposalStates(provider, [cached]);
 
       expect(refreshed[0]).toBe(cached);
-    });
-
-    it("skips the quorum call when there is no usable snapshot block", async () => {
-      multicallMocks.multicall.mockResolvedValue([
-        { success: true, returnData: "state:7" },
-        { success: true, returnData: "proposalVotes:1000,500,200" },
-      ]);
-
-      const refreshed = await refreshProposalStates(provider, [
-        makeProposal({ id: "9950", startBlock: "0" }),
-      ]);
-
-      expect(multicallMocks.multicall.mock.calls[0][1]).toHaveLength(2);
-      expect(refreshed[0].votes?.quorum).toBeUndefined();
     });
 
     it("falls back to per-proposal reads when the multicall fails", async () => {
