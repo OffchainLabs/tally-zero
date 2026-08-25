@@ -74,6 +74,14 @@ describe("state-utils", () => {
       }
     });
 
+    // The proposal page renders "Unknown proposal state" for anything this
+    // does not resolve, so the derived Executing status has to be in the list.
+    it("resolves the derived Executing status", () => {
+      const result = findStateByValue("Executing");
+      expect(result?.value).toBe("Executing");
+      expect(result?.label).toBe("Executing");
+    });
+
     it("returns state with all required properties", () => {
       const result = findStateByValue("Active");
       expect(result).toHaveProperty("value");

@@ -43,6 +43,15 @@ const STATE_GLASS_STYLES = {
     shadow: "hover:shadow-blue-500/40",
     dot: "bg-blue-400",
   },
+  // A Core proposal past the governor's execute() but still travelling through
+  // the L2-to-L1 message, the L1 timelock and the retryable ticket.
+  Executing: {
+    bg: "bg-sky-500/20",
+    text: "text-sky-400",
+    border: "border-sky-500/30",
+    shadow: "hover:shadow-sky-500/40",
+    dot: "bg-sky-400",
+  },
   Queued: {
     bg: "bg-arb-blue/20",
     text: "text-arb-teal",
@@ -67,7 +76,12 @@ const STATE_GLASS_STYLES = {
 } as const;
 
 export interface StatusBadgeGlassProps extends React.HTMLAttributes<HTMLDivElement> {
-  state: ProposalStateName;
+  /**
+   * A governor state, or "Executing" for a Core proposal that has been executed
+   * on the governor but has not finished its L1 round trip. See
+   * `getEffectiveDisplayState` in lib/lifecycle-utils.
+   */
+  state: ProposalStateName | "Executing";
 }
 
 // Default fallback styles for unknown states

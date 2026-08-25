@@ -3,12 +3,14 @@
  * Handles stage tracking, state formatting, and progress calculation
  */
 
-import { isCoreGovernor } from "@/config/governors";
+import { getFinalStageForGovernor, isCoreGovernor } from "@/config/governors";
+import { normalizeProposalStateName } from "@/lib/state-utils";
+import type { ProposalStateName } from "@/types/proposal";
 import type { ProposalStage } from "@/types/proposal-stage";
 import {
-  areAllStagesComplete,
   formatStageTitle,
-  getCurrentStage,
+  getLifecyclePhase,
+  type LifecyclePhase,
   type StageType,
 } from "@gzeoneth/gov-tracker";
 
@@ -40,81 +42,169 @@ export function getTotalStages(governorAddress: string): number {
   return isCoreGovernor(governorAddress) ? 7 : 4;
 }
 
-/**
- * Determine the current active stage (1-indexed) from the stages array
- * Uses gov-tracker's getCurrentStage for consistent stage detection
- * @param stages - Array of proposal stages
- * @returns The 1-indexed stage number of the last active stage, or 0 if empty
- */
-export function getCurrentStageNumber(stages: ProposalStage[]): number {
-  if (!stages || stages.length === 0) return 0;
-
-  const currentStage = getCurrentStage(stages);
-  if (!currentStage) return 1;
-
-  // Find the index of the current stage in the array (1-indexed)
-  const index = stages.findIndex((s) => s.type === currentStage.type);
-  return index >= 0 ? index + 1 : 1;
+/** A stage is done when it either completed or was skipped as unnecessary */
+function isStageSettled(stage: ProposalStage | undefined): boolean {
+  return stage?.status === "COMPLETED" || stage?.status === "SKIPPED";
 }
 
 /**
- * Check if a proposal has truly completed all stages
- * Uses gov-tracker's areAllStagesComplete for consistent completion detection
+ * How many stages of the lifecycle are behind the proposal.
+ *
+ * Counted rather than positional, because a stage array is not always the full
+ * lifecycle: a tracking run fills it in as it goes and a cached checkpoint holds
+ * only what the run reached.
+ */
+function getSettledStageCount(stages: ProposalStage[]): number {
+  return stages.filter(isStageSettled).length;
+}
+
+/**
+ * Check if a proposal has truly reached the end of its lifecycle.
+ *
+ * Asks whether the governor's own final stage (`RETRYABLE_EXECUTED` for Core,
+ * `L2_TIMELOCK` for Treasury) is present and settled, which is the hop that
+ * actually applies the change.
+ *
+ * Deliberately not gov-tracker's `areAllStagesComplete`, and not
+ * `getLifecyclePhase() === "executed"`. Both answer "is every stage in this
+ * array done", and the array is frequently a prefix of the lifecycle: tracking
+ * fills it in stage by stage, and a checkpoint saved on a stage boundary holds
+ * nothing but COMPLETED stages. On that input both report a mid-flight proposal
+ * as finished, which is the exact mistake this module exists to avoid.
+ *
  * @param stages - Array of proposal stages to check
- * @returns True if the proposal has completed all expected stages
+ * @param governorAddress - The governor contract address, which decides which
+ *   stage is the last one
  */
-export function isProposalFullyExecuted(stages: ProposalStage[]): boolean {
+export function isProposalFullyExecuted(
+  stages: ProposalStage[],
+  governorAddress: string
+): boolean {
   if (!stages || stages.length === 0) return false;
-  return areAllStagesComplete(stages);
+
+  const finalStage = getFinalStageForGovernor(governorAddress);
+  if (!finalStage) return false;
+
+  return isStageSettled(stages.find((stage) => stage.type === finalStage));
+}
+
+/** What each in-flight lifecycle phase is called in the UI */
+const PHASE_LABELS: Record<LifecyclePhase, string> = {
+  voting: "Voting",
+  queued: "Queued in the timelock",
+  l2_delay: "Waiting out the L2 timelock",
+  bridging: "Bridging from L2 to L1",
+  l1_delay: "Waiting out the L1 timelock",
+  finalizing: "Redeeming the retryable ticket",
+  executed: "Fully executed",
+  failed: "Failed",
+  unknown: "Unknown",
+};
+
+/** The status a proposal row shows: a governor state, or "Executing" */
+export type ProposalDisplayState = ProposalStateName | "Executing";
+
+/** Resolved status for one proposal row */
+export interface ProposalDisplayStatus {
+  /** Label to render, e.g. "Queued", "Executing", "Executed" */
+  display: string;
+  /** Key for the colour / dot / badge lookups, e.g. "Executing" */
+  state: ProposalDisplayState;
+  /** Whether the proposal is still moving through the timelocks */
+  isInProgress: boolean;
+  /** Sentence describing the current lifecycle phase, when stages are known */
+  phaseLabel: string | null;
+  /** 1-indexed current stage, or null when no stages are known */
+  currentStage: number | null;
+  /** Total stages expected for this governor */
+  totalStages: number;
 }
 
 /**
- * Get the effective display state for a proposal
- * For Core Governor proposals that show "Executed" but haven't completed L1 stages,
- * returns "Stage x/y" instead
- * @param governorState - The state from the governor contract
- * @param stages - Array of proposal stages
+ * Get the effective display state for a proposal.
+ *
+ * The governor's own `Executed` is not the end of a Core Governor proposal: it
+ * means the L2 timelock operation ran and handed the payload to
+ * `ArbSys.sendTxToL1`. The proposal still has to clear the L2-to-L1 challenge
+ * period, the 3-day L1 timelock and the retryable ticket redemption on L2 —
+ * roughly ten more days — before anything it asks for has actually happened.
+ * That stretch is reported as **Executing**, and only a settled
+ * `RETRYABLE_EXECUTED` stage turns it into `Executed`. See
+ * {@link isProposalFullyExecuted} for why that one stage decides it.
+ *
+ * Treasury Governor proposals never leave L2, so their `Executed` is final.
+ *
+ * @param governorState - The state read from the governor contract
+ * @param stages - Tracked lifecycle stages; empty when none are known yet
  * @param governorAddress - The governor contract address
- * @returns Object with display string and whether the proposal is in progress
+ * @param isTracking - Whether the lifecycle is being read right now. With no
+ *   stages to go on this is what separates a Core proposal whose round trip is
+ *   still being confirmed (show `Executing`; the governor has executed and it
+ *   is completion that is unproven) from an untracked historic row, which keeps
+ *   showing the governor's answer.
  */
 export function getEffectiveDisplayState(
   governorState: string | null,
   stages: ProposalStage[],
-  governorAddress: string
-): { display: string; isInProgress: boolean } {
-  // If not "Executed", return the governor state as-is
-  if (governorState?.toLowerCase() !== "executed") {
-    return { display: formatCurrentState(governorState), isInProgress: false };
-  }
-
-  // For Treasury Governor, "Executed" is accurate after L2 timelock
-  if (!isCoreGovernor(governorAddress)) {
-    return { display: "Executed", isInProgress: false };
-  }
-
-  // For Core Governor, check if truly completed
-  if (isProposalFullyExecuted(stages)) {
-    return { display: "Executed", isInProgress: false };
-  }
-
-  // Core Governor with "Executed" state but not fully done - show stage progress
-  const currentStage = getCurrentStageNumber(stages);
+  governorAddress: string,
+  isTracking = false
+): ProposalDisplayStatus {
   const totalStages = getTotalStages(governorAddress);
+  const hasStages = stages && stages.length > 0;
+  const isFinished =
+    hasStages && isProposalFullyExecuted(stages, governorAddress);
 
-  // If the current stage is the last stage but not fully complete,
-  // show the previous completed stage number instead
-  let displayStage = currentStage;
-  if (currentStage === totalStages && !isProposalFullyExecuted(stages)) {
-    // Find the last completed stage
-    const completedCount = stages.filter(
-      (s) => s.status === "COMPLETED"
-    ).length;
-    displayStage = Math.max(1, completedCount);
+  // Counted from the settled stages rather than read off the array's length, so
+  // a partially filled stage list reports the hop actually in progress.
+  const currentStage = hasStages
+    ? Math.min(getSettledStageCount(stages) + (isFinished ? 0 : 1), totalStages)
+    : null;
+
+  // `getLifecyclePhase` shares the truncation blind spot described on
+  // `isProposalFullyExecuted`, so its "executed" answer is only trusted once the
+  // final stage agrees. Otherwise the stage counter carries the detail alone.
+  const phase = hasStages ? getLifecyclePhase(stages) : null;
+  const phaseLabel =
+    !phase || (phase === "executed" && !isFinished)
+      ? null
+      : PHASE_LABELS[phase];
+
+  const settled = (state: ProposalDisplayState): ProposalDisplayStatus => ({
+    display: formatCurrentState(state),
+    state,
+    isInProgress: false,
+    phaseLabel,
+    currentStage,
+    totalStages,
+  });
+
+  // Anything before execution is what the governor says it is.
+  if (governorState?.toLowerCase() !== "executed") {
+    return settled(normalizeProposalStateName(governorState));
+  }
+
+  // Treasury Governor proposals are L2-only: "Executed" is accurate.
+  if (!isCoreGovernor(governorAddress)) {
+    return settled("Executed");
+  }
+
+  if (isFinished) {
+    return settled("Executed");
+  }
+
+  // Neither stages nor a trace in flight: nothing says the round trip is
+  // unfinished, so keep the governor's answer rather than guess.
+  if (!hasStages && !isTracking) {
+    return settled("Executed");
   }
 
   return {
-    display: `Stage ${displayStage}/${totalStages}`,
+    display: "Executing",
+    state: "Executing",
     isInProgress: true,
+    phaseLabel,
+    currentStage,
+    totalStages,
   };
 }
 
@@ -133,6 +223,7 @@ export function formatCurrentState(state: string | null): string {
     succeeded: "Passed",
     defeated: "Defeated",
     queued: "Queued",
+    executing: "Executing",
     executed: "Executed",
     canceled: "Canceled",
     expired: "Expired",
@@ -166,6 +257,8 @@ const STATE_STYLE_MAP: Record<
   { icon: StateStyleIcon; color: StateStyleColor }
 > = {
   executed: { icon: "check", color: "text-green-600 dark:text-green-400" },
+  // Mid round-trip: same "still moving" blue as the pre-vote states
+  executing: { icon: "reload", color: "text-blue-600 dark:text-blue-400" },
   active: { icon: "reload", color: "text-blue-600 dark:text-blue-400" },
   pending: { icon: "reload", color: "text-blue-600 dark:text-blue-400" },
   queued: { icon: "clock", color: "text-yellow-600 dark:text-yellow-400" },
@@ -191,6 +284,7 @@ export function getStateStyle(state: string | null): {
 /** Background-color class for the status dot, matching each state's hue. */
 const STATE_DOT_MAP: Record<string, string> = {
   executed: "bg-green-500",
+  executing: "bg-blue-500",
   active: "bg-blue-500",
   pending: "bg-blue-500",
   queued: "bg-yellow-500",

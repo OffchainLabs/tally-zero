@@ -8,6 +8,7 @@ import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { HasVotedBadge } from "@/components/ui/HasVotedBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
+import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,9 @@ export const MobileProposalCard = memo(function MobileProposalCard({
     extractProposalTitle(proposal.description),
     80
   );
+  // Same on-chain status the desktop table's LifecycleCell resolves, so a Core
+  // proposal still travelling through the timelocks reads "Executing" here too.
+  const { state } = useProposalLifecycleStatus(proposal);
 
   return (
     <Link
@@ -54,7 +58,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
             {proposal.isStateUnverified ? (
               <Skeleton className="h-5 w-20 rounded-full" />
             ) : (
-              <StatusBadgeGlass state={proposal.state} />
+              <StatusBadgeGlass state={state} />
             )}
             {proposal.governorName && (
               <GovernorBadge governorName={proposal.governorName} size="sm" />
