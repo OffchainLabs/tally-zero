@@ -35,6 +35,7 @@ import {
 } from "@/lib/proposal-tracker-manager";
 import {
   isProposalStateUnverified,
+  LIFECYCLE_WINDOW_DAYS,
   needsOnChainStateRefresh,
   type StateVerificationProgress,
 } from "@/lib/proposal-utils";
@@ -58,24 +59,19 @@ const DEFAULT_BLOCK_RANGE = 10000000;
 const UNKNOWN_PROPOSER = "0x0000000000000000000000000000000000000000";
 
 /**
- * How far back the RPC pass always scans for `ProposalCreated` events, in days,
+ * How far back the RPC pass always scans for `ProposalCreated` events,
  * regardless of how far the indexer has caught up.
  *
- * A Core proposal needs roughly 38 days to go from creation to a redeemed
- * retryable (3 voting delay + 14 voting + 8 L2 timelock + ~7 L2-to-L1 challenge
- * + 3 L1 timelock), and nobody queues or executes the moment they are able to,
- * so 75 days is a generous cover for every proposal that could still be moving.
- *
- * Scanning them is what gives those rows a `creationTxHash` — the indexer index
- * carries none — which is the only handle the lifecycle tracker has for
- * deciding whether a Core proposal reported as `Executed` has actually finished
- * its L1 round trip. It also re-reads their state and votes from the governor.
- * At the default 10M block range this is 3 chunked `eth_getLogs` per governor,
- * once per session, in the background.
+ * {@link LIFECYCLE_WINDOW_DAYS} covers every proposal that could still be
+ * moving. Scanning them is what gives those rows a `creationTxHash` — the
+ * indexer index carries none — which is the only handle the lifecycle tracker
+ * has for deciding whether a Core proposal reported as `Executed` has actually
+ * finished its L1 round trip. It also re-reads their state and votes from the
+ * governor. At the default 10M block range this is 3 chunked `eth_getLogs` per
+ * governor, once per session, in the background.
  */
-const RECENT_LIFECYCLE_SCAN_DAYS = 75;
 const RECENT_LIFECYCLE_SCAN_BLOCKS =
-  RECENT_LIFECYCLE_SCAN_DAYS * BLOCKS_PER_DAY.arbitrum;
+  LIFECYCLE_WINDOW_DAYS * BLOCKS_PER_DAY.arbitrum;
 
 /**
  * Vote summaries are one request per proposal; fetch them in small batches so

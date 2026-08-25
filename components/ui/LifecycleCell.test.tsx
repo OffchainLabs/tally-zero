@@ -31,6 +31,7 @@ function status(overrides: Record<string, unknown>) {
     phaseLabel: null,
     currentStage: null,
     totalStages: 7,
+    isResolving: false,
     isTracked: true,
     isQueued: false,
     queuePosition: null,
@@ -53,14 +54,41 @@ describe("LifecycleCell", () => {
   // be waiting for one of the two tracking slots must not be the one dead spot.
   it("links to the stages tab while tracking is queued", () => {
     mocks.useProposalLifecycleStatus.mockReturnValue(
-      status({ isQueued: true, queuePosition: 2 })
+      status({ isResolving: true, isQueued: true, queuePosition: 2 })
     );
 
     const html = renderToStaticMarkup(<LifecycleCell proposal={proposal} />);
 
-    expect(html).toContain("Queue #2");
     expect(html).toContain(`/proposal/`);
     expect(html).toContain("tab=stages");
+    // The queue position moved into the hover card, which Radix renders only
+    // once opened. What must not happen is it standing in for a status.
+    expect(html).not.toContain("Queue #2");
+  });
+
+  // Cycling through "Queued", "Executed" and then "Executing" as each source
+  // answers reads as three verdicts rather than one being refined.
+  it("shows a placeholder instead of a status while one is still being read", () => {
+    mocks.useProposalLifecycleStatus.mockReturnValue(
+      status({ isResolving: true, isLoading: true, display: "Executing" })
+    );
+
+    const html = renderToStaticMarkup(<LifecycleCell proposal={proposal} />);
+
+    expect(html).toContain("animate-[shimmer_2s_ease-in-out_infinite]");
+    expect(html).not.toContain(">Executing<");
+    expect(html).not.toContain(">Queued<");
+  });
+
+  it("shows a placeholder while the indexed state is unverified", () => {
+    mocks.useProposalLifecycleStatus.mockReturnValue(status({}));
+
+    const html = renderToStaticMarkup(
+      <LifecycleCell proposal={{ ...proposal, isStateUnverified: true }} />
+    );
+
+    expect(html).toContain("animate-[shimmer_2s_ease-in-out_infinite]");
+    expect(html).not.toContain(">Queued<");
   });
 
   it("links to the stages tab for a resolved status", () => {

@@ -30,8 +30,9 @@ export const MobileProposalCard = memo(function MobileProposalCard({
     80
   );
   // Same on-chain status the desktop table's LifecycleCell resolves, so a Core
-  // proposal still travelling through the timelocks reads "Executing" here too.
-  const { state } = useProposalLifecycleStatus(proposal);
+  // proposal still travelling through the timelocks reads "Executing" here too,
+  // and stays a placeholder until it settles instead of cycling through labels.
+  const { state, isResolving } = useProposalLifecycleStatus(proposal);
 
   return (
     <Link
@@ -54,8 +55,8 @@ export const MobileProposalCard = memo(function MobileProposalCard({
             {plainText}
           </p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {/* Withheld until the governor confirms it; see isProposalStateUnverified */}
-            {proposal.isStateUnverified ? (
+            {/* Withheld until the chain confirms it; see isProposalStateUnverified */}
+            {proposal.isStateUnverified || isResolving ? (
               <Skeleton className="h-5 w-20 rounded-full" />
             ) : (
               <StatusBadgeGlass state={state} />

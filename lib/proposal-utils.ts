@@ -1,3 +1,4 @@
+import { isCoreGovernor } from "@/config/governors";
 import {
   ADVANCEABLE_PROPOSAL_STATES,
   normalizeProposalStateName,
@@ -5,6 +6,23 @@ import {
 import type { ParsedProposal } from "@/types/proposal";
 import { GOVERNOR_VOTING_PERIOD_BLOCKS } from "@config/arbitrum-governance";
 import { BLOCKS_PER_DAY } from "@config/block-times";
+
+/**
+ * How far back a proposal can have started and still be moving through its
+ * lifecycle, in days.
+ *
+ * A Core proposal takes about 38 days from creation to a redeemed retryable
+ * (3 voting delay + 14 voting + 8 L2 timelock + ~7 L2-to-L1 challenge + 3 L1
+ * timelock), and nobody queues or executes the moment they are able to, so 75
+ * days is a generous cover.
+ *
+ * Shared with the RPC scan in `useMultiGovernorSearch`, which reads
+ * `ProposalCreated` logs over the same window: the rows inside it are exactly
+ * the ones that get a creation transaction hash, and therefore the only ones
+ * whose lifecycle can be traced.
+ */
+export const LIFECYCLE_WINDOW_DAYS = 75;
+const LIFECYCLE_WINDOW_BLOCKS = LIFECYCLE_WINDOW_DAYS * BLOCKS_PER_DAY.ethereum;
 
 /**
  * How long after a proposal's voting period ends a `Defeated` verdict is still
@@ -27,6 +45,8 @@ type ProposalStateSource = {
   startBlock?: string | null;
   /** Scheduled vote end block; "0" when the indexer did not supply one */
   endBlock?: string | null;
+  /** Governor contract address, which decides whether an L1 round trip follows */
+  contractAddress?: string | null;
 };
 
 function parseBlockNumber(value: string | null | undefined): number | null {
@@ -118,15 +138,27 @@ export type StateVerificationProgress = {
  * Whether a proposal's state is still awaiting confirmation from the governor
  * and should therefore not be rendered yet.
  *
- * Only `Defeated` qualifies. It is the state the indexer can be wrong about
- * (see {@link needsOnChainStateRefresh}), and showing it on load means a row can
- * read "Defeated" for a second and then flip to "Active" once the governor
- * answers. The in-flight states are not withheld: `Pending` / `Active` are
- * accurate enough to show immediately and only their tallies move.
+ * A row whose status is about to be corrected should show a loading placeholder,
+ * not a sequence of answers. Reading "Queued", then "Executed", then "Executing"
+ * over a few seconds tells the reader less than showing nothing would, and it
+ * looks like the page cannot make up its mind.
+ *
+ * Three cases qualify, all of them bounded to the rows that can actually change:
+ *
+ * - `Defeated`, inside the recheck window. It is the one final-looking state a
+ *   deadline miscalculation can fabricate (see {@link needsOnChainStateRefresh}).
+ * - `Succeeded` and `Queued`, which `queue()` and `execute()` advance without
+ *   the indexer necessarily having seen it.
+ * - `Executed` on the Core Governor, for a proposal recent enough to still be in
+ *   its L1 round trip. That row is about to be traced, and the trace is what
+ *   decides between `Executed` and `Executing`.
+ *
+ * `Pending` and `Active` are shown immediately, as before: they are accurate
+ * enough on arrival and only their tallies move. Everything else is terminal.
  *
  * Falls back to showing the indexed state as soon as there is no better answer
  * coming: once reconciliation finishes, once it fails, or when the governor clock
- * is unavailable so the recheck window cannot be evaluated at all.
+ * is unavailable so the windows cannot be evaluated at all.
  */
 export function isProposalStateUnverified(
   proposal: ProposalStateSource,
@@ -137,14 +169,46 @@ export function isProposalStateUnverified(
     reconcileFailed,
   }: StateVerificationProgress
 ): boolean {
-  if (normalizeProposalStateName(proposal.state) !== "Defeated") return false;
   if (reconciled || reconcileFailed) return false;
+
+  const state = normalizeProposalStateName(proposal.state);
+
+  if (state === "Succeeded" || state === "Queued") return true;
+
+  if (state === "Executed") {
+    return isWithinLifecycleWindow(proposal, currentGovernorBlock);
+  }
+
+  if (state !== "Defeated") return false;
 
   // The window needs the clock. While it is still loading, withhold rather than
   // flash a state that a moment later turns out to have been worth rechecking.
   if (governorClockPending) return true;
 
   return needsOnChainStateRefresh(proposal, currentGovernorBlock);
+}
+
+/**
+ * Whether a Core Governor proposal is recent enough that its L1 round trip
+ * could still be running, which is what makes its `Executed` worth withholding.
+ *
+ * Measured from the vote snapshot, the only timestamp-like field an indexer row
+ * carries, against {@link LIFECYCLE_WINDOW_DAYS}: the same window the RPC scan
+ * covers, so this withholds exactly the rows that scan is about to hand a
+ * creation transaction to. Older Core rows, and every Treasury row, render
+ * immediately; a Treasury proposal never leaves L2, so its `Executed` is final.
+ */
+function isWithinLifecycleWindow(
+  { startBlock, contractAddress }: ProposalStateSource,
+  currentGovernorBlock: number | null
+): boolean {
+  if (!contractAddress || !isCoreGovernor(contractAddress)) return false;
+  if (currentGovernorBlock === null) return false;
+
+  const snapshot = parseBlockNumber(startBlock);
+  if (snapshot === null) return false;
+
+  return currentGovernorBlock - snapshot <= LIFECYCLE_WINDOW_BLOCKS;
 }
 
 export function isIncompleteProposalState(

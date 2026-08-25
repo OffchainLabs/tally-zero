@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { GOVERNORS } from "@/config/governors";
 import { GOVERNOR_VOTING_PERIOD_BLOCKS } from "@config/arbitrum-governance";
 import { BLOCKS_PER_DAY } from "@config/block-times";
 
@@ -7,6 +8,7 @@ import {
   getScheduledVoteEndBlock,
   isIncompleteProposalState,
   isProposalStateUnverified,
+  LIFECYCLE_WINDOW_DAYS,
   mergeProposalData,
   needsOnChainStateRefresh,
   type StateVerificationProgress,
@@ -229,8 +231,62 @@ describe("proposal-utils", () => {
       ).toBe(false);
     });
 
-    it("never withholds states other than Defeated", () => {
-      for (const state of ["Active", "Pending", "Executed", "Succeeded"]) {
+    // Showing "Queued", then "Executed", then "Executing" over a few seconds
+    // reads as three answers rather than one being refined.
+    it("withholds the post-vote states that queue() and execute() advance", () => {
+      for (const state of ["Succeeded", "Queued"]) {
+        expect(
+          isProposalStateUnverified({ state, endBlock: "0" }, RECONCILING)
+        ).toBe(true);
+      }
+    });
+
+    it("withholds Executed on a Core proposal that could still be in flight", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.core.address,
+          },
+          RECONCILING
+        )
+      ).toBe(true);
+    });
+
+    it("shows Executed once the proposal is past the lifecycle window", () => {
+      const oldSnapshot =
+        L1_HEAD - (LIFECYCLE_WINDOW_DAYS + 1) * BLOCKS_PER_DAY.ethereum;
+
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(oldSnapshot),
+            contractAddress: GOVERNORS.core.address,
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
+    // Treasury proposals never leave L2, so their Executed cannot become
+    // Executing and there is nothing to wait for.
+    it("shows Executed immediately for a Treasury proposal", () => {
+      expect(
+        isProposalStateUnverified(
+          {
+            state: "Executed",
+            startBlock: String(SNAPSHOT_BLOCK),
+            contractAddress: GOVERNORS.treasury.address,
+          },
+          RECONCILING
+        )
+      ).toBe(false);
+    });
+
+    it("shows the pre-vote states immediately", () => {
+      for (const state of ["Active", "Pending", "Canceled", "Expired"]) {
         expect(
           isProposalStateUnverified({ state, endBlock: "0" }, RECONCILING)
         ).toBe(false);

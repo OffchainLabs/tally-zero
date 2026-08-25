@@ -198,9 +198,10 @@ function ProposalPageContent({
   // retryable ticket has been executed. `Executed` is the only label the stages
   // can change, so nothing else is traced for it; the stages tab shares the
   // same tracking session when it opens.
-  const { state: displayState } = useProposalLifecycleStatus(proposal, {
-    enabled: proposal.state.toLowerCase() === "executed",
-  });
+  const { state: displayState, isResolving: isStateResolving } =
+    useProposalLifecycleStatus(proposal, {
+      enabled: proposal.state.toLowerCase() === "executed",
+    });
 
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
@@ -288,6 +289,7 @@ function ProposalPageContent({
         <VoteModel
           proposal={parsedProposal.data}
           stateValue={stateValue}
+          isStateResolving={isStateResolving}
           isDesktop={true}
           variant="page"
           defaultTab={activeTab}

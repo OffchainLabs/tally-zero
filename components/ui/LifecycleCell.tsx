@@ -19,7 +19,7 @@ import {
 } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
-import { ClockIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ReloadIcon } from "@radix-ui/react-icons";
 import { InfoIcon } from "lucide-react";
 
 interface LifecycleCellProps {
@@ -41,6 +41,7 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     phaseLabel,
     currentStage,
     totalStages,
+    isResolving,
     isTracked,
     isQueued,
     queuePosition,
@@ -56,24 +57,20 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
     tab: "stages",
   });
 
-  // The indexer called this vote closed, but a late-quorum extension can leave
-  // it open on-chain. Hold the status back rather than show one that is about to
-  // be overturned by the governor.
-  if (proposal.isStateUnverified) {
-    return <UnverifiedLifecycleContent />;
-  }
-
-  // Tracking is queued behind other proposals and has nothing to show yet, so
-  // say so instead of rendering a status no trace has confirmed. Still a link:
-  // every other state in this cell opens the stages tab, and waiting for a
-  // tracking slot is no reason to make the row the one dead spot in the column.
-  if (isQueued) {
+  // Nothing settled yet. A status arrived at in steps reads as three different
+  // answers ("Queued", then "Executed", then "Executing") rather than as one
+  // being refined, so show a placeholder until the chain has the last word.
+  // Covers both halves of the wait: the indexed state being re-read from the
+  // governor, and the stage trace that separates Executing from Executed.
+  if (proposal.isStateUnverified || isResolving) {
     return (
       <Link
         href={stagesHref}
         className="text-left hover:opacity-80 transition-opacity"
       >
-        <QueuedLifecycleContent queuePosition={queuePosition} />
+        <ResolvingLifecycleContent
+          queuePosition={isQueued ? queuePosition : null}
+        />
       </Link>
     );
   }
@@ -101,10 +98,15 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
 }
 
 /**
- * Placeholder shown while a proposal's indexed status is being confirmed against
- * the governor contract.
+ * Placeholder shown while a proposal's status is still being read from the
+ * chain. The queue position, when there is one, stays in the hover card: it
+ * explains a wait, and is not a status.
  */
-function UnverifiedLifecycleContent() {
+function ResolvingLifecycleContent({
+  queuePosition,
+}: {
+  queuePosition: number | null;
+}) {
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
@@ -114,34 +116,11 @@ function UnverifiedLifecycleContent() {
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="glass w-auto">
-        <p className="text-sm">Confirming status on-chain</p>
+        <p className="text-sm">Reading status from the chain</p>
         <p className="text-xs text-muted-foreground">
-          Waiting for the governor to confirm before showing a status.
-        </p>
-      </HoverCardContent>
-    </HoverCard>
-  );
-}
-
-function QueuedLifecycleContent({
-  queuePosition,
-}: {
-  queuePosition: number | null;
-}) {
-  return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-          <ClockIcon className="h-3.5 w-3.5 text-yellow-500 drop-shadow-sm" />
-          <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
-            Queue #{queuePosition}
-          </span>
-        </div>
-      </HoverCardTrigger>
-      <HoverCardContent className="glass w-auto">
-        <p className="text-sm">Waiting in queue (position {queuePosition})</p>
-        <p className="text-xs text-muted-foreground">
-          Max 2 proposals tracked concurrently
+          {queuePosition !== null
+            ? `Waiting for a tracking slot (position ${queuePosition}, two proposals at a time).`
+            : "Waiting for the governor and the lifecycle stages to agree before showing a status."}
         </p>
       </HoverCardContent>
     </HoverCard>

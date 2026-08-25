@@ -37,6 +37,12 @@ export interface ProposalLifecycleInput {
 }
 
 export interface ProposalLifecycleStatus extends ProposalDisplayStatus {
+  /**
+   * The displayed status can still change, because the trace that decides it has
+   * not finished. Callers should render a loading placeholder rather than a
+   * status the next second overwrites.
+   */
+  isResolving: boolean;
   /** Whether this row's lifecycle is being read from the chain at all */
   isTracked: boolean;
   /** Tracking is in the queue behind other proposals (max 2 run at once) */
@@ -106,6 +112,7 @@ export function useProposalLifecycleStatus(
     queuePosition,
     isComplete,
     error,
+    result,
     isBackgroundRefreshing,
   } = useProposalStages({
     proposalId: proposal.id,
@@ -127,6 +134,13 @@ export function useProposalLifecycleStatus(
 
   return {
     ...status,
+    // Queued counts as unresolved too: a trace waiting for one of the two
+    // tracking slots has produced nothing to show yet. A finished trace being
+    // refreshed in the background does not, hence the check on `result` rather
+    // than on `isLoading`: that session goes back to loading while still
+    // holding a resolved answer, and blanking a settled row would be its own
+    // kind of flicker.
+    isResolving: isTracked && !error && !isComplete && result === null,
     isTracked,
     isQueued,
     queuePosition,
