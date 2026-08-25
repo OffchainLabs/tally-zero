@@ -19,7 +19,8 @@ import {
 } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
-import { ClockIcon, ExternalLinkIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ClockIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { InfoIcon } from "lucide-react";
 
 interface LifecycleCellProps {
   proposal: z.infer<typeof proposalSchema> & {
@@ -63,9 +64,18 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   }
 
   // Tracking is queued behind other proposals and has nothing to show yet, so
-  // say so instead of rendering a status no trace has confirmed.
+  // say so instead of rendering a status no trace has confirmed. Still a link:
+  // every other state in this cell opens the stages tab, and waiting for a
+  // tracking slot is no reason to make the row the one dead spot in the column.
   if (isQueued) {
-    return <QueuedLifecycleContent queuePosition={queuePosition} />;
+    return (
+      <Link
+        href={stagesHref}
+        className="text-left hover:opacity-80 transition-opacity"
+      >
+        <QueuedLifecycleContent queuePosition={queuePosition} />
+      </Link>
+    );
   }
 
   return (
@@ -180,7 +190,7 @@ const LifecycleContent = memo(function LifecycleContent({
             )}
           </span>
           <span className={cn("text-xs font-medium", color)}>{display}</span>
-          <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+          <InfoIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="glass w-auto">
