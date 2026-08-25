@@ -51,6 +51,12 @@ type ProposalStateSource = {
   creationTxHash?: string | null;
 };
 
+function isCoreGovernorProposal({
+  contractAddress,
+}: ProposalStateSource): boolean {
+  return Boolean(contractAddress) && isCoreGovernor(contractAddress!);
+}
+
 function parseBlockNumber(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Number(value);
@@ -189,7 +195,10 @@ export function isProposalStateUnverified(
     // has one, whether from the indexer or from the scan, the trace takes over
     // and reports its own progress; see `isResolving`.
     if (reconciled || proposal.creationTxHash) return false;
-    return isWithinLifecycleWindow(proposal, currentGovernorBlock);
+    // The window needs the clock, and only a Core proposal has a round trip to
+    // be in the middle of, so only those wait for it.
+    if (governorClockPending) return isCoreGovernorProposal(proposal);
+    return couldBeMidRoundTrip(proposal, currentGovernorBlock);
   }
 
   if (statesRefreshed || reconciled) return false;
@@ -206,16 +215,20 @@ export function isProposalStateUnverified(
 }
 
 /**
- * Whether a Core Governor proposal is recent enough that its L1 round trip
- * could still be running, which is what makes its `Executed` worth withholding.
+ * Whether a proposal could still be moving through its L1 round trip, which is
+ * the only case where a lifecycle trace can tell the reader something the
+ * governor's own `state()` does not.
  *
  * Measured from the vote snapshot, the only timestamp-like field an indexer row
- * carries, against {@link LIFECYCLE_WINDOW_DAYS}: the same window the RPC scan
- * covers, so this withholds exactly the rows that scan is about to hand a
- * creation transaction to. Older Core rows, and every Treasury row, render
- * immediately; a Treasury proposal never leaves L2, so its `Executed` is final.
+ * carries, against {@link LIFECYCLE_WINDOW_DAYS}. Older Core rows, and every
+ * Treasury row, are settled: a Treasury proposal never leaves L2, and a Core
+ * proposal from beyond the window has long since finished, so tracing either
+ * one spends seconds to confirm the `Executed` already on screen.
+ *
+ * This is the gate on both withholding a status and spending a trace on it, so
+ * the rows that hold back are exactly the rows something is coming for.
  */
-function isWithinLifecycleWindow(
+export function couldBeMidRoundTrip(
   { startBlock, contractAddress }: ProposalStateSource,
   currentGovernorBlock: number | null
 ): boolean {

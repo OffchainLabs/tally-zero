@@ -14,18 +14,20 @@
  *   never advances. Stage statuses are the source of truth after the vote; the
  *   governor is the source of truth before it.
  *
- * Tracking costs RPC calls, so it only runs for rows that can still move and
- * that carry a creation transaction hash. Indexer rows carry none; the
- * background RPC scan in `useMultiGovernorSearch` supplies one for everything
- * created inside its recent window, which is where the in-flight proposals are.
+ * A trace costs around eight seconds against a cold cache and runs two at a
+ * time, so it is spent only where it changes the answer: see
+ * `shouldTrackProposalLifecycle`.
  */
 
 import { isCoreGovernor } from "@/config/governors";
+import { useL1Block } from "@/hooks/use-l1-block";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
 import {
   getEffectiveDisplayState,
   type ProposalDisplayStatus,
 } from "@/lib/lifecycle-utils";
+import { couldBeMidRoundTrip } from "@/lib/proposal-utils";
+import { normalizeProposalStateName } from "@/lib/state-utils";
 import type { ProposalStage } from "@/types/proposal-stage";
 
 /** The proposal fields the status depends on */
@@ -34,6 +36,8 @@ export interface ProposalLifecycleInput {
   state: string;
   contractAddress: string;
   creationTxHash?: string;
+  /** Vote snapshot block, which dates the proposal against the round-trip window */
+  startBlock?: string;
 }
 
 export interface ProposalLifecycleStatus extends ProposalDisplayStatus {
@@ -64,29 +68,41 @@ export interface ProposalLifecycleStatus extends ProposalDisplayStatus {
 }
 
 /**
- * States whose lifecycle is worth tracing. `succeeded` / `queued` are still
- * moving through the timelock, `pending` / `active` are pre-vote, and
- * `executed` matters only on the Core Governor, where it is the start of the
- * L1 round trip rather than the end of the proposal.
+ * Whether tracing this proposal can tell the reader anything.
+ *
+ * Only one case can: a Core Governor proposal the governor calls `Executed`
+ * that is recent enough to still be in its L1 round trip, where the stages
+ * decide between `Executing` and `Executed`. Every other status passes through
+ * from the governor untouched, so a trace spends around eight seconds
+ * confirming what the row already says.
+ *
+ * That distinction is the whole performance story of this column. Reading
+ * creation transaction hashes from the indexer made every row traceable, and
+ * tracing every traceable row put six of the first ten behind a two-at-a-time
+ * queue: roughly 24 seconds before the last one resolved, all of it spent
+ * confirming `Executed` on proposals that finished months ago.
  */
-export function shouldTrackProposalLifecycle({
-  state,
-  contractAddress,
-  creationTxHash,
-}: ProposalLifecycleInput): boolean {
-  if (!creationTxHash) return false;
+export function shouldTrackProposalLifecycle(
+  proposal: ProposalLifecycleInput,
+  currentGovernorBlock: number | null
+): boolean {
+  return (
+    isRoundTripCandidate(proposal) &&
+    couldBeMidRoundTrip(proposal, currentGovernorBlock)
+  );
+}
 
-  switch (state.toLowerCase()) {
-    case "pending":
-    case "active":
-    case "succeeded":
-    case "queued":
-      return true;
-    case "executed":
-      return isCoreGovernor(contractAddress);
-    default:
-      return false;
-  }
+/**
+ * The half of that decision that does not need the governor clock: a Core
+ * proposal reported `Executed` with something to trace. Only these rows care
+ * how old they are, so only these wait for the clock before the status settles.
+ */
+function isRoundTripCandidate(proposal: ProposalLifecycleInput): boolean {
+  return (
+    Boolean(proposal.creationTxHash) &&
+    normalizeProposalStateName(proposal.state) === "Executed" &&
+    isCoreGovernor(proposal.contractAddress)
+  );
 }
 
 export interface UseProposalLifecycleStatusOptions {
@@ -102,7 +118,17 @@ export function useProposalLifecycleStatus(
   proposal: ProposalLifecycleInput,
   { enabled = true }: UseProposalLifecycleStatusOptions = {}
 ): ProposalLifecycleStatus {
-  const isTracked = enabled && shouldTrackProposalLifecycle(proposal);
+  // The governor clock is the L1 block height, and this is the same shared
+  // query every other surface reads, so it costs nothing here.
+  const { currentL1Block, isLoading: isClockLoading } = useL1Block();
+  const isTracked =
+    enabled && shouldTrackProposalLifecycle(proposal, currentL1Block);
+
+  // Until the clock arrives there is no telling whether this row needs a trace.
+  // Showing the governor's "Executed" in the meantime would mean flashing an
+  // answer the trace is about to replace with "Executing".
+  const isAwaitingClock =
+    enabled && isClockLoading && isRoundTripCandidate(proposal);
 
   const {
     stages,
@@ -140,7 +166,9 @@ export function useProposalLifecycleStatus(
     // than on `isLoading`: that session goes back to loading while still
     // holding a resolved answer, and blanking a settled row would be its own
     // kind of flicker.
-    isResolving: isTracked && !error && !isComplete && result === null,
+    isResolving:
+      isAwaitingClock ||
+      (isTracked && !error && !isComplete && result === null),
     isTracked,
     isQueued,
     queuePosition,

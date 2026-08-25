@@ -180,7 +180,9 @@ const LifecycleContent = memo(function LifecycleContent({
         ) : isTracked ? (
           <p className="text-sm">Lifecycle tracked: {stageCount} stages</p>
         ) : (
-          <p className="text-sm">Lifecycle finalized on-chain</p>
+          // Every status but a Core proposal's Executed comes straight from the
+          // governor, with no lifecycle trace behind it.
+          <p className="text-sm">Status read from the governor</p>
         )}
         {phaseLabel && currentStage !== null && (
           <p className="text-xs text-muted-foreground">
