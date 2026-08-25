@@ -1,3 +1,4 @@
+import { DELEGATE_MIN_VOTING_POWER_ARB } from "@/config/delegates";
 import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 import { commitAvatar } from "@/lib/profile/avatar";
 import type { MeResponse } from "@/lib/siwe/types";
@@ -5,6 +6,13 @@ import type { MeResponse } from "@/lib/siwe/types";
 export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 2_000_000;
+
+// Names the threshold, so a delegate below it can tell a cutoff from having no
+// voting power at all.
+const BELOW_THRESHOLD_MESSAGE =
+  `Uploading an avatar requires at least ` +
+  `${DELEGATE_MIN_VOTING_POWER_ARB.toLocaleString("en-US")} ARB of voting ` +
+  `power. Your delegated ARB is below that threshold.`;
 
 type ImageContentType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 
@@ -33,9 +41,10 @@ function sniffImage(bytes: Uint8Array): ImageContentType | null {
 
 // Authenticated avatar upload. Auth + anti-spam are delegated to the indexer's
 // SIWE surface: POST /api/me/avatar-intent verifies the session, requires the
-// address to hold delegated voting power (403), and rate-limits per address
-// (429). This route is the HTTP boundary only — staging the image, updating the
-// profile and collecting the superseded copy all live in `commitAvatar`.
+// address to clear the delegate voting-power threshold (403), and rate-limits
+// per address (429). This route is the HTTP boundary only — staging the image,
+// updating the profile and collecting the superseded copy all live in
+// `commitAvatar`.
 export async function POST(request: Request): Promise<Response> {
   const cookie = request.headers.get("cookie");
   if (!cookie) {
@@ -71,7 +80,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 /**
- * Authorize the upload at the indexer (session + delegated-ARB gate + rate
+ * Authorize the upload at the indexer (session + delegated-ARB threshold + rate
  * limit) and read the profile's current picture, which is what the commit will
  * supersede. Returns the error `Response` to send when either call fails.
  */
@@ -93,10 +102,7 @@ async function authorize(
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
   if (intent.status === 403) {
-    return Response.json(
-      { error: "Only delegates with voting power can upload an avatar." },
-      { status: 403 }
-    );
+    return Response.json({ error: BELOW_THRESHOLD_MESSAGE }, { status: 403 });
   }
   if (intent.status === 429) {
     return Response.json(
