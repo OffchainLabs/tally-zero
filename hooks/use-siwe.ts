@@ -49,9 +49,17 @@ export function useSiwe() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_KEY }),
   });
 
+  // Clear on settled, not on success: a sign-out that fails at the proxy (503
+  // unconfigured / 502 upstream) must not leave the UI asserting a session the
+  // user just asked to end. Clearing alone would lie in the other direction
+  // though — the cookie may well still be alive — so reconcile against /api/me
+  // immediately rather than letting the 30s staleTime resurrect it later.
   const signOut = useMutation({
     mutationFn: () => siweApi.logout(),
-    onSuccess: () => queryClient.setQueryData(ME_KEY, null),
+    onSettled: () => {
+      queryClient.setQueryData(ME_KEY, null);
+      return queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
   });
 
   const refreshSession = useCallback(
@@ -77,6 +85,8 @@ export function useSiwe() {
     isSigningIn: signIn.isPending,
     signInError: signIn.error,
     signOut: signOut.mutateAsync,
+    isSigningOut: signOut.isPending,
+    signOutError: signOut.error,
     refreshSession,
   };
 }

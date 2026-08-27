@@ -126,8 +126,14 @@ export const siweApi = {
     return parse<{ url: string }>(res);
   },
 
+  // 401 is the second intentional exception to "non-2xx throws": a server with
+  // no session is the state sign-out was asking for, not a failure. Genuine
+  // failures (the proxy's 503 unconfigured / 502 upstream, or a timeout) still
+  // throw, so the caller can tell "you are signed out" from "we could not ask".
   async logout(): Promise<void> {
-    await send<null>("/api/auth/logout", "POST");
+    const res = await fetch(`${BASE}/api/auth/logout`, { method: "POST" });
+    if (res.status === 401) return;
+    await parse<null>(res);
   },
 
   // GET /api/auth/session and GET /api/me/profile are deliberately not wrapped:
@@ -138,7 +144,8 @@ export const siweApi = {
   // --- Acting as a Safe -----------------------------------------------------
   // The subject of every owned read/write is `actingAs ?? address`, so these
   // three calls change what the whole app is about. Callers must drop cached
-  // subject-scoped data afterwards (see hooks/use-act-as.ts).
+  // subject-scoped data afterwards — a single removeQueries(SUBJECT_SCOPE),
+  // which the act-as hook in the next PR of this stack will own.
 
   async safes(): Promise<KnownSafe[]> {
     const body = await send<{ safes: KnownSafe[] }>("/api/auth/safes", "GET");
