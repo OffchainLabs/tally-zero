@@ -68,3 +68,5 @@ public/uploads/
 test-results/
 playwright-report/
 .playwright/
+# saved storageState carries a live siwe_session cookie — never commit it
+e2e/.auth/
