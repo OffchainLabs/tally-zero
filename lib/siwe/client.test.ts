@@ -175,13 +175,21 @@ describe("siweApi request shaping", () => {
   });
 
   // logout() used to fire-and-forget, so a failed sign-out looked successful
-  // and the UI cleared the session locally while the server kept it alive.
+  // and the UI cleared the session locally while the server kept it alive. A
+  // real failure is the proxy's 503 unconfigured / 502 upstream, not a 401.
   it("surfaces a failed logout instead of swallowing it", async () => {
+    mockFetchOnce({ error: "Indexer upstream error." }, { status: 502 });
+    await expect(siweApi.logout()).rejects.toBeInstanceOf(SiweApiError);
+  });
+
+  // 401 is not a failure here: a server with no session is exactly the state
+  // sign-out was asking for, so the caller should not have to catch it.
+  it("treats a 401 logout as already signed out", async () => {
     mockFetchOnce(
       { error: { code: "unauthorized", message: "no session" } },
       { status: 401 }
     );
-    await expect(siweApi.logout()).rejects.toBeInstanceOf(SiweApiError);
+    await expect(siweApi.logout()).resolves.toBeUndefined();
   });
 
   it("resolves logout on the empty 204 body", async () => {
