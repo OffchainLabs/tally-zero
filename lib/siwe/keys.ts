@@ -28,8 +28,14 @@ export const SUBJECT_SCOPE = ["siwe", "subject"] as const;
 /** Root of the signer-scoped Safe recall list. */
 export const SAFES_SCOPE = ["siwe", "safes"] as const;
 
+// Addresses reach these keys in two casings — the indexer's `effectiveAddress`
+// and wagmi's checksummed `address` — and one subject must never occupy two
+// cache entries, or a write through one leaves the other stale. Lowercasing here
+// matches how the sibling hooks key an address (use-user-vote, use-delegate-votes).
+const addr = (value: string) => value.toLowerCase();
+
 const subjectKey = (subject: string, ...rest: string[]) =>
-  [...SUBJECT_SCOPE, subject, ...rest] as const;
+  [...SUBJECT_SCOPE, addr(subject), ...rest] as const;
 
 export const siweKeys = {
   /** Session envelope. Not subject-scoped: it *carries* the subject. */
@@ -43,7 +49,8 @@ export const siweKeys = {
    * session resolves; that is the documented dependent-query shape (the query
    * is gated by `enabled`, so a key holding undefined never fetches).
    */
-  safes: (signer: string | undefined) => [...SAFES_SCOPE, signer] as const,
+  safes: (signer: string | undefined) =>
+    [...SAFES_SCOPE, signer && addr(signer)] as const,
 
   /** Subject-scoped — all evicted together by SUBJECT_SCOPE. */
   profile: (subject: string) => subjectKey(subject, "profile"),
@@ -57,5 +64,5 @@ export const siweKeys = {
   elections: ["siwe", "elections"] as const,
   sharedDraft: (slug: string) => ["siwe", "shared-draft", slug] as const,
   publicCandidateProfile: (electionId: string, address: string) =>
-    ["siwe", "public-candidate-profile", electionId, address] as const,
+    ["siwe", "public-candidate-profile", electionId, addr(address)] as const,
 };
