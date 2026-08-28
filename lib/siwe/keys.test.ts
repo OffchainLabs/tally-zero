@@ -79,4 +79,36 @@ describe("siweKeys", () => {
     expect(() => siweKeys.safes(undefined)).not.toThrow();
     expect(siweKeys.safes(undefined)).toEqual([...SAFES_SCOPE, undefined]);
   });
+
+  // An election id is `${governorAddress}:${proposalId}`, so it carries an
+  // address and has the same two-casings problem: the indexer sends it
+  // lowercase, config/governors.ts holds it checksummed. An id built from
+  // either must land on one cache entry.
+  it("keys one election identically whatever its governor casing", () => {
+    const checksummed = "0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9:601626880";
+    const lower = "0xf07ded9dc292157749b6fd268e37df6ea38395b9:601626880";
+
+    expect(siweKeys.publicCandidateProfile(checksummed, "0xa")).toEqual(
+      siweKeys.publicCandidateProfile(lower, "0xa")
+    );
+    expect(siweKeys.candidateProfile("0xsubject", checksummed)).toEqual(
+      siweKeys.candidateProfile("0xsubject", lower)
+    );
+  });
+
+  // Only the governor half is normalized. Proposal ids are opaque here, so they
+  // are passed through rather than lowercased.
+  it("leaves the proposal id untouched", () => {
+    const key = siweKeys.publicCandidateProfile("0xGOV:AbC123", "0xa");
+    expect(key).toContain("0xgov:AbC123");
+  });
+
+  it("passes through an election id with no colon", () => {
+    expect(() =>
+      siweKeys.publicCandidateProfile("nocolon", "0xa")
+    ).not.toThrow();
+    expect(siweKeys.publicCandidateProfile("nocolon", "0xa")).toContain(
+      "nocolon"
+    );
+  });
 });

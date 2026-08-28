@@ -41,6 +41,18 @@ export const SAFES_SCOPE = ["siwe", "safes"] as const;
 // matches how the sibling hooks key an address (use-user-vote, use-delegate-votes).
 const addr = (value: string) => value.toLowerCase();
 
+// An election id is `${governorAddress}:${proposalId}` (see types.ts), so its
+// leading segment is an address and gets the same treatment as a bare one:
+// governor addresses arrive lowercase from the indexer and checksummed from
+// config/governors.ts, so an id built from either source has to key the same.
+// Only the first colon is split on, and the proposal id is passed through
+// untouched rather than lowercased, so nothing here depends on its alphabet.
+const electionKey = (electionId: string) => {
+  const colon = electionId.indexOf(":");
+  if (colon === -1) return electionId;
+  return addr(electionId.slice(0, colon)) + electionId.slice(colon);
+};
+
 const subjectKey = (subject: string, ...rest: string[]) =>
   [...SUBJECT_SCOPE, addr(subject), ...rest] as const;
 
@@ -72,11 +84,16 @@ export const siweKeys = {
   // Nested under drafts() so invalidating the list also refreshes each draft.
   draft: (subject: string, id: string) => subjectKey(subject, "drafts", id),
   candidateProfile: (subject: string, electionId: string) =>
-    subjectKey(subject, "candidate-profile", electionId),
+    subjectKey(subject, "candidate-profile", electionKey(electionId)),
 
   /** Public — unauthenticated reads, shared across all viewers. */
   elections: ["siwe", "elections"] as const,
   sharedDraft: (slug: string) => ["siwe", "shared-draft", slug] as const,
   publicCandidateProfile: (electionId: string, address: string) =>
-    ["siwe", "public-candidate-profile", electionId, addr(address)] as const,
+    [
+      "siwe",
+      "public-candidate-profile",
+      electionKey(electionId),
+      addr(address),
+    ] as const,
 };
