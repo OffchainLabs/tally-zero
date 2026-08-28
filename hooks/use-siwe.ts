@@ -8,6 +8,7 @@ import { useAccount, useSignMessage } from "wagmi";
 import { SIWE_CHAIN_ID } from "@/config/siwe";
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
+import { clearAndReconcileSession } from "@/lib/siwe/session-cache";
 import type { MeResponse } from "@/lib/siwe/types";
 
 const ME_KEY = siweKeys.me;
@@ -49,17 +50,18 @@ export function useSiwe() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_KEY }),
   });
 
-  // Clear on settled, not on success: a sign-out that fails at the proxy (503
-  // unconfigured / 502 upstream) must not leave the UI asserting a session the
-  // user just asked to end. Clearing alone would lie in the other direction
-  // though — the cookie may well still be alive — so reconcile against /api/me
-  // immediately rather than letting the 30s staleTime resurrect it later.
+  // Clear on success, and success is the whole set of outcomes that signed the
+  // user out: logout() resolves on 204 and on 401, and a 401 means the server
+  // already has no session, which is what sign-out asked for.
+  //
+  // A throw means we could not ask (the proxy's 503 unconfigured / 502 upstream,
+  // or a timeout), and the cookie is probably still alive, so the session is
+  // left alone and signOutError carries the reason. Clearing there would put the
+  // UI on the sign-in screen while the session lives, and reconciling could not
+  // correct it, because the outage that failed the logout fails /api/me too.
   const signOut = useMutation({
     mutationFn: () => siweApi.logout(),
-    onSettled: () => {
-      queryClient.setQueryData(ME_KEY, null);
-      return queryClient.invalidateQueries({ queryKey: ME_KEY });
-    },
+    onSuccess: () => clearAndReconcileSession(queryClient),
   });
 
   const refreshSession = useCallback(
