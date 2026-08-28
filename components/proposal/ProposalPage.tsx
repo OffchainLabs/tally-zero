@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { proposalSchema } from "@/config/schema";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
+import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
 import {
   buildGovernorId,
   buildProposalPath,
@@ -191,6 +192,17 @@ function ProposalPageContent({
   );
   const [showFullId, setShowFullId] = useState(false);
 
+  // The governor calls a Core proposal Executed as soon as the L2 timelock
+  // operation runs, which is where the L1 round trip starts. The header badge
+  // follows the tracked stages instead, so it reads Executing until the
+  // retryable ticket has been executed. `Executed` is the only label the stages
+  // can change, so nothing else is traced for it; the stages tab shares the
+  // same tracking session when it opens.
+  const { state: displayState, isResolving: isStateResolving } =
+    useProposalLifecycleStatus(proposal, {
+      enabled: proposal.state.toLowerCase() === "executed",
+    });
+
   const handleCalldataOverrideChange = useCallback(
     (index: number, newCalldata: string | undefined) => {
       setCalldataOverrides((prev) => {
@@ -216,7 +228,7 @@ function ProposalPageContent({
     );
   }
 
-  const stateValue = findStateByValue(proposal.state);
+  const stateValue = findStateByValue(displayState);
   if (!stateValue) {
     return (
       <ProposalPageError
@@ -277,6 +289,7 @@ function ProposalPageContent({
         <VoteModel
           proposal={parsedProposal.data}
           stateValue={stateValue}
+          isStateResolving={isStateResolving}
           isDesktop={true}
           variant="page"
           defaultTab={activeTab}

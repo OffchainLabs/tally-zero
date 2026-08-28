@@ -11,22 +11,16 @@ import {
 } from "@/components/ui/HoverCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { proposalSchema } from "@/config/schema";
-import { useProposalStages } from "@/hooks/use-proposal-stages";
+import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
 import {
-  formatCurrentState,
   formatStageName,
-  getEffectiveDisplayState,
   getStateDotColor,
   getStateStyle,
 } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
-import {
-  ClockIcon,
-  CrossCircledIcon,
-  ExternalLinkIcon,
-  ReloadIcon,
-} from "@radix-ui/react-icons";
+import { ReloadIcon } from "@radix-ui/react-icons";
+import { InfoIcon } from "lucide-react";
 
 interface LifecycleCellProps {
   proposal: z.infer<typeof proposalSchema> & {
@@ -40,86 +34,45 @@ interface LifecycleCellProps {
  * the stages tab when clicked.
  */
 export function LifecycleCell({ proposal }: LifecycleCellProps) {
-  const normalizedProposalState = proposal.state.toLowerCase();
-  const shouldTrackLifecycle =
-    !!proposal.creationTxHash &&
-    (normalizedProposalState === "pending" ||
-      normalizedProposalState === "active" ||
-      normalizedProposalState === "succeeded" ||
-      normalizedProposalState === "queued");
-  const proposalStages = useProposalStages({
-    proposalId: proposal.id,
-    creationTxHash: proposal.creationTxHash || "",
-    governorAddress: proposal.contractAddress,
-    enabled: shouldTrackLifecycle,
-  });
+  const {
+    display,
+    state,
+    isInProgress,
+    phaseLabel,
+    currentStage,
+    totalStages,
+    isResolving,
+    isTracked,
+    isQueued,
+    queuePosition,
+    isLoading,
+    stages,
+    currentStageIndex,
+    isBackgroundRefreshing,
+  } = useProposalLifecycleStatus(proposal);
 
-  // Derive status from proposal stages result
-  const status = proposalStages.isQueued
-    ? "queued"
-    : proposalStages.isLoading
-      ? "loading"
-      : proposalStages.error
-        ? "error"
-        : proposalStages.isComplete
-          ? "complete"
-          : "idle";
-
-  const currentState = proposalStages.result?.currentState || proposal.state;
-  const { queuePosition, currentStageIndex, stages, isBackgroundRefreshing } =
-    proposalStages;
   const stagesHref = buildProposalPath({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress,
     tab: "stages",
   });
 
-  // The indexer called this vote closed, but a late-quorum extension can leave
-  // it open on-chain. Hold the status back rather than show one that is about to
-  // be overturned by the governor.
-  if (proposal.isStateUnverified) {
-    return <UnverifiedLifecycleContent />;
-  }
-
-  if (!shouldTrackLifecycle) {
+  // Nothing settled yet. A status arrived at in steps reads as three different
+  // answers ("Queued", then "Executed", then "Executing") rather than as one
+  // being refined, so show a placeholder until the chain has the last word.
+  // Covers both halves of the wait: the indexed state being re-read from the
+  // governor, and the stage trace that separates Executing from Executed.
+  if (proposal.isStateUnverified || isResolving) {
     return (
       <Link
         href={stagesHref}
         className="text-left hover:opacity-80 transition-opacity"
       >
-        <StaticLifecycleContent currentState={proposal.state} />
+        <ResolvingLifecycleContent
+          queuePosition={isQueued ? queuePosition : null}
+        />
       </Link>
     );
-  }
-
-  // Tracking can fail for reasons that have nothing to do with the proposal
-  // (RPC hiccups, rate limits). Fall back to the on-chain state so the cell
-  // matches what every other data path already shows for this proposal.
-  if (status === "error") {
-    return (
-      <Link
-        href={stagesHref}
-        className="text-left hover:opacity-80 transition-opacity"
-      >
-        <StaticLifecycleContent currentState={proposal.state} />
-      </Link>
-    );
-  }
-
-  const content = (
-    <LifecycleContent
-      status={status}
-      currentState={currentState}
-      queuePosition={queuePosition}
-      currentStageIndex={currentStageIndex}
-      stages={stages}
-      isBackgroundRefreshing={isBackgroundRefreshing}
-      governorAddress={proposal.contractAddress}
-    />
-  );
-
-  if (status === "idle") {
-    return <span className="text-xs text-muted-foreground">-</span>;
   }
 
   return (
@@ -127,16 +80,33 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
       href={stagesHref}
       className="text-left hover:opacity-80 transition-opacity"
     >
-      {content}
+      <LifecycleContent
+        display={display}
+        state={state}
+        isInProgress={isInProgress}
+        phaseLabel={phaseLabel}
+        currentStage={currentStage}
+        totalStages={totalStages}
+        isTracked={isTracked}
+        isLoading={isLoading}
+        stageCount={stages.length}
+        currentStageName={stages[currentStageIndex]?.type ?? null}
+        isBackgroundRefreshing={isBackgroundRefreshing}
+      />
     </Link>
   );
 }
 
 /**
- * Placeholder shown while a proposal's indexed status is being confirmed against
- * the governor contract.
+ * Placeholder shown while a proposal's status is still being read from the
+ * chain. The queue position, when there is one, stays in the hover card: it
+ * explains a wait, and is not a status.
  */
-function UnverifiedLifecycleContent() {
+function ResolvingLifecycleContent({
+  queuePosition,
+}: {
+  queuePosition: number | null;
+}) {
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
@@ -146,178 +116,91 @@ function UnverifiedLifecycleContent() {
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="glass w-auto">
-        <p className="text-sm">Confirming status on-chain</p>
+        <p className="text-sm">Reading status from the chain</p>
         <p className="text-xs text-muted-foreground">
-          Waiting for the governor to confirm before showing a status.
+          {queuePosition !== null
+            ? `Waiting for a tracking slot (position ${queuePosition}, two proposals at a time).`
+            : "Waiting for the governor and the lifecycle stages to agree before showing a status."}
         </p>
       </HoverCardContent>
     </HoverCard>
   );
 }
 
-function StaticLifecycleContent({ currentState }: { currentState: string }) {
-  const { color } = getStateStyle(currentState);
-  const dotColor = getStateDotColor(currentState);
+interface LifecycleContentProps {
+  display: string;
+  state: string;
+  isInProgress: boolean;
+  phaseLabel: string | null;
+  currentStage: number | null;
+  totalStages: number;
+  isTracked: boolean;
+  isLoading: boolean;
+  stageCount: number;
+  currentStageName: string | null;
+  isBackgroundRefreshing: boolean;
+}
+
+const LifecycleContent = memo(function LifecycleContent({
+  display,
+  state,
+  isInProgress,
+  phaseLabel,
+  currentStage,
+  totalStages,
+  isTracked,
+  isLoading,
+  stageCount,
+  currentStageName,
+  isBackgroundRefreshing,
+}: LifecycleContentProps) {
+  const { color } = getStateStyle(state);
+  const dotColor = getStateDotColor(state);
+  const isWorking = isLoading || isBackgroundRefreshing;
 
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
         <div className="inline-flex items-center gap-1.5 cursor-help">
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", dotColor)} />
-          <span className={cn("text-xs font-medium", color)}>
-            {formatCurrentState(currentState)}
+          <span className="relative flex shrink-0">
+            <span className={cn("h-2 w-2 rounded-full", dotColor)} />
+            {isWorking && (
+              <ReloadIcon className="absolute -top-1 -right-1 h-2 w-2 text-blue-500 animate-spin drop-shadow-sm" />
+            )}
           </span>
-          <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+          <span className={cn("text-xs font-medium", color)}>{display}</span>
+          <InfoIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="glass w-auto">
-        <p className="text-sm">Lifecycle finalized on-chain</p>
-        <p className="text-xs text-muted-foreground">Click to view details</p>
+        {isInProgress ? (
+          <p className="text-sm">
+            Executed on the governor, still moving through the timelocks
+          </p>
+        ) : isTracked ? (
+          <p className="text-sm">Lifecycle tracked: {stageCount} stages</p>
+        ) : (
+          // Every status but a Core proposal's Executed comes straight from the
+          // governor, with no lifecycle trace behind it.
+          <p className="text-sm">Status read from the governor</p>
+        )}
+        {phaseLabel && currentStage !== null && (
+          <p className="text-xs text-muted-foreground">
+            Stage {currentStage}/{totalStages} · {phaseLabel}
+          </p>
+        )}
+        {isLoading ? (
+          <p className="text-xs text-blue-500">
+            {currentStageName
+              ? `Reading ${formatStageName(currentStageName)}...`
+              : "Reading stages from the chain..."}
+          </p>
+        ) : isBackgroundRefreshing ? (
+          <p className="text-xs text-blue-500">Refreshing in background...</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Click to view details</p>
+        )}
       </HoverCardContent>
     </HoverCard>
   );
-}
-
-interface LifecycleContentProps {
-  status: string;
-  currentState: string | null;
-  queuePosition: number | null;
-  currentStageIndex: number;
-  stages: Array<{ type: string; status: string }>;
-  isBackgroundRefreshing: boolean;
-  governorAddress: string;
-}
-
-const LifecycleContent = memo(function LifecycleContent({
-  status,
-  currentState,
-  queuePosition,
-  currentStageIndex,
-  stages,
-  isBackgroundRefreshing,
-  governorAddress,
-}: LifecycleContentProps) {
-  if (status === "queued") {
-    return (
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-            <ClockIcon className="h-3.5 w-3.5 text-yellow-500 drop-shadow-sm" />
-            <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
-              Queue #{queuePosition}
-            </span>
-          </div>
-        </HoverCardTrigger>
-        <HoverCardContent className="glass w-auto">
-          <p className="text-sm">Waiting in queue (position {queuePosition})</p>
-          <p className="text-xs text-muted-foreground">
-            Max 2 proposals tracked concurrently
-          </p>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  }
-
-  if (status === "loading") {
-    const progress =
-      stages.length > 0 ? Math.round((stages.length / 10) * 100) : 0;
-    const currentStageName = stages[currentStageIndex]?.type || "Starting...";
-
-    return (
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md">
-            <ReloadIcon className="h-3.5 w-3.5 text-blue-500 animate-spin drop-shadow-sm" />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                Tracking
-              </span>
-              <div className="w-12 h-1 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500/80 backdrop-blur-sm transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </HoverCardTrigger>
-        <HoverCardContent className="glass w-auto">
-          <p className="text-sm">
-            Tracking lifecycle ({stages.length}/10 stages)
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Current: {formatStageName(currentStageName)}
-          </p>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          <div className="glass-subtle backdrop-blur flex items-center gap-1.5 cursor-help px-2 py-1 rounded-md border-red-500/20">
-            <CrossCircledIcon className="h-3.5 w-3.5 text-red-500 drop-shadow-sm" />
-            <span className="text-xs font-medium text-red-600 dark:text-red-400">
-              Error
-            </span>
-          </div>
-        </HoverCardTrigger>
-        <HoverCardContent className="glass w-auto">
-          <p className="text-sm">Failed to track lifecycle</p>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  }
-
-  if (status === "complete") {
-    // Get effective display state - shows "Stage x/y" for Core proposals still in L1 round-trip
-    const { display: stateDisplay, isInProgress } = getEffectiveDisplayState(
-      currentState,
-      stages as Parameters<typeof getEffectiveDisplayState>[1],
-      governorAddress
-    );
-
-    // Use different styling for in-progress Core proposals
-    const effectiveState = isInProgress ? "pending" : currentState;
-    const { color } = getStateStyle(effectiveState);
-    const dotColor = getStateDotColor(effectiveState);
-
-    return (
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          <div className="inline-flex items-center gap-1.5 cursor-help">
-            <span className="relative flex shrink-0">
-              <span className={cn("h-2 w-2 rounded-full", dotColor)} />
-              {isBackgroundRefreshing && (
-                <ReloadIcon className="absolute -top-1 -right-1 h-2 w-2 text-blue-500 animate-spin drop-shadow-sm" />
-              )}
-            </span>
-            <span className={cn("text-xs font-medium", color)}>
-              {stateDisplay}
-            </span>
-            <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
-          </div>
-        </HoverCardTrigger>
-        <HoverCardContent className="glass w-auto">
-          <p className="text-sm">Lifecycle tracked: {stages.length} stages</p>
-          {isInProgress && (
-            <p className="text-xs text-yellow-600 dark:text-yellow-400">
-              L1 execution in progress
-            </p>
-          )}
-          {isBackgroundRefreshing ? (
-            <p className="text-xs text-blue-500">Refreshing in background...</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Click to view details
-            </p>
-          )}
-        </HoverCardContent>
-      </HoverCard>
-    );
-  }
-
-  return null;
 });

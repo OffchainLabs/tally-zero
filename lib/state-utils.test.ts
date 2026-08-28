@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ADVANCEABLE_PROPOSAL_STATES,
   findStateByValue,
   getStateName,
   IN_FLIGHT_PROPOSAL_STATES,
@@ -71,6 +72,14 @@ describe("state-utils", () => {
         expect(result).toBeDefined();
         expect(result?.value).toBe(state);
       }
+    });
+
+    // The proposal page renders "Unknown proposal state" for anything this
+    // does not resolve, so the derived Executing status has to be in the list.
+    it("resolves the derived Executing status", () => {
+      const result = findStateByValue("Executing");
+      expect(result?.value).toBe("Executing");
+      expect(result?.label).toBe("Executing");
     });
 
     it("returns state with all required properties", () => {
@@ -172,6 +181,24 @@ describe("state-utils", () => {
 
     it("excludes Defeated, which is windowed separately", () => {
       expect(IN_FLIGHT_PROPOSAL_STATES).not.toContain("Defeated");
+    });
+  });
+
+  describe("ADVANCEABLE_PROPOSAL_STATES", () => {
+    it("adds the post-vote states that queue() and execute() move on", () => {
+      expect([...ADVANCEABLE_PROPOSAL_STATES].sort()).toEqual([
+        "Active",
+        "Pending",
+        "Queued",
+        "Succeeded",
+        "Unknown",
+      ]);
+    });
+
+    it("excludes the states the governor never leaves", () => {
+      for (const state of ["Canceled", "Expired", "Executed"] as const) {
+        expect(ADVANCEABLE_PROPOSAL_STATES).not.toContain(state);
+      }
     });
   });
 });

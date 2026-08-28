@@ -91,3 +91,24 @@ export const IN_FLIGHT_PROPOSAL_STATES: readonly ProposalStateName[] = [
   "Active",
   "Unknown",
 ];
+
+/**
+ * Every state the governor can still move a proposal out of, and which must
+ * therefore be re-read from the chain rather than taken from the indexer.
+ *
+ * The in-flight states plus the two post-vote ones: `Succeeded` becomes
+ * `Queued` (or `Expired`) as soon as anyone calls `queue()`, and `Queued`
+ * becomes `Executed` once the L2 timelock delay is up and `execute()` lands.
+ * The indexer is a cache, so it reports whichever of these it last saw; that
+ * lag is only ever visible on the newest proposals, which are the rows at the
+ * top of the table.
+ *
+ * `Canceled`, `Expired` and `Executed` are terminal on the governor and stay
+ * trusted. `Defeated` is handled separately, on a recheck window: see
+ * `needsOnChainStateRefresh` in `lib/proposal-utils`.
+ */
+export const ADVANCEABLE_PROPOSAL_STATES: readonly ProposalStateName[] = [
+  ...IN_FLIGHT_PROPOSAL_STATES,
+  "Succeeded",
+  "Queued",
+];

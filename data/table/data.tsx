@@ -38,6 +38,15 @@ export const states = [
     icon: CheckCircledIcon,
   },
   {
+    // A Core proposal past the governor's execute() but still travelling: the
+    // L2-to-L1 message, the L1 timelock and the retryable ticket are still to
+    // come. See getEffectiveDisplayState in lib/lifecycle-utils.
+    value: "Executing",
+    label: "Executing",
+    bgColor: "bg-sky-100 text-sky-600 dark:bg-sky-900/60 dark:text-sky-300",
+    icon: UpdateIcon,
+  },
+  {
     value: "Executed",
     label: "Executed",
     bgColor:
