@@ -7,9 +7,11 @@ import { useAccount, useSignMessage } from "wagmi";
 
 import { SIWE_CHAIN_ID } from "@/config/siwe";
 import { siweApi } from "@/lib/siwe/client";
+import { siweKeys } from "@/lib/siwe/keys";
+import { clearAndReconcileSession } from "@/lib/siwe/session-cache";
 import type { MeResponse } from "@/lib/siwe/types";
 
-const ME_KEY = ["siwe", "me"] as const;
+const ME_KEY = siweKeys.me;
 
 /**
  * SIWE session state + sign-in/out. Sign-in does the standard dance: fetch a
@@ -48,9 +50,18 @@ export function useSiwe() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_KEY }),
   });
 
+  // Clear on success, and success is the whole set of outcomes that signed the
+  // user out: logout() resolves on 204 and on 401, and a 401 means the server
+  // already has no session, which is what sign-out asked for.
+  //
+  // A throw means we could not ask (the proxy's 503 unconfigured / 502 upstream,
+  // or a timeout), and the cookie is probably still alive, so the session is
+  // left alone and signOutError carries the reason. Clearing there would put the
+  // UI on the sign-in screen while the session lives, and reconciling could not
+  // correct it, because the outage that failed the logout fails /api/me too.
   const signOut = useMutation({
     mutationFn: () => siweApi.logout(),
-    onSuccess: () => queryClient.setQueryData(ME_KEY, null),
+    onSuccess: () => clearAndReconcileSession(queryClient),
   });
 
   const refreshSession = useCallback(
@@ -63,12 +74,21 @@ export function useSiwe() {
     address,
     isConnected,
     session,
+    /** The Safe being acted as, or null when acting as the signer itself. */
+    actingAs: session?.actingAs ?? null,
+    /**
+     * Subject of every owned read/write — `actingAs ?? address`. Use this, not
+     * `address`, to scope any query about "my" data.
+     */
+    effectiveAddress: session?.effectiveAddress ?? null,
     isSignedIn: Boolean(session),
     isLoadingSession: sessionQuery.isLoading,
     signIn: signIn.mutateAsync,
     isSigningIn: signIn.isPending,
     signInError: signIn.error,
     signOut: signOut.mutateAsync,
+    isSigningOut: signOut.isPending,
+    signOutError: signOut.error,
     refreshSession,
   };
 }

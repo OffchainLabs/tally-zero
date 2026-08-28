@@ -34,7 +34,8 @@ const STATEMENT_PLACEHOLDER =
 
 export function DelegateRegistrationForm() {
   const router = useRouter();
-  const { session, signOut, refreshSession } = useSiwe();
+  const { session, signOut, isSigningOut, signOutError, refreshSession } =
+    useSiwe();
 
   const [form, setForm] = useState<FormState>(EMPTY_REGISTRATION_FORM);
   const [saving, setSaving] = useState(false);
@@ -281,13 +282,24 @@ export function DelegateRegistrationForm() {
                 type="button"
                 variant="ghost"
                 data-testid="siwe-sign-out"
-                disabled={busy}
+                disabled={busy || isSigningOut}
                 onClick={() => {
+                  // The hook clears and re-reads the session either way; this
+                  // catch only stops the rejection escaping as unhandled. The
+                  // failure itself is rendered from signOutError below.
                   signOut().catch(() => {});
                 }}
               >
-                Sign out
+                {isSigningOut ? "Signing out…" : "Sign out"}
               </Button>
+              {signOutError ? (
+                <p
+                  className="text-sm text-destructive"
+                  data-testid="siwe-sign-out-error"
+                >
+                  {signOutError.message}
+                </p>
+              ) : null}
             </div>
             <Button type="submit" disabled={busy} data-testid="profile-save">
               {saving ? (
