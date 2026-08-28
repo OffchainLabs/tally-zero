@@ -35,11 +35,21 @@ export const SUBJECT_SCOPE = ["siwe", "subject"] as const;
 /** Root of the signer-scoped Safe recall list. */
 export const SAFES_SCOPE = ["siwe", "safes"] as const;
 
+/**
+ * Subject-scoped keys take the subject as `string | null | undefined` for the
+ * same reason `safes` does: the caller builds the key before the session
+ * resolves. Putting the unresolved value straight in the key is the documented
+ * dependent-query shape — pair it with `skipToken` so the fetch cannot run with
+ * a missing subject, and no placeholder segment ever has to be invented.
+ */
+type KeyPart = string | null | undefined;
+
 // Addresses reach these keys in two casings — the indexer's `effectiveAddress`
 // and wagmi's checksummed `address` — and one subject must never occupy two
 // cache entries, or a write through one leaves the other stale. Lowercasing here
 // matches how the sibling hooks key an address (use-user-vote, use-delegate-votes).
-const addr = (value: string) => value.toLowerCase();
+// An unresolved part passes through untouched so the dependent-query shape holds.
+const addr = (value: KeyPart) => value?.toLowerCase() ?? value;
 
 // An election id is `${governorAddress}:${proposalId}` (see types.ts), so its
 // leading segment is an address and gets the same treatment as a bare one:
@@ -47,13 +57,14 @@ const addr = (value: string) => value.toLowerCase();
 // config/governors.ts, so an id built from either source has to key the same.
 // Only the first colon is split on, and the proposal id is passed through
 // untouched rather than lowercased, so nothing here depends on its alphabet.
-const electionKey = (electionId: string) => {
+const electionKey = (electionId: KeyPart) => {
+  if (!electionId) return electionId;
   const colon = electionId.indexOf(":");
   if (colon === -1) return electionId;
   return addr(electionId.slice(0, colon)) + electionId.slice(colon);
 };
 
-const subjectKey = (subject: string, ...rest: string[]) =>
+const subjectKey = (subject: KeyPart, ...rest: KeyPart[]) =>
   [...SUBJECT_SCOPE, addr(subject), ...rest] as const;
 
 export const siweKeys = {
@@ -79,17 +90,17 @@ export const siweKeys = {
     [...SAFES_SCOPE, signer && addr(signer)] as const,
 
   /** Subject-scoped — all evicted together by SUBJECT_SCOPE. */
-  profile: (subject: string) => subjectKey(subject, "profile"),
-  drafts: (subject: string) => subjectKey(subject, "drafts"),
+  profile: (subject: KeyPart) => subjectKey(subject, "profile"),
+  drafts: (subject: KeyPart) => subjectKey(subject, "drafts"),
   // Nested under drafts() so invalidating the list also refreshes each draft.
-  draft: (subject: string, id: string) => subjectKey(subject, "drafts", id),
-  candidateProfile: (subject: string, electionId: string) =>
+  draft: (subject: KeyPart, id: KeyPart) => subjectKey(subject, "drafts", id),
+  candidateProfile: (subject: KeyPart, electionId: KeyPart) =>
     subjectKey(subject, "candidate-profile", electionKey(electionId)),
 
   /** Public — unauthenticated reads, shared across all viewers. */
   elections: ["siwe", "elections"] as const,
   sharedDraft: (slug: string) => ["siwe", "shared-draft", slug] as const,
-  publicCandidateProfile: (electionId: string, address: string) =>
+  publicCandidateProfile: (electionId: KeyPart, address: string) =>
     [
       "siwe",
       "public-candidate-profile",
