@@ -83,7 +83,11 @@ describe("siweApi error parsing", () => {
   });
 });
 
-function lastCall(spy: ReturnType<typeof mockFetchOnce>) {
+// calls[0], so this reads the *first* request a spy saw. Every caller below
+// asserts against a freshly created spy, where first and last are the same
+// request; named for what it actually returns so a future two-call test cannot
+// quietly assert against the wrong one.
+function firstCall(spy: ReturnType<typeof mockFetchOnce>) {
   const [url, init] = spy.mock.calls[0] as [string, RequestInit | undefined];
   return { url, init };
 }
@@ -111,7 +115,7 @@ describe("siweApi request shaping", () => {
 
     await siweApi.getMyCandidateProfile(electionId);
 
-    const { url } = lastCall(spy);
+    const { url } = firstCall(spy);
     expect(url).toBe(
       "/api/governance-indexer/api/me/candidate-profile/0xb7585Cb8%3A601626880"
     );
@@ -134,7 +138,7 @@ describe("siweApi request shaping", () => {
       country: null,
     });
 
-    const { url, init } = lastCall(spy);
+    const { url, init } = firstCall(spy);
     expect(url).toContain("0xgov%3A7");
     expect(init?.method).toBe("PUT");
     expect(init?.headers).toEqual({ "content-type": "application/json" });
@@ -149,7 +153,7 @@ describe("siweApi request shaping", () => {
       }
     );
     await siweApi.actAs("0x2");
-    expect(JSON.parse(String(lastCall(post).init?.body))).toEqual({
+    expect(JSON.parse(String(firstCall(post).init?.body))).toEqual({
       safeAddress: "0x2",
     });
 
@@ -161,7 +165,7 @@ describe("siweApi request shaping", () => {
       }
     );
     await siweApi.stopActingAs();
-    const { init } = lastCall(del);
+    const { init } = firstCall(del);
     expect(init?.method).toBe("DELETE");
     expect(init?.body).toBeUndefined();
     expect(init?.headers).toBeUndefined();
@@ -195,5 +199,36 @@ describe("siweApi request shaping", () => {
   it("resolves logout on the empty 204 body", async () => {
     mockFetchOnce(undefined, { status: 204 });
     await expect(siweApi.logout()).resolves.toBeUndefined();
+  });
+
+  // The indexer 404s a candidate who never filed a profile, which on a public
+  // candidate page is the ordinary case. The `| null` in the return type has to
+  // be reachable, or every caller writing `if (!profile)` gets a rejection on
+  // the common path instead.
+  it("maps a 404 candidate profile to null rather than throwing", async () => {
+    mockFetchOnce(
+      { error: { code: "not_found", message: "no profile" } },
+      { status: 404 }
+    );
+    await expect(
+      siweApi.getPublicCandidateProfile("0xgov:7", "0xcandidate")
+    ).resolves.toBeNull();
+  });
+
+  it("still throws on a non-404 candidate profile failure", async () => {
+    mockFetchOnce({ error: "upstream unreachable" }, { status: 502 });
+    await expect(
+      siweApi.getPublicCandidateProfile("0xgov:7", "0xcandidate")
+    ).rejects.toBeInstanceOf(SiweApiError);
+  });
+
+  it("encodes both segments of the public candidate profile path", async () => {
+    const spy = mockFetchOnce({ version: 1 }, { status: 200 });
+
+    await siweApi.getPublicCandidateProfile("0xgov:7", "0xCandidate");
+
+    expect(firstCall(spy).url).toBe(
+      "/api/governance-indexer/api/elections/0xgov%3A7/candidate-profiles/0xCandidate"
+    );
   });
 });
