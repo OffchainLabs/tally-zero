@@ -8,9 +8,16 @@
 //
 // So every subject-scoped key nests under one shared prefix that carries the
 // effective address. Two things fall out of that: a cached entry can never be
-// read as another subject's, and evicting on a subject switch is a single
-// removeQueries(SUBJECT_SCOPE) — a new subject-scoped query is covered the
-// moment it is written, with no list to keep in sync.
+// read as another subject's, and one removeQueries(SUBJECT_SCOPE) evicts all of
+// them, so a subject-scoped query added later is covered the moment it is
+// written, with no list to keep in sync.
+//
+// One exception, and it is why a subject switch is two calls rather than one:
+// `me` sits outside SUBJECT_SCOPE (see below) yet its payload carries the
+// effective subject's resolved profile and ownedFields, so
+// removeQueries(SUBJECT_SCOPE) leaves it behind. Switching subject means
+// invalidating `me` first, so the new subject is known, then removing
+// SUBJECT_SCOPE.
 //
 // Three scopes, and they are genuinely different:
 //   - subject-scoped: profile, drafts, candidate profiles → keyed on effectiveAddress
@@ -38,7 +45,14 @@ const subjectKey = (subject: string, ...rest: string[]) =>
   [...SUBJECT_SCOPE, addr(subject), ...rest] as const;
 
 export const siweKeys = {
-  /** Session envelope. Not subject-scoped: it *carries* the subject. */
+  /**
+   * Session envelope. Deliberately outside SUBJECT_SCOPE because it *carries*
+   * the subject, so it cannot be keyed on it.
+   *
+   * It is not a pure envelope though: /api/me answers with the effective
+   * subject's resolved profile and ownedFields too. That makes this the one key
+   * a subject switch has to evict by name, before removing SUBJECT_SCOPE.
+   */
   me: ["siwe", "me"] as const,
 
   /**

@@ -102,7 +102,7 @@ export const siweApi = {
     await send<unknown>("/api/auth/verify", "POST", { message, signature });
   },
 
-  // The one intentional exception to "non-2xx throws": being signed out is a
+  // The first intentional exception to "non-2xx throws": being signed out is a
   // normal state for this call, not an error the caller should have to catch.
   async me(): Promise<MeResponse | null> {
     const res = await fetch(`${BASE}/api/me`);
@@ -144,8 +144,10 @@ export const siweApi = {
   // --- Acting as a Safe -----------------------------------------------------
   // The subject of every owned read/write is `actingAs ?? address`, so these
   // three calls change what the whole app is about. Callers must drop cached
-  // subject-scoped data afterwards — a single removeQueries(SUBJECT_SCOPE),
-  // which the act-as hook in the next PR of this stack will own.
+  // subject-scoped data afterwards, and that is two steps rather than one:
+  // invalidate siweKeys.me first (it carries the new subject), then
+  // removeQueries(SUBJECT_SCOPE). See lib/siwe/keys.ts for why me is the
+  // exception. The act-as hook in the next PR of this stack owns the sequence.
 
   async safes(): Promise<KnownSafe[]> {
     const body = await send<{ safes: KnownSafe[] }>("/api/auth/safes", "GET");
@@ -236,16 +238,23 @@ export const siweApi = {
     );
   },
 
-  // Public. Returns the bare version (or null), not a wrapper object. For a
-  // completed election this is frozen to the last version before closedAt.
-  getPublicCandidateProfile(
+  // Public. Returns the bare version, not a wrapper object. For a completed
+  // election this is frozen to the last version before closedAt.
+  //
+  // 404 is the third intentional exception to "non-2xx throws": the indexer
+  // 404s a candidate who has never filed a profile, and on a public candidate
+  // page that is the ordinary case rather than an error. Without this the
+  // `| null` in the return type is unreachable and every caller writing
+  // `if (!profile)` gets a rejection on the common path. Everything else throws.
+  async getPublicCandidateProfile(
     electionId: string,
     address: string
   ): Promise<CandidateProfileVersion | null> {
-    return send<CandidateProfileVersion | null>(
-      `/api/elections/${seg(electionId)}/candidate-profiles/${seg(address)}`,
-      "GET"
+    const res = await fetch(
+      `${BASE}/api/elections/${seg(electionId)}/candidate-profiles/${seg(address)}`
     );
+    if (res.status === 404) return null;
+    return parse<CandidateProfileVersion>(res);
   },
 };
 
