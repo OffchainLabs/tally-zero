@@ -215,8 +215,16 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
   }
 }
 
+/**
+ * One hour. Every field in the snapshot is a governance parameter that changes
+ * without a deploy: members now rotate their own keys mid-term, elections
+ * install a new cohort, and `setCadence` can move the schedule again. Caching
+ * this forever froze the page on the pre-upgrade half-yearly cadence.
+ */
+const SNAPSHOT_REVALIDATE_SECONDS = 3600;
+
 export const getCachedSecurityCouncilSnapshot = unstable_cache(
   fetchSecurityCouncilSnapshot,
-  ["tally-zero-security-council-snapshot-v4"],
-  { revalidate: false }
+  ["tally-zero-security-council-snapshot-v5"],
+  { revalidate: SNAPSHOT_REVALIDATE_SECONDS }
 );

@@ -34,10 +34,10 @@ describe("deriveCadenceMonths", () => {
 describe("describeElectionCadence", () => {
   it("states the interval and the resulting term length", () => {
     expect(describeElectionCadence(12)).toBe(
-      "Elections are held every 12 months and replace one cohort, so a member serves a 2-year term."
+      "Elections are now held every 12 months and replace one cohort, so a member serves a 2-year term."
     );
     expect(describeElectionCadence(6)).toBe(
-      "Elections are held every 6 months and replace one cohort, so a member serves a 1-year term."
+      "Elections are now held every 6 months and replace one cohort, so a member serves a 1-year term."
     );
   });
 

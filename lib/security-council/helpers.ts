@@ -14,9 +14,10 @@ const AVERAGE_MONTH_SECONDS = 30.436875 * SECONDS_PER_DAY;
  * cohorts).
  *
  * The cadence is a governance parameter (`setCadence`), so it is read off the
- * chain rather than hardcoded: this returns 6 for the original half-yearly
- * schedule and 12 once the "Security Council Election Process Improvements"
- * upgrade is live, with no code change in between. Returns null when either
+ * chain rather than hardcoded: it returned 6 under the original half-yearly
+ * schedule and returns 12 under the yearly schedule the executed "Security
+ * Council Election Process Improvements" AIP installed, and it will follow any
+ * later `setCadence` vote with no code change. Returns null when either
  * timestamp is missing, so callers can drop the interval from their copy
  * instead of guessing.
  */
@@ -49,11 +50,15 @@ function formatTermLength(months: number): string {
  * The sentence describing how often elections run and how long a member's term
  * therefore lasts. Each election replaces one of the two cohorts, so a term
  * spans two cadences.
+ *
+ * Phrased as "now" on purpose: the cadence has already changed once, and past
+ * elections kept the schedule they were actually held on. The sentence
+ * describes the schedule from here on, never the history.
  */
 export function describeElectionCadence(months: number | null): string {
   if (!months) {
     return "Each election replaces one cohort, so a member's term spans two election cycles.";
   }
 
-  return `Elections are held every ${formatInterval(months)} and replace one cohort, so a member serves a ${formatTermLength(months * 2)} term.`;
+  return `Elections are now held every ${formatInterval(months)} and replace one cohort, so a member serves a ${formatTermLength(months * 2)} term.`;
 }

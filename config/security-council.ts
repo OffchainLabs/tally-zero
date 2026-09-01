@@ -31,6 +31,16 @@ export const DAO_CONSTITUTION_ELECTIONS_URL =
   "https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections";
 
 /**
+ * The executed constitutional AIP "Security Council Election Process
+ * Improvements", which moved elections to a yearly March cadence, doubled
+ * cohort terms to two years, lowered the nominee qualification threshold to
+ * 0.1% of votable ARB, and added self-service key rotation for members and
+ * candidates.
+ */
+export const ELECTION_IMPROVEMENTS_PROPOSAL_ID =
+  "99505320587245662570748490045867467578602042886347829693486500764737017017943";
+
+/**
  * How late into the compliance phase a candidate may still rotate the signer
  * key they registered with. The rotation must land at least this many days
  * before the phase ends so the Arbitrum Foundation can veto a rotation that
@@ -118,8 +128,8 @@ export const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
  * Nominee qualification threshold as a percentage of votable ARB. Only a
  * fallback for when the governor's `quorumNumerator`/`quorumDenominator` reads
  * are unavailable: the on-chain fraction is authoritative. The DAO lowered it
- * from 0.2% to 0.1% in the "Security Council Election Process Improvements"
- * AIP, which takes effect when that upgrade reaches the governor.
+ * from 0.2% to 0.1% in the executed "Security Council Election Process
+ * Improvements" AIP, so 0.1% is the current threshold.
  */
 export const NOMINEE_QUORUM_PERCENT = 0.1;
 
