@@ -9,5 +9,12 @@
     // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>uuid (8.3.2)
     // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@metamask/sdk>@metamask/providers>@metamask/rpc-errors>@metamask/utils>uuid (9.0.1)
     "GHSA-w5hq-g745-h8pq",
+
+    // https://github.com/advisories/GHSA-vcc3-ghjq-m6fr
+    // decode-uri-component denial of service via exponential decoding of malformed percent-encoded input.
+    // Only reachable through query-string when @walletconnect/utils parses relay/pairing URIs, which runs client-only here (AppKit is never imported by an API route or server module), so malformed input can at worst stall the tab of the user who pasted it.
+    // No upgrade path yet: every patched release (>=0.3.0, so also the fixed >=0.5.0) is ESM-only while query-string 7.1.3 is CommonJS and require()s it, so forcing the override throws "decodeComponent is not a function" under Node and under webpack/esbuild bundles. It clears once @wagmi/connectors ships @walletconnect/ethereum-provider >=2.23, whose @walletconnect/utils drops query-string.
+    // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>query-string>decode-uri-component (0.2.2)
+    "GHSA-vcc3-ghjq-m6fr",
   ],
 }
