@@ -262,11 +262,24 @@ function getTimeUntil(timestamp: number): string {
   return formatDuration(diff);
 }
 
-function getElectionStartFromStages(stages?: TrackedStage[]): number | null {
+/**
+ * When the election actually started, taken from the transaction that created
+ * it.
+ *
+ * The tracker builds the CREATE_ELECTION stage with only a block number, never
+ * a timestamp, so the transaction alone carries no date. `fetchedTimestamps`
+ * has already resolved that block, so read the creation tx out of it rather
+ * than reporting an unknown start.
+ */
+export function getElectionStartFromStages(
+  stages?: TrackedStage[],
+  fetchedTimestamps?: Map<string, number>
+): number | null {
   if (!stages) return null;
   const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
   const tx = createStage?.transactions?.[0];
-  return tx?.timestamp ?? null;
+  if (!tx) return null;
+  return tx.timestamp ?? fetchedTimestamps?.get(tx.hash) ?? null;
 }
 
 export function ElectionPhaseTimeline({
@@ -309,7 +322,7 @@ export function ElectionPhaseTimeline({
   });
 
   const resolvedStartTimestamp =
-    getElectionStartFromStages(stages) ??
+    getElectionStartFromStages(stages, fetchedTimestamps) ??
     (isScheduledElection && onChainTimestamp !== undefined
       ? Number(onChainTimestamp)
       : null);
