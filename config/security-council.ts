@@ -59,12 +59,17 @@ export const MEMBER_ROTATION_TIMELOCK_DAYS = 18;
  * First election index governed by the rules the "Security Council Election
  * Process Improvements" AIP installed.
  *
- * Elections 0 through 5 ran between September 2023 and March 2026 and had all
- * finished before that AIP reached its on-chain vote (August 2026), so they
- * qualified contenders at 0.2% of votable ARB and offered candidates no key
- * rotation at all. Index 6 is the first election created after execution, and
- * the yearly cadence puts it in March 2027, so the boundary falls inside the
- * gap between the two and never splits an election.
+ * The nominee governor has changed its quorum fraction exactly twice: it was
+ * initialized to 20/10000 (0.2%) on 2023-08-15, and the AIP lowered it to
+ * 10/10000 (0.1%) on 2026-08-31 (L2 block 500410316, tx 0x48468a99). Elections
+ * 0 through 5 were created between 2023-09 and 2026-03-15 and had all long
+ * finished by then, so every one of them qualified contenders at 0.2% and
+ * offered candidates no key rotation at all.
+ *
+ * `electionCount()` is 6, so index 6 does not exist yet and the yearly cadence
+ * puts it in March 2027. The boundary therefore sits in the five-month gap
+ * between the last pre-AIP election and the change, and never splits an
+ * election.
  *
  * Used to keep today's rules out of a past election's phase descriptions: the
  * same mistake as dating past elections from the current cadence, one screen
