@@ -26,6 +26,57 @@ export const ELECTION_DURATIONS = {
   TOTAL: ELECTION_TIMING.TOTAL_ELECTION_DAYS,
 } as const;
 
+/** DAO Constitution section covering the Security Council election process. */
+export const DAO_CONSTITUTION_ELECTIONS_URL =
+  "https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections";
+
+/**
+ * The executed constitutional AIP "Security Council Election Process
+ * Improvements", which moved elections to a yearly March cadence, doubled
+ * cohort terms to two years, lowered the nominee qualification threshold to
+ * 0.1% of votable ARB, and added self-service key rotation for members and
+ * candidates.
+ */
+export const ELECTION_IMPROVEMENTS_PROPOSAL_ID =
+  "99505320587245662570748490045867467578602042886347829693486500764737017017943";
+
+/**
+ * How late into the compliance phase a candidate may still rotate the signer
+ * key they registered with. The rotation must land at least this many days
+ * before the phase ends so the Arbitrum Foundation can veto a rotation that
+ * skipped the correct procedure.
+ */
+export const CANDIDATE_ROTATION_CUTOFF_DAYS = 3;
+
+/**
+ * Governance timelock a sitting member's self-service key rotation goes
+ * through (L2 timelock, L2 to L1 message, L1 timelock) before the new signer
+ * is registered in the Security Council multisigs.
+ */
+export const MEMBER_ROTATION_TIMELOCK_DAYS = 18;
+
+/**
+ * First election index governed by the rules the "Security Council Election
+ * Process Improvements" AIP installed.
+ *
+ * The nominee governor has changed its quorum fraction exactly twice: it was
+ * initialized to 20/10000 (0.2%) on 2023-08-15, and the AIP lowered it to
+ * 10/10000 (0.1%) on 2026-08-31 (L2 block 500410316, tx 0x48468a99). Elections
+ * 0 through 5 were created between 2023-09 and 2026-03-15 and had all long
+ * finished by then, so every one of them qualified contenders at 0.2% and
+ * offered candidates no key rotation at all.
+ *
+ * `electionCount()` is 6, so index 6 does not exist yet and the yearly cadence
+ * puts it in March 2027. The boundary therefore sits in the five-month gap
+ * between the last pre-AIP election and the change, and never splits an
+ * election.
+ *
+ * Used to keep today's rules out of a past election's phase descriptions: the
+ * same mistake as dating past elections from the current cadence, one screen
+ * over.
+ */
+export const FIRST_ELECTION_UNDER_CURRENT_RULES = 6;
+
 export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOT_STARTED: {
     name: "Not Started",
@@ -43,7 +94,7 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOMINEE_SELECTION: {
     name: "Nominee Selection",
     description:
-      "Delegates must endorse contenders with 0.2% of votable tokens for contenders to be nominated for the Member Election.",
+      "Delegates endorse contenders so they can be nominated for the Member Election.",
     durationDays: ELECTION_DURATIONS.NOMINEE_SELECTION,
     colorClass: "text-blue-500",
   },
@@ -96,7 +147,100 @@ export const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
   COMPLETED: [],
 };
 
-export const NOMINEE_QUORUM_PERCENT = 0.2;
+/**
+ * Nominee qualification threshold as a percentage of votable ARB. Only a
+ * fallback for when the governor's `quorumNumerator`/`quorumDenominator` reads
+ * are unavailable: the on-chain fraction is authoritative. The DAO lowered it
+ * from 0.2% to 0.1% in the executed "Security Council Election Process
+ * Improvements" AIP, so 0.1% is the current threshold.
+ */
+export const NOMINEE_QUORUM_PERCENT = 0.1;
+
+/**
+ * Nominee qualification threshold every election before
+ * {@link FIRST_ELECTION_UNDER_CURRENT_RULES} ran under, as a percentage of
+ * votable ARB.
+ *
+ * Safe to hardcode because it describes a closed era: the governor held
+ * 20/10000 from its initialization on 2023-08-15 until the AIP lowered it on
+ * 2026-08-31, and all six of those elections were created inside that window,
+ * so 0.2% is exact for each of them rather than an approximation of a range.
+ * History cannot change, so this needs no chain read.
+ *
+ * If the DAO changes the threshold again, do not edit this. Add the new
+ * boundary index and the era it closes, since elections 0 through 5 will still
+ * have run at 0.2%.
+ */
+export const PRE_AIP_NOMINEE_QUORUM_PERCENT = 0.2;
+
+const PERCENT_SCALE = 100;
+const MAX_PERCENT_DECIMALS = 3;
+
+/**
+ * Formats the governor's quorum fraction as a percentage label, e.g. "0.1%".
+ * Falls back to {@link NOMINEE_QUORUM_PERCENT} when either read is missing or
+ * unusable, so the copy never renders a blank or a bogus threshold.
+ */
+export function formatQuorumPercent(
+  numerator?: bigint | number,
+  denominator?: bigint | number
+): string {
+  const fallback = `${NOMINEE_QUORUM_PERCENT}%`;
+  if (numerator === undefined || denominator === undefined) return fallback;
+
+  const numeratorValue = Number(numerator);
+  const denominatorValue = Number(denominator);
+  if (!Number.isFinite(numeratorValue) || !Number.isFinite(denominatorValue)) {
+    return fallback;
+  }
+  if (denominatorValue <= 0 || numeratorValue <= 0) return fallback;
+
+  const percent = (numeratorValue / denominatorValue) * PERCENT_SCALE;
+  return `${parseFloat(percent.toFixed(MAX_PERCENT_DECIMALS))}%`;
+}
+
+/**
+ * Phase description for one election, carrying the rules that actually
+ * governed it.
+ *
+ * The qualification threshold and candidate key rotation are both governance
+ * parameters the DAO has already changed once, so neither is baked into
+ * {@link PHASE_METADATA}. A past election is described in the past tense with
+ * the threshold it really used, and without the key rotation that did not
+ * exist yet; describing it with today's rules would restate history the way
+ * `electionToTimestamp` restated past election dates.
+ */
+export function getPhaseDescription(
+  phase: ElectionPhase,
+  options?: {
+    quorumPercentLabel?: string;
+    /**
+     * Whether the election being described is governed by the rules in force
+     * now. Defaults to true, for a caller describing a phase with no
+     * particular election in hand.
+     */
+    underCurrentRules?: boolean;
+  }
+): string {
+  const base = PHASE_METADATA[phase].description;
+  const isHistory = options?.underCurrentRules === false;
+
+  if (phase === "NOMINEE_SELECTION") {
+    if (isHistory) {
+      return `${base} A contender qualified once its pledged votes reached ${PRE_AIP_NOMINEE_QUORUM_PERCENT}% of votable ARB.`;
+    }
+    const label = options?.quorumPercentLabel ?? `${NOMINEE_QUORUM_PERCENT}%`;
+    return `${base} A contender qualifies once its pledged votes reach ${label} of votable ARB.`;
+  }
+
+  // No historical counterpart: candidates in a past election could not rotate
+  // their signer key at all, so there is nothing to say in its place.
+  if (phase === "VETTING_PERIOD" && !isHistory) {
+    return `${base} Candidates can rotate their signer key until ${CANDIDATE_ROTATION_CUTOFF_DAYS} days before this phase ends.`;
+  }
+
+  return base;
+}
 
 export function getPhaseColor(phase: ElectionPhase): string {
   return PHASE_METADATA[phase].colorClass;

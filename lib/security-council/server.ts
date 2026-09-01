@@ -17,6 +17,7 @@ import {
 import { TARGET_COHORT_SIZE } from "@/config/security-council";
 import { SECONDS_PER_DAY } from "@/lib/date-utils";
 import { debug } from "@/lib/debug";
+import { deriveCadenceMonths } from "@/lib/security-council/helpers";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 
 class SecurityCouncilSnapshotError extends Error {
@@ -38,6 +39,8 @@ export interface SecurityCouncilSnapshot {
   secondCohort: CouncilMember[];
   firstCohortTermEnd: number | null;
   secondCohortTermEnd: number | null;
+  /** Months between elections, derived on chain. Null when unreadable. */
+  electionCadenceMonths: number | null;
 }
 
 const scManagerAbi = parseAbi(SECURITY_COUNCIL_MANAGER_ABI);
@@ -196,6 +199,10 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
         onChain.secondNextTs !== null
           ? onChain.secondNextTs + electionWindowSeconds
           : null,
+      electionCadenceMonths: deriveCadenceMonths(
+        onChain.firstNextTs,
+        onChain.secondNextTs
+      ),
     };
   } catch (err) {
     debug.app("Failed to fetch Security Council snapshot: %O", err);
@@ -208,8 +215,16 @@ async function fetchSecurityCouncilSnapshot(): Promise<SecurityCouncilSnapshot> 
   }
 }
 
+/**
+ * One hour. Every field in the snapshot is a governance parameter that changes
+ * without a deploy: members now rotate their own keys mid-term, elections
+ * install a new cohort, and `setCadence` can move the schedule again. Caching
+ * this forever froze the page on the pre-upgrade half-yearly cadence.
+ */
+const SNAPSHOT_REVALIDATE_SECONDS = 3600;
+
 export const getCachedSecurityCouncilSnapshot = unstable_cache(
   fetchSecurityCouncilSnapshot,
-  ["tally-zero-security-council-snapshot-v3"],
-  { revalidate: false }
+  ["tally-zero-security-council-snapshot-v5"],
+  { revalidate: SNAPSHOT_REVALIDATE_SECONDS }
 );

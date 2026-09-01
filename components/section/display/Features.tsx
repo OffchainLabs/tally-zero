@@ -15,7 +15,7 @@ const features = [
     icon: Shield,
     title: "Security Council",
     description:
-      "Elect the 12-member Security Council that safeguards the protocol. Two 6-member cohorts are replaced every six months.",
+      "Elect the 12-member Security Council that safeguards the protocol. Two 6-member cohorts serve staggered terms, and each election replaces one cohort.",
     href: "/security-council",
   },
   {

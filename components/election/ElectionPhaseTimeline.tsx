@@ -26,10 +26,13 @@ import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
 
 import {
+  FIRST_ELECTION_UNDER_CURRENT_RULES,
   formatDuration,
+  getPhaseDescription,
   PHASE_METADATA,
   PHASE_TO_STAGE_TYPES,
 } from "@/config/security-council";
+import { useNomineeQuorumPercentLabel } from "@/hooks/use-nominee-quorum-percent";
 import { cn } from "@/lib/utils";
 import type { ElectionPhase } from "@/types/election";
 
@@ -260,11 +263,24 @@ function getTimeUntil(timestamp: number): string {
   return formatDuration(diff);
 }
 
-function getElectionStartFromStages(stages?: TrackedStage[]): number | null {
+/**
+ * When the election actually started, taken from the transaction that created
+ * it.
+ *
+ * The tracker builds the CREATE_ELECTION stage with only a block number, never
+ * a timestamp, so the transaction alone carries no date. `fetchedTimestamps`
+ * has already resolved that block, so read the creation tx out of it rather
+ * than reporting an unknown start.
+ */
+export function getElectionStartFromStages(
+  stages?: TrackedStage[],
+  fetchedTimestamps?: Map<string, number>
+): number | null {
   if (!stages) return null;
   const createStage = stages.find((s) => s.type === "CREATE_ELECTION");
   const tx = createStage?.transactions?.[0];
-  return tx?.timestamp ?? null;
+  if (!tx) return null;
+  return tx.timestamp ?? fetchedTimestamps?.get(tx.hash) ?? null;
 }
 
 export function ElectionPhaseTimeline({
@@ -278,10 +294,28 @@ export function ElectionPhaseTimeline({
   const { openTimelock } = useDeepLink();
   const { l2Rpc } = useRpcSettings();
   const { nomineeGovernorAddress, chainId } = useElectionContracts();
+  const quorumPercentLabel = useNomineeQuorumPercentLabel();
   const currentIndex = getPhaseIndex(currentPhase);
   const timelockTxHash = getL2TimelockTxHash(stages, memberExecuteTxHash);
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
+
+  // `electionToTimestamp` is a formula over the current cadence, so it only
+  // tells the truth about elections that have not run yet: since the cadence
+  // moved from 6 to 12 months it restates past elections as March dates a year
+  // apart. Read it for a scheduled election, never as a fallback for a past one
+  // whose stages are still loading.
+  const isScheduledElection =
+    electionIndex !== undefined &&
+    status != null &&
+    electionIndex >= status.electionCount;
+
+  // A past election ran under the pre-AIP threshold and had no candidate key
+  // rotation, so its phases must not be described with today's rules. An
+  // upcoming election has no index yet and is by definition in the future.
+  const underCurrentRules =
+    electionIndex === undefined ||
+    electionIndex >= FIRST_ELECTION_UNDER_CURRENT_RULES;
 
   const { data: onChainTimestamp } = useReadContract({
     address: nomineeGovernorAddress,
@@ -290,14 +324,16 @@ export function ElectionPhaseTimeline({
     args: electionIndex !== undefined ? [BigInt(electionIndex)] : undefined,
     chainId,
     query: {
-      enabled: electionIndex !== undefined,
+      enabled: isScheduledElection,
       staleTime: Infinity,
     },
   });
 
   const resolvedStartTimestamp =
-    getElectionStartFromStages(stages) ??
-    (onChainTimestamp !== undefined ? Number(onChainTimestamp) : null);
+    getElectionStartFromStages(stages, fetchedTimestamps) ??
+    (isScheduledElection && onChainTimestamp !== undefined
+      ? Number(onChainTimestamp)
+      : null);
 
   const phaseEtas =
     status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
@@ -364,7 +400,10 @@ export function ElectionPhaseTimeline({
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {metadata.description}
+                  {getPhaseDescription(phase, {
+                    quorumPercentLabel,
+                    underCurrentRules,
+                  })}
                 </p>
                 {eta && (
                   <p

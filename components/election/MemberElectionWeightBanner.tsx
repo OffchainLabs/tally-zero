@@ -1,5 +1,6 @@
 import { AlertCircle, ExternalLink, Info } from "lucide-react";
 
+import { DAO_CONSTITUTION_ELECTIONS_URL } from "@/config/security-council";
 import type { WeightInfo } from "@/lib/election-weight";
 
 import { VoteWeightChart } from "./VoteWeightChart";
@@ -45,7 +46,7 @@ export function MemberElectionWeightBanner({
             currentDay={weightInfo?.elapsedDays}
           />
           <a
-            href="https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections"
+            href={DAO_CONSTITUTION_ELECTIONS_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"

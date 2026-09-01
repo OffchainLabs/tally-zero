@@ -8,6 +8,8 @@ import shuffle from "lodash.shuffle";
 import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
 
+import { DAO_CONSTITUTION_ELECTIONS_URL } from "@/config/security-council";
+import { useNomineeQuorumPercentLabel } from "@/hooks/use-nominee-quorum-percent";
 import { sortByOrderMap } from "@/lib/collection-utils";
 import {
   useAddressDisplayRecords,
@@ -24,6 +26,8 @@ function NomineeSelectionBanner({
 }: {
   quorumThreshold: string;
 }) {
+  const quorumPercentLabel = useNomineeQuorumPercentLabel();
+
   return (
     <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
       <div className="flex items-start gap-2 text-blue-500">
@@ -32,11 +36,12 @@ function NomineeSelectionBanner({
           <p className="font-medium">Nominee Selection</p>
           <p className="text-blue-500/80 mt-1">
             Vote for contenders to endorse them as nominees. Each contender
-            needs at least {formatVotingPower(quorumThreshold)} ARB (0.2% of
-            votable tokens) to qualify for the compliance check.
+            needs at least {formatVotingPower(quorumThreshold)} ARB (
+            {quorumPercentLabel} of votable tokens) to qualify for the
+            compliance check.
           </p>
           <a
-            href="https://docs.arbitrum.foundation/dao-constitution#section-4-security-council-elections"
+            href={DAO_CONSTITUTION_ELECTIONS_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 mt-2 text-blue-400 hover:text-blue-300 transition-colors"
