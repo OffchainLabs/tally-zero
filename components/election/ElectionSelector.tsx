@@ -54,10 +54,14 @@ export function getElectionCreationTx(
 }
 
 /**
- * Start timestamp per election index. Creation transactions usually arrive with
- * a timestamp; when the tracker only recorded a block number we resolve it from
- * the chain, since a missing date is better than a wrong one but worse than the
- * real one.
+ * Start timestamp per election index, resolved from the block the creation
+ * transaction landed in.
+ *
+ * The chain lookup is the normal path, not a fallback: the tracker builds the
+ * CREATE_ELECTION stage with only a block number, so a creation transaction
+ * essentially never arrives carrying a timestamp. One that does is used as is.
+ * When the lookup fails the entry keeps its cohort label alone, since a missing
+ * date is better than a wrong one but worse than the real one.
  */
 function useElectionStartTimestamps(
   allElections: ElectionProposalStatus[]
