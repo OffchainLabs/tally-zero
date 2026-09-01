@@ -7,6 +7,7 @@ import {
   getPhaseDescription,
   NOMINEE_QUORUM_PERCENT,
   PHASE_METADATA,
+  PRE_AIP_NOMINEE_QUORUM_PERCENT,
 } from "./security-council";
 
 describe("formatQuorumPercent", () => {
@@ -72,17 +73,29 @@ describe("compliance phase description", () => {
 });
 
 // Elections 0 through 5 ran before the "Security Council Election Process
-// Improvements" AIP executed, so neither the 0.1% threshold nor candidate key
-// rotation applied to them.
+// Improvements" AIP executed. The governor held 20/10000 for that whole span,
+// so they qualified contenders at 0.2%, and candidate key rotation did not
+// exist for any of them.
 describe("getPhaseDescription for an election that predates the AIP", () => {
-  it("states no qualification threshold", () => {
+  it("states the threshold that actually applied, in the past tense", () => {
     const description = getPhaseDescription("NOMINEE_SELECTION", {
       quorumPercentLabel: "0.1%",
       underCurrentRules: false,
     });
 
-    expect(description).toBe(PHASE_METADATA.NOMINEE_SELECTION.description);
-    expect(description).not.toMatch(/%/);
+    expect(description).toContain(
+      `${PRE_AIP_NOMINEE_QUORUM_PERCENT}% of votable ARB`
+    );
+    expect(description).toContain("qualified once its pledged votes reached");
+  });
+
+  it("ignores the live label rather than dating history from it", () => {
+    expect(
+      getPhaseDescription("NOMINEE_SELECTION", {
+        quorumPercentLabel: "0.1%",
+        underCurrentRules: false,
+      })
+    ).not.toContain("0.1%");
   });
 
   it("does not offer candidates a key rotation they never had", () => {

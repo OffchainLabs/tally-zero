@@ -156,6 +156,23 @@ export const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
  */
 export const NOMINEE_QUORUM_PERCENT = 0.1;
 
+/**
+ * Nominee qualification threshold every election before
+ * {@link FIRST_ELECTION_UNDER_CURRENT_RULES} ran under, as a percentage of
+ * votable ARB.
+ *
+ * Safe to hardcode because it describes a closed era: the governor held
+ * 20/10000 from its initialization on 2023-08-15 until the AIP lowered it on
+ * 2026-08-31, and all six of those elections were created inside that window,
+ * so 0.2% is exact for each of them rather than an approximation of a range.
+ * History cannot change, so this needs no chain read.
+ *
+ * If the DAO changes the threshold again, do not edit this. Add the new
+ * boundary index and the era it closes, since elections 0 through 5 will still
+ * have run at 0.2%.
+ */
+export const PRE_AIP_NOMINEE_QUORUM_PERCENT = 0.2;
+
 const PERCENT_SCALE = 100;
 const MAX_PERCENT_DECIMALS = 3;
 
@@ -183,15 +200,15 @@ export function formatQuorumPercent(
 }
 
 /**
- * Phase description for one election, carrying only the rules that actually
+ * Phase description for one election, carrying the rules that actually
  * governed it.
  *
  * The qualification threshold and candidate key rotation are both governance
  * parameters the DAO has already changed once, so neither is baked into
- * {@link PHASE_METADATA}. An election that ran before the "Security Council
- * Election Process Improvements" AIP executed used a different threshold and
- * had no key rotation, so describing it with today's rules would restate
- * history the way `electionToTimestamp` restated past election dates.
+ * {@link PHASE_METADATA}. A past election is described in the past tense with
+ * the threshold it really used, and without the key rotation that did not
+ * exist yet; describing it with today's rules would restate history the way
+ * `electionToTimestamp` restated past election dates.
  */
 export function getPhaseDescription(
   phase: ElectionPhase,
@@ -206,14 +223,19 @@ export function getPhaseDescription(
   }
 ): string {
   const base = PHASE_METADATA[phase].description;
-  if (options?.underCurrentRules === false) return base;
+  const isHistory = options?.underCurrentRules === false;
 
   if (phase === "NOMINEE_SELECTION") {
+    if (isHistory) {
+      return `${base} A contender qualified once its pledged votes reached ${PRE_AIP_NOMINEE_QUORUM_PERCENT}% of votable ARB.`;
+    }
     const label = options?.quorumPercentLabel ?? `${NOMINEE_QUORUM_PERCENT}%`;
     return `${base} A contender qualifies once its pledged votes reach ${label} of votable ARB.`;
   }
 
-  if (phase === "VETTING_PERIOD") {
+  // No historical counterpart: candidates in a past election could not rotate
+  // their signer key at all, so there is nothing to say in its place.
+  if (phase === "VETTING_PERIOD" && !isHistory) {
     return `${base} Candidates can rotate their signer key until ${CANDIDATE_ROTATION_CUTOFF_DAYS} days before this phase ends.`;
   }
 
