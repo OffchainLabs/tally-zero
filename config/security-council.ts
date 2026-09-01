@@ -55,6 +55,23 @@ export const CANDIDATE_ROTATION_CUTOFF_DAYS = 3;
  */
 export const MEMBER_ROTATION_TIMELOCK_DAYS = 18;
 
+/**
+ * First election index governed by the rules the "Security Council Election
+ * Process Improvements" AIP installed.
+ *
+ * Elections 0 through 5 ran between September 2023 and March 2026 and had all
+ * finished before that AIP reached its on-chain vote (August 2026), so they
+ * qualified contenders at 0.2% of votable ARB and offered candidates no key
+ * rotation at all. Index 6 is the first election created after execution, and
+ * the yearly cadence puts it in March 2027, so the boundary falls inside the
+ * gap between the two and never splits an election.
+ *
+ * Used to keep today's rules out of a past election's phase descriptions: the
+ * same mistake as dating past elections from the current cadence, one screen
+ * over.
+ */
+export const FIRST_ELECTION_UNDER_CURRENT_RULES = 6;
+
 export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   NOT_STARTED: {
     name: "Not Started",
@@ -78,7 +95,8 @@ export const PHASE_METADATA: Record<ElectionPhase, PhaseMetadata> = {
   },
   VETTING_PERIOD: {
     name: "Compliance Check",
-    description: `The Arbitrum Foundation vets nominees for compliance before the member election. Candidates can rotate their signer key until ${CANDIDATE_ROTATION_CUTOFF_DAYS} days before this phase ends.`,
+    description:
+      "The Arbitrum Foundation vets nominees for compliance before the member election.",
     durationDays: ELECTION_DURATIONS.VETTING_PERIOD,
     colorClass: "text-yellow-500",
   },
@@ -160,19 +178,41 @@ export function formatQuorumPercent(
 }
 
 /**
- * Phase description with the live qualification threshold folded in. The
- * threshold is a governance parameter that the DAO can change without a code
- * change, so it is never baked into {@link PHASE_METADATA}.
+ * Phase description for one election, carrying only the rules that actually
+ * governed it.
+ *
+ * The qualification threshold and candidate key rotation are both governance
+ * parameters the DAO has already changed once, so neither is baked into
+ * {@link PHASE_METADATA}. An election that ran before the "Security Council
+ * Election Process Improvements" AIP executed used a different threshold and
+ * had no key rotation, so describing it with today's rules would restate
+ * history the way `electionToTimestamp` restated past election dates.
  */
 export function getPhaseDescription(
   phase: ElectionPhase,
-  options?: { quorumPercentLabel?: string }
+  options?: {
+    quorumPercentLabel?: string;
+    /**
+     * Whether the election being described is governed by the rules in force
+     * now. Defaults to true, for a caller describing a phase with no
+     * particular election in hand.
+     */
+    underCurrentRules?: boolean;
+  }
 ): string {
   const base = PHASE_METADATA[phase].description;
-  if (phase !== "NOMINEE_SELECTION") return base;
+  if (options?.underCurrentRules === false) return base;
 
-  const label = options?.quorumPercentLabel ?? `${NOMINEE_QUORUM_PERCENT}%`;
-  return `${base} A contender qualifies once its pledged votes reach ${label} of votable ARB.`;
+  if (phase === "NOMINEE_SELECTION") {
+    const label = options?.quorumPercentLabel ?? `${NOMINEE_QUORUM_PERCENT}%`;
+    return `${base} A contender qualifies once its pledged votes reach ${label} of votable ARB.`;
+  }
+
+  if (phase === "VETTING_PERIOD") {
+    return `${base} Candidates can rotate their signer key until ${CANDIDATE_ROTATION_CUTOFF_DAYS} days before this phase ends.`;
+  }
+
+  return base;
 }
 
 export function getPhaseColor(phase: ElectionPhase): string {

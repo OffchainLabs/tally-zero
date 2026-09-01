@@ -26,6 +26,7 @@ import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { getOrCreateProvider } from "@/lib/rpc-utils";
 
 import {
+  FIRST_ELECTION_UNDER_CURRENT_RULES,
   formatDuration,
   getPhaseDescription,
   PHASE_METADATA,
@@ -309,6 +310,13 @@ export function ElectionPhaseTimeline({
     status != null &&
     electionIndex >= status.electionCount;
 
+  // A past election ran under the pre-AIP threshold and had no candidate key
+  // rotation, so its phases must not be described with today's rules. An
+  // upcoming election has no index yet and is by definition in the future.
+  const underCurrentRules =
+    electionIndex === undefined ||
+    electionIndex >= FIRST_ELECTION_UNDER_CURRENT_RULES;
+
   const { data: onChainTimestamp } = useReadContract({
     address: nomineeGovernorAddress,
     abi: nomineeElectionGovernorReadAbi,
@@ -392,7 +400,10 @@ export function ElectionPhaseTimeline({
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {getPhaseDescription(phase, { quorumPercentLabel })}
+                  {getPhaseDescription(phase, {
+                    quorumPercentLabel,
+                    underCurrentRules,
+                  })}
                 </p>
                 {eta && (
                   <p
