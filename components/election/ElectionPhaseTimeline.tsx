@@ -286,6 +286,16 @@ export function ElectionPhaseTimeline({
 
   const fetchedTimestamps = useFetchMissingTimestamps(stages, l2Rpc);
 
+  // `electionToTimestamp` is a formula over the current cadence, so it only
+  // tells the truth about elections that have not run yet: since the cadence
+  // moved from 6 to 12 months it restates past elections as March dates a year
+  // apart. Read it for a scheduled election, never as a fallback for a past one
+  // whose stages are still loading.
+  const isScheduledElection =
+    electionIndex !== undefined &&
+    status != null &&
+    electionIndex >= status.electionCount;
+
   const { data: onChainTimestamp } = useReadContract({
     address: nomineeGovernorAddress,
     abi: nomineeElectionGovernorReadAbi,
@@ -293,14 +303,16 @@ export function ElectionPhaseTimeline({
     args: electionIndex !== undefined ? [BigInt(electionIndex)] : undefined,
     chainId,
     query: {
-      enabled: electionIndex !== undefined,
+      enabled: isScheduledElection,
       staleTime: Infinity,
     },
   });
 
   const resolvedStartTimestamp =
     getElectionStartFromStages(stages) ??
-    (onChainTimestamp !== undefined ? Number(onChainTimestamp) : null);
+    (isScheduledElection && onChainTimestamp !== undefined
+      ? Number(onChainTimestamp)
+      : null);
 
   const phaseEtas =
     status?.nextElectionTimestamp && currentPhase === "NOT_STARTED"
