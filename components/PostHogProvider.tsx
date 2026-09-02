@@ -18,6 +18,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         api_host: env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
         capture_pageview: true,
         persistence: "memory",
+        cookieless_mode: "always",
       }}
     >
       {children}
