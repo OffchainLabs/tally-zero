@@ -22,7 +22,14 @@ export const AUTH_WALLETS = {
 
 export type AuthWalletName = keyof typeof AUTH_WALLETS;
 
-/** Storage-state path for a pre-authenticated wallet. Gitignored. */
+/**
+ * Storage-state path for a pre-authenticated wallet.
+ *
+ * Gitignored — and untracked, which is not the same thing: these files were
+ * committed once before the ignore rule was added, so .gitignore had no effect
+ * on them and every run showed up as a diff. Live session cookies are not
+ * repository content.
+ */
 export function authFile(name: AuthWalletName): string {
   return resolve(__dirname, "..", ".auth", `${name}.json`);
 }
