@@ -9,7 +9,12 @@ import {
 
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
-import type { Draft, DraftFields, DraftSummary } from "@/lib/siwe/types";
+import type {
+  Draft,
+  DraftFields,
+  DraftSubmission,
+  DraftSummary,
+} from "@/lib/siwe/types";
 
 import { useSiwe } from "./use-siwe";
 
@@ -97,4 +102,40 @@ export function useDraft(id: string | null) {
     queryFn: subject && id ? () => siweApi.getDraft(id) : skipToken,
     staleTime: 30_000,
   });
+}
+
+/**
+ * A published draft read by its share slug. No session involved: the slug is
+ * itself the capability, which is why this key carries no identity.
+ */
+export function useSharedDraft(slug: string) {
+  return useQuery<Draft>({
+    queryKey: siweKeys.sharedDraft(slug),
+    queryFn: () => siweApi.getSharedDraft(slug),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Records the on-chain submission of a published draft.
+ *
+ * Also unauthenticated — anyone with the link can attach the transaction that
+ * submitted it, which is deliberate: the person who submits a draft on chain is
+ * often not the person who wrote it.
+ */
+export function useMarkSubmitted(slug: string) {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (onchain: DraftSubmission) =>
+      siweApi.markSubmitted(slug, onchain),
+    onSuccess: (draft) =>
+      queryClient.setQueryData(siweKeys.sharedDraft(slug), draft),
+  });
+
+  return {
+    markSubmitted: mutation.mutateAsync,
+    isSubmitting: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
 }
