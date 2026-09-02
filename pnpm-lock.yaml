@@ -34,6 +34,8 @@ overrides:
   nanoid@3: ">=3.3.17 <4"
   "@opentelemetry/core": ">=2.8.0"
   sharp: ">=0.35.0"
+  browserslist: ">=4.28.7 <5"
+  "@humanfs/node": ">=0.16.8 <0.17"
 
 importers:
   .:
@@ -1271,17 +1273,24 @@ packages:
     peerDependencies:
       react-hook-form: ^7.0.0
 
-  "@humanfs/core@0.19.1":
+  "@humanfs/core@0.19.2":
     resolution:
       {
-        integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==,
+        integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==,
       }
     engines: { node: ">=18.18.0" }
 
-  "@humanfs/node@0.16.7":
+  "@humanfs/node@0.16.8":
     resolution:
       {
-        integrity: sha512-/zUx+yOsIrG4Y43Eh2peDeKCxlRt/gET6aHfaKpuq267qXdYDFViVHfMaLyygZOnl0kGWxFIgsBy8QFuTLUXEQ==,
+        integrity: sha512-gE1eQNZ3R++kTzFUpdGlpmy8kDZD/MLyHqDwqjkVQI0JMdI1D51sy1H958PNXYkM2rAac7e5/CnIKZrHtPh3BQ==,
+      }
+    engines: { node: ">=18.18.0" }
+
+  "@humanfs/types@0.15.0":
+    resolution:
+      {
+        integrity: sha512-ZZ1w0aoQkwuUuC7Yf+7sdeaNfqQiiLcSRbfI08oAxqLtpXQr9AIVX7Ay7HLDuiLYAaFPu8oBYNq/QIi9URHJ3Q==,
       }
     engines: { node: ">=18.18.0" }
 
@@ -1660,13 +1669,6 @@ packages:
       {
         integrity: sha512-/kSXhY692qiV1MXu6EeOZvg5nECLclxNXcKCxJ3cXQgYuRymRHpdx/t7JXfsK+JLjwA1e1c1/SBrlQYpusC29Q==,
       }
-
-  "@metamask/safe-event-emitter@3.1.2":
-    resolution:
-      {
-        integrity: sha512-5yb2gMI1BDm0JybZezeoX/3XhPDOtTbcFvpTXM9kxsoZjPZFh4XciqRbpD6N86HYZqWDhEaKUDuOyR0sQHEjMA==,
-      }
-    engines: { node: ">=12.0.0" }
 
   "@metamask/safe-event-emitter@3.1.3":
     resolution:
@@ -4967,6 +4969,14 @@ packages:
     engines: { node: ">=6.0.0" }
     hasBin: true
 
+  baseline-browser-mapping@2.11.20:
+    resolution:
+      {
+        integrity: sha512-H0ulySigv6icDJ1F7SjtdCD6PrhTpdYCmP0CactWy1+ekh0AFd0o1Wn5T8b+hnTmdBx19u9yhL6wvCylXMY7zw==,
+      }
+    engines: { node: ">=6.0.0" }
+    hasBin: true
+
   bcp-47-match@2.0.3:
     resolution:
       {
@@ -5060,10 +5070,10 @@ packages:
         integrity: sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==,
       }
 
-  browserslist@4.28.1:
+  browserslist@4.28.8:
     resolution:
       {
-        integrity: sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA==,
+        integrity: sha512-V2NpofLblG64mfOtSgDhOJESZEGogzDMBv/q+W6oc4LXWP/q75eOXoOaaOu1EOadB9U4Bwx/e0yzbvwKH8zalA==,
       }
     engines: { node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7 }
     hasBin: true
@@ -5139,6 +5149,12 @@ packages:
     resolution:
       {
         integrity: sha512-llngX0E7nQci5BPJDqoZSbuZ5Bcs9F5db7EtgfwBerX9XGtkkiO4NwfDDIRzHTTwcYC8vC7bmeUEPGrKlR/TkQ==,
+      }
+
+  caniuse-lite@1.0.30001810:
+    resolution:
+      {
+        integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==,
       }
 
   ccount@2.0.1:
@@ -5811,10 +5827,10 @@ packages:
       }
     engines: { bun: ">=1", deno: ">=2", node: ">=16" }
 
-  electron-to-chromium@1.5.321:
+  electron-to-chromium@1.5.418:
     resolution:
       {
-        integrity: sha512-L2C7Q279W2D/J4PLZLk7sebOILDSWos7bMsMNN06rK482umHUrh/3lM8G7IlHFOYip2oAg5nha1rCMxr/rs6ZQ==,
+        integrity: sha512-UzS26r3AEbG5wSoGVpJKqwHIU9zwQN7LHdVIThDrJpS0I5KdlXFMEb8543fhc9dVnIIAST6ar8rhwa00AL5MlA==,
       }
 
   elliptic@6.6.1:
@@ -8169,11 +8185,12 @@ packages:
         integrity: sha512-8DY+kFsDkNXy1sJglUfuODx1/opAGJGyrTuFqEoN90oRc2Vk0ZbD4K2qmKXBBEhZQzdKHIVfEJpDU8Ak2NJEvQ==,
       }
 
-  node-releases@2.0.36:
+  node-releases@2.0.54:
     resolution:
       {
-        integrity: sha512-TdC8FSgHz8Mwtw9g5L4gR/Sh9XhSP/0DEkQxfEFXOpiul5IiHgHan2VhYYb6agDSfp4KuvltmGApc8HMgUrIkA==,
+        integrity: sha512-YHs7BmmcsdAI5Ozuf8JZo6PT0mv2GIWC9vMfvUC3dp65M8hn7Ux8CPL+2oBI7juNuj9d0ndhTcznq2ODBps9cQ==,
       }
+    engines: { node: ">=18" }
 
   normalize-path@3.0.0:
     resolution:
@@ -10320,14 +10337,14 @@ packages:
       uploadthing:
         optional: true
 
-  update-browserslist-db@1.2.3:
+  update-browserslist-db@1.3.2:
     resolution:
       {
-        integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==,
+        integrity: sha512-UQ+MSxlhRm1bzjhU+DcuXfjFO1FzNtqhK5+9Yvlp90ItDLk5vT932A0rFu619nf7RVS+Y/VeaUW1jaRDqZ8VJw==,
       }
     hasBin: true
     peerDependencies:
-      browserslist: ">= 4.21.0"
+      browserslist: ">=4.28.7 <5"
 
   uri-js@4.4.1:
     resolution:
@@ -11033,7 +11050,7 @@ snapshots:
     dependencies:
       "@babel/compat-data": 7.29.0
       "@babel/helper-validator-option": 7.27.1
-      browserslist: 4.28.1
+      browserslist: 4.28.8
       lru-cache: 5.1.1
       semver: 7.7.4
 
@@ -11739,12 +11756,17 @@ snapshots:
     dependencies:
       react-hook-form: 7.71.2(react@19.2.4)
 
-  "@humanfs/core@0.19.1": {}
-
-  "@humanfs/node@0.16.7":
+  "@humanfs/core@0.19.2":
     dependencies:
-      "@humanfs/core": 0.19.1
+      "@humanfs/types": 0.15.0
+
+  "@humanfs/node@0.16.8":
+    dependencies:
+      "@humanfs/core": 0.19.2
+      "@humanfs/types": 0.15.0
       "@humanwhocodes/retry": 0.4.3
+
+  "@humanfs/types@0.15.0": {}
 
   "@humanwhocodes/module-importer@1.0.1": {}
 
@@ -11906,7 +11928,7 @@ snapshots:
   "@metamask/json-rpc-engine@8.0.2":
     dependencies:
       "@metamask/rpc-errors": 6.4.0
-      "@metamask/safe-event-emitter": 3.1.2
+      "@metamask/safe-event-emitter": 3.1.3
       "@metamask/utils": 8.5.0
     transitivePeerDependencies:
       - supports-color
@@ -11914,7 +11936,7 @@ snapshots:
   "@metamask/json-rpc-middleware-stream@7.0.2":
     dependencies:
       "@metamask/json-rpc-engine": 8.0.2
-      "@metamask/safe-event-emitter": 3.1.2
+      "@metamask/safe-event-emitter": 3.1.3
       "@metamask/utils": 8.5.0
       readable-stream: 3.6.2
     transitivePeerDependencies:
@@ -11935,7 +11957,7 @@ snapshots:
       "@metamask/json-rpc-middleware-stream": 7.0.2
       "@metamask/object-multiplex": 2.1.0
       "@metamask/rpc-errors": 6.4.0
-      "@metamask/safe-event-emitter": 3.1.2
+      "@metamask/safe-event-emitter": 3.1.3
       "@metamask/utils": 8.5.0
       detect-browser: 5.3.0
       extension-port-stream: 3.0.0
@@ -11961,8 +11983,6 @@ snapshots:
       - supports-color
 
   "@metamask/safe-event-emitter@2.0.0": {}
-
-  "@metamask/safe-event-emitter@3.1.2": {}
 
   "@metamask/safe-event-emitter@3.1.3": {}
 
@@ -12031,7 +12051,7 @@ snapshots:
       debug: 4.4.3
       lodash: 4.18.1
       pony-cause: 2.1.11
-      semver: 7.7.4
+      semver: 7.8.5
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -12055,7 +12075,7 @@ snapshots:
       "@types/debug": 4.1.13
       debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.4
+      semver: 7.8.5
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -12069,7 +12089,7 @@ snapshots:
       "@types/debug": 4.1.13
       debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.4
+      semver: 7.8.5
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -13890,7 +13910,7 @@ snapshots:
       "@solana/buffer-layout": 4.0.1
       "@solana/codecs-numbers": 2.3.0(typescript@5.9.3)
       agentkeepalive: 4.6.0
-      bn.js: 5.2.3
+      bn.js: 5.2.5
       borsh: 0.7.0
       bs58: 4.0.1
       buffer: 6.0.3
@@ -15369,7 +15389,7 @@ snapshots:
 
   autoprefixer@10.4.27(postcss@8.5.24):
     dependencies:
-      browserslist: 4.28.1
+      browserslist: 4.28.8
       caniuse-lite: 1.0.30001780
       fraction.js: 5.3.4
       picocolors: 1.1.1
@@ -15415,6 +15435,8 @@ snapshots:
 
   baseline-browser-mapping@2.10.9: {}
 
+  baseline-browser-mapping@2.11.20: {}
+
   bcp-47-match@2.0.3: {}
 
   bech32@1.1.4: {}
@@ -15435,7 +15457,7 @@ snapshots:
 
   borsh@0.7.0:
     dependencies:
-      bn.js: 5.2.3
+      bn.js: 5.2.5
       bs58: 4.0.1
       text-encoding-utf-8: 1.0.2
 
@@ -15456,13 +15478,13 @@ snapshots:
 
   brorand@1.1.0: {}
 
-  browserslist@4.28.1:
+  browserslist@4.28.8:
     dependencies:
-      baseline-browser-mapping: 2.10.9
-      caniuse-lite: 1.0.30001780
-      electron-to-chromium: 1.5.321
-      node-releases: 2.0.36
-      update-browserslist-db: 1.2.3(browserslist@4.28.1)
+      baseline-browser-mapping: 2.11.20
+      caniuse-lite: 1.0.30001810
+      electron-to-chromium: 1.5.418
+      node-releases: 2.0.54
+      update-browserslist-db: 1.3.2(browserslist@4.28.8)
 
   bs58@4.0.1:
     dependencies:
@@ -15505,6 +15527,8 @@ snapshots:
   camelcase@5.3.1: {}
 
   caniuse-lite@1.0.30001780: {}
+
+  caniuse-lite@1.0.30001810: {}
 
   ccount@2.0.1: {}
 
@@ -15844,7 +15868,7 @@ snapshots:
       "@noble/curves": 1.8.2
       "@noble/hashes": 1.8.0
 
-  electron-to-chromium@1.5.321: {}
+  electron-to-chromium@1.5.418: {}
 
   elliptic@6.6.1:
     dependencies:
@@ -16232,7 +16256,7 @@ snapshots:
       "@eslint/eslintrc": 3.3.5
       "@eslint/js": 9.39.4
       "@eslint/plugin-kit": 0.4.1
-      "@humanfs/node": 0.16.7
+      "@humanfs/node": 0.16.8
       "@humanwhocodes/module-importer": 1.0.1
       "@humanwhocodes/retry": 0.4.3
       "@types/estree": 1.0.8
@@ -17709,7 +17733,7 @@ snapshots:
 
   node-mock-http@1.0.4: {}
 
-  node-releases@2.0.36: {}
+  node-releases@2.0.54: {}
 
   normalize-path@3.0.0: {}
 
@@ -18590,7 +18614,7 @@ snapshots:
       "@types/uuid": 10.0.0
       "@types/ws": 8.18.1
       buffer: 6.0.3
-      eventemitter3: 5.0.1
+      eventemitter3: 5.0.4
       uuid: 14.0.0
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
@@ -19255,9 +19279,9 @@ snapshots:
       "@vercel/blob": 2.6.1
       idb-keyval: 6.2.2
 
-  update-browserslist-db@1.2.3(browserslist@4.28.1):
+  update-browserslist-db@1.3.2(browserslist@4.28.8):
     dependencies:
-      browserslist: 4.28.1
+      browserslist: 4.28.8
       escalade: 3.2.0
       picocolors: 1.1.1
 
