@@ -18,7 +18,12 @@ import { signIn } from "./fixtures/session";
 //   2. a saved session is reused while it is still valid, so repeated runs on
 //      one machine cost no nonces at all. Sessions last 7 days on a sliding
 //      window, so in practice only the first run of the week pays.
-// Without (2), two back-to-back runs spend 12 nonces and the second fails.
+// Without (2), a run still spends one nonce per wallet, and two runs inside a
+// minute trip the limit.
+//
+// Budget, with the wallet map at five entries: a cold run costs 1 (global-setup
+// readiness probe) + 5 (here) + 1 (the sign-out spec, which needs its own
+// session) = 7; a warm run costs 1 + 0 + 1 = 2.
 async function sessionStillValid(
   browser: Browser,
   name: AuthWalletName
