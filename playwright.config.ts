@@ -20,7 +20,24 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Signs each dev wallet in once and saves its session cookie. Specs replay
+    // that state instead of signing in themselves — POST /api/auth/nonce is
+    // limited to 10/min per IP and every test shares one IP, so per-test
+    // sign-in does not scale past a handful of tests.
+    // Same context config as `chromium`, so sessions are captured under the
+    // conditions the specs replay them into.
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["setup"],
+    },
+  ],
   webServer: {
     command: "pnpm dev",
     url: BASE_URL,
