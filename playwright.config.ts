@@ -25,7 +25,13 @@ export default defineConfig({
     // that state instead of signing in themselves — POST /api/auth/nonce is
     // limited to 10/min per IP and every test shares one IP, so per-test
     // sign-in does not scale past a handful of tests.
-    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    // Same context config as `chromium`, so sessions are captured under the
+    // conditions the specs replay them into.
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
