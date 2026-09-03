@@ -36,6 +36,7 @@ overrides:
   sharp: ">=0.35.0"
   browserslist: ">=4.28.7 <5"
   "@humanfs/node": ">=0.16.8 <0.17"
+  fflate: ">=0.4.9 <0.5"
 
 importers:
   .:
@@ -6409,10 +6410,10 @@ packages:
       picomatch:
         optional: true
 
-  fflate@0.4.8:
+  fflate@0.4.9:
     resolution:
       {
-        integrity: sha512-FJqqoDBR00Mdj9ppamLa/Y7vxm+PRmNWA67N846RvsoYVMKB4q3y/de5PA7gUmRMYK/8CMz2GDZQmCRN1wBcWA==,
+        integrity: sha512-zdxgIEddhfsyCaWpJ2SdXEP8ZMrKJ6+5jl4OupODcywU0IhRk6gdXuVGcPICyfx2H97hVK7xmJtRLPjkxAX8Vw==,
       }
 
   file-entry-cache@8.0.0:
@@ -16470,7 +16471,7 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.4
 
-  fflate@0.4.8: {}
+  fflate@0.4.9: {}
 
   file-entry-cache@8.0.0:
     dependencies:
@@ -18156,7 +18157,7 @@ snapshots:
       "@posthog/types": 1.407.1
       core-js: 3.49.0
       dompurify: 3.4.13
-      fflate: 0.4.8
+      fflate: 0.4.9
       preact: 10.29.8
       query-selector-shadow-dom: 1.0.1
       web-vitals: 6.2.1
