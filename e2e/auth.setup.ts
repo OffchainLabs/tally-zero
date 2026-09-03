@@ -3,11 +3,12 @@ import { existsSync } from "node:fs";
 import {
   type Browser,
   type BrowserContext,
+  expect,
   test as setup,
 } from "@playwright/test";
 
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./fixtures/auth";
-import { signIn } from "./fixtures/session";
+import { REGISTER_PATH, signIn, useWallet } from "./fixtures/session";
 
 // Runs once before the suite as the `setup` project. Each wallet signs in
 // through the real UI (so nonce -> verify -> cookie is still exercised) and its
@@ -47,6 +48,24 @@ async function sessionStillValid(
     await context?.close();
   }
 }
+
+// One failure here means the whole run is doomed (`chromium` depends on this
+// project), so stop at the first one rather than time out on each wallet.
+setup.describe.configure({ mode: "serial" });
+
+// Runs on every run, warm or cold, and costs no nonce. The per-wallet tests
+// below skip sign-in whenever a saved session is still valid, so on a warm
+// machine nothing loads the page signIn() navigates to. That is how the path
+// pointed at a deleted route for weeks while the suite stayed green: only a
+// fresh clone would have hit the 404. This test always loads it.
+setup("sign-in page mounts the SIWE gate", async ({ page }) => {
+  // The gate only shows the sign-in control to a connected wallet. Nothing is
+  // clicked, so no session is created and the wallet's saved state is untouched.
+  await useWallet(page, AUTH_WALLETS.profile);
+  const response = await page.goto(REGISTER_PATH);
+  expect(response?.status(), `${REGISTER_PATH} must be served`).toBe(200);
+  await expect(page.getByTestId("siwe-sign-in")).toBeVisible();
+});
 
 for (const name of Object.keys(AUTH_WALLETS) as AuthWalletName[]) {
   setup(`authenticate ${name}`, async ({ browser, page }) => {
