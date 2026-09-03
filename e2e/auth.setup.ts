@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 
-import { type Browser, test as setup } from "@playwright/test";
+import {
+  type Browser,
+  type BrowserContext,
+  test as setup,
+} from "@playwright/test";
 
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./fixtures/auth";
 import { signIn } from "./fixtures/session";
@@ -20,8 +24,12 @@ async function sessionStillValid(
   name: AuthWalletName
 ): Promise<boolean> {
   if (!existsSync(authFile(name))) return false;
-  const context = await browser.newContext({ storageState: authFile(name) });
+  let context: BrowserContext | undefined;
   try {
+    // newContext() itself throws on a saved state that exists but does not
+    // parse (a partial write from an interrupted run, say), so it has to be
+    // inside the try for that to mean "re-authenticate" rather than "fail".
+    context = await browser.newContext({ storageState: authFile(name) });
     // 200 means the cookie still resolves to a live session; 401 means expired
     // or truncated away (e.g. by `pnpm reset:siwe`).
     const response = await context.request.get(
@@ -31,7 +39,7 @@ async function sessionStillValid(
   } catch {
     return false;
   } finally {
-    await context.close();
+    await context?.close();
   }
 }
 
