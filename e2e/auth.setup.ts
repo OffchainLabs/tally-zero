@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 
-import { type Browser, test as setup } from "@playwright/test";
+import {
+  type Browser,
+  type BrowserContext,
+  test as setup,
+} from "@playwright/test";
 
 import { AUTH_WALLETS, type AuthWalletName, authFile } from "./fixtures/auth";
 import { signIn } from "./fixtures/session";
@@ -14,14 +18,23 @@ import { signIn } from "./fixtures/session";
 //   2. a saved session is reused while it is still valid, so repeated runs on
 //      one machine cost no nonces at all. Sessions last 7 days on a sliding
 //      window, so in practice only the first run of the week pays.
-// Without (2), two back-to-back runs spend 12 nonces and the second fails.
+// Without (2), a run still spends one nonce per wallet, and two runs inside a
+// minute trip the limit.
+//
+// Budget, with the wallet map at five entries: a cold run costs 1 (global-setup
+// readiness probe) + 5 (here) + 1 (the sign-out spec, which needs its own
+// session) = 7; a warm run costs 1 + 0 + 1 = 2.
 async function sessionStillValid(
   browser: Browser,
   name: AuthWalletName
 ): Promise<boolean> {
   if (!existsSync(authFile(name))) return false;
-  const context = await browser.newContext({ storageState: authFile(name) });
+  let context: BrowserContext | undefined;
   try {
+    // newContext() itself throws on a saved state that exists but does not
+    // parse (a partial write from an interrupted run, say), so it has to be
+    // inside the try for that to mean "re-authenticate" rather than "fail".
+    context = await browser.newContext({ storageState: authFile(name) });
     // 200 means the cookie still resolves to a live session; 401 means expired
     // or truncated away (e.g. by `pnpm reset:siwe`).
     const response = await context.request.get(
@@ -31,7 +44,7 @@ async function sessionStillValid(
   } catch {
     return false;
   } finally {
-    await context.close();
+    await context?.close();
   }
 }
 

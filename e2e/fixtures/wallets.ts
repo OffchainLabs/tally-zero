@@ -34,6 +34,17 @@ export const DEV_WALLETS = {
     key: "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
     address: "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720",
   },
+  /**
+   * Sign-out lifecycle only, and deliberately NOT in AUTH_WALLETS: signing out
+   * destroys the session, so a wallet whose session the setup project saved
+   * would be re-authenticating on every run. Needs no ARB and no delegation,
+   * because SIWE is an off-chain signature and this wallet never reaches a
+   * voting-power gate.
+   */
+  signOut: {
+    key: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+    address: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+  },
 } as const;
 
 export type DevWallet = (typeof DEV_WALLETS)[keyof typeof DEV_WALLETS];
