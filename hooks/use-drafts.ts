@@ -58,7 +58,13 @@ export function useDraftMutations() {
 
   const create = useMutation({
     mutationFn: (fields: DraftFields) => siweApi.createDraft(fields),
-    onSuccess: invalidate,
+    onSuccess: (draft) => {
+      // Seed the new draft's own query so a caller that navigates to
+      // ?draft=<id> right away finds it loaded instead of showing a skeleton
+      // (which would unmount the proposal form).
+      queryClient.setQueryData(siweKeys.draft(subject, draft.id), draft);
+      return invalidate();
+    },
   });
 
   const patch = useMutation({

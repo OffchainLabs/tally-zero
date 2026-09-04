@@ -20,6 +20,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   searchParams: new URLSearchParams(),
+  replace: vi.fn(),
   useSiwe: vi.fn(),
   useDraft: vi.fn(),
   form: vi.fn(),
@@ -28,6 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => mocks.searchParams,
+  usePathname: () => "/proposal/new",
+  useRouter: () => ({ replace: mocks.replace }),
 }));
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
@@ -77,10 +80,13 @@ const DRAFT: Draft = {
   updatedAt: "2026-01-01T00:00:00Z",
 };
 
+const SUBJECT = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+
 function session(overrides: Partial<ReturnType<typeof mocks.useSiwe>> = {}) {
   mocks.useSiwe.mockReturnValue({
     isSignedIn: false,
     isLoadingSession: false,
+    effectiveAddress: overrides.isSignedIn ? SUBJECT : null,
     ...overrides,
   });
 }
@@ -116,29 +122,26 @@ describe("ProposalDraftLoader", () => {
 
     expect(render()).toContain('data-testid="form"');
     expect(mocks.form).toHaveBeenCalledTimes(1);
-    expect(mocks.form.mock.calls[0][0]).toMatchObject({ initialDraft: null });
+    expect(mocks.form.mock.calls[0][0]).toMatchObject({
+      initialDraft: null,
+      draftId: null,
+      serverSave: null,
+    });
   });
 
-  // With no local autosave, saving needs a session; say so before the user
-  // types rather than only on the disabled button's tooltip.
-  it("tells a signed-out visitor on a blank form that saving needs sign-in", () => {
-    mocks.searchParams = new URLSearchParams();
-    session({ isSignedIn: false });
-
-    const markup = render();
-
-    expect(markup).toContain("Sign in to save this proposal to your drafts.");
-    expect(markup).toContain('data-testid="form"');
-  });
-
-  it("shows no sign-in hint once signed in, or while the session resolves", () => {
-    mocks.searchParams = new URLSearchParams();
-
+  // The form picks its autosave slot from draftId and names the subject in its
+  // status bar, so both have to arrive alongside the draft.
+  it("hands the form the bound draft id and the signed-in subject", () => {
     session({ isSignedIn: true });
-    expect(render()).not.toContain("Sign in to save this proposal");
+    draftQuery({ data: DRAFT });
 
-    session({ isLoadingSession: true });
-    expect(render()).not.toContain("Sign in to save this proposal");
+    render();
+
+    expect(mocks.form.mock.calls[0][0]).toMatchObject({
+      draftId: "d1",
+      serverSave: null,
+      accountAddress: SUBJECT,
+    });
   });
 
   // useDraft stands down with skipToken until the subject is known, and a
