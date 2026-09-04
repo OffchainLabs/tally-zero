@@ -25,16 +25,31 @@ function useDraftSubject() {
   return useSiwe().effectiveAddress;
 }
 
-/** Drafts owned by the current effective subject. */
-export function useDrafts() {
+/**
+ * The drafts list for the current effective subject. Kept apart from the
+ * mutations so a component that only saves (the proposal form's dialog) does
+ * not subscribe to, and so fetch, a list it never shows.
+ */
+export function useDraftsList() {
   const subject = useDraftSubject();
-  const queryClient = useQueryClient();
 
   const list = useQuery<DraftSummary[]>({
     queryKey: siweKeys.drafts(subject),
     queryFn: subject ? () => siweApi.listDrafts() : skipToken,
     staleTime: 30_000,
   });
+
+  return {
+    drafts: list.data ?? [],
+    isLoading: list.isLoading,
+    error: list.error as Error | null,
+  };
+}
+
+/** Create, update, publish, and delete drafts for the current effective subject. */
+export function useDraftMutations() {
+  const subject = useDraftSubject();
+  const queryClient = useQueryClient();
 
   // Individual drafts nest under the list key, so invalidating the list root
   // refreshes them too — see lib/siwe/keys.ts.
@@ -70,9 +85,6 @@ export function useDrafts() {
   });
 
   return {
-    drafts: list.data ?? [],
-    isLoading: list.isLoading,
-    error: list.error as Error | null,
     createDraft: create.mutateAsync,
     isCreating: create.isPending,
     patchDraft: patch.mutateAsync,
@@ -82,6 +94,11 @@ export function useDrafts() {
     deleteDraft: remove.mutateAsync,
     isDeleting: remove.isPending,
   };
+}
+
+/** Drafts owned by the current effective subject: the list plus every mutation. */
+export function useDrafts() {
+  return { ...useDraftsList(), ...useDraftMutations() };
 }
 
 /**
