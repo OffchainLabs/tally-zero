@@ -125,6 +125,7 @@ describe("CreateProposalForm snapshot block annotation", () => {
       actions: [
         { id: "restored-0", target: TARGET, value: "5", calldata: "0x" },
       ],
+      updatedAt: "2026-01-01T00:00:00Z",
     };
 
     // Radix renders the radio as a button; the checked one carries aria-checked.
@@ -153,8 +154,9 @@ describe("CreateProposalForm snapshot block annotation", () => {
       expect(markup).toContain(`value="${TARGET}"`);
     });
 
-    // The form has no persistence of its own: the only save path is the server
-    // drafts button injected through renderDraftActions.
+    // The browser autosave has no button: it runs on its own and reports in the
+    // status bar. The only save button is the server one injected through
+    // renderDraftActions.
     it("renders no local Save draft button in either mode", () => {
       const plain = renderToStaticMarkup(<CreateProposalForm />);
       const onDraft = renderToStaticMarkup(
@@ -163,6 +165,30 @@ describe("CreateProposalForm snapshot block annotation", () => {
 
       expect(plain).not.toContain(">Save draft</button>");
       expect(onDraft).not.toContain(">Save draft</button>");
+    });
+
+    it("starts the status bar at Not saved on a blank form", () => {
+      const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+      expect(markup).toContain('data-testid="draft-save-status"');
+      expect(markup).toContain('data-state="never"');
+      expect(markup).toContain("Not saved");
+    });
+
+    // A form opened on a server draft is, at that moment, saved there: the bar
+    // says so as of the draft's updatedAt and names the account.
+    it("starts the status bar at saved-to-account when opened on a draft", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={restored}
+          draftId="d1"
+          accountAddress="0x1234567890abcdef1234567890abcdef12345678"
+        />
+      );
+
+      expect(markup).toContain('data-state="server"');
+      expect(markup).toContain("Saved to your drafts as 0x1234...5678");
+      expect(markup).toContain(new Date(restored.updatedAt).toISOString());
     });
 
     it("hands renderDraftActions the live form snapshot and renders its output", () => {

@@ -142,6 +142,10 @@ describe("draftToFormState", () => {
     expect(state.actions[0]).toMatchObject({ target: "", calldata: "0x" });
   });
 
+  it("carries the server's updatedAt so the autosave can compare ages", () => {
+    expect(draftToFormState(draft()).updatedAt).toBe("2026-01-01T00:00:00Z");
+  });
+
   it("gives every restored action a distinct form id", () => {
     const state = draftToFormState(
       draft({

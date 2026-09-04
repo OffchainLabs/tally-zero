@@ -5,10 +5,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildSubmittedProposalPath,
   createFormProposalAction,
+  createProposalDraft,
   getProposalEligibility,
   getProposalPreviewRehypePlugins,
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
+  parseProposalDraft,
+  PROPOSAL_DRAFT_VERSION,
+  serializeProposalSnapshot,
 } from "./create-proposal-form-utils";
 
 describe("create-proposal-form-utils", () => {
@@ -67,6 +71,155 @@ describe("create-proposal-form-utils", () => {
 
     it("returns below when voting power is insufficient", () => {
       expect(getProposalEligibility(BigInt(9), BigInt(10))).toBe("below");
+    });
+  });
+
+  describe("proposal draft helpers", () => {
+    it("creates a serializable draft payload", () => {
+      const draft = createProposalDraft({
+        governorType: "core",
+        description: "# Title",
+        actions: [
+          {
+            target: "0x1111111111111111111111111111111111111111",
+            value: "42",
+            calldata: "0x1234",
+          },
+        ],
+        savedAt: 123,
+      });
+
+      expect(draft).toEqual({
+        version: PROPOSAL_DRAFT_VERSION,
+        savedAt: 123,
+        governorType: "core",
+        description: "# Title",
+        actions: [
+          {
+            target: "0x1111111111111111111111111111111111111111",
+            value: "42",
+            calldata: "0x1234",
+          },
+        ],
+      });
+    });
+
+    it("parses a saved draft and regenerates action row ids", () => {
+      const restored = parseProposalDraft(
+        JSON.stringify({
+          version: PROPOSAL_DRAFT_VERSION,
+          savedAt: 456,
+          governorType: "treasury",
+          description: "hello",
+          actions: [
+            {
+              target: "0x2222222222222222222222222222222222222222",
+              value: "0",
+              calldata: "0x",
+            },
+          ],
+        })
+      );
+
+      expect(restored).toMatchObject({
+        version: PROPOSAL_DRAFT_VERSION,
+        savedAt: 456,
+        governorType: "treasury",
+        description: "hello",
+        actions: [
+          {
+            target: "0x2222222222222222222222222222222222222222",
+            value: "0",
+            calldata: "0x",
+          },
+        ],
+      });
+      expect(restored?.actions[0]?.id).toMatch(/^proposal-action-\d+$/);
+    });
+
+    it("falls back to a blank action when saved actions are unusable", () => {
+      const restored = parseProposalDraft(
+        JSON.stringify({
+          version: PROPOSAL_DRAFT_VERSION,
+          savedAt: 789,
+          governorType: "core",
+          description: "draft",
+          actions: [{ target: 1, value: 2, calldata: 3 }],
+        })
+      );
+
+      expect(restored).toMatchObject({
+        governorType: "core",
+        description: "draft",
+        actions: [
+          {
+            target: "",
+            value: "0",
+            calldata: "0x",
+          },
+        ],
+      });
+      expect(restored?.actions[0]?.id).toMatch(/^proposal-action-\d+$/);
+    });
+
+    it("returns null for invalid json", () => {
+      expect(parseProposalDraft("{not-json")).toBeNull();
+    });
+
+    it("returns null for unsupported draft metadata", () => {
+      expect(
+        parseProposalDraft(
+          JSON.stringify({
+            version: 999,
+            savedAt: 123,
+            governorType: "core",
+            description: "draft",
+            actions: [],
+          })
+        )
+      ).toBeNull();
+
+      expect(
+        parseProposalDraft(
+          JSON.stringify({
+            version: PROPOSAL_DRAFT_VERSION,
+            savedAt: "today",
+            governorType: "core",
+            description: "draft",
+            actions: [],
+          })
+        )
+      ).toBeNull();
+    });
+
+    // The dirty check compares what the form holds with what was last saved,
+    // so row ids and any extra fields must not make equal contents differ.
+    it("serializes equal contents identically regardless of row ids", () => {
+      const action = {
+        target: "0x1111111111111111111111111111111111111111",
+        value: "1",
+        calldata: "0x",
+      };
+
+      const fromForm = serializeProposalSnapshot({
+        governorType: "core",
+        description: "body",
+        actions: [{ ...action, id: "proposal-action-7" } as typeof action],
+      });
+      const fromStorage = serializeProposalSnapshot({
+        governorType: "core",
+        description: "body",
+        actions: [action],
+      });
+
+      expect(fromForm).toBe(fromStorage);
+      expect(
+        serializeProposalSnapshot({
+          governorType: "core",
+          description: "body changed",
+          actions: [action],
+        })
+      ).not.toBe(fromStorage);
     });
   });
 
