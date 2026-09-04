@@ -1,10 +1,12 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
-import CreateProposalForm from "@/components/form/CreateProposalForm";
+import CreateProposalForm, {
+  type ServerSaveEvent,
+} from "@/components/form/CreateProposalForm";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useDraft } from "@/hooks/use-drafts";
@@ -79,22 +81,31 @@ export function resolveDraftBinding(
  * Everything session-shaped lives here — the search param, the query, the SIWE
  * hooks — so CreateProposalForm needs none of it. With `?draft=<id>` the form is
  * mounted on that draft's contents and saving updates it in place; without one
- * the form behaves exactly as it always has, and the first save to the account
- * binds the form to the draft it created.
+ * the form autosaves to this browser as it always has, and the first save to
+ * the account binds the form to the draft it created and moves the URL to it,
+ * so a reload comes back to the same draft.
  */
 export function ProposalDraftLoader() {
   const draftId = useSearchParams().get("draft");
-  const { isSignedIn, isLoadingSession } = useSiwe();
+  const pathname = usePathname();
+  const router = useRouter();
+  const { isSignedIn, isLoadingSession, effectiveAddress } = useSiwe();
   const { data: draft, isLoading, error } = useDraft(draftId);
 
   // The draft the last save returned, remembered with the ?draft= it was made
-  // under so a later navigation to a different draft does not inherit it.
+  // under (and its own id, which the URL moves to after a create) so a later
+  // navigation to an unrelated draft does not inherit it. `serverSave` is kept
+  // as one object so the form's effect on it fires once per save.
   const [lastSaved, setLastSaved] = useState<{
     openedOn: string | null;
     draft: Draft;
+    serverSave: ServerSaveEvent;
   } | null>(null);
-  const savedDraft =
-    lastSaved && lastSaved.openedOn === draftId ? lastSaved.draft : null;
+  const saveApplies =
+    lastSaved !== null &&
+    (lastSaved.openedOn === draftId || lastSaved.draft.id === draftId);
+  const savedDraft = saveApplies ? lastSaved.draft : null;
+  const serverSave = saveApplies ? lastSaved.serverSave : null;
 
   // Drafts are session-scoped, so an unauthenticated ?draft= would otherwise
   // fall through to a blank form with no explanation.
@@ -106,8 +117,8 @@ export function ProposalDraftLoader() {
   // The session has to count as loading too. useDraft stands down with
   // skipToken until the subject is known, and a skipped query is pending but
   // not fetching, so its isLoading is false. Without this the form would mount
-  // blank before the session resolved, then be unmounted for the skeleton and
-  // mounted again on the draft.
+  // blank (and restore the browser autosave) before the session resolved, then
+  // be unmounted for the skeleton and mounted again on the draft.
   if (draftId && (isLoadingSession || isLoading)) {
     return (
       <Card variant="glass">
@@ -122,19 +133,9 @@ export function ProposalDraftLoader() {
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
 
-  // There is no local autosave, so a signed-out visitor should learn before
-  // typing that keeping their work needs a session, not on hovering the
-  // disabled save button afterwards.
-  const cannotSave = !draftId && !isLoadingSession && !isSignedIn;
-
   return (
     <div className="flex flex-col gap-4">
-      {cannotSave ? (
-        <p className="text-sm text-muted-foreground">
-          Sign in to save this proposal to your drafts. Nothing is kept
-          otherwise.
-        </p>
-      ) : needsSignIn ? (
+      {needsSignIn ? (
         <p className="text-sm text-amber-400">
           Sign in to open a saved draft. Starting a blank proposal instead.
         </p>
@@ -162,15 +163,36 @@ export function ProposalDraftLoader() {
 
       <CreateProposalForm
         initialDraft={restored}
+        draftId={binding.draftId}
+        serverSave={serverSave}
+        accountAddress={effectiveAddress}
         renderDraftActions={(snapshot) => (
           <SaveToAccountDialog
             snapshot={snapshot}
             draftId={binding.draftId}
             initialTitle={binding.initialTitle}
             saveAsNew={binding.saveAsNew}
-            onSaved={(saved) =>
-              setLastSaved({ openedOn: draftId, draft: saved })
-            }
+            onSaved={(saved) => {
+              setLastSaved({
+                openedOn: draftId,
+                draft: saved,
+                serverSave: {
+                  at: Date.now(),
+                  address: effectiveAddress,
+                  snapshot,
+                },
+              });
+              // A create (blank form, or a copy of a frozen draft) leaves the
+              // URL pointing at nothing or at the original. Move it to the new
+              // draft so a reload comes back here. useDraftMutations seeded the
+              // new draft's query, so the skeleton gate does not unmount the
+              // form while it would otherwise fetch.
+              if (saved.id !== draftId) {
+                router.replace(
+                  `${pathname}?draft=${encodeURIComponent(saved.id)}`
+                );
+              }
+            }}
           />
         )}
       />
