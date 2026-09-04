@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Draft } from "@/lib/siwe/types";
 
-import { ProposalDraftLoader } from "./ProposalDraftLoader";
+import {
+  ProposalDraftLoader,
+  resolveDraftBinding,
+} from "./ProposalDraftLoader";
 
 /**
  * The loader decides, per render, whether the proposal form is mounted. That
@@ -206,4 +209,59 @@ describe("ProposalDraftLoader", () => {
     expect(markup).toContain('data-testid="form"');
     expect(mocks.form.mock.calls[0][0]).toMatchObject({ initialDraft: null });
   });
+});
+
+// The binding after a save is state the static renders above cannot reach, so
+// the derivation is pinned on its own. The API has no uniqueness rule on titles,
+// so a second create would not fail: it would silently add another copy. Binding
+// to the saved draft is what turns the second save into an update.
+describe("resolveDraftBinding", () => {
+  const COPY: Draft = { ...DRAFT, id: "d2", title: "Stored (copy)" };
+
+  it("binds a blank form to nothing until the first save", () => {
+    expect(resolveDraftBinding(undefined, null)).toEqual({
+      isEditable: true,
+      draftId: null,
+      initialTitle: undefined,
+      saveAsNew: false,
+    });
+  });
+
+  it("binds a blank form to the draft its first save created", () => {
+    expect(resolveDraftBinding(undefined, COPY)).toMatchObject({
+      draftId: "d2",
+      initialTitle: "Stored (copy)",
+      saveAsNew: false,
+    });
+  });
+
+  it("prefers the saved record of an editable draft, which may have been renamed", () => {
+    const renamed: Draft = { ...DRAFT, title: "Renamed" };
+
+    expect(resolveDraftBinding(DRAFT, renamed)).toMatchObject({
+      isEditable: true,
+      draftId: "d1",
+      initialTitle: "Renamed",
+    });
+  });
+
+  it.each(["published", "submitted"] as const)(
+    "binds a %s draft to its copy once that copy exists",
+    (status) => {
+      const frozen: Draft = { ...DRAFT, status };
+
+      expect(resolveDraftBinding(frozen, null)).toEqual({
+        isEditable: false,
+        draftId: null,
+        initialTitle: "Stored (copy)",
+        saveAsNew: true,
+      });
+      expect(resolveDraftBinding(frozen, COPY)).toEqual({
+        isEditable: false,
+        draftId: "d2",
+        initialTitle: "Stored (copy)",
+        saveAsNew: false,
+      });
+    }
+  );
 });

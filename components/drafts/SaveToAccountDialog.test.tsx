@@ -90,6 +90,17 @@ describe("SaveToAccountDialog", () => {
     expect(markup).not.toContain("Update my draft");
   });
 
+  // Once the first save has created the copy, the owner binds the dialog to it;
+  // an id must win over any leftover saveAsNew so the next save is an update.
+  it("offers to update once bound to a draft, whatever saveAsNew says", () => {
+    const markup = renderToStaticMarkup(
+      <SaveToAccountDialog snapshot={snapshot()} draftId="d2" saveAsNew />
+    );
+
+    expect(markup).toContain("Update my draft");
+    expect(markup).not.toContain("Save as new draft");
+  });
+
   // The blocker is the client-side stand-in for the API's 400s, surfaced as the
   // button's tooltip so the user learns why before a request is made.
   it("is disabled with the blocker as its tooltip when the API would reject", () => {
