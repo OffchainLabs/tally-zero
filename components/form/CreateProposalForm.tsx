@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -32,17 +32,11 @@ import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDial
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
-  PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS,
-  STORAGE_KEYS,
-} from "@/config/storage-keys";
-import {
   buildSubmittedProposalPath,
   createFormProposalAction,
-  createProposalDraft,
   getProposalEligibility,
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
-  parseProposalDraft,
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
@@ -82,9 +76,8 @@ interface SubmittedProposalMeta {
 
 interface CreateProposalFormProps {
   /**
-   * A stored draft to open the form on, already mapped to form state. When set,
-   * the localStorage restore below stands down — an explicit request for a
-   * specific draft outranks crash-recovery state.
+   * A stored draft to open the form on, already mapped to form state. Seeds the
+   * initial state on mount and is deliberately not re-read afterwards.
    */
   initialDraft?: RestoredDraftFormState | null;
   /**
@@ -120,7 +113,6 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
 
   const governor = GOVERNORS[governorType];
 
@@ -167,25 +159,12 @@ export default function CreateProposalForm({
     () => actions.map(({ id: _id, ...action }) => action),
     [actions]
   );
-  const draftSnapshotRef = useRef({
-    governorType,
-    description,
-    actions: proposalActions,
-  });
-  const isDraftHydratedRef = useRef(isDraftHydrated);
-  const shouldPersistDraftRef = useRef(true);
-  // `initialDraft` seeds state and is deliberately not re-read afterwards, so
-  // the mount-only restore effect below reads it through a ref rather than
-  // claiming it as a dependency it would ignore.
-  const openedOnStoredDraftRef = useRef(Boolean(initialDraft));
-
+  // What the server-drafts dialog saves; the form itself persists nothing.
   const draftSnapshot = {
     governorType,
     description,
     actions: proposalActions,
   };
-  draftSnapshotRef.current = draftSnapshot;
-  isDraftHydratedRef.current = isDraftHydrated;
   const actionErrors = useMemo(
     () => proposalActions.map(validateAction),
     [proposalActions]
@@ -278,46 +257,12 @@ export default function CreateProposalForm({
     isConfirming,
     isConfirmed: hasConfirmedSubmission,
   });
-  shouldPersistDraftRef.current = submissionPhase !== "confirmed";
   const isBusy =
     submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
 
   useEffect(() => {
-    // Opened on a specific stored draft: that is already the initial state, so
-    // restoring the autosave over the top of it would silently discard it.
-    if (openedOnStoredDraftRef.current) {
-      setIsDraftHydrated(true);
-      return;
-    }
-
-    try {
-      const restoredDraft = parseProposalDraft(
-        window.localStorage.getItem(STORAGE_KEYS.PROPOSAL_DRAFT)
-      );
-
-      if (restoredDraft) {
-        setGovernorType(restoredDraft.governorType);
-        setDescription(restoredDraft.description);
-        setActions(restoredDraft.actions);
-      }
-    } finally {
-      setIsDraftHydrated(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (submissionPhase === "confirmed") {
       toast("Proposal submitted.");
-    }
-  }, [submissionPhase]);
-
-  useEffect(() => {
-    if (submissionPhase !== "confirmed") return;
-
-    try {
-      window.localStorage.removeItem(STORAGE_KEYS.PROPOSAL_DRAFT);
-    } catch {
-      // Storage can be unavailable in privacy-restricted contexts.
     }
   }, [submissionPhase]);
 
@@ -327,31 +272,6 @@ export default function CreateProposalForm({
       setSubmittedProposalMeta(null);
     }
   }, [writeError]);
-
-  useEffect(() => {
-    if (!isDraftHydrated || submissionPhase === "confirmed") return;
-
-    const intervalId = window.setInterval(() => {
-      saveDraft();
-    }, PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [isDraftHydrated, submissionPhase]);
-
-  useEffect(() => {
-    if (!isDraftHydrated || submissionPhase === "confirmed") return;
-
-    const handlePageHide = () => {
-      saveDraft();
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-
-    return () => {
-      handlePageHide();
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [isDraftHydrated, submissionPhase]);
 
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
@@ -368,26 +288,6 @@ export default function CreateProposalForm({
     !!simulateData?.request &&
     !isSimulating &&
     !isSimulateError;
-
-  function saveDraft({ showToast = false }: { showToast?: boolean } = {}) {
-    if (!isDraftHydratedRef.current || !shouldPersistDraftRef.current) return;
-
-    try {
-      const draft = createProposalDraft(draftSnapshotRef.current);
-      window.localStorage.setItem(
-        STORAGE_KEYS.PROPOSAL_DRAFT,
-        JSON.stringify(draft)
-      );
-
-      if (showToast) {
-        toast.success("Draft saved.");
-      }
-    } catch {
-      if (showToast) {
-        toast.error("Failed to save draft.");
-      }
-    }
-  }
 
   function handleAddAction() {
     setActions((prev) => [...prev, createFormProposalAction()]);
@@ -488,7 +388,6 @@ export default function CreateProposalForm({
           showError={attemptedSubmit && descriptionInvalid}
           disabled={isBusy}
           onOpenUpload={() => setUploadOpen(true)}
-          onBlur={() => saveDraft()}
         />
 
         <ActionsBuilder
@@ -515,8 +414,6 @@ export default function CreateProposalForm({
           replacementErrorMessage={replacementErrorMessage}
           canSubmit={canSubmit}
           formInvalid={formInvalid}
-          saveDraftDisabled={!isDraftHydrated || submissionPhase !== "idle"}
-          onSaveDraft={() => saveDraft({ showToast: true })}
           onSubmit={handleSubmit}
           draftActions={renderDraftActions?.(draftSnapshot)}
         />
@@ -897,7 +794,6 @@ interface DescriptionEditorProps {
   showError: boolean;
   disabled: boolean;
   onOpenUpload: () => void;
-  onBlur: () => void;
 }
 
 function DescriptionEditor({
@@ -906,7 +802,6 @@ function DescriptionEditor({
   showError,
   disabled,
   onOpenUpload,
-  onBlur,
 }: DescriptionEditorProps) {
   return (
     <Card variant="glass">
@@ -928,7 +823,6 @@ function DescriptionEditor({
           value={value}
           onChange={onChange}
           disabled={disabled}
-          onBlur={onBlur}
           placeholder={
             "# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported."
           }
@@ -955,10 +849,11 @@ interface SubmitSectionProps {
   replacementErrorMessage: string | null;
   canSubmit: boolean;
   formInvalid: boolean;
-  saveDraftDisabled: boolean;
-  onSaveDraft: () => void;
   onSubmit: () => void;
-  /** Rendered ahead of "Save draft"; empty unless server drafts are wired up. */
+  /**
+   * Rendered ahead of "Submit Proposal". The server-drafts save button lives
+   * here; the form has no persistence of its own.
+   */
   draftActions?: ReactNode;
 }
 
@@ -976,8 +871,6 @@ function SubmitSection({
   replacementErrorMessage,
   canSubmit,
   formInvalid,
-  saveDraftDisabled,
-  onSaveDraft,
   onSubmit,
   draftActions,
 }: SubmitSectionProps) {
@@ -1067,14 +960,6 @@ function SubmitSection({
 
         <div className="flex flex-wrap justify-end gap-2">
           {draftActions}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            disabled={saveDraftDisabled}
-          >
-            Save draft
-          </Button>
           {submissionPhase === "awaiting-wallet" ||
           submissionPhase === "confirming" ? (
             <Button disabled>

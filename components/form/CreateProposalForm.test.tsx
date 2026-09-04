@@ -112,4 +112,78 @@ describe("CreateProposalForm snapshot block annotation", () => {
     expect(markup).not.toContain("etherscan.io/block/");
     expect(markup).toContain("Values at Ethereum block #?");
   });
+
+  // The server-drafts feature reaches the form through two optional props and
+  // nothing else, so these pin what each one is given and does on first render.
+  describe("server draft props", () => {
+    const TARGET = "0x2222222222222222222222222222222222222222";
+
+    const restored = {
+      title: "Stored draft",
+      description: "# Stored\n\nbody",
+      governorType: "core" as const,
+      actions: [
+        { id: "restored-0", target: TARGET, value: "5", calldata: "0x" },
+      ],
+    };
+
+    // Radix renders the radio as a button; the checked one carries aria-checked.
+    const governorRadio = (markup: string, type: string) =>
+      markup.match(new RegExp(`<button[^>]*id="gov-${type}"[^>]*>`))?.[0] ?? "";
+
+    it("defaults to the treasury governor and one blank action without a draft", () => {
+      const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+      expect(governorRadio(markup, "treasury")).toContain(
+        'aria-checked="true"'
+      );
+      expect(governorRadio(markup, "core")).toContain('aria-checked="false"');
+      expect(markup).not.toContain(TARGET);
+    });
+
+    it("seeds governor and actions from initialDraft", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm initialDraft={restored} />
+      );
+
+      expect(governorRadio(markup, "core")).toContain('aria-checked="true"');
+      expect(governorRadio(markup, "treasury")).toContain(
+        'aria-checked="false"'
+      );
+      expect(markup).toContain(`value="${TARGET}"`);
+    });
+
+    // The form has no persistence of its own: the only save path is the server
+    // drafts button injected through renderDraftActions.
+    it("renders no local Save draft button in either mode", () => {
+      const plain = renderToStaticMarkup(<CreateProposalForm />);
+      const onDraft = renderToStaticMarkup(
+        <CreateProposalForm initialDraft={restored} />
+      );
+
+      expect(plain).not.toContain(">Save draft</button>");
+      expect(onDraft).not.toContain(">Save draft</button>");
+    });
+
+    it("hands renderDraftActions the live form snapshot and renders its output", () => {
+      const seen: unknown[] = [];
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={restored}
+          renderDraftActions={(snapshot) => {
+            seen.push(snapshot);
+            return <span data-testid="draft-actions-probe" />;
+          }}
+        />
+      );
+
+      expect(markup).toContain('data-testid="draft-actions-probe"');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({
+        governorType: "core",
+        description: restored.description,
+        actions: [{ target: TARGET, value: "5", calldata: "0x" }],
+      });
+    });
+  });
 });

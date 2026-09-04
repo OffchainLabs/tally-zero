@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { useDrafts } from "@/hooks/use-drafts";
+import { useDraftMutations } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import {
   deriveDraftTitle,
@@ -22,15 +22,12 @@ import {
   type ProposalFormSnapshot,
   toDraftFields,
 } from "@/lib/drafts/mapping";
+import type { Draft } from "@/lib/siwe/types";
 
 /**
- * Saves the proposal form to the signed-in subject's drafts.
- *
- * Deliberately separate from the form's localStorage autosave, which stays
- * exactly as it was. The two solve different problems: autosave is crash
- * recovery for anyone with a wallet connected, this is a named, shareable copy
- * that needs a SIWE session. Keeping them apart is what lets the proposal form
- * remain usable without signing in.
+ * Saves the proposal form to the signed-in subject's drafts. This is the
+ * form's only save path: there is no local autosave, so a signed-out visitor
+ * can fill in and submit a proposal but cannot keep it.
  *
  * The title lives here rather than as a field on the form because it is draft
  * metadata — a proposal's real title is the first heading of its markdown — and
@@ -40,15 +37,30 @@ export function SaveToAccountDialog({
   snapshot,
   draftId,
   initialTitle,
+  saveAsNew = false,
+  onSaved,
 }: {
   snapshot: ProposalFormSnapshot;
-  /** Set when the form was opened from an existing draft: save updates it. */
+  /** Set when the form was opened from an editable draft: save updates it. */
   draftId?: string | null;
   /** The stored draft's name, so an update does not rename it by accident. */
   initialTitle?: string;
+  /**
+   * The form was opened on a draft that can no longer be edited in place
+   * (published or submitted), so saving creates a copy. Only changes the
+   * wording; `draftId` should be null in this case.
+   */
+  saveAsNew?: boolean;
+  /**
+   * Called with the draft the server returned after a successful create or
+   * update. The owner uses it to bind later saves to that draft, so a create
+   * is followed by updates rather than more creates.
+   */
+  onSaved?: (draft: Draft) => void;
 }) {
   const { isSignedIn } = useSiwe();
-  const { createDraft, patchDraft, isCreating, isPatching } = useDrafts();
+  const { createDraft, patchDraft, isCreating, isPatching } =
+    useDraftMutations();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -71,22 +83,31 @@ export function SaveToAccountDialog({
     const fields = toDraftFields({ ...snapshot, title });
 
     try {
+      let saved: Draft;
       if (draftId) {
-        await patchDraft({ id: draftId, ...fields });
+        saved = await patchDraft({ id: draftId, ...fields });
         toast.success("Draft updated.");
       } else {
-        await createDraft(fields);
+        saved = await createDraft(fields);
         toast.success("Saved to your drafts.");
       }
+      onSaved?.(saved);
       setOpen(false);
     } catch (cause) {
-      // Keep the dialog open so the reason sits next to the title that caused
-      // it — a duplicate name or a rejected action is worth reading.
+      // Keep the dialog open so the reason sits next to the fields that caused
+      // it — a rejected action or a frozen draft is worth reading. (Titles are
+      // not validated beyond being non-empty, so a name never fails here.)
       setError(
         cause instanceof Error ? cause.message : "Failed to save draft."
       );
     }
   }
+
+  const buttonLabel = draftId
+    ? "Update my draft"
+    : saveAsNew
+      ? "Save as new draft"
+      : "Save to my drafts";
 
   if (!isSignedIn) {
     return (
@@ -96,7 +117,7 @@ export function SaveToAccountDialog({
         disabled
         title="Sign in to save drafts to your account."
       >
-        Save to my drafts
+        {buttonLabel}
       </Button>
     );
   }
@@ -111,14 +132,18 @@ export function SaveToAccountDialog({
         disabled={Boolean(blocker)}
         title={blocker ?? undefined}
       >
-        {draftId ? "Update my draft" : "Save to my drafts"}
+        {buttonLabel}
       </Button>
 
       <Dialog open={open} onOpenChange={openWith}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {draftId ? "Update draft" : "Save to my drafts"}
+              {draftId
+                ? "Update draft"
+                : saveAsNew
+                  ? "Save as new draft"
+                  : "Save to my drafts"}
             </DialogTitle>
             <DialogDescription>
               Stored against your account, so you can come back to it from
