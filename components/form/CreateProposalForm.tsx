@@ -278,13 +278,23 @@ export default function CreateProposalForm({
     isConfirming,
     isConfirmed: hasConfirmedSubmission,
   });
-  shouldPersistDraftRef.current = submissionPhase !== "confirmed";
+  // Opened on a stored draft, the localStorage slot is left alone entirely. It
+  // belongs to the anonymous crash-recovery flow, and every persistence path
+  // below (interval, pagehide, blur, the Save draft button) funnels through
+  // saveDraft, so this one flag is enough to keep the server draft's contents
+  // from replacing whatever was autosaved there. "Update my draft" is the save
+  // path in that mode.
+  const openedOnStoredDraft = openedOnStoredDraftRef.current;
+  shouldPersistDraftRef.current =
+    !openedOnStoredDraft && submissionPhase !== "confirmed";
   const isBusy =
     submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
 
   useEffect(() => {
     // Opened on a specific stored draft: that is already the initial state, so
-    // restoring the autosave over the top of it would silently discard it.
+    // restoring the autosave over the top of it would silently discard it. The
+    // form still counts as hydrated so the rest of the UI enables; writing back
+    // to localStorage is what shouldPersistDraftRef blocks in this mode.
     if (openedOnStoredDraftRef.current) {
       setIsDraftHydrated(true);
       return;
@@ -515,6 +525,7 @@ export default function CreateProposalForm({
           replacementErrorMessage={replacementErrorMessage}
           canSubmit={canSubmit}
           formInvalid={formInvalid}
+          showSaveDraft={!openedOnStoredDraft}
           saveDraftDisabled={!isDraftHydrated || submissionPhase !== "idle"}
           onSaveDraft={() => saveDraft({ showToast: true })}
           onSubmit={handleSubmit}
@@ -955,6 +966,12 @@ interface SubmitSectionProps {
   replacementErrorMessage: string | null;
   canSubmit: boolean;
   formInvalid: boolean;
+  /**
+   * False when the form was opened on a stored draft: local autosave is
+   * suspended there, so a "Save draft" button would appear to work and do
+   * nothing. The server draft's own save button takes its place.
+   */
+  showSaveDraft: boolean;
   saveDraftDisabled: boolean;
   onSaveDraft: () => void;
   onSubmit: () => void;
@@ -976,6 +993,7 @@ function SubmitSection({
   replacementErrorMessage,
   canSubmit,
   formInvalid,
+  showSaveDraft,
   saveDraftDisabled,
   onSaveDraft,
   onSubmit,
@@ -1067,14 +1085,16 @@ function SubmitSection({
 
         <div className="flex flex-wrap justify-end gap-2">
           {draftActions}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            disabled={saveDraftDisabled}
-          >
-            Save draft
-          </Button>
+          {showSaveDraft ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onSaveDraft}
+              disabled={saveDraftDisabled}
+            >
+              Save draft
+            </Button>
+          ) : null}
           {submissionPhase === "awaiting-wallet" ||
           submissionPhase === "confirming" ? (
             <Button disabled>

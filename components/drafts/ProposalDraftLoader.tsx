@@ -29,7 +29,13 @@ export function ProposalDraftLoader() {
 
   // Mount the form only once the draft has resolved: seeding initial state is
   // simpler than reconciling a late arrival against what the user has typed.
-  if (draftId && isLoading) {
+  //
+  // The session has to count as loading too. useDraft stands down with
+  // skipToken until the subject is known, and a skipped query is pending but
+  // not fetching, so its isLoading is false. Without this the form would mount
+  // blank (and restore the localStorage autosave) before the session resolved,
+  // then be unmounted for the skeleton and mounted again on the draft.
+  if (draftId && (isLoadingSession || isLoading)) {
     return (
       <Card variant="glass">
         <CardContent className="space-y-3 pt-6">
@@ -42,6 +48,12 @@ export function ProposalDraftLoader() {
 
   const restored = draft ? draftToFormState(draft) : null;
 
+  // Publishing freezes a draft on the server (PATCH answers 409 not_editable),
+  // so a published or submitted draft opens read-only in that sense: its
+  // contents still seed the form, but saving creates a copy instead of trying
+  // an update that would fail after the user has typed.
+  const isEditable = !draft || draft.status === "draft";
+
   return (
     <div className="flex flex-col gap-4">
       {needsSignIn ? (
@@ -53,6 +65,11 @@ export function ProposalDraftLoader() {
           That draft could not be loaded — it may have been deleted, or belong
           to a different account. Starting a blank proposal instead.
         </p>
+      ) : draft && !isEditable ? (
+        <p className="text-sm text-amber-400">
+          This draft has been {draft.status}, so it can no longer be edited in
+          place. Changes you make here can be saved as a new draft.
+        </p>
       ) : null}
 
       <CreateProposalForm
@@ -60,8 +77,15 @@ export function ProposalDraftLoader() {
         renderDraftActions={(snapshot) => (
           <SaveToAccountDialog
             snapshot={snapshot}
-            draftId={draft?.id ?? null}
-            initialTitle={draft?.title}
+            draftId={draft && isEditable ? draft.id : null}
+            initialTitle={
+              draft
+                ? isEditable
+                  ? draft.title
+                  : `${draft.title} (copy)`
+                : undefined
+            }
+            saveAsNew={Boolean(draft) && !isEditable}
           />
         )}
       />
