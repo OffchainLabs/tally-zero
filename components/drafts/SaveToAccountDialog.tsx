@@ -22,6 +22,7 @@ import {
   type ProposalFormSnapshot,
   toDraftFields,
 } from "@/lib/drafts/mapping";
+import type { Draft } from "@/lib/siwe/types";
 
 /**
  * Saves the proposal form to the signed-in subject's drafts.
@@ -42,6 +43,7 @@ export function SaveToAccountDialog({
   draftId,
   initialTitle,
   saveAsNew = false,
+  onSaved,
 }: {
   snapshot: ProposalFormSnapshot;
   /** Set when the form was opened from an editable draft: save updates it. */
@@ -54,6 +56,12 @@ export function SaveToAccountDialog({
    * wording; `draftId` should be null in this case.
    */
   saveAsNew?: boolean;
+  /**
+   * Called with the draft the server returned after a successful create or
+   * update. The owner uses it to bind later saves to that draft, so a create
+   * is followed by updates rather than more creates.
+   */
+  onSaved?: (draft: Draft) => void;
 }) {
   const { isSignedIn } = useSiwe();
   const { createDraft, patchDraft, isCreating, isPatching } =
@@ -80,17 +88,20 @@ export function SaveToAccountDialog({
     const fields = toDraftFields({ ...snapshot, title });
 
     try {
+      let saved: Draft;
       if (draftId) {
-        await patchDraft({ id: draftId, ...fields });
+        saved = await patchDraft({ id: draftId, ...fields });
         toast.success("Draft updated.");
       } else {
-        await createDraft(fields);
+        saved = await createDraft(fields);
         toast.success("Saved to your drafts.");
       }
+      onSaved?.(saved);
       setOpen(false);
     } catch (cause) {
-      // Keep the dialog open so the reason sits next to the title that caused
-      // it — a duplicate name or a rejected action is worth reading.
+      // Keep the dialog open so the reason sits next to the fields that caused
+      // it — a rejected action or a frozen draft is worth reading. (Titles are
+      // not validated beyond being non-empty, so a name never fails here.)
       setError(
         cause instanceof Error ? cause.message : "Failed to save draft."
       );

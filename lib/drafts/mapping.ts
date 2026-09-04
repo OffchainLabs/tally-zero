@@ -37,6 +37,9 @@ import type {
  * Titles are a list-view affordance, not content — the full heading is always
  * in the description. Truncating keeps one runaway first line from making the
  * drafts list unreadable.
+ *
+ * A UI choice only: the API accepts any non-empty title, so this applies to
+ * titles derived here and is not enforced on ones the user types.
  */
 export const DRAFT_TITLE_MAX_LENGTH = 120;
 
