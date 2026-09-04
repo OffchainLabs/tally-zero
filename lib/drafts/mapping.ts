@@ -155,6 +155,11 @@ export type RestoredDraftFormState = {
   description: string;
   governorType: GovernorType;
   actions: FormProposalAction[];
+  /**
+   * When the server last saw these contents. The form's autosave compares its
+   * browser copy against this to decide whether local edits are newer.
+   */
+  updatedAt: string;
 };
 
 /**
@@ -174,5 +179,6 @@ export function draftToFormState(draft: Draft): RestoredDraftFormState {
     description: draft.description,
     governorType: fromDraftGovernorType(draft.governorType),
     actions: actions.length > 0 ? actions : [createFormProposalAction()],
+    updatedAt: draft.updatedAt,
   };
 }

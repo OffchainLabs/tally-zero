@@ -19,6 +19,7 @@ export const STORAGE_PREFIX = "tally-zero";
 export const STORAGE_KEYS = {
   L1_RPC: "tally-zero-l1-rpc",
   L2_RPC: "tally-zero-l2-rpc",
+  PROPOSAL_DRAFT: "tally-zero-proposal-draft",
   BLOCK_RANGE: "tally-zero-block-range",
   L1_BLOCK_RANGE: "tally-zero-l1-block-range",
   STAGES_CACHE_PREFIX: "tally-zero-stages-",
@@ -62,6 +63,20 @@ export const L1_BLOCK_REFRESH_INTERVAL_MS = MS_PER_MINUTE;
 
 /** Duration that a cached L1 block number is considered fresh in milliseconds */
 export const L1_BLOCK_CACHE_FRESHNESS_MS = 30 * MS_PER_SECOND;
+
+/** Delay after the last edit before the proposal form autosaves to localStorage */
+export const PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS = 2 * MS_PER_SECOND;
+
+/**
+ * The proposal form's autosave slot. The bare key holds the anonymous form;
+ * a form bound to a server draft gets a slot per draft id, so a server
+ * draft's contents never overwrite the anonymous crash-recovery copy.
+ */
+export function proposalDraftStorageKey(draftId: string | null): string {
+  return draftId
+    ? `${STORAGE_KEYS.PROPOSAL_DRAFT}:${draftId}`
+    : STORAGE_KEYS.PROPOSAL_DRAFT;
+}
 
 /** Available cache TTL options for user settings (values in seconds) */
 export const CACHE_TTL_OPTIONS = [

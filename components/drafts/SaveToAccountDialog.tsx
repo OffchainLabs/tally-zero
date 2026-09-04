@@ -25,9 +25,9 @@ import {
 import type { Draft } from "@/lib/siwe/types";
 
 /**
- * Saves the proposal form to the signed-in subject's drafts. This is the
- * form's only save path: there is no local autosave, so a signed-out visitor
- * can fill in and submit a proposal but cannot keep it.
+ * Saves the proposal form to the signed-in subject's drafts. The form autosaves
+ * to this browser on its own; this is the named copy that other devices and
+ * the drafts list can see, and the only save path that needs a SIWE session.
  *
  * The title lives here rather than as a field on the form because it is draft
  * metadata — a proposal's real title is the first heading of its markdown — and

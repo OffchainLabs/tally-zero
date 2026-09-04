@@ -17,6 +17,8 @@ import {
   DEFAULT_TENDERLY_PROJECT,
   L1_BLOCK_CACHE_FRESHNESS_MS,
   L1_BLOCK_REFRESH_INTERVAL_MS,
+  PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
+  proposalDraftStorageKey,
   STORAGE_KEYS,
   STORAGE_PREFIX,
 } from "./storage-keys";
@@ -42,6 +44,10 @@ describe("storage-keys config", () => {
 
     it("has L2_RPC key", () => {
       expect(STORAGE_KEYS.L2_RPC).toBe("tally-zero-l2-rpc");
+    });
+
+    it("has PROPOSAL_DRAFT key", () => {
+      expect(STORAGE_KEYS.PROPOSAL_DRAFT).toBe("tally-zero-proposal-draft");
     });
 
     it("has BLOCK_RANGE key", () => {
@@ -140,6 +146,27 @@ describe("storage-keys config", () => {
 
     it("L1_BLOCK_CACHE_FRESHNESS_MS is 30 seconds", () => {
       expect(L1_BLOCK_CACHE_FRESHNESS_MS).toBe(30000);
+    });
+
+    it("PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS is 2 seconds", () => {
+      expect(PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS).toBe(2000);
+    });
+  });
+
+  // The anonymous form and each bound server draft get their own slot, so a
+  // draft opened from the account never overwrites the crash-recovery copy.
+  describe("proposalDraftStorageKey", () => {
+    it("uses the bare key for the anonymous form", () => {
+      expect(proposalDraftStorageKey(null)).toBe(STORAGE_KEYS.PROPOSAL_DRAFT);
+    });
+
+    it("namespaces a bound draft under the same prefix", () => {
+      expect(proposalDraftStorageKey("d1")).toBe(
+        "tally-zero-proposal-draft:d1"
+      );
+      expect(proposalDraftStorageKey("d1")).not.toBe(
+        proposalDraftStorageKey("d2")
+      );
     });
   });
 

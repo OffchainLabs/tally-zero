@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -26,17 +26,28 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
 
+import {
+  DraftSaveStatusBar,
+  type DraftSaveStatus,
+} from "@/components/form/DraftSaveStatusBar";
 import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
+  PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
+  proposalDraftStorageKey,
+} from "@/config/storage-keys";
+import {
   buildSubmittedProposalPath,
   createFormProposalAction,
+  createProposalDraft,
   getProposalEligibility,
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
+  parseProposalDraft,
+  serializeProposalSnapshot,
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
@@ -74,12 +85,45 @@ interface SubmittedProposalMeta {
   governorAddress: string;
 }
 
+/** A successful save to the account, reported by whoever owns that save. */
+export interface ServerSaveEvent {
+  /** When it succeeded, ms epoch. */
+  at: number;
+  /** The subject it was saved under, for the status bar. */
+  address: string | null;
+  /** Exactly what was sent, so the form can tell whether anything changed since. */
+  snapshot: ProposalFormSnapshot;
+}
+
+function removeLocalSlots(keys: Array<string | null>) {
+  try {
+    for (const key of new Set(keys)) {
+      if (key) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
 interface CreateProposalFormProps {
   /**
    * A stored draft to open the form on, already mapped to form state. Seeds the
    * initial state on mount and is deliberately not re-read afterwards.
    */
   initialDraft?: RestoredDraftFormState | null;
+  /**
+   * The server draft the form is bound to, if any. Picks the autosave slot, so
+   * a bound draft's contents never overwrite the anonymous crash-recovery copy.
+   */
+  draftId?: string | null;
+  /**
+   * The most recent successful save to the account. Resets the dirty state and
+   * shows in the status bar; the browser copy is dropped since the contents are
+   * on the server now.
+   */
+  serverSave?: ServerSaveEvent | null;
+  /** The signed-in subject, named in the status bar for server saves. */
+  accountAddress?: string | null;
   /**
    * Extra buttons for the submit row, given the live form contents.
    *
@@ -92,6 +136,9 @@ interface CreateProposalFormProps {
 
 export default function CreateProposalForm({
   initialDraft,
+  draftId = null,
+  serverSave = null,
+  accountAddress = null,
   renderDraftActions,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
@@ -113,6 +160,25 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  // Local autosave and the status bar. Nothing is written until the mount
+  // effect has checked the browser for a copy to restore.
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  // A form opened on a server draft starts out saved there, as of its updatedAt.
+  const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>(() =>
+    initialDraft
+      ? {
+          kind: "server",
+          at: Date.parse(initialDraft.updatedAt),
+          address: accountAddress,
+        }
+      : { kind: "never" }
+  );
+  // Contents at the last save of either kind; anything different is unsaved.
+  const [lastSavedSerialized, setLastSavedSerialized] = useState(() =>
+    serializeProposalSnapshot({ governorType, description, actions })
+  );
+  const [restoredFromLocal, setRestoredFromLocal] = useState(false);
 
   const governor = GOVERNORS[governorType];
 
@@ -159,12 +225,33 @@ export default function CreateProposalForm({
     () => actions.map(({ id: _id, ...action }) => action),
     [actions]
   );
-  // What the server-drafts dialog saves; the form itself persists nothing.
+  // What the autosave writes and the server-drafts dialog saves.
   const draftSnapshot = {
     governorType,
     description,
     actions: proposalActions,
   };
+  const serialized = serializeProposalSnapshot(draftSnapshot);
+  const isDirty = serialized !== lastSavedSerialized;
+
+  // The autosave paths that run outside render (the debounce timer, pagehide,
+  // unmount) read the latest values through refs.
+  const draftSnapshotRef = useRef(draftSnapshot);
+  draftSnapshotRef.current = draftSnapshot;
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+  const lastSavedSerializedRef = useRef(lastSavedSerialized);
+  lastSavedSerializedRef.current = lastSavedSerialized;
+  const storageKeyRef = useRef(proposalDraftStorageKey(draftId));
+  storageKeyRef.current = proposalDraftStorageKey(draftId);
+  // `initialDraft` seeds state and is deliberately not re-read afterwards, so
+  // the mount-only restore effect reads it through a ref rather than claiming
+  // it as a dependency it would ignore.
+  const initialDraftRef = useRef(initialDraft);
+  // The slot the autosave last wrote, so a server save or a confirmed
+  // submission can clear it even after the binding has moved to a new id.
+  const lastWrittenKeyRef = useRef<string | null>(null);
+
   const actionErrors = useMemo(
     () => proposalActions.map(validateAction),
     [proposalActions]
@@ -272,6 +359,106 @@ export default function CreateProposalForm({
       setSubmittedProposalMeta(null);
     }
   }, [writeError]);
+
+  useEffect(() => {
+    // Crash recovery. The anonymous form takes its slot outright. A form opened
+    // on a server draft takes the per-draft slot only when it is newer than the
+    // server copy and actually differs, and the status bar says so.
+    const key = storageKeyRef.current;
+    const opened = initialDraftRef.current;
+    try {
+      const local = parseProposalDraft(window.localStorage.getItem(key));
+      if (local) {
+        const serverAt = opened ? Date.parse(opened.updatedAt) : -Infinity;
+        const localSerialized = serializeProposalSnapshot(local);
+        if (
+          local.savedAt > serverAt &&
+          localSerialized !== lastSavedSerializedRef.current
+        ) {
+          setGovernorType(local.governorType);
+          setDescription(local.description);
+          setActions(local.actions);
+          setLastSavedSerialized(localSerialized);
+          setSaveStatus({ kind: "local", at: local.savedAt });
+          setRestoredFromLocal(Boolean(opened));
+          lastWrittenKeyRef.current = key;
+        } else {
+          // Older than the server copy, or identical to it: nothing to recover.
+          window.localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // Storage can be unavailable in privacy-restricted contexts.
+    } finally {
+      setIsDraftHydrated(true);
+    }
+  }, []);
+
+  function saveLocally() {
+    if (!isDirtyRef.current) return;
+    const key = storageKeyRef.current;
+
+    try {
+      const draft = createProposalDraft(draftSnapshotRef.current);
+      window.localStorage.setItem(key, JSON.stringify(draft));
+      lastWrittenKeyRef.current = key;
+      setLastSavedSerialized(serializeProposalSnapshot(draft));
+      setSaveStatus({ kind: "local", at: draft.savedAt });
+      setRestoredFromLocal(false);
+    } catch {
+      // Storage unavailable: the bar keeps reading "Unsaved changes", which is
+      // the truth.
+    }
+  }
+  const saveLocallyRef = useRef(saveLocally);
+  saveLocallyRef.current = saveLocally;
+
+  // Debounced autosave: a moment after the last edit. `serialized` is a
+  // dependency so every keystroke restarts the timer.
+  useEffect(() => {
+    if (!isDraftHydrated || !isDirty || submissionPhase === "confirmed") return;
+
+    const timeoutId = window.setTimeout(
+      () => saveLocallyRef.current(),
+      PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isDraftHydrated, isDirty, serialized, submissionPhase]);
+
+  // Flush on leaving the page, and on unmount, so the debounce window is not a
+  // window for losing edits.
+  useEffect(() => {
+    if (!isDraftHydrated || submissionPhase === "confirmed") return;
+
+    const flush = () => saveLocallyRef.current();
+    window.addEventListener("pagehide", flush);
+
+    return () => {
+      flush();
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [isDraftHydrated, submissionPhase]);
+
+  useEffect(() => {
+    if (!serverSave) return;
+    setLastSavedSerialized(serializeProposalSnapshot(serverSave.snapshot));
+    setSaveStatus({
+      kind: "server",
+      at: serverSave.at,
+      address: serverSave.address,
+    });
+    setRestoredFromLocal(false);
+    // The contents are on the server now; the browser copy has done its job.
+    removeLocalSlots([lastWrittenKeyRef.current, storageKeyRef.current]);
+    lastWrittenKeyRef.current = null;
+  }, [serverSave]);
+
+  useEffect(() => {
+    if (submissionPhase !== "confirmed") return;
+    removeLocalSlots([lastWrittenKeyRef.current, storageKeyRef.current]);
+    lastWrittenKeyRef.current = null;
+  }, [submissionPhase]);
 
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
@@ -416,6 +603,12 @@ export default function CreateProposalForm({
           formInvalid={formInvalid}
           onSubmit={handleSubmit}
           draftActions={renderDraftActions?.(draftSnapshot)}
+        />
+
+        <DraftSaveStatusBar
+          status={saveStatus}
+          isDirty={isDraftHydrated && isDirty}
+          restoredFromLocal={restoredFromLocal}
         />
       </div>
 
