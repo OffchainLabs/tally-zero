@@ -119,6 +119,28 @@ describe("ProposalDraftLoader", () => {
     expect(mocks.form.mock.calls[0][0]).toMatchObject({ initialDraft: null });
   });
 
+  // With no local autosave, saving needs a session; say so before the user
+  // types rather than only on the disabled button's tooltip.
+  it("tells a signed-out visitor on a blank form that saving needs sign-in", () => {
+    mocks.searchParams = new URLSearchParams();
+    session({ isSignedIn: false });
+
+    const markup = render();
+
+    expect(markup).toContain("Sign in to save this proposal to your drafts.");
+    expect(markup).toContain('data-testid="form"');
+  });
+
+  it("shows no sign-in hint once signed in, or while the session resolves", () => {
+    mocks.searchParams = new URLSearchParams();
+
+    session({ isSignedIn: true });
+    expect(render()).not.toContain("Sign in to save this proposal");
+
+    session({ isLoadingSession: true });
+    expect(render()).not.toContain("Sign in to save this proposal");
+  });
+
   // useDraft stands down with skipToken until the subject is known, and a
   // skipped query is pending but not fetching, so its isLoading is false. The
   // loader must not read that as "resolved".

@@ -106,8 +106,8 @@ export function ProposalDraftLoader() {
   // The session has to count as loading too. useDraft stands down with
   // skipToken until the subject is known, and a skipped query is pending but
   // not fetching, so its isLoading is false. Without this the form would mount
-  // blank (and restore the localStorage autosave) before the session resolved,
-  // then be unmounted for the skeleton and mounted again on the draft.
+  // blank before the session resolved, then be unmounted for the skeleton and
+  // mounted again on the draft.
   if (draftId && (isLoadingSession || isLoading)) {
     return (
       <Card variant="glass">
@@ -122,9 +122,19 @@ export function ProposalDraftLoader() {
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
 
+  // There is no local autosave, so a signed-out visitor should learn before
+  // typing that keeping their work needs a session, not on hovering the
+  // disabled save button afterwards.
+  const cannotSave = !draftId && !isLoadingSession && !isSignedIn;
+
   return (
     <div className="flex flex-col gap-4">
-      {needsSignIn ? (
+      {cannotSave ? (
+        <p className="text-sm text-muted-foreground">
+          Sign in to save this proposal to your drafts. Nothing is kept
+          otherwise.
+        </p>
+      ) : needsSignIn ? (
         <p className="text-sm text-amber-400">
           Sign in to open a saved draft. Starting a blank proposal instead.
         </p>
