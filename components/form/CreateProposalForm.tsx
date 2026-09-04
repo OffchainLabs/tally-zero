@@ -323,6 +323,10 @@ export default function CreateProposalForm({
 
   useEffect(() => {
     if (submissionPhase !== "confirmed") return;
+    // Opened on a stored draft, the slot was never written (see
+    // shouldPersistDraftRef), so whatever it holds is someone else's crash
+    // recovery, not this proposal. Leave it.
+    if (openedOnStoredDraftRef.current) return;
 
     try {
       window.localStorage.removeItem(STORAGE_KEYS.PROPOSAL_DRAFT);
