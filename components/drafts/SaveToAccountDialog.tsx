@@ -25,14 +25,9 @@ import {
 import type { Draft } from "@/lib/siwe/types";
 
 /**
- * Saves the proposal form to the signed-in subject's drafts.
- *
- * Deliberately separate from the form's localStorage autosave. The two solve
- * different problems: autosave is crash recovery for anyone with a wallet
- * connected, this is a named, shareable copy that needs a SIWE session. Keeping
- * them apart is what lets the proposal form remain usable without signing in.
- * (When the form is opened on a stored draft it suspends the local autosave, so
- * this button is the only save path in that mode.)
+ * Saves the proposal form to the signed-in subject's drafts. This is the
+ * form's only save path: there is no local autosave, so a signed-out visitor
+ * can fill in and submit a proposal but cannot keep it.
  *
  * The title lives here rather than as a field on the form because it is draft
  * metadata — a proposal's real title is the first heading of its markdown — and

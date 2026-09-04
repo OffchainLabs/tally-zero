@@ -153,16 +153,15 @@ describe("CreateProposalForm snapshot block annotation", () => {
       expect(markup).toContain(`value="${TARGET}"`);
     });
 
-    // Local autosave is suspended while editing a stored draft, so the button
-    // that writes to it would appear to work and do nothing. The server draft's
-    // own save button (via renderDraftActions) takes its place.
-    it("hides the local Save draft button when opened on a stored draft", () => {
+    // The form has no persistence of its own: the only save path is the server
+    // drafts button injected through renderDraftActions.
+    it("renders no local Save draft button in either mode", () => {
       const plain = renderToStaticMarkup(<CreateProposalForm />);
       const onDraft = renderToStaticMarkup(
         <CreateProposalForm initialDraft={restored} />
       );
 
-      expect(plain).toContain(">Save draft</button>");
+      expect(plain).not.toContain(">Save draft</button>");
       expect(onDraft).not.toContain(">Save draft</button>");
     });
 
