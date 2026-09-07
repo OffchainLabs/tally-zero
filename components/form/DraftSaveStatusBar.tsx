@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND } from "@/lib/date-utils";
 import { shortenAddress } from "@/lib/format-utils";
@@ -21,6 +21,12 @@ interface DraftSaveStatusBarProps {
    * draft the form was opened on, because the local copy was newer.
    */
   restoredFromLocal?: boolean;
+  /**
+   * Buttons for the right end of the row: the form puts "Save to my drafts"
+   * and "Submit Proposal" here so the actions sit next to the state they act
+   * on and stay in view while the page scrolls.
+   */
+  actions?: ReactNode;
   className?: string;
 }
 
@@ -45,6 +51,7 @@ export function DraftSaveStatusBar({
   status,
   isDirty,
   restoredFromLocal = false,
+  actions,
   className,
 }: DraftSaveStatusBarProps) {
   // Re-render on a slow tick so "3 min ago" keeps up without a save happening.
@@ -95,11 +102,11 @@ export function DraftSaveStatusBar({
       data-testid="draft-save-status"
       data-state={state}
       className={cn(
-        "sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-t-2xl border-t border-border/40 glass px-4 py-2.5 text-sm backdrop-blur",
+        "sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-t-2xl border-t border-border/40 glass px-4 py-2.5 text-sm backdrop-blur",
         className
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <span
           aria-hidden="true"
           className={cn(
@@ -125,6 +132,14 @@ export function DraftSaveStatusBar({
           </time>{" "}
           · {formatSaveAge(savedAt, now)}
         </p>
+      ) : null}
+      {actions ? (
+        <div
+          className="ml-auto flex flex-wrap items-center justify-end gap-2"
+          data-testid="draft-save-actions"
+        >
+          {actions}
+        </div>
       ) : null}
     </div>
   );

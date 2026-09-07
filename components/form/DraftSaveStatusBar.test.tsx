@@ -93,6 +93,25 @@ describe("DraftSaveStatusBar", () => {
     expect(markup).toContain("Saved to your drafts as 0x1234...5678");
     expect(markup).not.toContain("<time");
   });
+
+  it("renders the caller's actions at the end of the row, and nothing when there are none", () => {
+    const withActions = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "never" }}
+        isDirty={false}
+        actions={<button type="button">Submit Proposal</button>}
+      />
+    );
+    expect(withActions).toContain('data-testid="draft-save-actions"');
+    expect(withActions.indexOf("Submit Proposal")).toBeGreaterThan(
+      withActions.indexOf("Not saved")
+    );
+
+    const without = renderToStaticMarkup(
+      <DraftSaveStatusBar status={{ kind: "never" }} isDirty={false} />
+    );
+    expect(without).not.toContain('data-testid="draft-save-actions"');
+  });
 });
 
 describe("formatSaveAge", () => {
