@@ -203,8 +203,11 @@ describe("ProposalDraftLoader", () => {
       const markup = render();
 
       expect(markup).toContain(`This draft has been ${status}`);
+      // Unbound for the dialog, but the autosave slot is still this draft's:
+      // sharing the bare key would restore or delete the anonymous form's copy.
       expect(mocks.form.mock.calls[0][0]).toMatchObject({
         initialDraft: { title: "Stored" },
+        draftId: "d1",
       });
       expect(mocks.dialog.mock.calls[0][0]).toMatchObject({
         draftId: null,

@@ -155,7 +155,11 @@ export function ProposalDraftLoader() {
 
       <CreateProposalForm
         initialDraft={restored}
-        draftId={binding.draftId}
+        // The autosave slot is named after the draft on screen, while the save
+        // dialog below writes to the binding. They differ for a published or
+        // submitted draft before its first save: bound to nothing, but its
+        // contents must not share the anonymous form's slot.
+        draftId={binding.draftId ?? draft?.id ?? null}
         serverSave={serverSave}
         accountAddress={effectiveAddress}
         renderDraftActions={(snapshot) => (
