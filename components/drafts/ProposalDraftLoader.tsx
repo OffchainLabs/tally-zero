@@ -75,6 +75,33 @@ export function resolveDraftBinding(
       };
 }
 
+/** The draft the last save returned, and the ?draft= the page had at the time. */
+export interface LastSaved {
+  openedOn: string | null;
+  draft: Draft;
+  serverSave: ServerSaveEvent;
+  /** The URL has since reached `draft.id`. */
+  moved: boolean;
+}
+
+/**
+ * Whether the last save still describes the draft on screen, given the current
+ * ?draft=. It does when the URL points at the saved draft, and, until the URL
+ * has moved there, when it still points at whatever the save was made under
+ * (null for the blank form). After the move a null is a fresh blank form again
+ * and must not inherit an earlier save.
+ *
+ * Exported for its tests: the states involved are only reachable after a save.
+ */
+export function saveAppliesTo(
+  lastSaved: LastSaved | null,
+  draftId: string | null
+): boolean {
+  if (!lastSaved) return false;
+  if (lastSaved.draft.id === draftId) return true;
+  return !lastSaved.moved && lastSaved.openedOn === draftId;
+}
+
 /**
  * Wires the proposal form to the server-side drafts API.
  *
@@ -96,16 +123,16 @@ export function ProposalDraftLoader() {
   // under (and its own id, which the URL moves to after a create) so a later
   // navigation to an unrelated draft does not inherit it. `serverSave` is kept
   // as one object so the form's effect on it fires once per save.
-  const [lastSaved, setLastSaved] = useState<{
-    openedOn: string | null;
-    draft: Draft;
-    serverSave: ServerSaveEvent;
-  } | null>(null);
-  const saveApplies =
-    lastSaved !== null &&
-    (lastSaved.openedOn === draftId || lastSaved.draft.id === draftId);
-  const savedDraft = saveApplies ? lastSaved.draft : null;
-  const serverSave = saveApplies ? lastSaved.serverSave : null;
+  const [lastSaved, setLastSaved] = useState<LastSaved | null>(null);
+  // Note the URL reaching the saved draft. Adjusting state during render on a
+  // prop change is the React-sanctioned shape; the nested serverSave object is
+  // kept, so the form's effect on it does not fire again.
+  if (lastSaved && !lastSaved.moved && lastSaved.draft.id === draftId) {
+    setLastSaved({ ...lastSaved, moved: true });
+  }
+  const saveApplies = saveAppliesTo(lastSaved, draftId);
+  const savedDraft = saveApplies ? lastSaved!.draft : null;
+  const serverSave = saveApplies ? lastSaved!.serverSave : null;
 
   // Drafts are session-scoped, so an unauthenticated ?draft= would otherwise
   // fall through to a blank form with no explanation.
@@ -177,6 +204,7 @@ export function ProposalDraftLoader() {
                   address: effectiveAddress,
                   snapshot,
                 },
+                moved: false,
               });
               // A create (blank form, or a copy of a frozen draft) leaves the
               // URL pointing at nothing or at the original. Move it to the new
