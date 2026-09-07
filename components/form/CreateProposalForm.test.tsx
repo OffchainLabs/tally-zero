@@ -205,6 +205,26 @@ describe("CreateProposalForm snapshot block annotation", () => {
       expect(markup).not.toContain("<time");
     });
 
+    // Both actions live in the sticky bar so they stay in view and sit next to
+    // the state they act on; the messages card above them has no buttons.
+    it("renders the account save and Submit Proposal buttons in the sticky bar", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          renderDraftActions={() => <span data-testid="draft-actions-probe" />}
+        />
+      );
+
+      const bar = markup.indexOf('data-testid="draft-save-status"');
+      const actions = markup.indexOf('data-testid="draft-save-actions"');
+      expect(bar).toBeGreaterThan(-1);
+      expect(actions).toBeGreaterThan(bar);
+      expect(
+        markup.indexOf('data-testid="draft-actions-probe"')
+      ).toBeGreaterThan(actions);
+      expect(markup.indexOf("Submit Proposal")).toBeGreaterThan(actions);
+      expect(markup.split("Submit Proposal")).toHaveLength(2);
+    });
+
     it("hands renderDraftActions the live form snapshot and renders its output", () => {
       const seen: unknown[] = [];
       const markup = renderToStaticMarkup(

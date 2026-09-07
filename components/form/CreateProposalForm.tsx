@@ -127,7 +127,7 @@ interface CreateProposalFormProps {
   /** The signed-in subject, named in the status bar for server saves. */
   accountAddress?: string | null;
   /**
-   * Extra buttons for the submit row, given the live form contents.
+   * Extra buttons for the sticky status row, given the live form contents.
    *
    * A render prop so the server-drafts feature can read the form without this
    * component knowing anything about SIWE — it stays free of a session, a query
@@ -605,16 +605,31 @@ export default function CreateProposalForm({
           writeErrorMessage={writeErrorMessage}
           receiptErrorMessage={receiptErrorMessage}
           replacementErrorMessage={replacementErrorMessage}
-          canSubmit={canSubmit}
           formInvalid={formInvalid}
-          onSubmit={handleSubmit}
-          draftActions={renderDraftActions?.(draftSnapshot)}
         />
 
         <DraftSaveStatusBar
           status={saveStatus}
           isDirty={isDraftHydrated && isDirty}
           restoredFromLocal={restoredFromLocal}
+          actions={
+            <>
+              {renderDraftActions?.(draftSnapshot)}
+              {submissionPhase === "awaiting-wallet" ||
+              submissionPhase === "confirming" ? (
+                <Button disabled>
+                  <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
+                  {submissionPhase === "confirming"
+                    ? "Confirming…"
+                    : "Submitting…"}
+                </Button>
+              ) : (
+                <Button onClick={handleSubmit} disabled={!canSubmit}>
+                  Submit Proposal
+                </Button>
+              )}
+            </>
+          }
         />
       </div>
 
@@ -1046,15 +1061,7 @@ interface SubmitSectionProps {
   writeErrorMessage: string | null;
   receiptErrorMessage: string | null;
   replacementErrorMessage: string | null;
-  canSubmit: boolean;
   formInvalid: boolean;
-  onSubmit: () => void;
-  /**
-   * Rendered ahead of "Submit Proposal". The server-drafts save button lives
-   * here; the form's own localStorage autosave runs separately and reports in
-   * the status bar below.
-   */
-  draftActions?: ReactNode;
 }
 
 function SubmitSection({
@@ -1069,11 +1076,10 @@ function SubmitSection({
   writeErrorMessage,
   receiptErrorMessage,
   replacementErrorMessage,
-  canSubmit,
   formInvalid,
-  onSubmit,
-  draftActions,
 }: SubmitSectionProps) {
+  // Messages only. The "Save to my drafts" and "Submit Proposal" buttons sit
+  // in the sticky DraftSaveStatusBar below, next to the save state.
   return (
     <Card variant="glass">
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -1157,21 +1163,6 @@ function SubmitSection({
             {predictedProposalId.slice(-6)}
           </p>
         )}
-
-        <div className="flex flex-wrap justify-end gap-2">
-          {draftActions}
-          {submissionPhase === "awaiting-wallet" ||
-          submissionPhase === "confirming" ? (
-            <Button disabled>
-              <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
-              {submissionPhase === "confirming" ? "Confirming…" : "Submitting…"}
-            </Button>
-          ) : (
-            <Button onClick={onSubmit} disabled={!canSubmit}>
-              Submit Proposal
-            </Button>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
