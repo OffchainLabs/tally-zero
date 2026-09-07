@@ -97,8 +97,6 @@ export function DraftSaveStatusBar({
 
   return (
     <div
-      role="status"
-      aria-live="polite"
       data-testid="draft-save-status"
       data-state={state}
       className={cn(
@@ -120,7 +118,12 @@ export function DraftSaveStatusBar({
                   : "bg-muted-foreground/50"
           )}
         />
-        <div className="min-w-0">
+        {/*
+          The live region is the text alone. The action buttons sit in the same
+          row but re-label on their own (Submitting…, Confirming…) and must not
+          be announced as status changes.
+        */}
+        <div role="status" aria-live="polite" className="min-w-0">
           <p className="font-medium text-foreground">{headline}</p>
           <p className="text-xs text-muted-foreground">{detail}</p>
         </div>
