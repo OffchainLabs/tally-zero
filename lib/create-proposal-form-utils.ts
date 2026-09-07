@@ -99,6 +99,42 @@ export function serializeProposalSnapshot(
   });
 }
 
+/**
+ * A server timestamp as ms epoch, or null when it does not parse. Callers
+ * compare against the result, and `NaN` would make every comparison false.
+ */
+export function parseServerTimestamp(iso: string): number | null {
+  const at = Date.parse(iso);
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * Whether the browser's autosave slot should replace the contents the form was
+ * seeded with. It should when the copy is newer than the server's last save and
+ * actually differs from the seed; otherwise there is nothing to recover and the
+ * slot can go.
+ *
+ * `serverUpdatedAt` is null for the anonymous form, which has no server copy,
+ * and also when the server's timestamp did not parse: an unknown server time
+ * counts as older than any local copy, so a bad timestamp keeps the user's
+ * edits rather than deleting them.
+ */
+export function shouldRestoreLocalDraft({
+  local,
+  serverUpdatedAt,
+  seededSerialized,
+}: {
+  local: RestoredProposalDraft;
+  serverUpdatedAt: number | null;
+  seededSerialized: string;
+}): boolean {
+  const serverAt = serverUpdatedAt ?? -Infinity;
+  return (
+    local.savedAt > serverAt &&
+    serializeProposalSnapshot(local) !== seededSerialized
+  );
+}
+
 export function createProposalDraft({
   governorType,
   description,

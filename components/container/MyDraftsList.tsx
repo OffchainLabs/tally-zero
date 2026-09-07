@@ -51,7 +51,8 @@ export default function MyDraftsList() {
     return (
       <EmptyState title="Sign in to see your drafts">
         Drafts are saved to your account from the New Proposal page, so they
-        follow you across devices.
+        follow you across devices. Anything you have typed there is kept in this
+        browser until you save it.
       </EmptyState>
     );
   }

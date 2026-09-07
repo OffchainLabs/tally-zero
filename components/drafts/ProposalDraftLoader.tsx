@@ -145,19 +145,11 @@ export function ProposalDraftLoader() {
           to a different account. Starting a blank proposal instead.
         </p>
       ) : draft && !binding.isEditable ? (
+        // Shown until the first save: that save creates the copy and moves the
+        // URL to it, and the copy is an ordinary editable draft from then on.
         <p className="text-sm text-amber-400">
-          {savedDraft ? (
-            <>
-              This draft has been {draft.status}, so you are editing a copy,
-              saved as &ldquo;{savedDraft.title}&rdquo;. Saving again updates
-              that copy.
-            </>
-          ) : (
-            <>
-              This draft has been {draft.status}, so it can no longer be edited
-              in place. Changes you make here can be saved as a new draft.
-            </>
-          )}
+          This draft has been {draft.status}, so it can no longer be edited in
+          place. Changes you make here can be saved as a new draft.
         </p>
       ) : null}
 

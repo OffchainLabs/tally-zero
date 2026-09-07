@@ -191,6 +191,20 @@ describe("CreateProposalForm snapshot block annotation", () => {
       expect(markup).toContain(new Date(restored.updatedAt).toISOString());
     });
 
+    it("renders when the stored draft's updatedAt does not parse", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={{ ...restored, updatedAt: "not a date" }}
+          draftId="d1"
+          accountAddress="0x1234567890abcdef1234567890abcdef12345678"
+        />
+      );
+
+      expect(markup).toContain('data-state="server"');
+      expect(markup).toContain("Saved to your drafts as 0x1234...5678");
+      expect(markup).not.toContain("<time");
+    });
+
     it("hands renderDraftActions the live form snapshot and renders its output", () => {
       const seen: unknown[] = [];
       const markup = renderToStaticMarkup(

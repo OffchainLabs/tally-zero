@@ -47,7 +47,9 @@ import {
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
+  parseServerTimestamp,
   serializeProposalSnapshot,
+  shouldRestoreLocalDraft,
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
@@ -165,11 +167,12 @@ export default function CreateProposalForm({
   // effect has checked the browser for a copy to restore.
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   // A form opened on a server draft starts out saved there, as of its updatedAt.
+  // The bar omits the time when that did not parse, so NaN is safe to hand it.
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>(() =>
     initialDraft
       ? {
           kind: "server",
-          at: Date.parse(initialDraft.updatedAt),
+          at: parseServerTimestamp(initialDraft.updatedAt) ?? NaN,
           address: accountAddress,
         }
       : { kind: "never" }
@@ -369,16 +372,19 @@ export default function CreateProposalForm({
     try {
       const local = parseProposalDraft(window.localStorage.getItem(key));
       if (local) {
-        const serverAt = opened ? Date.parse(opened.updatedAt) : -Infinity;
-        const localSerialized = serializeProposalSnapshot(local);
         if (
-          local.savedAt > serverAt &&
-          localSerialized !== lastSavedSerializedRef.current
+          shouldRestoreLocalDraft({
+            local,
+            serverUpdatedAt: opened
+              ? parseServerTimestamp(opened.updatedAt)
+              : null,
+            seededSerialized: lastSavedSerializedRef.current,
+          })
         ) {
           setGovernorType(local.governorType);
           setDescription(local.description);
           setActions(local.actions);
-          setLastSavedSerialized(localSerialized);
+          setLastSavedSerialized(serializeProposalSnapshot(local));
           setSaveStatus({ kind: "local", at: local.savedAt });
           setRestoredFromLocal(Boolean(opened));
           lastWrittenKeyRef.current = key;
@@ -1045,7 +1051,8 @@ interface SubmitSectionProps {
   onSubmit: () => void;
   /**
    * Rendered ahead of "Submit Proposal". The server-drafts save button lives
-   * here; the form has no persistence of its own.
+   * here; the form's own localStorage autosave runs separately and reports in
+   * the status bar below.
    */
   draftActions?: ReactNode;
 }
