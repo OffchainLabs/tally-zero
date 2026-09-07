@@ -112,6 +112,30 @@ describe("DraftSaveStatusBar", () => {
     );
     expect(without).not.toContain('data-testid="draft-save-actions"');
   });
+
+  // The buttons re-label on their own (Submitting…, Confirming…); a live region
+  // around the whole row would announce those as status changes.
+  it("keeps the live region on the status text, not the row with the actions", () => {
+    const markup = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "never" }}
+        isDirty={false}
+        actions={<button type="button">Submit Proposal</button>}
+      />
+    );
+
+    const row = markup.match(/<div[^>]*data-testid="draft-save-status"[^>]*>/);
+    expect(row?.[0]).toBeDefined();
+    expect(row?.[0]).not.toContain("aria-live");
+    expect(row?.[0]).not.toContain('role="status"');
+
+    const live = markup.indexOf('aria-live="polite"');
+    expect(live).toBeGreaterThan(-1);
+    expect(markup.slice(live)).toMatch(/^aria-live="polite"[^>]*>.*Not saved/);
+    // The live region closes before the actions start.
+    const liveClose = markup.indexOf("</div>", live);
+    expect(liveClose).toBeLessThan(markup.indexOf("Submit Proposal"));
+  });
 });
 
 describe("formatSaveAge", () => {
