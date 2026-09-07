@@ -75,6 +75,9 @@ describe("MyDraftsList", () => {
     const markup = render();
 
     expect(markup).toContain("Sign in to see your drafts");
+    // The anonymous form still autosaves to this browser; the prompt must not
+    // read as "nothing is kept without an account".
+    expect(markup).toContain("kept in this browser until you save it");
     expect(markup).not.toContain("No drafts yet");
   });
 

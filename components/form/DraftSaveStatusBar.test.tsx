@@ -77,6 +77,22 @@ describe("DraftSaveStatusBar", () => {
 
     expect(markup).toContain("Saved to your drafts</p>");
   });
+
+  // A stored draft whose updatedAt did not parse reaches the bar as NaN. It is
+  // still on the server, so the headline stands; only the time is dropped
+  // (toISOString on an invalid date would throw and take the form with it).
+  it("omits the time for a server save whose timestamp is unknown", () => {
+    const markup = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "server", at: NaN, address: ADDRESS }}
+        isDirty={false}
+      />
+    );
+
+    expect(markup).toContain('data-state="server"');
+    expect(markup).toContain("Saved to your drafts as 0x1234...5678");
+    expect(markup).not.toContain("<time");
+  });
 });
 
 describe("formatSaveAge", () => {

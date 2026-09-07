@@ -55,7 +55,10 @@ export function DraftSaveStatusBar({
   }, []);
 
   const state = isDirty ? "unsaved" : status.kind;
-  const savedAt = status.kind === "never" ? null : status.at;
+  // A server draft whose timestamp did not parse arrives as NaN: say where the
+  // contents are, just not when.
+  const savedAt =
+    status.kind === "never" || !Number.isFinite(status.at) ? null : status.at;
 
   const headline =
     state === "unsaved"
