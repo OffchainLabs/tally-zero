@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Draft } from "@/lib/siwe/types";
 
 import {
+  type LastSaved,
   ProposalDraftLoader,
   resolveDraftBinding,
+  saveAppliesTo,
 } from "./ProposalDraftLoader";
 
 /**
@@ -292,4 +294,49 @@ describe("resolveDraftBinding", () => {
       });
     }
   );
+});
+
+// Which renders a save answers for. The URL moves to the saved draft after a
+// create, and there is a render or two before it lands where ?draft= still says
+// what it said at save time; the save has to apply across that gap and stop
+// applying to a bare /proposal/new afterwards.
+describe("saveAppliesTo", () => {
+  const save = (overrides: Partial<LastSaved> = {}): LastSaved => ({
+    openedOn: null,
+    draft: { ...DRAFT, id: "d9" },
+    serverSave: {
+      at: 0,
+      address: SUBJECT,
+      snapshot: { description: "", governorType: "treasury", actions: [] },
+    },
+    moved: false,
+    ...overrides,
+  });
+
+  it("applies to nothing before any save", () => {
+    expect(saveAppliesTo(null, null)).toBe(false);
+    expect(saveAppliesTo(null, "d1")).toBe(false);
+  });
+
+  it("applies while the URL still says what it said at save time", () => {
+    expect(saveAppliesTo(save(), null)).toBe(true);
+    expect(saveAppliesTo(save({ openedOn: "d1" }), "d1")).toBe(true);
+  });
+
+  it("applies once the URL has moved to the saved draft, and keeps applying", () => {
+    expect(saveAppliesTo(save(), "d9")).toBe(true);
+    expect(saveAppliesTo(save({ moved: true }), "d9")).toBe(true);
+  });
+
+  it("stops answering for the blank form once the URL has moved", () => {
+    expect(saveAppliesTo(save({ moved: true }), null)).toBe(false);
+    expect(saveAppliesTo(save({ openedOn: "d1", moved: true }), "d1")).toBe(
+      false
+    );
+  });
+
+  it("never applies to an unrelated draft", () => {
+    expect(saveAppliesTo(save(), "d2")).toBe(false);
+    expect(saveAppliesTo(save({ openedOn: "d1" }), "d2")).toBe(false);
+  });
 });
