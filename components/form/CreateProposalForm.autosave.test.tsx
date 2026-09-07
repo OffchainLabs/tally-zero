@@ -12,6 +12,9 @@ import {
   parseProposalDraft,
 } from "@/lib/create-proposal-form-utils";
 
+import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
+import type { Draft } from "@/lib/siwe/types";
+
 import CreateProposalForm from "./CreateProposalForm";
 
 /**
@@ -23,6 +26,13 @@ import CreateProposalForm from "./CreateProposalForm";
  */
 
 const mocks = vi.hoisted(() => ({
+  searchParams: new URLSearchParams(),
+  pathname: "/proposal/new",
+  replace: vi.fn(),
+  useSiwe: vi.fn(),
+  useDraft: vi.fn(),
+  createDraft: vi.fn(),
+  patchDraft: vi.fn(),
   useAccount: vi.fn(),
   useGovernanceClock: vi.fn(),
   useReadContract: vi.fn(),
@@ -30,6 +40,22 @@ const mocks = vi.hoisted(() => ({
   useWaitForTransactionReceipt: vi.fn(),
   useWriteContract: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => mocks.searchParams,
+  usePathname: () => mocks.pathname,
+  useRouter: () => ({ replace: mocks.replace }),
+}));
+vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
+vi.mock("@/hooks/use-drafts", () => ({
+  useDraft: mocks.useDraft,
+  useDraftMutations: () => ({
+    createDraft: mocks.createDraft,
+    patchDraft: mocks.patchDraft,
+    isCreating: false,
+    isPatching: false,
+  }),
 }));
 
 vi.mock("sonner", () => ({ toast: mocks.toast }));
@@ -109,6 +135,20 @@ const stored = {
   updatedAt: SERVER_UPDATED_AT,
 };
 
+const serverDraft: Draft = {
+  id: "d1",
+  author: ACCOUNT,
+  title: stored.title,
+  description: stored.description,
+  governorType: "CONSTITUTIONAL",
+  actions: [{ target: STORED_TARGET, value: "5", calldata: "0x" }],
+  status: "draft",
+  shareSlug: null,
+  onchain: null,
+  createdAt: SERVER_UPDATED_AT,
+  updatedAt: SERVER_UPDATED_AT,
+};
+
 function seedSlot(
   key: string,
   target: string,
@@ -152,6 +192,18 @@ describe("CreateProposalForm browser autosave", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     installStorage();
+    mocks.searchParams = new URLSearchParams("draft=d1");
+    mocks.pathname = "/proposal/new";
+    mocks.useSiwe.mockReturnValue({
+      isSignedIn: true,
+      isLoadingSession: false,
+      effectiveAddress: ACCOUNT,
+    });
+    mocks.useDraft.mockReturnValue({
+      data: serverDraft,
+      isLoading: false,
+      error: null,
+    });
 
     mocks.useGovernanceClock.mockReturnValue({
       clockBlock: BigInt(23_456_789),
@@ -313,4 +365,165 @@ describe("CreateProposalForm browser autosave", () => {
     });
     expect(slot(BARE_KEY)).toBeNull();
   });
+
+  it.each(["debounce", "pagehide", "unmount"])(
+    "keeps recovery isolated when the session expires before %s",
+    (flush) => {
+      seedSlot(BARE_KEY, SCRATCH_TARGET, SERVER_AT + 60_000);
+      const scratchBefore = window.localStorage.getItem(BARE_KEY);
+      const view = render(<ProposalDraftLoader />);
+      typeTarget(view.container, TYPED_TARGET);
+
+      mocks.useSiwe.mockReturnValue({
+        isSignedIn: false,
+        isLoadingSession: false,
+        effectiveAddress: null,
+      });
+      mocks.useDraft.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: null,
+      });
+      view.rerender(<ProposalDraftLoader />);
+      expect(targetInput(view.container).value).toBe(TYPED_TARGET);
+
+      if (flush === "unmount") view.unmount();
+      else if (flush === "pagehide") fireEvent(window, new Event("pagehide"));
+      else settle();
+
+      expect(window.localStorage.getItem(BARE_KEY)).toBe(scratchBefore);
+      expect(slot(DRAFT_KEY)).toMatchObject({
+        description: stored.description,
+        actions: [{ target: TYPED_TARGET, value: "5", calldata: "0x" }],
+      });
+    }
+  );
+
+  it.each(["blank", "published"])(
+    "ignores a delayed create after leaving a %s form",
+    async (opened) => {
+      if (opened === "blank") {
+        mocks.searchParams = new URLSearchParams();
+        mocks.useDraft.mockReturnValue({
+          data: undefined,
+          isLoading: false,
+          error: null,
+        });
+        seedSlot(BARE_KEY, SCRATCH_TARGET, SERVER_AT);
+      } else {
+        mocks.useDraft.mockReturnValue({
+          data: { ...serverDraft, status: "published" },
+          isLoading: false,
+          error: null,
+        });
+      }
+      let resolve!: (draft: Draft) => void;
+      mocks.createDraft.mockReturnValue(
+        new Promise<Draft>((done) => {
+          resolve = done;
+        })
+      );
+      const view = render(<ProposalDraftLoader />);
+      fireEvent.click(view.getByTestId("open-save-to-drafts"));
+      fireEvent.click(view.getByTestId("confirm-save-to-drafts"));
+      expect(mocks.createDraft).toHaveBeenCalledTimes(1);
+      view.unmount();
+
+      await act(async () => resolve({ ...serverDraft, id: "new-draft" }));
+      expect(mocks.replace).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["draft", "pathname", "away and back"])(
+    "ignores a delayed create after %s navigation with the loader still mounted",
+    async (navigation) => {
+      mocks.useDraft.mockReturnValue({
+        data: { ...serverDraft, status: "published" },
+        isLoading: false,
+        error: null,
+      });
+      let resolve!: (draft: Draft) => void;
+      mocks.createDraft.mockReturnValue(
+        new Promise<Draft>((done) => {
+          resolve = done;
+        })
+      );
+      const view = render(<ProposalDraftLoader />);
+      fireEvent.click(view.getByTestId("open-save-to-drafts"));
+      fireEvent.click(view.getByTestId("confirm-save-to-drafts"));
+      if (navigation === "pathname") mocks.pathname = "/elsewhere";
+      else mocks.searchParams = new URLSearchParams("draft=another-draft");
+      view.rerender(<ProposalDraftLoader />);
+      if (navigation === "away and back") {
+        mocks.searchParams = new URLSearchParams("draft=d1");
+        view.rerender(<ProposalDraftLoader />);
+      }
+
+      await act(async () => resolve({ ...serverDraft, id: "new-draft" }));
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(view.getByTestId("open-save-to-drafts").textContent).toBe(
+        "Save as new draft"
+      );
+    }
+  );
+
+  it.each(["blank", "published"])(
+    "migrates recovery after a %s create and updates the new draft on the next save",
+    async (opened) => {
+      if (opened === "blank") {
+        mocks.searchParams = new URLSearchParams();
+        mocks.useDraft.mockReturnValue({
+          data: undefined,
+          isLoading: false,
+          error: null,
+        });
+        seedSlot(BARE_KEY, SCRATCH_TARGET, SERVER_AT);
+      } else {
+        mocks.useDraft.mockReturnValue({
+          data: { ...serverDraft, status: "published" },
+          isLoading: false,
+          error: null,
+        });
+      }
+      const created = { ...serverDraft, id: "new-draft" };
+      mocks.createDraft.mockResolvedValue(created);
+      mocks.patchDraft.mockResolvedValue(created);
+      const view = render(<ProposalDraftLoader />);
+      typeTarget(view.container, TYPED_TARGET);
+      settle();
+      fireEvent.click(view.getByTestId("open-save-to-drafts"));
+      await act(async () =>
+        fireEvent.click(view.getByTestId("confirm-save-to-drafts"))
+      );
+      expect(mocks.replace).toHaveBeenCalledWith(
+        "/proposal/new?draft=new-draft"
+      );
+      expect(slot(opened === "blank" ? BARE_KEY : DRAFT_KEY)).toBeNull();
+
+      mocks.searchParams = new URLSearchParams("draft=new-draft");
+      mocks.useDraft.mockReturnValue({
+        data: created,
+        isLoading: false,
+        error: null,
+      });
+      view.rerender(<ProposalDraftLoader />);
+      typeTarget(view.container, SCRATCH_TARGET);
+      settle();
+      expect(slot(proposalDraftStorageKey(created.id))?.actions[0].target).toBe(
+        SCRATCH_TARGET
+      );
+      fireEvent.click(view.getByTestId("open-save-to-drafts"));
+      await act(async () =>
+        fireEvent.click(view.getByTestId("confirm-save-to-drafts"))
+      );
+      expect(mocks.createDraft).toHaveBeenCalledTimes(1);
+      expect(mocks.patchDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: created.id,
+          actions: [expect.objectContaining({ target: SCRATCH_TARGET })],
+        })
+      );
+      expect(slot(proposalDraftStorageKey(created.id))).toBeNull();
+    }
+  );
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
 import CreateProposalForm, {
@@ -119,6 +119,21 @@ export function ProposalDraftLoader() {
   const { isSignedIn, isLoadingSession, effectiveAddress } = useSiwe();
   const { data: draft, isLoading, error } = useDraft(draftId);
 
+  // Each route visit owns its save callbacks. A request may finish after
+  // navigation (even away and back to the same URL), but only the active visit
+  // may rebind the form or replace its URL. The mutation/cache still completes.
+  const saveSession = useMemo(
+    () => ({ pathname, draftId }),
+    [pathname, draftId]
+  );
+  const activeSaveSessionRef = useRef<typeof saveSession | null>(null);
+  useEffect(() => {
+    activeSaveSessionRef.current = saveSession;
+    return () => {
+      activeSaveSessionRef.current = null;
+    };
+  }, [saveSession]);
+
   // The draft the last save returned, remembered with the ?draft= it was made
   // under (and its own id, which the URL moves to after a create) so a later
   // navigation to an unrelated draft does not inherit it. `serverSave` is kept
@@ -196,6 +211,7 @@ export function ProposalDraftLoader() {
             initialTitle={binding.initialTitle}
             saveAsNew={binding.saveAsNew}
             onSaved={(saved) => {
+              if (activeSaveSessionRef.current !== saveSession) return;
               setLastSaved({
                 openedOn: draftId,
                 draft: saved,
