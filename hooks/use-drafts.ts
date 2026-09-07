@@ -102,11 +102,6 @@ export function useDraftMutations() {
   };
 }
 
-/** Drafts owned by the current effective subject: the list plus every mutation. */
-export function useDrafts() {
-  return { ...useDraftsList(), ...useDraftMutations() };
-}
-
 /**
  * One full draft, including description and actions, which the list view omits.
  * Pass null to stand down — used by the proposal form, which only has an id
