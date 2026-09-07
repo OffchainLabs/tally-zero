@@ -114,8 +114,8 @@ interface CreateProposalFormProps {
    */
   initialDraft?: RestoredDraftFormState | null;
   /**
-   * The server draft the form is bound to, if any. Picks the autosave slot, so
-   * a bound draft's contents never overwrite the anonymous crash-recovery copy.
+   * Picks the initial autosave slot. Only a new serverSave can move the mounted
+   * form to another draft's slot; losing query data must not change its identity.
    */
   draftId?: string | null;
   /**
@@ -246,7 +246,8 @@ export default function CreateProposalForm({
   const lastSavedSerializedRef = useRef(lastSavedSerialized);
   lastSavedSerializedRef.current = lastSavedSerialized;
   const storageKeyRef = useRef(proposalDraftStorageKey(draftId));
-  storageKeyRef.current = proposalDraftStorageKey(draftId);
+  const savedStorageKey = proposalDraftStorageKey(draftId);
+  const handledServerSaveRef = useRef<ServerSaveEvent | null>(null);
   // `initialDraft` seeds state and is deliberately not re-read afterwards, so
   // the mount-only restore effect reads it through a ref rather than claiming
   // it as a dependency it would ignore.
@@ -447,7 +448,11 @@ export default function CreateProposalForm({
   }, [isDraftHydrated, submissionPhase]);
 
   useEffect(() => {
-    if (!serverSave) return;
+    if (!serverSave || handledServerSaveRef.current === serverSave) return;
+    handledServerSaveRef.current = serverSave;
+    // A successful create deliberately moves recovery to the returned draft.
+    // Otherwise keep the mount's identity, even when session/query data vanish.
+    storageKeyRef.current = savedStorageKey;
     setLastSavedSerialized(serializeProposalSnapshot(serverSave.snapshot));
     setSaveStatus({
       kind: "server",
@@ -458,7 +463,7 @@ export default function CreateProposalForm({
     // The contents are on the server now; the browser copy has done its job.
     removeLocalSlots([lastWrittenKeyRef.current, storageKeyRef.current]);
     lastWrittenKeyRef.current = null;
-  }, [serverSave]);
+  }, [serverSave, savedStorageKey]);
 
   useEffect(() => {
     if (submissionPhase !== "confirmed") return;
