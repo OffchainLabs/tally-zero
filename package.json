@@ -32,7 +32,7 @@
     "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-voting-not-started-l1-block.f80a951",
     "@headlessui/react": "^2.2.9",
     "@hookform/resolvers": "^3.3.4",
-    "@next/bundle-analyzer": "16.2.12",
+    "@next/bundle-analyzer": "16.3.3",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
     "@radix-ui/react-hover-card": "^1.0.7",
@@ -64,7 +64,7 @@
     "geist": "^1.2.1",
     "lodash.shuffle": "^4.2.0",
     "lucide-react": "^1.7.0",
-    "next": "16.2.12",
+    "next": "16.3.3",
     "next-themes": "^0.2.1",
     "posthog-js": "^1.424.0",
     "react": "19.2.4",
@@ -95,7 +95,7 @@
     "audit-ci": "^7.1.0",
     "autoprefixer": "^10.0.1",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.3",
     "husky": "^9.0.11",
     "jsdom": "^30.0.1",
     "lint-staged": "^15.2.2",
@@ -106,7 +106,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.4.5",
     "vite": "^6.4.3",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.11"
   },
   "pnpm": {
     "overrides": {
@@ -115,7 +115,7 @@
       "lodash": ">=4.18.0",
       "axios": ">=1.18.0",
       "defu": ">=6.1.5",
-      "hono": ">=4.12.34",
+      "hono": ">=4.13.5",
       "semver": ">=6.3.1",
       "slow-redact": "0.3.1",
       "@noble/curves": "1.8.2",
@@ -135,13 +135,14 @@
       "dompurify": ">=3.4.13",
       "socket.io-parser": ">=4.2.7",
       "form-data@4": ">=4.0.6",
-      "js-yaml@4": ">=4.3.1 <5",
+      "js-yaml@4": ">=4.3.2 <5",
       "nanoid@3": ">=3.3.17 <4",
       "@opentelemetry/core": ">=2.8.0",
-      "sharp": ">=0.35.0",
+      "sharp": ">=0.35.4",
       "browserslist": ">=4.28.7 <5",
       "@humanfs/node": ">=0.16.8 <0.17",
-      "fflate": ">=0.4.9 <0.5"
+      "fflate": ">=0.4.9 <0.5",
+      "baseline-browser-mapping": ">=2.11.0 <3"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

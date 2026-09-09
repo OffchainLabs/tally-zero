@@ -16,5 +16,12 @@
     // No upgrade path yet: every patched release (>=0.3.0, so also the fixed >=0.5.0) is ESM-only while query-string 7.1.3 is CommonJS and require()s it, so forcing the override throws "decodeComponent is not a function" under Node and under webpack/esbuild bundles. It clears once @wagmi/connectors ships @walletconnect/ethereum-provider >=2.23, whose @walletconnect/utils drops query-string.
     // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>query-string>decode-uri-component (0.2.2)
     "GHSA-vcc3-ghjq-m6fr",
+
+    // https://github.com/advisories/GHSA-528h-pc64-c93x
+    // stream-json pick/ignore/filter/replace filters are O(depth^2) on nested input, so a small crafted JSON document can block the event loop (DoS).
+    // jayson only uses stream-json's StreamValues streamer and Verifier to parse framed JSON-RPC over TCP/TLS sockets (lib/utils.js); it never loads the affected filters. That socket parser is also Node-only: the @solana/web3.js browser build swaps in jayson/lib/client/browser, and AppKit is only imported from "use client" modules here, never from an API route or server module.
+    // No upgrade path yet: the fixed line (>=3.5.0) renamed its module files to kebab-case (streamers/stream-values, utils/verifier), so jayson 4.3.0's require("stream-json/streamers/StreamValues") throws MODULE_NOT_FOUND under the override. jayson is on ^1.9.1 with no release that has moved to stream-json 3 yet.
+    // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>stream-json (1.9.1)
+    "GHSA-528h-pc64-c93x",
   ],
 }
