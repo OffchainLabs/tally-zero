@@ -14,17 +14,24 @@ import { useSiwe } from "@/hooks/use-siwe";
  * Renders `children` only once a wallet is connected and a SIWE session exists,
  * standing in the connect and sign-in steps until then. Every authenticated
  * surface needs the same two screens, so they live here rather than in each one.
+ *
+ * `connectDescription` names what connecting is for. The default is the
+ * delegate-profile wording the gate was written for; a surface that asks for
+ * something else (recording a draft's submission, say) passes its own.
  */
-export function SiweGate({ children }: { children: React.ReactNode }) {
+export function SiweGate({
+  children,
+  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
+}: {
+  children: React.ReactNode;
+  connectDescription?: string;
+}) {
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
 
   if (!isConnected) {
     return (
-      <GateCard
-        title="Connect your wallet"
-        description="Connect your wallet to sign in and create your delegate profile."
-      >
+      <GateCard title="Connect your wallet" description={connectDescription}>
         {/* Reown connect control; test-wallet path auto-connects. */}
         <appkit-button />
       </GateCard>
