@@ -4,6 +4,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
+import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -17,10 +18,13 @@ import {
 } from "@/lib/create-proposal-form-utils";
 import { getAddressExplorerUrl, getTxExplorerUrl } from "@/lib/explorer-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
+import { SiweApiError } from "@/lib/siwe/client";
 import type { Draft } from "@/lib/siwe/types";
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+// The server's `requireDecimalString`: the id from ProposalCreated, in decimal.
+const DECIMAL_RE = /^\d+$/;
 
 /**
  * Public read of a published draft, addressed by its share slug.
@@ -42,6 +46,11 @@ export function SharedDraftView({ slug }: { slug: string }) {
   }
 
   if (error || !draft) {
+    // Only a 404 means the link itself is bad. Anything else (the proxy's 502
+    // or 503, a network failure) is an outage, and calling it an invalid link
+    // would tell every reviewer the draft had been revoked.
+    const isNotFound =
+      !error || (error instanceof SiweApiError && error.status === 404);
     return (
       <Card variant="glass">
         <CardContent className="pt-6">
@@ -49,8 +58,9 @@ export function SharedDraftView({ slug }: { slug: string }) {
             className="text-sm text-muted-foreground"
             data-testid="shared-draft-error"
           >
-            This draft link is not valid. Published drafts can be unpublished by
-            their author, and unpublished ones are never readable by slug.
+            {isNotFound
+              ? "This draft link is not valid. Only published drafts are readable by slug."
+              : error.message}
           </p>
         </CardContent>
       </Card>
@@ -92,7 +102,11 @@ export function SharedDraftView({ slug }: { slug: string }) {
       {draft.onchain ? (
         <SubmittedCard draft={draft} />
       ) : (
-        <MarkSubmittedForm slug={slug} />
+        // The read above stays public; only recording a submission needs a
+        // session, because the server signs the record with whoever made it.
+        <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
+          <MarkSubmittedForm slug={slug} />
+        </SiweGate>
       )}
     </div>
   );
@@ -189,9 +203,11 @@ function SubmittedCard({ draft }: { draft: Draft }) {
 /**
  * Attaches the transaction that put this draft on chain.
  *
- * Unauthenticated, matching the route: whoever submits a proposal is often not
- * its author, and requiring the author to come back and record it would leave
- * most drafts permanently marked unsubmitted.
+ * Any signed-in user may record it, not just the author, matching the route:
+ * whoever submits a proposal is often not its author, and requiring the author
+ * to come back and record it would leave most drafts permanently marked
+ * unsubmitted. The session is still required, because the server records who
+ * made the entry. Rendered behind SiweGate for that reason.
  */
 function MarkSubmittedForm({ slug }: { slug: string }) {
   const { markSubmitted, isSubmitting, error } = useMarkSubmitted(slug);
@@ -199,10 +215,11 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
   const [governorAddress, setGovernorAddress] = useState("");
   const [proposalId, setProposalId] = useState("");
 
+  // Mirrors the server's validators so a rejection is never a surprise.
   const isValid =
     TX_HASH_RE.test(transactionHash.trim()) &&
     ADDRESS_RE.test(governorAddress.trim()) &&
-    proposalId.trim() !== "";
+    DECIMAL_RE.test(proposalId.trim());
 
   async function submit() {
     if (!isValid || isSubmitting) return;
@@ -265,6 +282,7 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
             id="draft-proposal-id"
             data-testid="draft-proposal-id"
             className="font-mono"
+            placeholder="Decimal id from the ProposalCreated event"
             autoComplete="off"
             spellCheck={false}
             value={proposalId}
