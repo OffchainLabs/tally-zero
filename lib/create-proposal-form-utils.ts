@@ -22,6 +22,7 @@ export type ProposalSubmissionPhase =
 
 export const PROPOSAL_DRAFT_VERSION = 1;
 
+/** The localStorage autosave payload. */
 export interface ProposalDraft {
   version: typeof PROPOSAL_DRAFT_VERSION;
   savedAt: number;
@@ -32,6 +33,13 @@ export interface ProposalDraft {
 
 export interface RestoredProposalDraft extends Omit<ProposalDraft, "actions"> {
   actions: FormProposalAction[];
+}
+
+/** The form's contents as they are saved anywhere: rows without their ids. */
+export interface ProposalSnapshotLike {
+  governorType: GovernorType;
+  description: string;
+  actions: ProposalAction[];
 }
 
 let nextFormProposalActionId = 0;
@@ -71,17 +79,68 @@ function restoreProposalAction(action: unknown): FormProposalAction | null {
   };
 }
 
+/**
+ * Stable text form of the contents, for "has anything changed since the last
+ * save" checks. Row ids and any extra fields are dropped so the same contents
+ * serialize the same whether they came from the form, the autosave, or the
+ * server.
+ */
+export function serializeProposalSnapshot(
+  snapshot: ProposalSnapshotLike
+): string {
+  return JSON.stringify({
+    governorType: snapshot.governorType,
+    description: snapshot.description,
+    actions: snapshot.actions.map(({ target, value, calldata }) => ({
+      target,
+      value,
+      calldata,
+    })),
+  });
+}
+
+/**
+ * A server timestamp as ms epoch, or null when it does not parse. Callers
+ * compare against the result, and `NaN` would make every comparison false.
+ */
+export function parseServerTimestamp(iso: string): number | null {
+  const at = Date.parse(iso);
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * Whether the browser's autosave slot should replace the contents the form was
+ * seeded with. It should when the copy is newer than the server's last save and
+ * actually differs from the seed; otherwise there is nothing to recover and the
+ * slot can go.
+ *
+ * `serverUpdatedAt` is null for the anonymous form, which has no server copy,
+ * and also when the server's timestamp did not parse: an unknown server time
+ * counts as older than any local copy, so a bad timestamp keeps the user's
+ * edits rather than deleting them.
+ */
+export function shouldRestoreLocalDraft({
+  local,
+  serverUpdatedAt,
+  seededSerialized,
+}: {
+  local: RestoredProposalDraft;
+  serverUpdatedAt: number | null;
+  seededSerialized: string;
+}): boolean {
+  const serverAt = serverUpdatedAt ?? -Infinity;
+  return (
+    local.savedAt > serverAt &&
+    serializeProposalSnapshot(local) !== seededSerialized
+  );
+}
+
 export function createProposalDraft({
   governorType,
   description,
   actions,
   savedAt = Date.now(),
-}: {
-  governorType: GovernorType;
-  description: string;
-  actions: ProposalAction[];
-  savedAt?: number;
-}): ProposalDraft {
+}: ProposalSnapshotLike & { savedAt?: number }): ProposalDraft {
   return {
     version: PROPOSAL_DRAFT_VERSION,
     savedAt,
