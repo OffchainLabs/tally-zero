@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -26,14 +26,18 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
 
+import {
+  DraftSaveStatusBar,
+  type DraftSaveStatus,
+} from "@/components/form/DraftSaveStatusBar";
 import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
-  PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS,
-  STORAGE_KEYS,
+  PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
+  proposalDraftStorageKey,
 } from "@/config/storage-keys";
 import {
   buildSubmittedProposalPath,
@@ -43,9 +47,16 @@ import {
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
+  parseServerTimestamp,
+  serializeProposalSnapshot,
+  shouldRestoreLocalDraft,
   type FormProposalAction,
   type ProposalEligibility,
 } from "@/lib/create-proposal-form-utils";
+import type {
+  ProposalFormSnapshot,
+  RestoredDraftFormState,
+} from "@/lib/drafts/mapping";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import {
   getAddressExplorerUrl,
@@ -76,14 +87,73 @@ interface SubmittedProposalMeta {
   governorAddress: string;
 }
 
-export default function CreateProposalForm() {
+/** A successful save to the account, reported by whoever owns that save. */
+export interface ServerSaveEvent {
+  /** When it succeeded, ms epoch. */
+  at: number;
+  /** The subject it was saved under, for the status bar. */
+  address: string | null;
+  /** Exactly what was sent, so the form can tell whether anything changed since. */
+  snapshot: ProposalFormSnapshot;
+}
+
+function removeLocalSlots(keys: Array<string | null>) {
+  try {
+    for (const key of new Set(keys)) {
+      if (key) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+interface CreateProposalFormProps {
+  /**
+   * A stored draft to open the form on, already mapped to form state. Seeds the
+   * initial state on mount and is deliberately not re-read afterwards.
+   */
+  initialDraft?: RestoredDraftFormState | null;
+  /**
+   * Picks the initial autosave slot. Only a new serverSave can move the mounted
+   * form to another draft's slot; losing query data must not change its identity.
+   */
+  draftId?: string | null;
+  /**
+   * The most recent successful save to the account. Resets the dirty state and
+   * shows in the status bar; the browser copy is dropped since the contents are
+   * on the server now.
+   */
+  serverSave?: ServerSaveEvent | null;
+  /** The signed-in subject, named in the status bar for server saves. */
+  accountAddress?: string | null;
+  /**
+   * Extra buttons for the sticky status row, given the live form contents.
+   *
+   * A render prop so the server-drafts feature can read the form without this
+   * component knowing anything about SIWE — it stays free of a session, a query
+   * client, and a router, which is also what keeps its tests cheap.
+   */
+  renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
+}
+
+export default function CreateProposalForm({
+  initialDraft,
+  draftId = null,
+  serverSave = null,
+  accountAddress = null,
+  renderDraftActions,
+}: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
-  const [governorType, setGovernorType] = useState<GovernorType>("treasury");
-  const [actions, setActions] = useState<FormProposalAction[]>([
-    createFormProposalAction(),
-  ]);
-  const [description, setDescription] = useState("");
+  const [governorType, setGovernorType] = useState<GovernorType>(
+    initialDraft?.governorType ?? "treasury"
+  );
+  const [actions, setActions] = useState<FormProposalAction[]>(
+    initialDraft?.actions ?? [createFormProposalAction()]
+  );
+  const [description, setDescription] = useState(
+    initialDraft?.description ?? ""
+  );
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submittedProposalMeta, setSubmittedProposalMeta] =
     useState<SubmittedProposalMeta | null>(null);
@@ -92,7 +162,26 @@ export default function CreateProposalForm() {
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  // Local autosave and the status bar. Nothing is written until the mount
+  // effect has checked the browser for a copy to restore.
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  // A form opened on a server draft starts out saved there, as of its updatedAt.
+  // The bar omits the time when that did not parse, so NaN is safe to hand it.
+  const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>(() =>
+    initialDraft
+      ? {
+          kind: "server",
+          at: parseServerTimestamp(initialDraft.updatedAt) ?? NaN,
+          address: accountAddress,
+        }
+      : { kind: "never" }
+  );
+  // Contents at the last save of either kind; anything different is unsaved.
+  const [lastSavedSerialized, setLastSavedSerialized] = useState(() =>
+    serializeProposalSnapshot({ governorType, description, actions })
+  );
+  const [restoredFromLocal, setRestoredFromLocal] = useState(false);
 
   const governor = GOVERNORS[governorType];
 
@@ -139,20 +228,34 @@ export default function CreateProposalForm() {
     () => actions.map(({ id: _id, ...action }) => action),
     [actions]
   );
-  const draftSnapshotRef = useRef({
-    governorType,
-    description,
-    actions: proposalActions,
-  });
-  const isDraftHydratedRef = useRef(isDraftHydrated);
-  const shouldPersistDraftRef = useRef(true);
-
-  draftSnapshotRef.current = {
+  // What the autosave writes and the server-drafts dialog saves.
+  const draftSnapshot = {
     governorType,
     description,
     actions: proposalActions,
   };
-  isDraftHydratedRef.current = isDraftHydrated;
+  const serialized = serializeProposalSnapshot(draftSnapshot);
+  const isDirty = serialized !== lastSavedSerialized;
+
+  // The autosave paths that run outside render (the debounce timer, pagehide,
+  // unmount) read the latest values through refs.
+  const draftSnapshotRef = useRef(draftSnapshot);
+  draftSnapshotRef.current = draftSnapshot;
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+  const lastSavedSerializedRef = useRef(lastSavedSerialized);
+  lastSavedSerializedRef.current = lastSavedSerialized;
+  const storageKeyRef = useRef(proposalDraftStorageKey(draftId));
+  const savedStorageKey = proposalDraftStorageKey(draftId);
+  const handledServerSaveRef = useRef<ServerSaveEvent | null>(null);
+  // `initialDraft` seeds state and is deliberately not re-read afterwards, so
+  // the mount-only restore effect reads it through a ref rather than claiming
+  // it as a dependency it would ignore.
+  const initialDraftRef = useRef(initialDraft);
+  // The slot the autosave last wrote, so a server save or a confirmed
+  // submission can clear it even after the binding has moved to a new id.
+  const lastWrittenKeyRef = useRef<string | null>(null);
+
   const actionErrors = useMemo(
     () => proposalActions.map(validateAction),
     [proposalActions]
@@ -245,39 +348,12 @@ export default function CreateProposalForm() {
     isConfirming,
     isConfirmed: hasConfirmedSubmission,
   });
-  shouldPersistDraftRef.current = submissionPhase !== "confirmed";
   const isBusy =
     submissionPhase === "awaiting-wallet" || submissionPhase === "confirming";
 
   useEffect(() => {
-    try {
-      const restoredDraft = parseProposalDraft(
-        window.localStorage.getItem(STORAGE_KEYS.PROPOSAL_DRAFT)
-      );
-
-      if (restoredDraft) {
-        setGovernorType(restoredDraft.governorType);
-        setDescription(restoredDraft.description);
-        setActions(restoredDraft.actions);
-      }
-    } finally {
-      setIsDraftHydrated(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (submissionPhase === "confirmed") {
       toast("Proposal submitted.");
-    }
-  }, [submissionPhase]);
-
-  useEffect(() => {
-    if (submissionPhase !== "confirmed") return;
-
-    try {
-      window.localStorage.removeItem(STORAGE_KEYS.PROPOSAL_DRAFT);
-    } catch {
-      // Storage can be unavailable in privacy-restricted contexts.
     }
   }, [submissionPhase]);
 
@@ -289,29 +365,111 @@ export default function CreateProposalForm() {
   }, [writeError]);
 
   useEffect(() => {
-    if (!isDraftHydrated || submissionPhase === "confirmed") return;
+    // Crash recovery. The anonymous form takes its slot outright. A form opened
+    // on a server draft takes the per-draft slot only when it is newer than the
+    // server copy and actually differs, and the status bar says so.
+    const key = storageKeyRef.current;
+    const opened = initialDraftRef.current;
+    try {
+      const local = parseProposalDraft(window.localStorage.getItem(key));
+      if (local) {
+        if (
+          shouldRestoreLocalDraft({
+            local,
+            serverUpdatedAt: opened
+              ? parseServerTimestamp(opened.updatedAt)
+              : null,
+            seededSerialized: lastSavedSerializedRef.current,
+          })
+        ) {
+          setGovernorType(local.governorType);
+          setDescription(local.description);
+          setActions(local.actions);
+          setLastSavedSerialized(serializeProposalSnapshot(local));
+          setSaveStatus({ kind: "local", at: local.savedAt });
+          setRestoredFromLocal(Boolean(opened));
+          lastWrittenKeyRef.current = key;
+        } else {
+          // Older than the server copy, or identical to it: nothing to recover.
+          window.localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // Storage can be unavailable in privacy-restricted contexts.
+    } finally {
+      setIsDraftHydrated(true);
+    }
+  }, []);
 
-    const intervalId = window.setInterval(() => {
-      saveDraft();
-    }, PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS);
+  function saveLocally() {
+    if (!isDirtyRef.current) return;
+    const key = storageKeyRef.current;
 
-    return () => window.clearInterval(intervalId);
-  }, [isDraftHydrated, submissionPhase]);
+    try {
+      const draft = createProposalDraft(draftSnapshotRef.current);
+      window.localStorage.setItem(key, JSON.stringify(draft));
+      lastWrittenKeyRef.current = key;
+      setLastSavedSerialized(serializeProposalSnapshot(draft));
+      setSaveStatus({ kind: "local", at: draft.savedAt });
+      setRestoredFromLocal(false);
+    } catch {
+      // Storage unavailable: the bar keeps reading "Unsaved changes", which is
+      // the truth.
+    }
+  }
+  const saveLocallyRef = useRef(saveLocally);
+  saveLocallyRef.current = saveLocally;
 
+  // Debounced autosave: a moment after the last edit. `serialized` is a
+  // dependency so every keystroke restarts the timer.
+  useEffect(() => {
+    if (!isDraftHydrated || !isDirty || submissionPhase === "confirmed") return;
+
+    const timeoutId = window.setTimeout(
+      () => saveLocallyRef.current(),
+      PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isDraftHydrated, isDirty, serialized, submissionPhase]);
+
+  // Flush on leaving the page, and on unmount, so the debounce window is not a
+  // window for losing edits.
   useEffect(() => {
     if (!isDraftHydrated || submissionPhase === "confirmed") return;
 
-    const handlePageHide = () => {
-      saveDraft();
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
+    const flush = () => saveLocallyRef.current();
+    window.addEventListener("pagehide", flush);
 
     return () => {
-      handlePageHide();
-      window.removeEventListener("pagehide", handlePageHide);
+      flush();
+      window.removeEventListener("pagehide", flush);
     };
   }, [isDraftHydrated, submissionPhase]);
+
+  useEffect(() => {
+    if (!serverSave || handledServerSaveRef.current === serverSave) return;
+    handledServerSaveRef.current = serverSave;
+    // A successful create deliberately moves recovery to the returned draft.
+    // Otherwise keep the mount's identity, even when session/query data vanish.
+    storageKeyRef.current = savedStorageKey;
+    setLastSavedSerialized(serializeProposalSnapshot(serverSave.snapshot));
+    setSaveStatus({
+      kind: "server",
+      at: serverSave.at,
+      address: serverSave.address,
+    });
+    setRestoredFromLocal(false);
+    // The contents are on the server now; the browser copy has done its job.
+    removeLocalSlots([lastWrittenKeyRef.current, storageKeyRef.current]);
+    lastWrittenKeyRef.current = null;
+  }, [serverSave, savedStorageKey]);
+
+  useEffect(() => {
+    if (submissionPhase !== "confirmed") return;
+    removeLocalSlots([lastWrittenKeyRef.current, storageKeyRef.current]);
+    lastWrittenKeyRef.current = null;
+  }, [submissionPhase]);
 
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
@@ -328,26 +486,6 @@ export default function CreateProposalForm() {
     !!simulateData?.request &&
     !isSimulating &&
     !isSimulateError;
-
-  function saveDraft({ showToast = false }: { showToast?: boolean } = {}) {
-    if (!isDraftHydratedRef.current || !shouldPersistDraftRef.current) return;
-
-    try {
-      const draft = createProposalDraft(draftSnapshotRef.current);
-      window.localStorage.setItem(
-        STORAGE_KEYS.PROPOSAL_DRAFT,
-        JSON.stringify(draft)
-      );
-
-      if (showToast) {
-        toast.success("Draft saved.");
-      }
-    } catch {
-      if (showToast) {
-        toast.error("Failed to save draft.");
-      }
-    }
-  }
 
   function handleAddAction() {
     setActions((prev) => [...prev, createFormProposalAction()]);
@@ -448,7 +586,6 @@ export default function CreateProposalForm() {
           showError={attemptedSubmit && descriptionInvalid}
           disabled={isBusy}
           onOpenUpload={() => setUploadOpen(true)}
-          onBlur={() => saveDraft()}
         />
 
         <ActionsBuilder
@@ -473,11 +610,31 @@ export default function CreateProposalForm() {
           writeErrorMessage={writeErrorMessage}
           receiptErrorMessage={receiptErrorMessage}
           replacementErrorMessage={replacementErrorMessage}
-          canSubmit={canSubmit}
           formInvalid={formInvalid}
-          saveDraftDisabled={!isDraftHydrated || submissionPhase !== "idle"}
-          onSaveDraft={() => saveDraft({ showToast: true })}
-          onSubmit={handleSubmit}
+        />
+
+        <DraftSaveStatusBar
+          status={saveStatus}
+          isDirty={isDraftHydrated && isDirty}
+          restoredFromLocal={restoredFromLocal}
+          actions={
+            <>
+              {renderDraftActions?.(draftSnapshot)}
+              {submissionPhase === "awaiting-wallet" ||
+              submissionPhase === "confirming" ? (
+                <Button disabled>
+                  <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
+                  {submissionPhase === "confirming"
+                    ? "Confirming…"
+                    : "Submitting…"}
+                </Button>
+              ) : (
+                <Button onClick={handleSubmit} disabled={!canSubmit}>
+                  Submit Proposal
+                </Button>
+              )}
+            </>
+          }
         />
       </div>
 
@@ -856,7 +1013,6 @@ interface DescriptionEditorProps {
   showError: boolean;
   disabled: boolean;
   onOpenUpload: () => void;
-  onBlur: () => void;
 }
 
 function DescriptionEditor({
@@ -865,7 +1021,6 @@ function DescriptionEditor({
   showError,
   disabled,
   onOpenUpload,
-  onBlur,
 }: DescriptionEditorProps) {
   return (
     <Card variant="glass">
@@ -887,7 +1042,6 @@ function DescriptionEditor({
           value={value}
           onChange={onChange}
           disabled={disabled}
-          onBlur={onBlur}
           placeholder={
             "# Proposal title\n\nContext, rationale, and any relevant links. Markdown is supported."
           }
@@ -912,11 +1066,7 @@ interface SubmitSectionProps {
   writeErrorMessage: string | null;
   receiptErrorMessage: string | null;
   replacementErrorMessage: string | null;
-  canSubmit: boolean;
   formInvalid: boolean;
-  saveDraftDisabled: boolean;
-  onSaveDraft: () => void;
-  onSubmit: () => void;
 }
 
 function SubmitSection({
@@ -931,12 +1081,10 @@ function SubmitSection({
   writeErrorMessage,
   receiptErrorMessage,
   replacementErrorMessage,
-  canSubmit,
   formInvalid,
-  saveDraftDisabled,
-  onSaveDraft,
-  onSubmit,
 }: SubmitSectionProps) {
+  // Messages only. The "Save to my drafts" and "Submit Proposal" buttons sit
+  // in the sticky DraftSaveStatusBar below, next to the save state.
   return (
     <Card variant="glass">
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -1020,28 +1168,6 @@ function SubmitSection({
             {predictedProposalId.slice(-6)}
           </p>
         )}
-
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onSaveDraft}
-            disabled={saveDraftDisabled}
-          >
-            Save draft
-          </Button>
-          {submissionPhase === "awaiting-wallet" ||
-          submissionPhase === "confirming" ? (
-            <Button disabled>
-              <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
-              {submissionPhase === "confirming" ? "Confirming…" : "Submitting…"}
-            </Button>
-          ) : (
-            <Button onClick={onSubmit} disabled={!canSubmit}>
-              Submit Proposal
-            </Button>
-          )}
-        </div>
       </CardContent>
     </Card>
   );

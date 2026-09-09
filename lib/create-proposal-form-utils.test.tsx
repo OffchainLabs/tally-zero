@@ -11,7 +11,11 @@ import {
   getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
+  parseServerTimestamp,
   PROPOSAL_DRAFT_VERSION,
+  type RestoredProposalDraft,
+  serializeProposalSnapshot,
+  shouldRestoreLocalDraft,
 } from "./create-proposal-form-utils";
 
 describe("create-proposal-form-utils", () => {
@@ -189,6 +193,136 @@ describe("create-proposal-form-utils", () => {
           })
         )
       ).toBeNull();
+    });
+
+    // The proposal form's mount effect asks this before replacing what it was
+    // seeded with. Both halves of the rule have regressed before (a server
+    // draft overwriting the anonymous copy; a submission deleting the wrong
+    // slot), so the decision is pinned here rather than left inside an effect
+    // the node test environment cannot run.
+    describe("shouldRestoreLocalDraft", () => {
+      const seeded = {
+        governorType: "core" as const,
+        description: "seeded",
+        actions: [{ target: "", value: "0", calldata: "0x" }],
+      };
+      const seededSerialized = serializeProposalSnapshot(seeded);
+      const localAt = Date.UTC(2026, 8, 4, 12, 0, 0);
+      const local = (overrides: Partial<RestoredProposalDraft> = {}) => {
+        const restored = parseProposalDraft(
+          JSON.stringify(
+            createProposalDraft({
+              ...seeded,
+              description: "typed since",
+              savedAt: localAt,
+            })
+          )
+        );
+        if (!restored) throw new Error("fixture did not parse");
+        return { ...restored, ...overrides };
+      };
+
+      it("restores the anonymous form's copy whenever it differs from the seed", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local(),
+            serverUpdatedAt: null,
+            seededSerialized,
+          })
+        ).toBe(true);
+      });
+
+      it("discards a copy identical to the seed, whatever its age", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local({ description: "seeded" }),
+            serverUpdatedAt: null,
+            seededSerialized,
+          })
+        ).toBe(false);
+      });
+
+      it("restores a copy newer than the server's last save", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local(),
+            serverUpdatedAt: localAt - 60_000,
+            seededSerialized,
+          })
+        ).toBe(true);
+      });
+
+      it("discards a copy older than the server's last save", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local(),
+            serverUpdatedAt: localAt + 60_000,
+            seededSerialized,
+          })
+        ).toBe(false);
+      });
+
+      it("discards a copy saved at the same instant as the server", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local(),
+            serverUpdatedAt: localAt,
+            seededSerialized,
+          })
+        ).toBe(false);
+      });
+
+      // A bad server timestamp must not delete the user's edits: unknown
+      // counts as older than anything local.
+      it("keeps the local copy when the server time is unknown", () => {
+        expect(
+          shouldRestoreLocalDraft({
+            local: local(),
+            serverUpdatedAt: parseServerTimestamp("not a date"),
+            seededSerialized,
+          })
+        ).toBe(true);
+      });
+    });
+
+    describe("parseServerTimestamp", () => {
+      it("returns ms epoch for an ISO string and null otherwise", () => {
+        expect(parseServerTimestamp("2026-01-01T00:00:00Z")).toBe(
+          Date.UTC(2026, 0, 1)
+        );
+        expect(parseServerTimestamp("not a date")).toBeNull();
+        expect(parseServerTimestamp("")).toBeNull();
+      });
+    });
+
+    // The dirty check compares what the form holds with what was last saved,
+    // so row ids and any extra fields must not make equal contents differ.
+    it("serializes equal contents identically regardless of row ids", () => {
+      const action = {
+        target: "0x1111111111111111111111111111111111111111",
+        value: "1",
+        calldata: "0x",
+      };
+
+      const fromForm = serializeProposalSnapshot({
+        governorType: "core",
+        description: "body",
+        actions: [{ ...action, id: "proposal-action-7" } as typeof action],
+      });
+      const fromStorage = serializeProposalSnapshot({
+        governorType: "core",
+        description: "body",
+        actions: [action],
+      });
+
+      expect(fromForm).toBe(fromStorage);
+      expect(
+        serializeProposalSnapshot({
+          governorType: "core",
+          description: "body changed",
+          actions: [action],
+        })
+      ).not.toBe(fromStorage);
     });
   });
 

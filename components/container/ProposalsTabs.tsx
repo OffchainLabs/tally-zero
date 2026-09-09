@@ -22,7 +22,7 @@ export interface ProposalsTabsProps {
 
 /**
  * Segmented "Proposals / My Drafts" switcher plus the "New Proposal" action,
- * over either the caller's proposals content or the user's locally saved
+ * over either the caller's proposals content or the signed-in user's server
  * drafts. Shared by the home page and the proposals page so both get the same
  * nav above their table.
  */

@@ -19,7 +19,7 @@
 
     // https://github.com/advisories/GHSA-528h-pc64-c93x
     // stream-json pick/ignore/filter/replace filters are O(depth^2) on nested input, so a small crafted document can block the event loop.
-    // Reason to ignore: the only patched release line is 3.5.0, a major that jayson (^1.9.1) does not accept. jayson uses only streamers/StreamValues and utils/Verifier, none of the affected filters, and the path is the Coinbase adapter inside AppKit, which runs client-only here.
+    // Reason to ignore: the fix ships only in 3.5.0, two majors past the ^1.9.1 that jayson declares. jayson requires only streamers/StreamValues and utils/Verifier, never the affected filters, and the path arrives under the Coinbase adapter inside AppKit, which is client-only here.
     // from: @reown/appkit>@reown/appkit-utils>@base-org/account>@coinbase/cdp-sdk>@solana/web3.js>jayson>stream-json (1.9.1)
     "GHSA-528h-pc64-c93x",
   ],
