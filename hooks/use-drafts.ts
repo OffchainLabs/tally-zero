@@ -137,18 +137,28 @@ export function useSharedDraft(slug: string) {
 /**
  * Records the on-chain submission of a published draft.
  *
- * Also unauthenticated — anyone with the link can attach the transaction that
- * submitted it, which is deliberate: the person who submits a draft on chain is
- * often not the person who wrote it.
+ * Needs a session, but not the author's: any signed-in user can attach the
+ * transaction that submitted it, which is deliberate, since the person who
+ * submits a draft on chain is often not the person who wrote it. The server
+ * records the effective subject as `submittedBy`.
  */
 export function useMarkSubmitted(slug: string) {
+  const subject = useDraftSubject();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: (onchain: DraftSubmission) =>
       siweApi.markSubmitted(slug, onchain),
-    onSuccess: (draft) =>
-      queryClient.setQueryData(siweKeys.sharedDraft(slug), draft),
+    onSuccess: (draft) => {
+      queryClient.setQueryData(siweKeys.sharedDraft(slug), draft);
+      // The submitter may be the author too, and their list would otherwise
+      // keep saying "Published" until it went stale.
+      if (subject) {
+        return queryClient.invalidateQueries({
+          queryKey: siweKeys.drafts(subject),
+        });
+      }
+    },
   });
 
   return {
