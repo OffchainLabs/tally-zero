@@ -162,14 +162,20 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {isEditable ? (
-                <Button size="sm" variant="outline" asChild>
-                  <Link href={`/proposal/new?draft=${draft.id}`}>
-                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                    Open in form
-                  </Link>
-                </Button>
-              ) : null}
+              {/* A published or submitted draft still opens in the form, but
+                  frozen: the loader seeds from it and the first save creates a
+                  copy. Say so in the label. */}
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="open-draft"
+                asChild
+              >
+                <Link href={`/proposal/new?draft=${draft.id}`}>
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                  {isEditable ? "Open in form" : "Open as copy"}
+                </Link>
+              </Button>
 
               {isEditable ? (
                 <Button
@@ -206,15 +212,19 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
                 </>
               ) : null}
 
-              <Button
-                size="sm"
-                variant="ghost"
-                data-testid="delete-draft"
-                onClick={() => setConfirming("delete")}
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                Delete
-              </Button>
+              {/* The server answers 409 for anything but `draft`, so do not
+                  offer a Delete that can only fail. */}
+              {isEditable ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="delete-draft"
+                  onClick={() => setConfirming("delete")}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              ) : null}
             </div>
           )}
         </CardContent>
