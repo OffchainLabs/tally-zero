@@ -31,7 +31,11 @@ export function SiweGate({
 
   if (!isConnected) {
     return (
-      <GateCard title="Connect your wallet" description={connectDescription}>
+      <GateCard
+        title="Connect your wallet"
+        description={connectDescription}
+        testId="siwe-connect"
+      >
         {/* Reown connect control; test-wallet path auto-connects. */}
         <appkit-button />
       </GateCard>
@@ -68,14 +72,18 @@ export function SiweGate({
 function GateCard({
   title,
   description,
+  testId,
   children,
 }: {
   title: string;
   description: string;
+  /** The sign-in step has its button to hang a test on; the connect step has
+      only the Reown web component, so the card carries the hook instead. */
+  testId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Card variant="glass">
+    <Card variant="glass" data-testid={testId}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>

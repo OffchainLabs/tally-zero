@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { siweApi } from "@/lib/siwe/client";
+import { siweApi, SiweApiError } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import type {
   Draft,
@@ -131,6 +131,11 @@ export function useSharedDraft(slug: string) {
     queryKey: siweKeys.sharedDraft(slug),
     queryFn: () => siweApi.getSharedDraft(slug),
     staleTime: 30_000,
+    // A 404 is the server's final answer about this slug, so retrying it only
+    // holds the reader on the skeleton. Everything else (the proxy's 502/503,
+    // a dropped connection) is worth the default three attempts.
+    retry: (count, error) =>
+      !(error instanceof SiweApiError && error.status === 404) && count < 3,
   });
 }
 
