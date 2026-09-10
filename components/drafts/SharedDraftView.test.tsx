@@ -236,6 +236,9 @@ describe("SharedDraftView", () => {
     const disconnected = render(<SharedDraftView slug="abc123" />);
     expect(disconnected.queryByTestId("shared-draft-title")).not.toBeNull();
     expect(disconnected.queryByTestId("mark-submitted")).toBeNull();
+    // The connect step has no button of its own to hang a test on, so the card
+    // carries the hook. The drafts e2e spec matches on it rather than the copy.
+    expect(disconnected.queryByTestId("siwe-connect")).not.toBeNull();
     expect(disconnected.container.textContent).toContain(
       "record this draft's on-chain submission"
     );

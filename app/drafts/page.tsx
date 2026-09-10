@@ -17,7 +17,7 @@ export default function DraftsPage() {
           can circulate for review before submitting on chain.
         </p>
       </div>
-      <SiweGate>
+      <SiweGate connectDescription="Connect your wallet to sign in and see the proposal drafts saved to your account.">
         <DraftList />
       </SiweGate>
     </div>
