@@ -45,8 +45,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         custom_personal_data_properties: [...MASKED_QUERY_PARAMS],
 
         // Capture only pageviews and explicit events. Everything that inspects
-        // the DOM, the device, or performance stays off.
-        capture_pageview: true,
+        // the DOM, the device, or performance stays off. `history_change`
+        // fires on the initial load and on App Router path changes; plain
+        // `true` would record the first load only.
+        capture_pageview: "history_change",
         capture_pageleave: false,
         autocapture: false,
         capture_performance: false,

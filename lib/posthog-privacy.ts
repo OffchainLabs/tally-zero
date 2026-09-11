@@ -22,9 +22,14 @@ export const PRIVATE_PROPERTY_KEYS: readonly string[] = [
   "$screen_width",
   "$viewport_height",
   "$viewport_width",
-  // Locale and location
+  // Locale and location. Without `$timezone`, PostHog's cookieless hashing
+  // uses the project timezone (then UTC) for its calendar-day boundary; the
+  // event is not dropped.
   "$timezone",
   "$timezone_offset",
+  // The browser SDK never sets `$ip`. The capture endpoint adds it
+  // server-side, cookieless hashing consumes it, then ingestion deletes it.
+  // Listed as defense in depth only.
   "$ip",
 ];
 
