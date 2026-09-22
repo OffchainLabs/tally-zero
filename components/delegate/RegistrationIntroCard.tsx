@@ -27,12 +27,17 @@ export function RegistrationIntroCard() {
             </li>
           </ul>
         </div>
-        {/* The election route is deliberately not in the main nav — it is only
-            relevant to the handful of addresses standing in an election, and
-            this is the page they already come to for their own details. */}
+        {/* Deliberately not in the main nav — it is only relevant to the
+            handful of addresses standing in an election, and this is the page
+            they already come to for their own details. It also cannot live at
+            /elections — next.config.mjs permanently redirects that to
+            /security-council for old bookmarks. */}
         <p>
           Standing in a Security Council election?{" "}
-          <Link href="/elections" className="text-primary hover:underline">
+          <Link
+            href="/profile/candidate"
+            className="text-primary hover:underline"
+          >
             Publish your candidate profile
           </Link>
           .
