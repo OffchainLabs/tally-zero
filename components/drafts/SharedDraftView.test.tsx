@@ -83,7 +83,10 @@ describe("SharedDraftView", () => {
     signedIn();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it("shows a skeleton while loading", () => {
     mocks.useSharedDraft.mockReturnValue({
@@ -99,6 +102,7 @@ describe("SharedDraftView", () => {
   });
 
   it("calls a 404 an invalid link", () => {
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
     failed(new SiweApiError(404, "not_found", "Draft not found."));
 
     const { getByTestId } = render(<SharedDraftView slug="abc123" />);
@@ -109,22 +113,33 @@ describe("SharedDraftView", () => {
     expect(getByTestId("shared-draft-error").textContent).not.toContain(
       "unpublished"
     );
+    expect(logError).not.toHaveBeenCalled();
   });
 
   // An indexer outage must not read as a revoked link.
-  it("does not call an outage an invalid link", () => {
-    failed(
-      new SiweApiError(503, "error", "Governance indexer is not configured.")
+  it.each([
+    new SiweApiError(503, "error", "Governance indexer is not configured."),
+    new SiweApiError(502, "error", "Upstream connection refused."),
+    new TypeError("Failed to fetch"),
+  ])("shows generic outage copy and logs the detail for $message", (error) => {
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    failed(error);
+
+    const { getByTestId, container, rerender } = render(
+      <SharedDraftView slug="abc123" />
     );
 
-    const { getByTestId } = render(<SharedDraftView slug="abc123" />);
+    expect(getByTestId("shared-draft-error").textContent).toBe(
+      "Could not load this draft. Please try again later."
+    );
+    expect(container.textContent).not.toContain(error.message);
+    expect(logError).toHaveBeenCalledWith(
+      "Could not load shared draft:",
+      error
+    );
 
-    expect(getByTestId("shared-draft-error").textContent).toContain(
-      "Governance indexer is not configured."
-    );
-    expect(getByTestId("shared-draft-error").textContent).not.toContain(
-      "not valid"
-    );
+    rerender(<SharedDraftView slug="abc123" />);
+    expect(logError).toHaveBeenCalledTimes(1);
   });
 
   it("renders the title, author, and markdown body", () => {
