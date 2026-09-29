@@ -38,7 +38,7 @@ export function useSiwe() {
       const message = createSiweMessage({
         address,
         chainId: SIWE_CHAIN_ID,
-        domain: window.location.host,
+        domain: "alt.gov.arbitrum.foundation", //window.location.host,
         nonce,
         uri: window.location.origin,
         version: "1",

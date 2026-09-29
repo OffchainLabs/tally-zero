@@ -15,21 +15,30 @@ import { useSiwe } from "@/hooks/use-siwe";
  * standing in the connect and sign-in steps until then. Every authenticated
  * surface needs the same two screens, so they live here rather than in each one.
  *
- * `connectDescription` names what connecting is for. The default is the
- * delegate-profile wording the gate was written for; a surface that asks for
- * something else (recording a draft's submission, say) passes its own.
+ * `actionOnly` lets a caller place the connect/sign-in control inside its own
+ * explanatory layout, while this component keeps the authentication behavior.
  */
 export function SiweGate({
   children,
   connectDescription = "Connect your wallet to sign in and create your delegate profile.",
+  actionOnly = false,
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   connectDescription?: string;
+  actionOnly?: boolean;
 }) {
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
 
   if (!isConnected) {
+    if (actionOnly) {
+      return (
+        <div data-testid="siwe-connect">
+          <appkit-button />
+        </div>
+      );
+    }
+
     return (
       <GateCard
         title="Connect your wallet"
@@ -43,12 +52,11 @@ export function SiweGate({
   }
 
   if (!isSignedIn) {
-    return (
-      <GateCard
-        title="Sign in"
-        description="Sign a message to prove wallet ownership. No transaction, no gas."
-      >
+    const action = (
+      <>
         <Button
+          size={actionOnly ? "sm" : undefined}
+          variant={actionOnly ? "outline" : undefined}
           data-testid="siwe-sign-in"
           disabled={isSigningIn}
           onClick={() => {
@@ -62,6 +70,19 @@ export function SiweGate({
             {signInError.message}
           </p>
         ) : null}
+      </>
+    );
+
+    if (actionOnly) {
+      return <div className="flex flex-col items-center gap-2">{action}</div>;
+    }
+
+    return (
+      <GateCard
+        title="Sign in"
+        description="Sign a message to prove wallet ownership. No transaction, no gas."
+      >
+        {action}
       </GateCard>
     );
   }

@@ -9,9 +9,10 @@ import CreateProposalForm, {
 } from "@/components/form/CreateProposalForm";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useDraft } from "@/hooks/use-drafts";
+import { useDraft, useMarkSubmitted } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { draftToFormState } from "@/lib/drafts/mapping";
+import { submissionMatchesPublishedDraft } from "@/lib/drafts/submission";
 import type { Draft } from "@/lib/siwe/types";
 
 /**
@@ -118,6 +119,7 @@ export function ProposalDraftLoader() {
   const router = useRouter();
   const { isSignedIn, isLoadingSession, effectiveAddress } = useSiwe();
   const { data: draft, isLoading, error } = useDraft(draftId);
+  const { markSubmitted } = useMarkSubmitted(draft?.shareSlug ?? "");
 
   // Each route visit owns its save callbacks. A request may finish after
   // navigation (even away and back to the same URL), but only the active visit
@@ -186,6 +188,12 @@ export function ProposalDraftLoader() {
           That draft could not be loaded — it may have been deleted, or belong
           to a different account. Starting a blank proposal instead.
         </p>
+      ) : draft?.status === "published" ? (
+        <p className="text-sm text-amber-400">
+          This published draft is ready to submit on chain. Publishing froze its
+          shared contents; if you change them here, you can save your changes as
+          a new draft, and the original will remain published.
+        </p>
       ) : draft && !binding.isEditable ? (
         // Shown until the first save: that save creates the copy and moves the
         // URL to it, and the copy is an ordinary editable draft from then on.
@@ -204,6 +212,19 @@ export function ProposalDraftLoader() {
         draftId={binding.draftId ?? draft?.id ?? null}
         serverSave={serverSave}
         accountAddress={effectiveAddress}
+        onProposalConfirmed={
+          draft?.status === "published" &&
+          !!draft.shareSlug &&
+          effectiveAddress?.toLowerCase() === draft.author.toLowerCase()
+            ? async (submission) => {
+                if (!submissionMatchesPublishedDraft(draft, submission)) {
+                  return "different";
+                }
+                await markSubmitted(submission);
+                return "recorded";
+              }
+            : undefined
+        }
         renderDraftActions={(snapshot) => (
           <SaveToAccountDialog
             snapshot={snapshot}

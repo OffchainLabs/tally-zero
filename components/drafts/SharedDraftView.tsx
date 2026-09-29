@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { toast } from "sonner";
 
-import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
+import { useSharedDraft } from "@/hooks/use-drafts";
+import { useSiwe } from "@/hooks/use-siwe";
 import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
@@ -20,11 +18,6 @@ import { getAddressExplorerUrl, getTxExplorerUrl } from "@/lib/explorer-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { SiweApiError } from "@/lib/siwe/client";
 import type { Draft } from "@/lib/siwe/types";
-
-const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
-// The server's `requireDecimalString`: the id from ProposalCreated, in decimal.
-const DECIMAL_RE = /^\d+$/;
 
 /**
  * Public read of a published draft, addressed by its share slug.
@@ -35,6 +28,7 @@ const DECIMAL_RE = /^\d+$/;
  */
 export function SharedDraftView({ slug }: { slug: string }) {
   const { data: draft, isLoading, error } = useSharedDraft(slug);
+  const { effectiveAddress } = useSiwe();
 
   useEffect(() => {
     if (error && !(error instanceof SiweApiError && error.status === 404)) {
@@ -84,8 +78,16 @@ export function SharedDraftView({ slug }: { slug: string }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            By <span className="font-mono">{draft.author}</span> · updated{" "}
-            {new Date(draft.updatedAt).toLocaleString()}
+            By{" "}
+            <a
+              className="break-all font-mono text-primary hover:underline"
+              href={getAddressExplorerUrl(draft.author)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {draft.author}
+            </a>{" "}
+            · updated {new Date(draft.updatedAt).toLocaleString()}
           </p>
 
           <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground">
@@ -108,11 +110,24 @@ export function SharedDraftView({ slug }: { slug: string }) {
       {draft.onchain ? (
         <SubmittedCard draft={draft} />
       ) : (
-        // The read above stays public; only recording a submission needs a
-        // session, because the server signs the record with whoever made it.
-        <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
-          <MarkSubmittedForm slug={slug} />
-        </SiweGate>
+        <Card variant="glass">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+            <p className="text-sm text-muted-foreground">
+              This draft has not been submitted on chain.
+            </p>
+            {draft.status === "published" &&
+              effectiveAddress?.toLowerCase() ===
+                draft.author.toLowerCase() && (
+                <Button size="sm" asChild>
+                  <Link
+                    href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
+                  >
+                    Open to submit on chain
+                  </Link>
+                </Button>
+              )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -201,117 +216,6 @@ function SubmittedCard({ draft }: { draft: Draft }) {
         >
           View proposal
         </a>
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Attaches the transaction that put this draft on chain.
- *
- * Any signed-in user may record it, not just the author, matching the route:
- * whoever submits a proposal is often not its author, and requiring the author
- * to come back and record it would leave most drafts permanently marked
- * unsubmitted. The session is still required, because the server records who
- * made the entry. Rendered behind SiweGate for that reason.
- */
-function MarkSubmittedForm({ slug }: { slug: string }) {
-  const { markSubmitted, isSubmitting, error } = useMarkSubmitted(slug);
-  const [transactionHash, setTransactionHash] = useState("");
-  const [governorAddress, setGovernorAddress] = useState("");
-  const [proposalId, setProposalId] = useState("");
-
-  // Mirrors the server's validators so a rejection is never a surprise.
-  const isValid =
-    TX_HASH_RE.test(transactionHash.trim()) &&
-    ADDRESS_RE.test(governorAddress.trim()) &&
-    DECIMAL_RE.test(proposalId.trim());
-
-  async function submit() {
-    if (!isValid || isSubmitting) return;
-    try {
-      await markSubmitted({
-        transactionHash: transactionHash.trim(),
-        governorAddress: governorAddress.trim(),
-        proposalId: proposalId.trim(),
-      });
-      toast.success("Recorded — this draft is now marked submitted.");
-    } catch {
-      // `error` renders below; the inputs stay filled so they can be corrected.
-    }
-  }
-
-  return (
-    <Card variant="glass">
-      <CardHeader>
-        <CardTitle className="text-base">
-          Record an on-chain submission
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          If this proposal has been submitted, link the transaction so anyone
-          holding this draft can follow it.
-        </p>
-
-        <div className="space-y-2">
-          <Label htmlFor="draft-tx-hash">Transaction hash</Label>
-          <Input
-            id="draft-tx-hash"
-            data-testid="draft-tx-hash"
-            className="font-mono"
-            placeholder="0x…"
-            autoComplete="off"
-            spellCheck={false}
-            value={transactionHash}
-            onChange={(event) => setTransactionHash(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="draft-governor">Governor address</Label>
-          <Input
-            id="draft-governor"
-            data-testid="draft-governor"
-            className="font-mono"
-            placeholder="0x…"
-            autoComplete="off"
-            spellCheck={false}
-            value={governorAddress}
-            onChange={(event) => setGovernorAddress(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="draft-proposal-id">Proposal id</Label>
-          <Input
-            id="draft-proposal-id"
-            data-testid="draft-proposal-id"
-            className="font-mono"
-            placeholder="Decimal id from the ProposalCreated event"
-            autoComplete="off"
-            spellCheck={false}
-            value={proposalId}
-            onChange={(event) => setProposalId(event.target.value)}
-          />
-        </div>
-
-        {error ? (
-          <p
-            className="text-sm text-destructive"
-            data-testid="draft-submit-error"
-          >
-            {error.message}
-          </p>
-        ) : null}
-
-        <Button
-          data-testid="mark-submitted"
-          onClick={submit}
-          disabled={!isValid || isSubmitting}
-        >
-          {isSubmitting ? "Recording…" : "Mark as submitted"}
-        </Button>
       </CardContent>
     </Card>
   );

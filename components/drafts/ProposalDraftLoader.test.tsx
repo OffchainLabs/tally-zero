@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { GOVERNORS } from "@/config/governors";
+import { computeProposalId, normalizeActions } from "@/lib/propose-utils";
 import type { Draft } from "@/lib/siwe/types";
 
 import {
@@ -25,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   useSiwe: vi.fn(),
   useDraft: vi.fn(),
+  markSubmitted: vi.fn(),
   form: vi.fn(),
   dialog: vi.fn(),
 }));
@@ -37,7 +40,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 
-vi.mock("@/hooks/use-drafts", () => ({ useDraft: mocks.useDraft }));
+vi.mock("@/hooks/use-drafts", () => ({
+  useDraft: mocks.useDraft,
+  useMarkSubmitted: () => ({ markSubmitted: mocks.markSubmitted }),
+}));
 
 // The dialog pulls in the drafts hooks and the SIWE session; none of that is
 // under test here. Only what the loader hands it is.
@@ -70,7 +76,7 @@ vi.mock("@/components/form/CreateProposalForm", () => ({
 
 const DRAFT: Draft = {
   id: "d1",
-  author: "0xauthor",
+  author: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
   title: "Stored",
   description: "# Stored\n\nbody",
   governorType: "TREASURY",
@@ -116,6 +122,7 @@ describe("ProposalDraftLoader", () => {
     mocks.searchParams = new URLSearchParams("draft=d1");
     session();
     draftQuery();
+    mocks.markSubmitted.mockResolvedValue(undefined);
   });
 
   it("mounts the plain form once when there is no ?draft=", () => {
@@ -194,8 +201,7 @@ describe("ProposalDraftLoader", () => {
     });
   });
 
-  // PATCH answers 409 not_editable once a draft is published, so the user must
-  // learn that before typing, and saving has to create a copy instead.
+  // PATCH answers 409 once published, but the original can still be submitted.
   it.each(["published", "submitted"] as const)(
     "opens a %s draft as a copy rather than an update",
     (status) => {
@@ -204,7 +210,11 @@ describe("ProposalDraftLoader", () => {
 
       const markup = render();
 
-      expect(markup).toContain(`This draft has been ${status}`);
+      if (status === "published") {
+        expect(markup).toContain("ready to submit on chain");
+      } else {
+        expect(markup).toContain(`This draft has been ${status}`);
+      }
       // Unbound for the dialog, but the autosave slot is still this draft's:
       // sharing the bare key would restore or delete the anonymous form's copy.
       expect(mocks.form.mock.calls[0][0]).toMatchObject({
@@ -218,6 +228,56 @@ describe("ProposalDraftLoader", () => {
       });
     }
   );
+
+  it("records only the unchanged published proposal after the form confirms it", async () => {
+    const published: Draft = {
+      ...DRAFT,
+      status: "published",
+      shareSlug: "shared",
+      actions: [
+        {
+          target: "0x2222222222222222222222222222222222222222",
+          value: "0",
+          calldata: "0x",
+        },
+      ],
+    };
+    const { targets, values, calldatas } = normalizeActions(published.actions);
+    const proposalId = computeProposalId(
+      targets,
+      values,
+      calldatas,
+      published.description
+    );
+    session({ isSignedIn: true });
+    draftQuery({ data: published });
+    render();
+
+    const confirm = mocks.form.mock.calls[0][0].onProposalConfirmed;
+    expect(confirm).toBeTypeOf("function");
+    const submission = {
+      transactionHash: `0x${"ab".repeat(32)}`,
+      governorAddress: GOVERNORS.treasury.address,
+      proposalId,
+    };
+    expect(await confirm(submission)).toBe("recorded");
+    expect(mocks.markSubmitted).toHaveBeenCalledWith(submission);
+
+    mocks.markSubmitted.mockClear();
+    expect(await confirm({ ...submission, proposalId: "42" })).toBe(
+      "different"
+    );
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("does not offer recording for a different signed-in subject", () => {
+    session({ isSignedIn: true, effectiveAddress: "0xother" });
+    draftQuery({
+      data: { ...DRAFT, status: "published", shareSlug: "shared" },
+    });
+    render();
+    expect(mocks.form.mock.calls[0][0].onProposalConfirmed).toBeUndefined();
+  });
 
   it("explains and falls back to a blank form when signed out", () => {
     session({ isSignedIn: false });

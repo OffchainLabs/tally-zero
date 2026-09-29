@@ -57,6 +57,7 @@ import type {
   ProposalFormSnapshot,
   RestoredDraftFormState,
 } from "@/lib/drafts/mapping";
+import { submissionFromReceipt } from "@/lib/drafts/submission";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import {
   getAddressExplorerUrl,
@@ -72,6 +73,7 @@ import {
   validateAction,
   type ProposalAction,
 } from "@/lib/propose-utils";
+import type { DraftSubmission } from "@/lib/siwe/types";
 import { cn } from "@/lib/utils";
 
 import { useGovernanceClock } from "@/hooks/use-governance-clock";
@@ -134,6 +136,10 @@ interface CreateProposalFormProps {
    * client, and a router, which is also what keeps its tests cheap.
    */
   renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
+  /** Records an unchanged published draft after a verified propose() receipt. */
+  onProposalConfirmed?: (
+    submission: DraftSubmission
+  ) => Promise<"recorded" | "different">;
 }
 
 export default function CreateProposalForm({
@@ -142,6 +148,7 @@ export default function CreateProposalForm({
   serverSave = null,
   accountAddress = null,
   renderDraftActions,
+  onProposalConfirmed,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -162,6 +169,15 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [recordStatus, setRecordStatus] = useState<
+    "recording" | "recorded" | "different" | "unverified" | "failed" | null
+  >(null);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const [recordableSubmission, setRecordableSubmission] =
+    useState<DraftSubmission | null>(null);
+  const attemptedRecordHashRef = useRef<string | null>(null);
+  const onProposalConfirmedRef = useRef(onProposalConfirmed);
+  onProposalConfirmedRef.current = onProposalConfirmed;
 
   // Local autosave and the status bar. Nothing is written until the mount
   // effect has checked the browser for a copy to restore.
@@ -315,6 +331,7 @@ export default function CreateProposalForm({
     writeContract,
   } = useWriteContract();
   const {
+    data: receipt,
     isLoading: isConfirming,
     isSuccess: isConfirmed,
     error: receiptError,
@@ -341,7 +358,8 @@ export default function CreateProposalForm({
       );
     },
   });
-  const hasConfirmedSubmission = isConfirmed && !!trackedTxHash;
+  const hasConfirmedSubmission =
+    isConfirmed && receipt?.status === "success" && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
     isWriting,
@@ -356,6 +374,49 @@ export default function CreateProposalForm({
       toast("Proposal submitted.");
     }
   }, [submissionPhase]);
+
+  async function recordConfirmedSubmission(submission: DraftSubmission) {
+    const record = onProposalConfirmedRef.current;
+    if (!record) return;
+    setRecordStatus("recording");
+    setRecordError(null);
+    try {
+      setRecordStatus(await record(submission));
+    } catch (cause) {
+      setRecordStatus("failed");
+      setRecordError(getErrorMessage(cause, "record draft submission"));
+    }
+  }
+
+  useEffect(() => {
+    if (
+      !onProposalConfirmedRef.current ||
+      !isConfirmed ||
+      !receipt ||
+      !trackedTxHash ||
+      receipt.transactionHash.toLowerCase() !== trackedTxHash.toLowerCase() ||
+      !submittedProposalMeta
+    ) {
+      return;
+    }
+    if (attemptedRecordHashRef.current === receipt.transactionHash) return;
+    attemptedRecordHashRef.current = receipt.transactionHash;
+
+    const proposalId = submittedProposalMeta.proposalId;
+    const submission = proposalId
+      ? submissionFromReceipt(
+          receipt,
+          submittedProposalMeta.governorAddress,
+          proposalId
+        )
+      : null;
+    if (!submission) {
+      if (receipt.status === "success") setRecordStatus("unverified");
+      return;
+    }
+    setRecordableSubmission(submission);
+    void recordConfirmedSubmission(submission);
+  }, [isConfirmed, receipt, submittedProposalMeta, trackedTxHash]);
 
   useEffect(() => {
     if (writeError) {
@@ -532,6 +593,10 @@ export default function CreateProposalForm({
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
     setReplacementErrorMessage(null);
+    attemptedRecordHashRef.current = null;
+    setRecordStatus(null);
+    setRecordError(null);
+    setRecordableSubmission(null);
     setSubmittedProposalMeta({
       proposalId: predictedProposalId,
       governorAddress: governor.address,
@@ -550,6 +615,13 @@ export default function CreateProposalForm({
     return (
       <SuccessState
         txHash={trackedTxHash}
+        recordStatus={recordStatus}
+        recordError={recordError}
+        onRetryRecord={
+          recordableSubmission
+            ? () => void recordConfirmedSubmission(recordableSubmission)
+            : undefined
+        }
         proposalPath={buildSubmittedProposalPath({
           proposalId: submittedProposalMeta?.proposalId ?? predictedProposalId,
           governorAddress:
@@ -1176,9 +1248,24 @@ function SubmitSection({
 interface SuccessStateProps {
   txHash: string;
   proposalPath: string | null;
+  recordStatus:
+    | "recording"
+    | "recorded"
+    | "different"
+    | "unverified"
+    | "failed"
+    | null;
+  recordError: string | null;
+  onRetryRecord?: () => void;
 }
 
-function SuccessState({ txHash, proposalPath }: SuccessStateProps) {
+function SuccessState({
+  txHash,
+  proposalPath,
+  recordStatus,
+  recordError,
+  onRetryRecord,
+}: SuccessStateProps) {
   return (
     <Card variant="glass" className="border-emerald-500/30">
       <CardContent className="pt-6 flex flex-col gap-4 items-start">
@@ -1192,6 +1279,41 @@ function SuccessState({ txHash, proposalPath }: SuccessStateProps) {
           appear on the Proposals page and enter the voting-active phase at the
           governor&apos;s voting delay.
         </p>
+
+        {recordStatus === "recording" && (
+          <p className="text-sm text-muted-foreground">
+            Recording this draft as submitted…
+          </p>
+        )}
+        {recordStatus === "recorded" && (
+          <p className="text-sm text-emerald-400">
+            This draft is now marked submitted.
+          </p>
+        )}
+        {recordStatus === "different" && (
+          <p className="text-sm text-amber-400">
+            This proposal differs from the published draft, so that draft
+            remains published.
+          </p>
+        )}
+        {recordStatus === "unverified" && (
+          <p className="text-sm text-amber-400">
+            The confirmed transaction did not contain the expected proposal
+            event, so the draft was not marked submitted.
+          </p>
+        )}
+        {recordStatus === "failed" && (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm text-destructive">
+              {recordError ?? "Could not record this draft as submitted."}
+            </p>
+            {onRetryRecord && (
+              <Button variant="outline" onClick={onRetryRecord}>
+                Retry recording submission
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="text-xs font-mono text-muted-foreground break-all">
           tx: {txHash}

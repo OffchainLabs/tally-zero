@@ -142,10 +142,8 @@ export function useSharedDraft(slug: string) {
 /**
  * Records the on-chain submission of a published draft.
  *
- * Needs a session, but not the author's: any signed-in user can attach the
- * transaction that submitted it, which is deliberate, since the person who
- * submits a draft on chain is often not the person who wrote it. The server
- * records the effective subject as `submittedBy`.
+ * Called by the author's proposal form after a successful propose() receipt.
+ * The server records the effective subject as `submittedBy`.
  */
 export function useMarkSubmitted(slug: string) {
   const subject = useDraftSubject();
