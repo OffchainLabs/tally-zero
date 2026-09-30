@@ -14,6 +14,7 @@ import {
   type Config,
 } from "wagmi";
 
+import { WalletSessionReconciler } from "@/components/siwe/WalletSessionReconciler";
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import { APPKIT_NETWORKS, createGovernanceAppKit } from "@/lib/appkit";
@@ -347,6 +348,7 @@ export default function TestWalletProvider({
       <WagmiProvider config={state.config}>
         <QueryClientProvider client={testQueryClient}>
           <AutoConnect connectorId={state.connectorId} />
+          <WalletSessionReconciler />
           {children}
         </QueryClientProvider>
       </WagmiProvider>

@@ -45,6 +45,8 @@ describe("clearAndReconcileSession", () => {
     });
     expect(queryClient.getQueryData(siweKeys.me)).toEqual(LIVE);
     expect(calls).toBe(1);
+    queryClient.setQueryData(siweKeys.drafts(LIVE.address), ["old draft"]);
+    queryClient.setQueryData(siweKeys.safes(LIVE.address), ["old safe"]);
 
     // The server has dropped the session, so /api/me now answers 401, which
     // siweApi.me() maps to null.
@@ -53,6 +55,12 @@ describe("clearAndReconcileSession", () => {
     await flush();
 
     expect(queryClient.getQueryData(siweKeys.me)).toBeNull();
+    expect(
+      queryClient.getQueryData(siweKeys.drafts(LIVE.address))
+    ).toBeUndefined();
+    expect(
+      queryClient.getQueryData(siweKeys.safes(LIVE.address))
+    ).toBeUndefined();
     expect(calls).toBe(2);
     unsubscribe();
   });
