@@ -14,11 +14,15 @@ const mocks = vi.hoisted(() => ({
   publishDraft: vi.fn(),
   deleteDraft: vi.fn(),
   signIn: vi.fn(),
+  open: vi.fn(),
   copy: vi.fn(),
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
+vi.mock("@reown/appkit/react", () => ({
+  useAppKit: () => ({ open: mocks.open }),
+}));
 vi.mock("@/hooks/use-drafts", () => ({
   useDraftsList: mocks.useDraftsList,
   useDraftMutations: () => ({
@@ -108,6 +112,9 @@ describe("MyDraftsList", () => {
     session({ isSignedIn: false, isConnected: false });
     const view = render(<MyDraftsList />);
     expect(view.getByTestId("siwe-connect")).toBeDefined();
+    fireEvent.click(view.getByRole("button", { name: "Connect Wallet" }));
+    expect(mocks.open).toHaveBeenCalledExactlyOnceWith({ view: "Connect" });
+    expect(mocks.signIn).not.toHaveBeenCalled();
     expect(
       view.getByRole("heading", { name: "Sign in to see your drafts" })
     ).toBeDefined();

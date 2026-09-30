@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppKit } from "@reown/appkit/react";
+
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -27,16 +29,23 @@ export function SiweGate({
   connectDescription?: string;
   actionOnly?: boolean;
 }) {
+  const { open } = useAppKit();
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
 
   if (!isConnected) {
+    const action = (
+      <Button
+        size={actionOnly ? "sm" : undefined}
+        variant={actionOnly ? "outline" : undefined}
+        onClick={() => void open({ view: "Connect" })}
+      >
+        Connect Wallet
+      </Button>
+    );
+
     if (actionOnly) {
-      return (
-        <div data-testid="siwe-connect">
-          <appkit-button />
-        </div>
-      );
+      return <div data-testid="siwe-connect">{action}</div>;
     }
 
     return (
@@ -45,8 +54,7 @@ export function SiweGate({
         description={connectDescription}
         testId="siwe-connect"
       >
-        {/* Reown connect control; test-wallet path auto-connects. */}
-        <appkit-button />
+        {action}
       </GateCard>
     );
   }
@@ -98,8 +106,6 @@ function GateCard({
 }: {
   title: string;
   description: string;
-  /** The sign-in step has its button to hang a test on; the connect step has
-      only the Reown web component, so the card carries the hook instead. */
   testId?: string;
   children: React.ReactNode;
 }) {

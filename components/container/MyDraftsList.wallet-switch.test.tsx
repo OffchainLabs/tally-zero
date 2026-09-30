@@ -18,6 +18,9 @@ vi.mock("wagmi", () => ({
   useAccount: mocks.useAccount,
   useSignMessage: () => ({ signMessageAsync: mocks.signMessageAsync }),
 }));
+vi.mock("@reown/appkit/react", () => ({
+  useAppKit: () => ({ open: vi.fn() }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,
