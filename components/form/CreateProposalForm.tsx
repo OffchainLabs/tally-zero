@@ -10,7 +10,14 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -58,6 +65,11 @@ import type {
   RestoredDraftFormState,
 } from "@/lib/drafts/mapping";
 import { submissionFromReceipt } from "@/lib/drafts/submission";
+import {
+  clearPendingSubmission,
+  readPendingSubmission,
+  savePendingSubmission,
+} from "@/lib/drafts/submission-recovery";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import {
   getAddressExplorerUrl,
@@ -140,6 +152,8 @@ interface CreateProposalFormProps {
   onProposalConfirmed?: (
     submission: DraftSubmission
   ) => Promise<"recorded" | "different">;
+  /** Recovery slot for a published draft, scoped to its effective subject. */
+  draftSubmissionKey?: string;
 }
 
 export default function CreateProposalForm({
@@ -149,6 +163,7 @@ export default function CreateProposalForm({
   accountAddress = null,
   renderDraftActions,
   onProposalConfirmed,
+  draftSubmissionKey,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -178,6 +193,26 @@ export default function CreateProposalForm({
   const attemptedRecordHashRef = useRef<string | null>(null);
   const onProposalConfirmedRef = useRef(onProposalConfirmed);
   onProposalConfirmedRef.current = onProposalConfirmed;
+  const submittedDraftKeyRef = useRef<string | undefined>(undefined);
+  const restoredSubmissionKeyRef = useRef<string | undefined>(undefined);
+  const persistedSubmissionHashRef = useRef<string | null>(null);
+  const [isRecoveredSubmission, setIsRecoveredSubmission] = useState(false);
+
+  useEffect(() => {
+    if (
+      !draftSubmissionKey ||
+      trackedTxHash ||
+      restoredSubmissionKeyRef.current === draftSubmissionKey
+    )
+      return;
+    restoredSubmissionKeyRef.current = draftSubmissionKey;
+    const pending = readPendingSubmission(draftSubmissionKey);
+    if (!pending) return;
+    submittedDraftKeyRef.current = draftSubmissionKey;
+    setIsRecoveredSubmission(true);
+    setSubmittedProposalMeta(pending);
+    setTrackedTxHash(pending.transactionHash as `0x${string}`);
+  }, [draftSubmissionKey, trackedTxHash]);
 
   // Local autosave and the status bar. Nothing is written until the mount
   // effect has checked the browser for a copy to restore.
@@ -358,8 +393,25 @@ export default function CreateProposalForm({
       );
     },
   });
+  const verifiedSubmission = useMemo(() => {
+    if (
+      !receipt ||
+      !trackedTxHash ||
+      receipt.transactionHash.toLowerCase() !== trackedTxHash.toLowerCase() ||
+      !submittedProposalMeta?.proposalId
+    )
+      return null;
+    return submissionFromReceipt(
+      receipt,
+      submittedProposalMeta.governorAddress,
+      submittedProposalMeta.proposalId
+    );
+  }, [receipt, trackedTxHash, submittedProposalMeta]);
   const hasConfirmedSubmission =
-    isConfirmed && receipt?.status === "success" && !!trackedTxHash;
+    isConfirmed &&
+    receipt?.status === "success" &&
+    !!trackedTxHash &&
+    (!isRecoveredSubmission || !!verifiedSubmission);
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
     isWriting,
@@ -375,22 +427,29 @@ export default function CreateProposalForm({
     }
   }, [submissionPhase]);
 
-  async function recordConfirmedSubmission(submission: DraftSubmission) {
-    const record = onProposalConfirmedRef.current;
-    if (!record) return;
-    setRecordStatus("recording");
-    setRecordError(null);
-    try {
-      setRecordStatus(await record(submission));
-    } catch (cause) {
-      setRecordStatus("failed");
-      setRecordError(getErrorMessage(cause, "record draft submission"));
-    }
-  }
+  const recordConfirmedSubmission = useCallback(
+    async (submission: DraftSubmission) => {
+      const record = onProposalConfirmedRef.current;
+      if (!record || submittedDraftKeyRef.current !== draftSubmissionKey)
+        return;
+      const key = submittedDraftKeyRef.current;
+      setRecordStatus("recording");
+      setRecordError(null);
+      try {
+        const status = await record(submission);
+        if (key) clearPendingSubmission(key, submission.transactionHash);
+        setRecordStatus(status);
+      } catch (cause) {
+        setRecordStatus("failed");
+        setRecordError(getErrorMessage(cause, "record draft submission"));
+      }
+    },
+    [draftSubmissionKey]
+  );
 
   useEffect(() => {
     if (
-      !onProposalConfirmedRef.current ||
+      (!submittedDraftKeyRef.current && !onProposalConfirmedRef.current) ||
       !isConfirmed ||
       !receipt ||
       !trackedTxHash ||
@@ -399,24 +458,51 @@ export default function CreateProposalForm({
     ) {
       return;
     }
-    if (attemptedRecordHashRef.current === receipt.transactionHash) return;
-    attemptedRecordHashRef.current = receipt.transactionHash;
-
-    const proposalId = submittedProposalMeta.proposalId;
-    const submission = proposalId
-      ? submissionFromReceipt(
-          receipt,
-          submittedProposalMeta.governorAddress,
-          proposalId
-        )
-      : null;
+    const submission = verifiedSubmission;
     if (!submission) {
-      if (receipt.status === "success") setRecordStatus("unverified");
+      if (submittedDraftKeyRef.current)
+        clearPendingSubmission(
+          submittedDraftKeyRef.current,
+          receipt.transactionHash
+        );
+      if (receipt.status === "success") {
+        setRecordStatus("unverified");
+        if (isRecoveredSubmission)
+          setReplacementErrorMessage(
+            "The saved transaction did not contain the expected proposal event. The draft was not marked submitted."
+          );
+      }
       return;
     }
+    // Save before attempting the API write, even if the author disconnected.
+    // Reopening this draft fetches and verifies the receipt again.
+    if (
+      submittedDraftKeyRef.current &&
+      persistedSubmissionHashRef.current !== submission.transactionHash
+    ) {
+      savePendingSubmission(submittedDraftKeyRef.current, submission);
+      persistedSubmissionHashRef.current = submission.transactionHash;
+    }
+    if (
+      !onProposalConfirmedRef.current ||
+      submittedDraftKeyRef.current !== draftSubmissionKey
+    )
+      return;
+    if (attemptedRecordHashRef.current === receipt.transactionHash) return;
+    attemptedRecordHashRef.current = receipt.transactionHash;
     setRecordableSubmission(submission);
     void recordConfirmedSubmission(submission);
-  }, [isConfirmed, receipt, submittedProposalMeta, trackedTxHash]);
+  }, [
+    isConfirmed,
+    receipt,
+    submittedProposalMeta,
+    trackedTxHash,
+    verifiedSubmission,
+    onProposalConfirmed,
+    draftSubmissionKey,
+    isRecoveredSubmission,
+    recordConfirmedSubmission,
+  ]);
 
   useEffect(() => {
     if (writeError) {
@@ -594,9 +680,12 @@ export default function CreateProposalForm({
     if (!canSubmit || !simulateData?.request) return;
     setReplacementErrorMessage(null);
     attemptedRecordHashRef.current = null;
+    persistedSubmissionHashRef.current = null;
     setRecordStatus(null);
     setRecordError(null);
     setRecordableSubmission(null);
+    submittedDraftKeyRef.current = draftSubmissionKey;
+    setIsRecoveredSubmission(false);
     setSubmittedProposalMeta({
       proposalId: predictedProposalId,
       governorAddress: governor.address,
@@ -618,7 +707,9 @@ export default function CreateProposalForm({
         recordStatus={recordStatus}
         recordError={recordError}
         onRetryRecord={
-          recordableSubmission
+          recordableSubmission &&
+          onProposalConfirmed &&
+          submittedDraftKeyRef.current === draftSubmissionKey
             ? () => void recordConfirmedSubmission(recordableSubmission)
             : undefined
         }

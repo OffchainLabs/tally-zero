@@ -9,6 +9,7 @@ import CreateProposalForm, {
 } from "@/components/form/CreateProposalForm";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { draftSubmissionStorageKey } from "@/config/storage-keys";
 import { useDraft, useMarkSubmitted } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { draftToFormState } from "@/lib/drafts/mapping";
@@ -176,6 +177,10 @@ export function ProposalDraftLoader() {
 
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
+  const canRecordSubmission =
+    draft?.status === "published" &&
+    !!draft.shareSlug &&
+    effectiveAddress?.toLowerCase() === draft.author.toLowerCase();
 
   return (
     <div className="flex flex-col gap-4">
@@ -212,10 +217,13 @@ export function ProposalDraftLoader() {
         draftId={binding.draftId ?? draft?.id ?? null}
         serverSave={serverSave}
         accountAddress={effectiveAddress}
+        draftSubmissionKey={
+          canRecordSubmission
+            ? draftSubmissionStorageKey(draft.id, effectiveAddress!)
+            : undefined
+        }
         onProposalConfirmed={
-          draft?.status === "published" &&
-          !!draft.shareSlug &&
-          effectiveAddress?.toLowerCase() === draft.author.toLowerCase()
+          canRecordSubmission
             ? async (submission) => {
                 if (!submissionMatchesPublishedDraft(draft, submission)) {
                   return "different";
