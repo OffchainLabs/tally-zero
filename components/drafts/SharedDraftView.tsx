@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { SiweGate } from "@/components/siwe/SiweGate";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { isAddress, isHash } from "viem";
 
-import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
+import { useSiwe } from "@/hooks/use-siwe";
 import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
@@ -20,11 +23,6 @@ import { getAddressExplorerUrl, getTxExplorerUrl } from "@/lib/explorer-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { SiweApiError } from "@/lib/siwe/client";
 import type { Draft } from "@/lib/siwe/types";
-
-const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
-// The server's `requireDecimalString`: the id from ProposalCreated, in decimal.
-const DECIMAL_RE = /^\d+$/;
 
 /**
  * Public read of a published draft, addressed by its share slug.
@@ -35,6 +33,13 @@ const DECIMAL_RE = /^\d+$/;
  */
 export function SharedDraftView({ slug }: { slug: string }) {
   const { data: draft, isLoading, error } = useSharedDraft(slug);
+  const { effectiveAddress } = useSiwe();
+
+  useEffect(() => {
+    if (error && !(error instanceof SiweApiError && error.status === 404)) {
+      console.error("Could not load shared draft:", error);
+    }
+  }, [error]);
 
   if (isLoading) {
     return (
@@ -60,7 +65,7 @@ export function SharedDraftView({ slug }: { slug: string }) {
           >
             {isNotFound
               ? "This draft link is not valid. Only published drafts are readable by slug."
-              : error.message}
+              : "Could not load this draft. Please try again later."}
           </p>
         </CardContent>
       </Card>
@@ -78,8 +83,16 @@ export function SharedDraftView({ slug }: { slug: string }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            By <span className="font-mono">{draft.author}</span> · updated{" "}
-            {new Date(draft.updatedAt).toLocaleString()}
+            By{" "}
+            <a
+              className="break-all font-mono text-primary hover:underline"
+              href={getAddressExplorerUrl(draft.author)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {draft.author}
+            </a>{" "}
+            · updated {new Date(draft.updatedAt).toLocaleString()}
           </p>
 
           <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground">
@@ -102,40 +115,50 @@ export function SharedDraftView({ slug }: { slug: string }) {
       {draft.onchain ? (
         <SubmittedCard draft={draft} />
       ) : (
-        // The read above stays public; only recording a submission needs a
-        // session, because the server signs the record with whoever made it.
-        <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
-          <MarkSubmittedForm slug={slug} />
-        </SiweGate>
+        <Card variant="glass">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+            <p className="text-sm text-muted-foreground">
+              This draft has not been submitted on chain.
+            </p>
+            {draft.status === "published" &&
+              effectiveAddress?.toLowerCase() ===
+                draft.author.toLowerCase() && (
+                <Button size="sm" asChild>
+                  <Link
+                    href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
+                  >
+                    Open to submit on chain
+                  </Link>
+                </Button>
+              )}
+          </CardContent>
+          <CardContent>
+            <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
+              <MarkSubmittedForm slug={slug} />
+            </SiweGate>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 }
 
 function DraftActions({ draft }: { draft: Draft }) {
-  if (draft.actions.length === 0) {
-    return (
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle className="text-base">Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No actions yet — this draft is text only.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="text-base">
-          Actions ({draft.actions.length})
+          Actions{draft.actions.length > 0 && ` (${draft.actions.length})`}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent
+        className={draft.actions.length > 0 ? "space-y-3" : undefined}
+      >
+        {draft.actions.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No actions yet — this draft is text only.
+          </p>
+        )}
         {draft.actions.map((action, index) => (
           <div
             key={`${action.target}-${index}`}
@@ -217,9 +240,9 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
 
   // Mirrors the server's validators so a rejection is never a surprise.
   const isValid =
-    TX_HASH_RE.test(transactionHash.trim()) &&
-    ADDRESS_RE.test(governorAddress.trim()) &&
-    DECIMAL_RE.test(proposalId.trim());
+    isHash(transactionHash.trim()) &&
+    isAddress(governorAddress.trim(), { strict: false }) &&
+    /^\d+$/.test(proposalId.trim());
 
   async function submit() {
     if (!isValid || isSubmitting) return;
@@ -295,7 +318,7 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
             className="text-sm text-destructive"
             data-testid="draft-submit-error"
           >
-            {error.message}
+            Could not record this submission. Please try again.
           </p>
         ) : null}
 

@@ -134,6 +134,11 @@ interface CreateProposalFormProps {
    * client, and a router, which is also what keeps its tests cheap.
    */
   renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
+  /** Called as soon as the wallet broadcasts a proposal transaction. */
+  onProposalSubmitted?: (submission: {
+    hash: `0x${string}`;
+    governorAddress: string;
+  }) => void;
 }
 
 export default function CreateProposalForm({
@@ -142,6 +147,7 @@ export default function CreateProposalForm({
   serverSave = null,
   accountAddress = null,
   renderDraftActions,
+  onProposalSubmitted,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -162,7 +168,6 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-
   // Local autosave and the status bar. Nothing is written until the mount
   // effect has checked the browser for a copy to restore.
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
@@ -315,6 +320,7 @@ export default function CreateProposalForm({
     writeContract,
   } = useWriteContract();
   const {
+    data: receipt,
     isLoading: isConfirming,
     isSuccess: isConfirmed,
     error: receiptError,
@@ -341,7 +347,8 @@ export default function CreateProposalForm({
       );
     },
   });
-  const hasConfirmedSubmission = isConfirmed && !!trackedTxHash;
+  const hasConfirmedSubmission =
+    isConfirmed && receipt?.status === "success" && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
     isWriting,
@@ -474,9 +481,12 @@ export default function CreateProposalForm({
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
     : null;
-  const receiptErrorMessage = receiptError
-    ? getErrorMessage(receiptError, "confirm proposal")
-    : null;
+  const receiptErrorMessage =
+    receipt?.status === "reverted"
+      ? "Proposal transaction reverted. Your proposal was not submitted. Please try again."
+      : receiptError
+        ? getErrorMessage(receiptError, "confirm proposal")
+        : null;
 
   const canSubmit =
     submissionPhase === "idle" &&
@@ -539,6 +549,7 @@ export default function CreateProposalForm({
     writeContract(simulateData.request, {
       onSuccess: (hash) => {
         setTrackedTxHash(hash);
+        onProposalSubmitted?.({ hash, governorAddress: governor.address });
       },
       onError: () => {
         setTrackedTxHash(undefined);

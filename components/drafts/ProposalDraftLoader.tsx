@@ -1,18 +1,31 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 
 import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
 import CreateProposalForm, {
   type ServerSaveEvent,
 } from "@/components/form/CreateProposalForm";
+import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  useDraftSubmissionRecording,
+  type RecordableDraft,
+} from "@/hooks/use-draft-submission-recording";
 import { useDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { draftToFormState } from "@/lib/drafts/mapping";
 import type { Draft } from "@/lib/siwe/types";
+
+type ProposalFormProps = ComponentProps<typeof CreateProposalForm>;
 
 /**
  * Which stored draft the save button writes to, given the draft the page was
@@ -42,37 +55,14 @@ export function resolveDraftBinding(
   // an update that would fail after the user has typed.
   const isEditable = !opened || opened.status === "draft";
 
-  if (saved) {
-    return {
-      isEditable,
-      draftId: saved.id,
-      initialTitle: saved.title,
-      saveAsNew: false,
-    };
-  }
-
-  if (!opened) {
-    return {
-      isEditable,
-      draftId: null,
-      initialTitle: undefined,
-      saveAsNew: false,
-    };
-  }
-
-  return isEditable
-    ? {
-        isEditable,
-        draftId: opened.id,
-        initialTitle: opened.title,
-        saveAsNew: false,
-      }
-    : {
-        isEditable,
-        draftId: null,
-        initialTitle: `${opened.title} (copy)`,
-        saveAsNew: true,
-      };
+  const bound = saved ?? (isEditable ? opened : null);
+  return {
+    isEditable,
+    draftId: bound?.id ?? null,
+    initialTitle:
+      bound?.title ?? (opened ? `${opened.title} (copy)` : undefined),
+    saveAsNew: !bound && !!opened,
+  };
 }
 
 /** The draft the last save returned, and the ?draft= the page had at the time. */
@@ -174,6 +164,54 @@ export function ProposalDraftLoader() {
 
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
+  // Keep the recorder mounted when its API write refreshes the draft to
+  // submitted, so that the form keeps its transaction success screen.
+  const recordingDraft =
+    draft?.status !== "draft" &&
+    draft?.shareSlug &&
+    effectiveAddress?.toLowerCase() === draft.author.toLowerCase()
+      ? { ...draft, shareSlug: draft.shareSlug }
+      : null;
+
+  const formProps: ProposalFormProps = {
+    initialDraft: restored,
+    // The autosave slot is named after the draft on screen, while the save
+    // dialog below writes to the binding. They differ for a published or
+    // submitted draft before its first save: bound to nothing, but its
+    // contents must not share the anonymous form's slot.
+    draftId: binding.draftId ?? draft?.id ?? null,
+    serverSave,
+    accountAddress: effectiveAddress,
+    renderDraftActions: (snapshot) => (
+      <SaveToAccountDialog
+        snapshot={snapshot}
+        draftId={binding.draftId}
+        initialTitle={binding.initialTitle}
+        saveAsNew={binding.saveAsNew}
+        onSaved={(saved) => {
+          if (activeSaveSessionRef.current !== saveSession) return;
+          setLastSaved({
+            openedOn: draftId,
+            draft: saved,
+            serverSave: {
+              at: Date.now(),
+              address: effectiveAddress,
+              snapshot,
+            },
+            moved: false,
+          });
+          // A create (blank form, or a copy of a frozen draft) leaves the
+          // URL pointing at nothing or at the original. Move it to the new
+          // draft so a reload comes back here. useDraftMutations seeded the
+          // new draft's query, so the skeleton gate does not unmount the
+          // form while it would otherwise fetch.
+          if (saved.id !== draftId) {
+            router.replace(`${pathname}?draft=${encodeURIComponent(saved.id)}`);
+          }
+        }}
+      />
+    ),
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,6 +224,12 @@ export function ProposalDraftLoader() {
           That draft could not be loaded — it may have been deleted, or belong
           to a different account. Starting a blank proposal instead.
         </p>
+      ) : draft?.status === "published" ? (
+        <p className="text-sm text-amber-400">
+          This published draft is ready to submit on chain. Publishing froze its
+          shared contents; if you change them here, you can save your changes as
+          a new draft, and the original will remain published.
+        </p>
       ) : draft && !binding.isEditable ? (
         // Shown until the first save: that save creates the copy and moves the
         // URL to it, and the copy is an ordinary editable draft from then on.
@@ -195,47 +239,70 @@ export function ProposalDraftLoader() {
         </p>
       ) : null}
 
-      <CreateProposalForm
-        initialDraft={restored}
-        // The autosave slot is named after the draft on screen, while the save
-        // dialog below writes to the binding. They differ for a published or
-        // submitted draft before its first save: bound to nothing, but its
-        // contents must not share the anonymous form's slot.
-        draftId={binding.draftId ?? draft?.id ?? null}
-        serverSave={serverSave}
-        accountAddress={effectiveAddress}
-        renderDraftActions={(snapshot) => (
-          <SaveToAccountDialog
-            snapshot={snapshot}
-            draftId={binding.draftId}
-            initialTitle={binding.initialTitle}
-            saveAsNew={binding.saveAsNew}
-            onSaved={(saved) => {
-              if (activeSaveSessionRef.current !== saveSession) return;
-              setLastSaved({
-                openedOn: draftId,
-                draft: saved,
-                serverSave: {
-                  at: Date.now(),
-                  address: effectiveAddress,
-                  snapshot,
-                },
-                moved: false,
-              });
-              // A create (blank form, or a copy of a frozen draft) leaves the
-              // URL pointing at nothing or at the original. Move it to the new
-              // draft so a reload comes back here. useDraftMutations seeded the
-              // new draft's query, so the skeleton gate does not unmount the
-              // form while it would otherwise fetch.
-              if (saved.id !== draftId) {
-                router.replace(
-                  `${pathname}?draft=${encodeURIComponent(saved.id)}`
-                );
-              }
-            }}
-          />
-        )}
-      />
+      {recordingDraft && effectiveAddress ? (
+        <DraftSubmissionForm
+          key={`${recordingDraft.id}:${effectiveAddress.toLowerCase()}`}
+          draft={recordingDraft}
+          subject={effectiveAddress}
+          {...formProps}
+        />
+      ) : (
+        <CreateProposalForm {...formProps} />
+      )}
     </div>
+  );
+}
+
+/** Recording belongs to the loaded shared draft, independently of form state. */
+function DraftSubmissionForm({
+  draft,
+  subject,
+  ...formProps
+}: ProposalFormProps & {
+  draft: RecordableDraft;
+  subject: string;
+}) {
+  const { status, error, retry, onProposalSubmitted } =
+    useDraftSubmissionRecording(draft, subject);
+  return (
+    <>
+      {status && (
+        <div role="status" className="text-sm space-y-2">
+          {status === "confirming" && (
+            <p>Waiting for the draft&apos;s proposal transaction to confirm…</p>
+          )}
+          {status === "recording" && <p>Recording this draft as submitted…</p>}
+          {status === "recorded" && (
+            <p className="text-emerald-400">
+              This draft is now marked submitted.
+            </p>
+          )}
+          {status === "different" && (
+            <p className="text-amber-400">
+              This proposal differs from the published draft, so that draft
+              remains published.
+            </p>
+          )}
+          {status === "missing" && (
+            <p className="text-amber-400">
+              The confirmed transaction did not contain the expected proposal
+              event, so the draft was not marked submitted.
+            </p>
+          )}
+          {(status === "failed" || status === "receipt-error") && (
+            <p className="text-destructive">{error}</p>
+          )}
+          {status === "failed" && (
+            <Button variant="outline" onClick={retry}>
+              Retry recording submission
+            </Button>
+          )}
+        </div>
+      )}
+      <CreateProposalForm
+        {...formProps}
+        onProposalSubmitted={onProposalSubmitted}
+      />
+    </>
   );
 }

@@ -8,8 +8,11 @@ import { useAccount, useSignMessage } from "wagmi";
 import { SIWE_CHAIN_ID } from "@/config/siwe";
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
-import { clearAndReconcileSession } from "@/lib/siwe/session-cache";
-import type { MeResponse } from "@/lib/siwe/types";
+import { meQueryOptions } from "@/lib/siwe/queries";
+import {
+  clearAndReconcileSession,
+  logoutPreviousWalletSession,
+} from "@/lib/siwe/session-cache";
 
 const ME_KEY = siweKeys.me;
 
@@ -25,15 +28,15 @@ export function useSiwe() {
   const { signMessageAsync } = useSignMessage();
   const queryClient = useQueryClient();
 
-  const sessionQuery = useQuery<MeResponse | null>({
-    queryKey: ME_KEY,
-    queryFn: () => siweApi.me(),
-    staleTime: 30_000,
-  });
+  const sessionQuery = useQuery(meQueryOptions);
 
   const signIn = useMutation({
     mutationFn: async () => {
       if (!address) throw new Error("connect a wallet first");
+      // A wallet switch can race the provider's logout request. Wait for its
+      // revocation before verifying a new signature, or the old logout could
+      // revoke the new session instead.
+      await logoutPreviousWalletSession(queryClient, address);
       const nonce = await siweApi.nonce();
       const message = createSiweMessage({
         address,
@@ -69,7 +72,16 @@ export function useSiwe() {
     [queryClient]
   );
 
-  const session = sessionQuery.data ?? null;
+  // The cookie can still belong to a previously connected wallet. Treat that
+  // session as signed out until the connected wallet signs in, so owned data
+  // and actions never appear under the wrong wallet.
+  const cachedSession = sessionQuery.data ?? null;
+  const session =
+    isConnected &&
+    address &&
+    cachedSession?.address.toLowerCase() === address.toLowerCase()
+      ? cachedSession
+      : null;
   return {
     address,
     isConnected,

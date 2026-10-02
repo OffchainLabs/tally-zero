@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   useDraft: vi.fn(),
   createDraft: vi.fn(),
   patchDraft: vi.fn(),
+  markSubmitted: vi.fn(),
   useAccount: vi.fn(),
   useGovernanceClock: vi.fn(),
   useReadContract: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 vi.mock("@/hooks/use-drafts", () => ({
   useDraft: mocks.useDraft,
+  useMarkSubmitted: () => ({ markSubmitted: mocks.markSubmitted }),
   useDraftMutations: () => ({
     createDraft: mocks.createDraft,
     patchDraft: mocks.patchDraft,

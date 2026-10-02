@@ -69,7 +69,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
 
       <body
         className={cn(
-          "min-h-screen font-sans antialiased bg-[#0b0c10] transition-colors duration-200 ease-in-out",
+          "flex min-h-screen min-h-[100dvh] flex-col font-sans antialiased bg-[#0b0c10] transition-colors duration-200 ease-in-out",
           GeistSans.className
         )}
       >
@@ -88,7 +88,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
                       </div>
                     </header>
 
-                    {children}
+                    <main className="flex-1">{children}</main>
                     <SiteFooter />
 
                     <Toaster />
