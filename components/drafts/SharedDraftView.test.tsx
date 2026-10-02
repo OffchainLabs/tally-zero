@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SiweApiError } from "@/lib/siwe/client";
@@ -17,11 +17,22 @@ import { SharedDraftView } from "./SharedDraftView";
 const mocks = vi.hoisted(() => ({
   useSiwe: vi.fn(),
   useSharedDraft: vi.fn(),
+  markSubmitted: vi.fn(),
+  open: vi.fn(),
+}));
+
+vi.mock("@reown/appkit/react", () => ({
+  useAppKit: () => ({ open: mocks.open }),
 }));
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 vi.mock("@/hooks/use-drafts", () => ({
   useSharedDraft: mocks.useSharedDraft,
+  useMarkSubmitted: () => ({
+    markSubmitted: mocks.markSubmitted,
+    isSubmitting: false,
+    error: null,
+  }),
 }));
 
 const AUTHOR = "0x1111111111111111111111111111111111111111";
@@ -240,7 +251,7 @@ describe("SharedDraftView", () => {
     expect(
       container.querySelector('a[href="/proposal/new?draft=d1"]')
     ).not.toBeNull();
-    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector("input")).not.toBeNull();
   });
 
   it("keeps the published draft readable without offering submission to a reviewer", () => {
@@ -258,5 +269,35 @@ describe("SharedDraftView", () => {
       view.container.querySelector('a[href="/proposal/new?draft=d1"]')
     ).toBeNull();
     expect(view.container.querySelector("input")).toBeNull();
+  });
+  it("lets a signed-in delegate record another author's submission", async () => {
+    loaded(draft());
+    signedIn();
+    mocks.useSiwe.mockReturnValue({
+      ...mocks.useSiwe(),
+      effectiveAddress: GOVERNOR,
+    });
+    mocks.markSubmitted.mockResolvedValue(undefined);
+    const view = render(<SharedDraftView slug="abc123" />);
+    expect(
+      view.queryByRole("link", { name: "Open to submit on chain" })
+    ).toBeNull();
+    fireEvent.change(view.getByLabelText("Transaction hash"), {
+      target: { value: TX },
+    });
+    fireEvent.change(view.getByLabelText("Governor address"), {
+      target: { value: GOVERNOR },
+    });
+    fireEvent.change(view.getByLabelText("Proposal id"), {
+      target: { value: "42" },
+    });
+    await act(async () =>
+      fireEvent.click(view.getByRole("button", { name: "Mark as submitted" }))
+    );
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      transactionHash: TX,
+      governorAddress: GOVERNOR,
+      proposalId: "42",
+    });
   });
 });

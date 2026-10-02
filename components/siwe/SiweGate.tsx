@@ -12,110 +12,70 @@ import {
 } from "@/components/ui/Card";
 import { useSiwe } from "@/hooks/use-siwe";
 
-/**
- * Renders `children` only once a wallet is connected and a SIWE session exists,
- * standing in the connect and sign-in steps until then. Every authenticated
- * surface needs the same two screens, so they live here rather than in each one.
- *
- * `actionOnly` lets a caller place the connect/sign-in control inside its own
- * explanatory layout, while this component keeps the authentication behavior.
- */
-export function SiweGate({
-  children,
-  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
-  actionOnly = false,
-}: {
-  children?: React.ReactNode;
-  connectDescription?: string;
-  actionOnly?: boolean;
-}) {
+/** Connect or sign in inside the caller's own layout. */
+export function SiweAction() {
   const { open } = useAppKit();
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
-
+  if (isSignedIn) return null;
   if (!isConnected) {
-    const action = (
-      <Button
-        size={actionOnly ? "sm" : undefined}
-        variant={actionOnly ? "outline" : undefined}
-        onClick={() => void open({ view: "Connect" })}
-      >
-        Connect Wallet
-      </Button>
-    );
-
-    if (actionOnly) {
-      return <div data-testid="siwe-connect">{action}</div>;
-    }
-
     return (
-      <GateCard
-        title="Connect your wallet"
-        description={connectDescription}
-        testId="siwe-connect"
-      >
-        {action}
-      </GateCard>
-    );
-  }
-
-  if (!isSignedIn) {
-    const action = (
-      <>
+      <div data-testid="siwe-connect">
         <Button
-          size={actionOnly ? "sm" : undefined}
-          variant={actionOnly ? "outline" : undefined}
-          data-testid="siwe-sign-in"
-          disabled={isSigningIn}
-          onClick={() => {
-            signIn().catch(() => {});
-          }}
+          size="sm"
+          variant="outline"
+          onClick={() => void open({ view: "Connect" })}
         >
-          {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
+          Connect Wallet
         </Button>
-        {signInError ? (
-          <p className="text-sm text-destructive" data-testid="siwe-error">
-            {signInError.message}
-          </p>
-        ) : null}
-      </>
-    );
-
-    if (actionOnly) {
-      return <div className="flex flex-col items-center gap-2">{action}</div>;
-    }
-
-    return (
-      <GateCard
-        title="Sign in"
-        description="Sign a message to prove wallet ownership. No transaction, no gas."
-      >
-        {action}
-      </GateCard>
+      </div>
     );
   }
-
-  return <>{children}</>;
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="siwe-sign-in"
+        disabled={isSigningIn}
+        onClick={() => {
+          signIn().catch(() => {});
+        }}
+      >
+        {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
+      </Button>
+      {signInError ? (
+        <p className="text-sm text-destructive" data-testid="siwe-error">
+          {signInError.message}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
-function GateCard({
-  title,
-  description,
-  testId,
+/** Show the connect/sign-in card until authenticated content can mount. */
+export function SiweGate({
   children,
+  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
 }: {
-  title: string;
-  description: string;
-  testId?: string;
   children: React.ReactNode;
+  connectDescription?: string;
 }) {
+  const { isConnected, isSignedIn } = useSiwe();
+  if (isSignedIn) return <>{children}</>;
   return (
-    <Card variant="glass" data-testid={testId}>
+    <Card variant="glass">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle>{isConnected ? "Sign in" : "Connect your wallet"}</CardTitle>
+        <CardDescription>
+          {isConnected
+            ? "Sign a message to prove wallet ownership. No transaction, no gas."
+            : connectDescription}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
+      <CardContent className="space-y-3">
+        <SiweAction />
+      </CardContent>
     </Card>
   );
 }

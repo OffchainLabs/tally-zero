@@ -11,9 +11,8 @@ import {
 const subject = "0x1111111111111111111111111111111111111111";
 const key = draftSubmissionStorageKey("d1", subject);
 const submission = {
-  transactionHash: `0x${"ab".repeat(32)}`,
+  transactionHash: `0x${"ab".repeat(32)}` as `0x${string}`,
   governorAddress: "0x2222222222222222222222222222222222222222",
-  proposalId: "42",
 };
 
 describe("submission recovery storage", () => {
@@ -55,8 +54,6 @@ describe("submission recovery storage", () => {
     "{}",
     JSON.stringify({ ...submission, transactionHash: "0x1234" }),
     JSON.stringify({ ...submission, governorAddress: "invalid" }),
-    JSON.stringify({ ...submission, proposalId: 42 }),
-    JSON.stringify({ ...submission, proposalId: "-42" }),
   ])("ignores malformed recovery metadata: %s", (value) => {
     entries.set(key, value);
     expect(readPendingSubmission(key)).toBeNull();

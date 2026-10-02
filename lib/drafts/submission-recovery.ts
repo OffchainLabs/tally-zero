@@ -1,24 +1,28 @@
-import type { DraftSubmission } from "@/lib/siwe/types";
+import { isAddress, isHash } from "viem";
+
+export type PendingDraftSubmission = {
+  transactionHash: `0x${string}`;
+  governorAddress: string;
+};
 
 /** Stored metadata is only a recovery hint; callers must verify its receipt. */
-export function readPendingSubmission(key: string): DraftSubmission | null {
+export function readPendingSubmission(
+  key: string
+): PendingDraftSubmission | null {
   try {
     const value = JSON.parse(window.localStorage.getItem(key) ?? "null");
     if (
       !value ||
       typeof value.transactionHash !== "string" ||
-      !/^0x[\da-f]{64}$/i.test(value.transactionHash) ||
+      !isHash(value.transactionHash) ||
       typeof value.governorAddress !== "string" ||
-      !/^0x[\da-f]{40}$/i.test(value.governorAddress) ||
-      typeof value.proposalId !== "string" ||
-      !/^\d{1,78}$/.test(value.proposalId)
+      !isAddress(value.governorAddress, { strict: false })
     ) {
       return null;
     }
     return {
       transactionHash: value.transactionHash,
       governorAddress: value.governorAddress,
-      proposalId: value.proposalId,
     };
   } catch {
     return null;
@@ -27,7 +31,7 @@ export function readPendingSubmission(key: string): DraftSubmission | null {
 
 export function savePendingSubmission(
   key: string,
-  submission: DraftSubmission
+  submission: PendingDraftSubmission
 ): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(submission));

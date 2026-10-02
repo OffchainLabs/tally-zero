@@ -10,14 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
@@ -64,12 +57,6 @@ import type {
   ProposalFormSnapshot,
   RestoredDraftFormState,
 } from "@/lib/drafts/mapping";
-import { submissionFromReceipt } from "@/lib/drafts/submission";
-import {
-  clearPendingSubmission,
-  readPendingSubmission,
-  savePendingSubmission,
-} from "@/lib/drafts/submission-recovery";
 import { getErrorMessage, getSimulationErrorMessage } from "@/lib/error-utils";
 import {
   getAddressExplorerUrl,
@@ -85,7 +72,6 @@ import {
   validateAction,
   type ProposalAction,
 } from "@/lib/propose-utils";
-import type { DraftSubmission } from "@/lib/siwe/types";
 import { cn } from "@/lib/utils";
 
 import { useGovernanceClock } from "@/hooks/use-governance-clock";
@@ -148,12 +134,11 @@ interface CreateProposalFormProps {
    * client, and a router, which is also what keeps its tests cheap.
    */
   renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
-  /** Records an unchanged published draft after a verified propose() receipt. */
-  onProposalConfirmed?: (
-    submission: DraftSubmission
-  ) => Promise<"recorded" | "different">;
-  /** Recovery slot for a published draft, scoped to its effective subject. */
-  draftSubmissionKey?: string;
+  /** Called as soon as the wallet broadcasts a proposal transaction. */
+  onProposalSubmitted?: (submission: {
+    hash: `0x${string}`;
+    governorAddress: string;
+  }) => void;
 }
 
 export default function CreateProposalForm({
@@ -162,8 +147,7 @@ export default function CreateProposalForm({
   serverSave = null,
   accountAddress = null,
   renderDraftActions,
-  onProposalConfirmed,
-  draftSubmissionKey,
+  onProposalSubmitted,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -184,36 +168,6 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [recordStatus, setRecordStatus] = useState<
-    "recording" | "recorded" | "different" | "unverified" | "failed" | null
-  >(null);
-  const [recordError, setRecordError] = useState<string | null>(null);
-  const [recordableSubmission, setRecordableSubmission] =
-    useState<DraftSubmission | null>(null);
-  const attemptedRecordHashRef = useRef<string | null>(null);
-  const onProposalConfirmedRef = useRef(onProposalConfirmed);
-  onProposalConfirmedRef.current = onProposalConfirmed;
-  const submittedDraftKeyRef = useRef<string | undefined>(undefined);
-  const restoredSubmissionKeyRef = useRef<string | undefined>(undefined);
-  const persistedSubmissionHashRef = useRef<string | null>(null);
-  const [isRecoveredSubmission, setIsRecoveredSubmission] = useState(false);
-
-  useEffect(() => {
-    if (
-      !draftSubmissionKey ||
-      trackedTxHash ||
-      restoredSubmissionKeyRef.current === draftSubmissionKey
-    )
-      return;
-    restoredSubmissionKeyRef.current = draftSubmissionKey;
-    const pending = readPendingSubmission(draftSubmissionKey);
-    if (!pending) return;
-    submittedDraftKeyRef.current = draftSubmissionKey;
-    setIsRecoveredSubmission(true);
-    setSubmittedProposalMeta(pending);
-    setTrackedTxHash(pending.transactionHash as `0x${string}`);
-  }, [draftSubmissionKey, trackedTxHash]);
-
   // Local autosave and the status bar. Nothing is written until the mount
   // effect has checked the browser for a copy to restore.
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
@@ -393,25 +347,8 @@ export default function CreateProposalForm({
       );
     },
   });
-  const verifiedSubmission = useMemo(() => {
-    if (
-      !receipt ||
-      !trackedTxHash ||
-      receipt.transactionHash.toLowerCase() !== trackedTxHash.toLowerCase() ||
-      !submittedProposalMeta?.proposalId
-    )
-      return null;
-    return submissionFromReceipt(
-      receipt,
-      submittedProposalMeta.governorAddress,
-      submittedProposalMeta.proposalId
-    );
-  }, [receipt, trackedTxHash, submittedProposalMeta]);
   const hasConfirmedSubmission =
-    isConfirmed &&
-    receipt?.status === "success" &&
-    !!trackedTxHash &&
-    (!isRecoveredSubmission || !!verifiedSubmission);
+    isConfirmed && receipt?.status === "success" && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
     isWriting,
@@ -426,83 +363,6 @@ export default function CreateProposalForm({
       toast("Proposal submitted.");
     }
   }, [submissionPhase]);
-
-  const recordConfirmedSubmission = useCallback(
-    async (submission: DraftSubmission) => {
-      const record = onProposalConfirmedRef.current;
-      if (!record || submittedDraftKeyRef.current !== draftSubmissionKey)
-        return;
-      const key = submittedDraftKeyRef.current;
-      setRecordStatus("recording");
-      setRecordError(null);
-      try {
-        const status = await record(submission);
-        if (key) clearPendingSubmission(key, submission.transactionHash);
-        setRecordStatus(status);
-      } catch (cause) {
-        setRecordStatus("failed");
-        setRecordError(getErrorMessage(cause, "record draft submission"));
-      }
-    },
-    [draftSubmissionKey]
-  );
-
-  useEffect(() => {
-    if (
-      (!submittedDraftKeyRef.current && !onProposalConfirmedRef.current) ||
-      !isConfirmed ||
-      !receipt ||
-      !trackedTxHash ||
-      receipt.transactionHash.toLowerCase() !== trackedTxHash.toLowerCase() ||
-      !submittedProposalMeta
-    ) {
-      return;
-    }
-    const submission = verifiedSubmission;
-    if (!submission) {
-      if (submittedDraftKeyRef.current)
-        clearPendingSubmission(
-          submittedDraftKeyRef.current,
-          receipt.transactionHash
-        );
-      if (receipt.status === "success") {
-        setRecordStatus("unverified");
-        if (isRecoveredSubmission)
-          setReplacementErrorMessage(
-            "The saved transaction did not contain the expected proposal event. The draft was not marked submitted."
-          );
-      }
-      return;
-    }
-    // Save before attempting the API write, even if the author disconnected.
-    // Reopening this draft fetches and verifies the receipt again.
-    if (
-      submittedDraftKeyRef.current &&
-      persistedSubmissionHashRef.current !== submission.transactionHash
-    ) {
-      savePendingSubmission(submittedDraftKeyRef.current, submission);
-      persistedSubmissionHashRef.current = submission.transactionHash;
-    }
-    if (
-      !onProposalConfirmedRef.current ||
-      submittedDraftKeyRef.current !== draftSubmissionKey
-    )
-      return;
-    if (attemptedRecordHashRef.current === receipt.transactionHash) return;
-    attemptedRecordHashRef.current = receipt.transactionHash;
-    setRecordableSubmission(submission);
-    void recordConfirmedSubmission(submission);
-  }, [
-    isConfirmed,
-    receipt,
-    submittedProposalMeta,
-    trackedTxHash,
-    verifiedSubmission,
-    onProposalConfirmed,
-    draftSubmissionKey,
-    isRecoveredSubmission,
-    recordConfirmedSubmission,
-  ]);
 
   useEffect(() => {
     if (writeError) {
@@ -621,9 +481,12 @@ export default function CreateProposalForm({
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
     : null;
-  const receiptErrorMessage = receiptError
-    ? getErrorMessage(receiptError, "confirm proposal")
-    : null;
+  const receiptErrorMessage =
+    receipt?.status === "reverted"
+      ? "Proposal transaction reverted. Your proposal was not submitted. Please try again."
+      : receiptError
+        ? getErrorMessage(receiptError, "confirm proposal")
+        : null;
 
   const canSubmit =
     submissionPhase === "idle" &&
@@ -679,13 +542,6 @@ export default function CreateProposalForm({
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
     setReplacementErrorMessage(null);
-    attemptedRecordHashRef.current = null;
-    persistedSubmissionHashRef.current = null;
-    setRecordStatus(null);
-    setRecordError(null);
-    setRecordableSubmission(null);
-    submittedDraftKeyRef.current = draftSubmissionKey;
-    setIsRecoveredSubmission(false);
     setSubmittedProposalMeta({
       proposalId: predictedProposalId,
       governorAddress: governor.address,
@@ -693,6 +549,7 @@ export default function CreateProposalForm({
     writeContract(simulateData.request, {
       onSuccess: (hash) => {
         setTrackedTxHash(hash);
+        onProposalSubmitted?.({ hash, governorAddress: governor.address });
       },
       onError: () => {
         setTrackedTxHash(undefined);
@@ -704,15 +561,6 @@ export default function CreateProposalForm({
     return (
       <SuccessState
         txHash={trackedTxHash}
-        recordStatus={recordStatus}
-        recordError={recordError}
-        onRetryRecord={
-          recordableSubmission &&
-          onProposalConfirmed &&
-          submittedDraftKeyRef.current === draftSubmissionKey
-            ? () => void recordConfirmedSubmission(recordableSubmission)
-            : undefined
-        }
         proposalPath={buildSubmittedProposalPath({
           proposalId: submittedProposalMeta?.proposalId ?? predictedProposalId,
           governorAddress:
@@ -1339,24 +1187,9 @@ function SubmitSection({
 interface SuccessStateProps {
   txHash: string;
   proposalPath: string | null;
-  recordStatus:
-    | "recording"
-    | "recorded"
-    | "different"
-    | "unverified"
-    | "failed"
-    | null;
-  recordError: string | null;
-  onRetryRecord?: () => void;
 }
 
-function SuccessState({
-  txHash,
-  proposalPath,
-  recordStatus,
-  recordError,
-  onRetryRecord,
-}: SuccessStateProps) {
+function SuccessState({ txHash, proposalPath }: SuccessStateProps) {
   return (
     <Card variant="glass" className="border-emerald-500/30">
       <CardContent className="pt-6 flex flex-col gap-4 items-start">
@@ -1370,41 +1203,6 @@ function SuccessState({
           appear on the Proposals page and enter the voting-active phase at the
           governor&apos;s voting delay.
         </p>
-
-        {recordStatus === "recording" && (
-          <p className="text-sm text-muted-foreground">
-            Recording this draft as submitted…
-          </p>
-        )}
-        {recordStatus === "recorded" && (
-          <p className="text-sm text-emerald-400">
-            This draft is now marked submitted.
-          </p>
-        )}
-        {recordStatus === "different" && (
-          <p className="text-sm text-amber-400">
-            This proposal differs from the published draft, so that draft
-            remains published.
-          </p>
-        )}
-        {recordStatus === "unverified" && (
-          <p className="text-sm text-amber-400">
-            The confirmed transaction did not contain the expected proposal
-            event, so the draft was not marked submitted.
-          </p>
-        )}
-        {recordStatus === "failed" && (
-          <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-destructive">
-              {recordError ?? "Could not record this draft as submitted."}
-            </p>
-            {onRetryRecord && (
-              <Button variant="outline" onClick={onRetryRecord}>
-                Retry recording submission
-              </Button>
-            )}
-          </div>
-        )}
 
         <div className="text-xs font-mono text-muted-foreground break-all">
           tx: {txHash}

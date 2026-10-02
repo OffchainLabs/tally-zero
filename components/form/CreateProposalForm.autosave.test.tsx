@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { encodeAbiParameters, encodeEventTopics, parseAbiItem } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GOVERNORS } from "@/config/governors";
 import {
   PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
   proposalDraftStorageKey,
@@ -15,7 +13,6 @@ import {
 } from "@/lib/create-proposal-form-utils";
 
 import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
-import { computeProposalId, normalizeActions } from "@/lib/propose-utils";
 import type { Draft } from "@/lib/siwe/types";
 
 import CreateProposalForm from "./CreateProposalForm";
@@ -244,113 +241,6 @@ describe("CreateProposalForm browser autosave", () => {
     cleanup();
     vi.useRealTimers();
     vi.unstubAllGlobals();
-  });
-
-  it("records a published draft only after its propose transaction is confirmed", async () => {
-    const event = parseAbiItem(
-      "event ProposalCreated(uint256 proposalId, address proposer, address[] targets, uint256[] values, string[] signatures, bytes[] calldatas, uint256 startBlock, uint256 endBlock, string description)"
-    );
-    const { targets, values, calldatas } = normalizeActions(
-      serverDraft.actions
-    );
-    const proposalId = computeProposalId(
-      targets,
-      values,
-      calldatas,
-      serverDraft.description
-    );
-    const transactionHash = `0x${"ab".repeat(32)}` as `0x${string}`;
-    const receipt = {
-      status: "success",
-      transactionHash,
-      logs: [
-        {
-          address: GOVERNORS.core.address,
-          topics: encodeEventTopics({
-            abi: [event],
-            eventName: "ProposalCreated",
-          }),
-          data: encodeAbiParameters(
-            [
-              { type: "uint256" },
-              { type: "address" },
-              { type: "address[]" },
-              { type: "uint256[]" },
-              { type: "string[]" },
-              { type: "bytes[]" },
-              { type: "uint256" },
-              { type: "uint256" },
-              { type: "string" },
-            ],
-            [
-              BigInt(proposalId),
-              ACCOUNT as `0x${string}`,
-              targets,
-              values,
-              [],
-              calldatas,
-              BigInt(1),
-              BigInt(2),
-              serverDraft.description,
-            ]
-          ),
-        },
-      ],
-    };
-    const onProposalConfirmed = vi.fn().mockResolvedValue("recorded");
-    mocks.useReadContract.mockImplementation(
-      (options: { functionName?: string }) => ({
-        data:
-          options.functionName === "proposalThreshold"
-            ? BigInt(0)
-            : BigInt(100),
-        isLoading: false,
-      })
-    );
-    mocks.useSimulateContract.mockReturnValue({
-      data: { request: {} },
-      error: null,
-      isError: false,
-      isFetching: false,
-    });
-    mocks.useWriteContract.mockReturnValue({
-      error: null,
-      isPending: false,
-      writeContract: (
-        _request: unknown,
-        callbacks: { onSuccess: (hash: `0x${string}`) => void }
-      ) => callbacks.onSuccess(transactionHash),
-    });
-    mocks.useWaitForTransactionReceipt.mockImplementation(
-      ({ hash }: { hash?: string }) => ({
-        data: hash ? receipt : undefined,
-        isLoading: false,
-        isSuccess: Boolean(hash),
-        error: null,
-      })
-    );
-
-    const view = render(
-      <CreateProposalForm
-        initialDraft={stored}
-        onProposalConfirmed={onProposalConfirmed}
-      />
-    );
-    expect(onProposalConfirmed).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Submit Proposal" }));
-      await Promise.resolve();
-    });
-
-    expect(onProposalConfirmed).toHaveBeenCalledExactlyOnceWith({
-      transactionHash,
-      governorAddress: GOVERNORS.core.address,
-      proposalId,
-    });
-    expect(view.container.textContent).toContain(
-      "This draft is now marked submitted"
-    );
   });
 
   it("writes the anonymous slot a moment after the last edit, not before", () => {

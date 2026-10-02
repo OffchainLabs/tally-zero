@@ -1,14 +1,19 @@
 "use client";
 
+import { SiweGate } from "@/components/siwe/SiweGate";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
+import { isAddress, isHash } from "viem";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useSharedDraft } from "@/hooks/use-drafts";
+import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import {
   getProposalPreviewRehypePlugins,
@@ -127,6 +132,11 @@ export function SharedDraftView({ slug }: { slug: string }) {
                 </Button>
               )}
           </CardContent>
+          <CardContent>
+            <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
+              <MarkSubmittedForm slug={slug} />
+            </SiweGate>
+          </CardContent>
         </Card>
       )}
     </div>
@@ -134,29 +144,21 @@ export function SharedDraftView({ slug }: { slug: string }) {
 }
 
 function DraftActions({ draft }: { draft: Draft }) {
-  if (draft.actions.length === 0) {
-    return (
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle className="text-base">Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No actions yet — this draft is text only.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="text-base">
-          Actions ({draft.actions.length})
+          Actions{draft.actions.length > 0 && ` (${draft.actions.length})`}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent
+        className={draft.actions.length > 0 ? "space-y-3" : undefined}
+      >
+        {draft.actions.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No actions yet — this draft is text only.
+          </p>
+        )}
         {draft.actions.map((action, index) => (
           <div
             key={`${action.target}-${index}`}
@@ -216,6 +218,117 @@ function SubmittedCard({ draft }: { draft: Draft }) {
         >
           View proposal
         </a>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Attaches the transaction that put this draft on chain.
+ *
+ * Any signed-in user may record it, not just the author, matching the route:
+ * whoever submits a proposal is often not its author, and requiring the author
+ * to come back and record it would leave most drafts permanently marked
+ * unsubmitted. The session is still required, because the server records who
+ * made the entry. Rendered behind SiweGate for that reason.
+ */
+function MarkSubmittedForm({ slug }: { slug: string }) {
+  const { markSubmitted, isSubmitting, error } = useMarkSubmitted(slug);
+  const [transactionHash, setTransactionHash] = useState("");
+  const [governorAddress, setGovernorAddress] = useState("");
+  const [proposalId, setProposalId] = useState("");
+
+  // Mirrors the server's validators so a rejection is never a surprise.
+  const isValid =
+    isHash(transactionHash.trim()) &&
+    isAddress(governorAddress.trim(), { strict: false }) &&
+    /^\d+$/.test(proposalId.trim());
+
+  async function submit() {
+    if (!isValid || isSubmitting) return;
+    try {
+      await markSubmitted({
+        transactionHash: transactionHash.trim(),
+        governorAddress: governorAddress.trim(),
+        proposalId: proposalId.trim(),
+      });
+      toast.success("Recorded — this draft is now marked submitted.");
+    } catch {
+      // `error` renders below; the inputs stay filled so they can be corrected.
+    }
+  }
+
+  return (
+    <Card variant="glass">
+      <CardHeader>
+        <CardTitle className="text-base">
+          Record an on-chain submission
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          If this proposal has been submitted, link the transaction so anyone
+          holding this draft can follow it.
+        </p>
+
+        <div className="space-y-2">
+          <Label htmlFor="draft-tx-hash">Transaction hash</Label>
+          <Input
+            id="draft-tx-hash"
+            data-testid="draft-tx-hash"
+            className="font-mono"
+            placeholder="0x…"
+            autoComplete="off"
+            spellCheck={false}
+            value={transactionHash}
+            onChange={(event) => setTransactionHash(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="draft-governor">Governor address</Label>
+          <Input
+            id="draft-governor"
+            data-testid="draft-governor"
+            className="font-mono"
+            placeholder="0x…"
+            autoComplete="off"
+            spellCheck={false}
+            value={governorAddress}
+            onChange={(event) => setGovernorAddress(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="draft-proposal-id">Proposal id</Label>
+          <Input
+            id="draft-proposal-id"
+            data-testid="draft-proposal-id"
+            className="font-mono"
+            placeholder="Decimal id from the ProposalCreated event"
+            autoComplete="off"
+            spellCheck={false}
+            value={proposalId}
+            onChange={(event) => setProposalId(event.target.value)}
+          />
+        </div>
+
+        {error ? (
+          <p
+            className="text-sm text-destructive"
+            data-testid="draft-submit-error"
+          >
+            Could not record this submission. Please try again.
+          </p>
+        ) : null}
+
+        <Button
+          data-testid="mark-submitted"
+          onClick={submit}
+          disabled={!isValid || isSubmitting}
+        >
+          {isSubmitting ? "Recording…" : "Mark as submitted"}
+        </Button>
       </CardContent>
     </Card>
   );

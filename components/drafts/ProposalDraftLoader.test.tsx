@@ -1,16 +1,20 @@
-import type { ReactNode } from "react";
+// @vitest-environment jsdom
+import {
+  cleanup,
+  fireEvent,
+  render as renderView,
+} from "@testing-library/react";
+import { useState, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GOVERNORS } from "@/config/governors";
-import { computeProposalId, normalizeActions } from "@/lib/propose-utils";
 import type { Draft } from "@/lib/siwe/types";
 
 import {
-  type LastSaved,
   ProposalDraftLoader,
   resolveDraftBinding,
   saveAppliesTo,
+  type LastSaved,
 } from "./ProposalDraftLoader";
 
 /**
@@ -27,7 +31,8 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   useSiwe: vi.fn(),
   useDraft: vi.fn(),
-  markSubmitted: vi.fn(),
+  onProposalSubmitted: vi.fn(),
+  recording: vi.fn(),
   form: vi.fn(),
   dialog: vi.fn(),
 }));
@@ -42,7 +47,18 @@ vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 
 vi.mock("@/hooks/use-drafts", () => ({
   useDraft: mocks.useDraft,
-  useMarkSubmitted: () => ({ markSubmitted: mocks.markSubmitted }),
+}));
+
+vi.mock("@/hooks/use-draft-submission-recording", () => ({
+  useDraftSubmissionRecording: (draft: unknown, subject: string) => {
+    mocks.recording(draft, subject);
+    return {
+      status: null,
+      error: null,
+      retry: vi.fn(),
+      onProposalSubmitted: mocks.onProposalSubmitted,
+    };
+  },
 }));
 
 // The dialog pulls in the drafts hooks and the SIWE session; none of that is
@@ -58,12 +74,16 @@ vi.mock("@/components/drafts/SaveToAccountDialog", () => ({
 // and render the render prop's output the way the real form's submit row would,
 // so the (mocked) dialog sees its props.
 vi.mock("@/components/form/CreateProposalForm", () => ({
-  default: (props: {
+  default: function MockProposalForm(props: {
     renderDraftActions?: (snapshot: unknown) => ReactNode;
-  }) => {
+  }) {
+    const [confirmed, setConfirmed] = useState(false);
     mocks.form(props);
     return (
       <div data-testid="form">
+        <button onClick={() => setConfirmed(true)}>
+          {confirmed ? "Proposal created successfully" : "Submit proposal"}
+        </button>
         {props.renderDraftActions?.({
           description: "",
           governorType: "treasury",
@@ -117,12 +137,13 @@ function draftQuery(
 const render = () => renderToStaticMarkup(<ProposalDraftLoader />);
 
 describe("ProposalDraftLoader", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.searchParams = new URLSearchParams("draft=d1");
     session();
     draftQuery();
-    mocks.markSubmitted.mockResolvedValue(undefined);
   });
 
   it("mounts the plain form once when there is no ?draft=", () => {
@@ -229,45 +250,45 @@ describe("ProposalDraftLoader", () => {
     }
   );
 
-  it("records only the unchanged published proposal after the form confirms it", async () => {
+  it("scopes recording to the loaded published draft and subject", () => {
     const published: Draft = {
       ...DRAFT,
       status: "published",
       shareSlug: "shared",
-      actions: [
-        {
-          target: "0x2222222222222222222222222222222222222222",
-          value: "0",
-          calldata: "0x",
-        },
-      ],
     };
-    const { targets, values, calldatas } = normalizeActions(published.actions);
-    const proposalId = computeProposalId(
-      targets,
-      values,
-      calldatas,
-      published.description
-    );
     session({ isSignedIn: true });
     draftQuery({ data: published });
     render();
-
-    const confirm = mocks.form.mock.calls[0][0].onProposalConfirmed;
-    expect(confirm).toBeTypeOf("function");
-    const submission = {
-      transactionHash: `0x${"ab".repeat(32)}`,
-      governorAddress: GOVERNORS.treasury.address,
-      proposalId,
-    };
-    expect(await confirm(submission)).toBe("recorded");
-    expect(mocks.markSubmitted).toHaveBeenCalledWith(submission);
-
-    mocks.markSubmitted.mockClear();
-    expect(await confirm({ ...submission, proposalId: "42" })).toBe(
-      "different"
+    expect(mocks.recording).toHaveBeenCalledExactlyOnceWith(published, SUBJECT);
+    expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBe(
+      mocks.onProposalSubmitted
     );
-    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("does not mount recording for an editable draft", () => {
+    session({ isSignedIn: true });
+    draftQuery({ data: DRAFT });
+    render();
+    expect(mocks.recording).not.toHaveBeenCalled();
+  });
+
+  it("preserves form success when recording refreshes a published draft to submitted", () => {
+    session({ isSignedIn: true });
+    const published: Draft = {
+      ...DRAFT,
+      status: "published",
+      shareSlug: "shared",
+    };
+    draftQuery({ data: published });
+    const view = renderView(<ProposalDraftLoader />);
+    fireEvent.click(view.getByRole("button", { name: "Submit proposal" }));
+
+    draftQuery({ data: { ...published, status: "submitted" } });
+    view.rerender(<ProposalDraftLoader />);
+
+    expect(
+      view.getByRole("button", { name: "Proposal created successfully" })
+    ).toBeDefined();
   });
 
   it("does not offer recording for a different signed-in subject", () => {
@@ -276,7 +297,7 @@ describe("ProposalDraftLoader", () => {
       data: { ...DRAFT, status: "published", shareSlug: "shared" },
     });
     render();
-    expect(mocks.form.mock.calls[0][0].onProposalConfirmed).toBeUndefined();
+    expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBeUndefined();
   });
 
   it("explains and falls back to a blank form when signed out", () => {

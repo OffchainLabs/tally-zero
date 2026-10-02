@@ -28,11 +28,13 @@ vi.mock("next/link", () => ({
 afterEach(cleanup);
 
 describe("/proposals", () => {
-  it("shows New Proposal only after the SIWE session is signed in", () => {
+  it("keeps New Proposal available before and after signing in", () => {
     mocks.useSiwe.mockReturnValue({ isSignedIn: false });
     const view = render(<ProposalsPage />);
 
-    expect(view.queryByRole("link", { name: "New Proposal" })).toBeNull();
+    expect(
+      view.getByRole("link", { name: "New Proposal" }).getAttribute("href")
+    ).toBe("/proposal/new");
     expect(view.getByRole("link", { name: "My Drafts" })).toBeDefined();
 
     mocks.useSiwe.mockReturnValue({ isSignedIn: true });

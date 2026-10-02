@@ -9,6 +9,11 @@ import { cn } from "@/lib/utils";
 
 type ProposalView = "proposals" | "drafts";
 
+const VIEWS: { id: ProposalView; href: string; label: string }[] = [
+  { id: "proposals", href: "/proposals", label: "Proposals" },
+  { id: "drafts", href: "/drafts", label: "My Drafts" },
+];
+
 const VIEW_LINK_CLASS =
   "inline-flex h-9 items-center rounded-full px-5 text-sm font-medium transition-all duration-200";
 
@@ -35,30 +40,21 @@ export function ProposalsTabs({
           aria-label="Proposal views"
           className="inline-flex items-center gap-1 rounded-full glass-subtle backdrop-blur p-1"
         >
-          <Link
-            href="/proposals"
-            aria-current={active === "proposals" ? "true" : undefined}
-            className={cn(
-              VIEW_LINK_CLASS,
-              active === "proposals"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Proposals
-          </Link>
-          <Link
-            href="/drafts"
-            aria-current={active === "drafts" ? "true" : undefined}
-            className={cn(
-              VIEW_LINK_CLASS,
-              active === "drafts"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            My Drafts
-          </Link>
+          {VIEWS.map(({ id, href, label }) => (
+            <Link
+              key={id}
+              href={href}
+              aria-current={active === id ? "true" : undefined}
+              className={cn(
+                VIEW_LINK_CLASS,
+                active === id
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </Link>
+          ))}
         </nav>
 
         {active === "proposals" && showNewProposal ? (

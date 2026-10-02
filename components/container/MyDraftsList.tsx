@@ -12,11 +12,12 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { SiweGate } from "@/components/siwe/SiweGate";
+import { SiweAction } from "@/components/siwe/SiweGate";
 import { Button } from "@/components/ui/Button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useDraftMutations, useDraftsList } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
+import { getErrorMessage } from "@/lib/error-utils";
 import type {
   DraftGovernorType,
   DraftStatus,
@@ -28,6 +29,12 @@ const GOVERNOR_LABEL: Record<DraftGovernorType, string> = {
   TREASURY: "Treasury",
 };
 
+/**
+ * Draft lifecycle: draft (private and editable) → published (frozen and shared)
+ * → submitted (an on-chain submission has been recorded).
+ * Publishing and deleting are irreversible, so the second click stays on the
+ * row to make it clear which draft is about to change.
+ */
 const STATUS_LABEL: Record<DraftStatus, string> = {
   draft: "Draft",
   published: "Published",
@@ -42,10 +49,7 @@ export default function MyDraftsList() {
   const content = isLoadingSession ? (
     <LoadingState />
   ) : !isConnected || !isSignedIn ? (
-    <EmptyState
-      title="Sign in to see your drafts"
-      action={<SiweGate actionOnly />}
-    >
+    <EmptyState title="Sign in to see your drafts" action={<SiweAction />}>
       Drafts are saved to your account from the New Proposal page, so they
       follow you across devices. Anything you have typed there is kept in this
       browser until you save it. Signing in only signs a message; no transaction
@@ -146,18 +150,19 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   );
   const isEditable = draft.status === "draft";
 
-  async function run(action: "publish" | "delete") {
+  async function confirm() {
+    if (!confirming) return;
+    const isPublish = confirming === "publish";
     try {
-      if (action === "publish") {
-        await publishDraft(draft.id);
-        toast.success("Draft published — the share link is ready.");
-      } else {
-        await deleteDraft(draft.id);
-        toast.success("Draft deleted.");
-      }
+      await (isPublish ? publishDraft : deleteDraft)(draft.id);
+      toast.success(
+        isPublish
+          ? "Draft published — the share link is ready."
+          : "Draft deleted."
+      );
     } catch (cause) {
       toast.error(
-        cause instanceof Error ? cause.message : `Failed to ${action} draft.`
+        getErrorMessage(cause, isPublish ? "publish draft" : "delete draft")
       );
     } finally {
       setConfirming(null);
@@ -192,7 +197,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
             variant={confirming === "delete" ? "destructive" : "default"}
             data-testid={`confirm-${confirming}`}
             disabled={isPublishing || isDeleting}
-            onClick={() => run(confirming)}
+            onClick={confirm}
           >
             Yes, {confirming}
           </Button>

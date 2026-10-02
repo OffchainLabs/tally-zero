@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { siweApi } from "./client";
 import { SAFES_SCOPE, siweKeys, SUBJECT_SCOPE } from "./keys";
-import type { MeResponse } from "./types";
+import { meQueryOptions } from "./queries";
 
 const pendingWalletLogouts = new WeakMap<QueryClient, Promise<void>>();
 
@@ -34,27 +34,33 @@ export function clearAndReconcileSession(
 }
 
 /** Revoke a live session if it belongs to a different connected wallet. */
-export function logoutPreviousWalletSession(
+export async function logoutPreviousWalletSession(
   queryClient: QueryClient,
   connectedAddress: string
+): Promise<void> {
+  // Every caller checks its own wallet after any earlier revocation finishes.
+  await pendingWalletLogouts.get(queryClient);
+  const session = await queryClient.fetchQuery({
+    ...meQueryOptions,
+    staleTime: 0,
+  });
+  if (
+    !session ||
+    session.address.toLowerCase() === connectedAddress.toLowerCase()
+  ) {
+    return;
+  }
+  return logoutWalletSessionSingleFlight(queryClient);
+}
+
+/** Share only the address-independent cookie revocation. */
+function logoutWalletSessionSingleFlight(
+  queryClient: QueryClient
 ): Promise<void> {
   const pending = pendingWalletLogouts.get(queryClient);
   if (pending) return pending;
 
   const logout = (async () => {
-    // Re-read the cookie before revoking it. Another tab may have replaced the
-    // cached session since it was last fetched.
-    const session = await queryClient.fetchQuery<MeResponse | null>({
-      queryKey: siweKeys.me,
-      queryFn: () => siweApi.me(),
-      staleTime: 0,
-    });
-    if (
-      !session ||
-      session.address.toLowerCase() === connectedAddress.toLowerCase()
-    ) {
-      return;
-    }
     await siweApi.logout();
     await clearAndReconcileSession(queryClient);
   })().finally(() => pendingWalletLogouts.delete(queryClient));

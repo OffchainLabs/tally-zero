@@ -9,16 +9,41 @@ const proposalCreatedEvent = parseAbiItem(
   "event ProposalCreated(uint256 proposalId, address proposer, address[] targets, uint256[] values, string[] signatures, bytes[] calldatas, uint256 startBlock, uint256 endBlock, string description)"
 );
 
-/** Derive submission details from the confirmed governor event, not user input. */
-export function submissionFromReceipt(
+export type DraftReceiptCheck =
+  | { kind: "match"; submission: DraftSubmission }
+  | { kind: "different" | "missing" };
+
+/** UI verification only; the indexer remains responsible for trusted records. */
+export function checkDraftReceipt(
   receipt: TransactionReceipt,
-  governorAddress: string,
-  predictedProposalId: string
-): DraftSubmission | null {
-  if (receipt.status !== "success") return null;
+  draft: Draft
+): DraftReceiptCheck {
+  if (receipt.status !== "success" || draft.status !== "published")
+    return { kind: "missing" };
+  const governorAddress =
+    GOVERNORS[fromDraftGovernorType(draft.governorType)].address;
+  let proposalId: string;
+  try {
+    const { targets, values, calldatas } = normalizeActions(draft.actions);
+    proposalId = computeProposalId(
+      targets,
+      values,
+      calldatas,
+      draft.description
+    );
+  } catch {
+    return { kind: "different" };
+  }
+  let sawDifferentProposal = false;
 
   for (const log of receipt.logs) {
-    if (log.address.toLowerCase() !== governorAddress.toLowerCase()) continue;
+    if (
+      !Object.values(GOVERNORS).some(
+        (governor) =>
+          governor.address.toLowerCase() === log.address.toLowerCase()
+      )
+    )
+      continue;
     try {
       const event = decodeEventLog({
         abi: [proposalCreatedEvent],
@@ -27,42 +52,23 @@ export function submissionFromReceipt(
       });
       if (
         event.eventName === "ProposalCreated" &&
-        event.args.proposalId.toString() === predictedProposalId
+        log.address.toLowerCase() === governorAddress.toLowerCase() &&
+        event.args.proposalId.toString() === proposalId
       ) {
         return {
-          transactionHash: receipt.transactionHash,
-          governorAddress,
-          proposalId: event.args.proposalId.toString(),
+          kind: "match",
+          submission: {
+            transactionHash: receipt.transactionHash,
+            governorAddress,
+            proposalId: event.args.proposalId.toString(),
+          },
         };
       }
+      sawDifferentProposal = true;
     } catch {
       // Other logs from the same governor are irrelevant.
     }
   }
 
-  return null;
-}
-
-/** A changed form may be submitted, but it must not submit the frozen draft. */
-export function submissionMatchesPublishedDraft(
-  draft: Draft,
-  submission: DraftSubmission
-): boolean {
-  if (draft.status !== "published") return false;
-  const governor = GOVERNORS[fromDraftGovernorType(draft.governorType)];
-  if (
-    submission.governorAddress.toLowerCase() !== governor.address.toLowerCase()
-  ) {
-    return false;
-  }
-
-  try {
-    const { targets, values, calldatas } = normalizeActions(draft.actions);
-    return (
-      computeProposalId(targets, values, calldatas, draft.description) ===
-      submission.proposalId
-    );
-  } catch {
-    return false;
-  }
+  return { kind: sawDifferentProposal ? "different" : "missing" };
 }

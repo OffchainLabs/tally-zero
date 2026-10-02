@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import DraftsPage from "@/app/(marketing)/drafts/page";
+import DraftsPage from "@/app/drafts/page";
 import type { DraftSummary } from "@/lib/siwe/types";
 
 import MyDraftsList from "./MyDraftsList";
