@@ -118,9 +118,7 @@ function DraftsContent() {
           data-testid="drafts-list"
         >
           {sorted.map((draft) => (
-            <li key={draft.id}>
-              <DraftRow draft={draft} />
-            </li>
+            <DraftRow key={draft.id} draft={draft} />
           ))}
         </ul>
       )}
@@ -132,27 +130,35 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const isEditable = draft.status === "draft";
 
   return (
-    <Link
-      href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
-      className="group flex items-center gap-4 p-4 transition-colors hover:bg-white/[0.03]"
-    >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <FileText className="h-5 w-5" />
+    <li className="flex flex-col gap-3 p-4">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            {draft.title}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {GOVERNOR_LABEL[draft.governorType]} · {STATUS_LABEL[draft.status]}{" "}
+            · Updated {new Date(draft.updatedAt).toLocaleString()}
+          </p>
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">
-          {draft.title}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {GOVERNOR_LABEL[draft.governorType]} · {STATUS_LABEL[draft.status]} ·
-          Updated {new Date(draft.updatedAt).toLocaleString()}
-        </p>
-      </div>
-      <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
-        {isEditable ? "Continue editing" : "Open as copy"}
-        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-      </span>
-    </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link
+              href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
+              data-testid="open-draft"
+            >
+              {isEditable
+                ? "Continue editing"
+                : "Open as copy"}
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+    </li>
   );
 }
 
