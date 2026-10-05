@@ -43,6 +43,14 @@ export function useDraftSubmissionRecording(
   const attemptedHash = useRef<string | null>(null);
   const recordingHash = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (draft.status !== "published") return;
+    const saved = readPendingSubmission(key);
+    if (saved) {
+      setPending(saved);
+      setStatus("confirming");
+    }
+  }, [key, draft.status]);
 
   const onProposalSubmitted = useCallback(
     ({
@@ -132,5 +140,23 @@ export function useDraftSubmissionRecording(
     }
   }, [draft, pending, receipt, receiptError, key, record]);
 
-  return { status, error, canRetry: false, retry: async () => {}, onProposalSubmitted };
+  const canRetry =
+    status === "failed" ||
+    (status === "receipt-error" && !!pending && !!receiptError);
+  const retry = async () => {
+    if (status === "receipt-error" && pending && receiptError) {
+      setStatus("confirming");
+      setError(null);
+      const result = await refetch();
+      if (result.error) {
+        setStatus("receipt-error");
+        setError(getErrorMessage(result.error, "confirm proposal"));
+      }
+      return;
+    }
+    if (!receipt || status !== "failed") return;
+    const checked = checkDraftReceipt(receipt, draft);
+    if (checked.kind === "match") await record(checked.submission);
+  };
+  return { status, error, canRetry, retry, onProposalSubmitted };
 }
