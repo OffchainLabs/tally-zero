@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useWaitForTransactionReceipt } from "wagmi";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
@@ -35,6 +35,14 @@ export function useDraftSubmissionRecording(
   subject: string,
 ) {
   const key = draftSubmissionStorageKey(draft.id, subject);
+  const recorderId = useId();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const { markSubmitted } = useMarkSubmitted(draft.shareSlug);
   const [pending, setPending] = useState<PendingDraftSubmission | null>(null);
   const [status, setStatus] = useState<RecordingStatus>(
@@ -90,6 +98,32 @@ export function useDraftSubmissionRecording(
   } = useWaitForTransactionReceipt({
     chainId: ARBITRUM_CHAIN_ID,
     hash: pending?.transactionHash,
+    // The form also waits for this hash. Give each query its own replacement
+    // callback; viem still shares the underlying transaction observer.
+    scopeKey: `${key}:${recorderId}`,
+    onReplaced: ({ reason, transactionReceipt }) => {
+      if (
+        !mounted.current ||
+        !pending ||
+        pendingHash.current !== pending.transactionHash
+      )
+        return;
+      const saved = readPendingSubmission(key);
+      if (saved && saved.transactionHash !== pending.transactionHash) return;
+      clearPendingSubmission(key, pending.transactionHash);
+      if (reason === "cancelled") {
+        setPending(null);
+        setStatus("receipt-error");
+        setError(
+          "Proposal transaction was cancelled. The draft was not marked submitted.",
+        );
+      } else {
+        onProposalSubmitted({
+          hash: transactionReceipt.transactionHash,
+          governorAddress: pending.governorAddress,
+        });
+      }
+    },
   });
 
   const receipt = awaitedReceipt;
