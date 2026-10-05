@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
 import CreateProposalForm, {
@@ -13,6 +13,8 @@ import { useDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { draftToFormState } from "@/lib/drafts/mapping";
 import type { Draft } from "@/lib/siwe/types";
+
+type ProposalFormProps = ComponentProps<typeof CreateProposalForm>;
 
 /**
  * Which stored draft the save button writes to, given the draft the page was
@@ -151,6 +153,46 @@ export function ProposalDraftLoader() {
 
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
+  const formProps: ProposalFormProps = {
+    initialDraft: restored,
+    // The autosave slot is named after the draft on screen, while the save
+    // dialog below writes to the binding. They differ for a published or
+    // submitted draft before its first save: bound to nothing, but its
+    // contents must not share the anonymous form's slot.
+    draftId: binding.draftId ?? draft?.id ?? null,
+    serverSave,
+    accountAddress: effectiveAddress,
+    renderDraftActions: (snapshot) => (
+      <SaveToAccountDialog
+        snapshot={snapshot}
+        draftId={binding.draftId}
+        initialTitle={binding.initialTitle}
+        saveAsNew={binding.saveAsNew}
+        onSaved={(saved) => {
+          if (activeSaveSessionRef.current !== saveSession) return;
+          setLastSaved({
+            openedOn: draftId,
+            draft: saved,
+            serverSave: {
+              at: Date.now(),
+              address: effectiveAddress,
+              snapshot,
+            },
+            moved: false,
+          });
+          // A create (blank form, or a copy of a frozen draft) leaves the
+          // URL pointing at nothing or at the original. Move it to the new
+          // draft so a reload comes back here. useDraftMutations seeded the
+          // new draft's query, so the skeleton gate does not unmount the
+          // form while it would otherwise fetch.
+          if (saved.id !== draftId) {
+            router.replace(`${pathname}?draft=${encodeURIComponent(saved.id)}`);
+          }
+        }}
+      />
+    ),
+  };
+
 
   return (
     <div className="flex flex-col gap-4">
@@ -172,47 +214,7 @@ export function ProposalDraftLoader() {
         </p>
       ) : null}
 
-      <CreateProposalForm
-        initialDraft={restored}
-        // The autosave slot is named after the draft on screen, while the save
-        // dialog below writes to the binding. They differ for a published or
-        // submitted draft before its first save: bound to nothing, but its
-        // contents must not share the anonymous form's slot.
-        draftId={binding.draftId ?? draft?.id ?? null}
-        serverSave={serverSave}
-        accountAddress={effectiveAddress}
-        renderDraftActions={(snapshot) => (
-          <SaveToAccountDialog
-            snapshot={snapshot}
-            draftId={binding.draftId}
-            initialTitle={binding.initialTitle}
-            saveAsNew={binding.saveAsNew}
-            onSaved={(saved) => {
-              if (activeSaveSessionRef.current !== saveSession) return;
-              setLastSaved({
-                openedOn: draftId,
-                draft: saved,
-                serverSave: {
-                  at: Date.now(),
-                  address: effectiveAddress,
-                  snapshot,
-                },
-                moved: false,
-              });
-              // A create (blank form, or a copy of a frozen draft) leaves the
-              // URL pointing at nothing or at the original. Move it to the new
-              // draft so a reload comes back here. useDraftMutations seeded the
-              // new draft's query, so the skeleton gate does not unmount the
-              // form while it would otherwise fetch.
-              if (saved.id !== draftId) {
-                router.replace(
-                  `${pathname}?draft=${encodeURIComponent(saved.id)}`
-                );
-              }
-            }}
-          />
-        )}
-      />
+      <CreateProposalForm {...formProps} />
     </div>
   );
 }
