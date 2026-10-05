@@ -1,13 +1,22 @@
 "use client";
 
-import { ArrowRight, FileText, Plus } from "lucide-react";
+import {
+  ArrowRight,
+  ExternalLink,
+  FileText,
+  Plus,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { SiweAction } from "@/components/siwe/SiweGate";
 import { Button } from "@/components/ui/Button";
-import { useDraftsList } from "@/hooks/use-drafts";
+import { useDraftMutations, useDraftsList } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
+import { getErrorMessage } from "@/lib/error-utils";
 import type {
   DraftGovernorType,
   DraftStatus,
@@ -127,7 +136,31 @@ function DraftsContent() {
 }
 
 function DraftRow({ draft }: { draft: DraftSummary }) {
+  const { publishDraft, deleteDraft, isPublishing, isDeleting } =
+    useDraftMutations();
+  const [confirming, setConfirming] = useState<"publish" | "delete" | null>(
+    null
+  );
   const isEditable = draft.status === "draft";
+
+  async function confirm() {
+    if (!confirming) return;
+    const isPublish = confirming === "publish";
+    try {
+      await (isPublish ? publishDraft : deleteDraft)(draft.id);
+      toast.success(
+        isPublish
+          ? "Draft published — the share link is ready."
+          : "Draft deleted."
+      );
+    } catch (cause) {
+      toast.error(
+        getErrorMessage(cause, isPublish ? "publish draft" : "delete draft")
+      );
+    } finally {
+      setConfirming(null);
+    }
+  }
 
   return (
     <li className="flex flex-col gap-3 p-4">
@@ -145,6 +178,31 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           </p>
         </div>
       </div>
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-amber-400">
+            {confirming === "publish"
+              ? "Publishing freezes this draft against further edits and creates a public share link. This cannot be undone."
+              : "Delete this draft permanently?"}
+          </p>
+          <Button
+            size="sm"
+            variant={confirming === "delete" ? "destructive" : "default"}
+            data-testid={`confirm-${confirming}`}
+            disabled={isPublishing || isDeleting}
+            onClick={confirm}
+          >
+            Yes, {confirming}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirming(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" asChild>
             <Link
@@ -157,7 +215,30 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
+          {isEditable ? (
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="publish-draft"
+              onClick={() => setConfirming("publish")}
+            >
+              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              Publish
+            </Button>
+          ) : null}
+          {isEditable ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              data-testid="delete-draft"
+              onClick={() => setConfirming("delete")}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          ) : null}
         </div>
+      )}
     </li>
   );
 }
