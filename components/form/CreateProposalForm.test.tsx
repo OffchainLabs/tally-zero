@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   useSimulateContract: vi.fn(),
   useWaitForTransactionReceipt: vi.fn(),
   useWriteContract: vi.fn(),
-  writeContract: vi.fn(),
+  writeContractAsync: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }));
 
@@ -76,7 +76,7 @@ describe("CreateProposalForm snapshot block annotation", () => {
     mocks.useWriteContract.mockReturnValue({
       error: null,
       isPending: false,
-      writeContract: mocks.writeContract,
+      writeContractAsync: mocks.writeContractAsync,
     });
     mocks.useWaitForTransactionReceipt.mockReturnValue({
       isLoading: false,
