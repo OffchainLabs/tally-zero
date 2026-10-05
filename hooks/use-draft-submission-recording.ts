@@ -10,6 +10,7 @@ import {
   clearPendingSubmission,
   readPendingSubmission,
   savePendingSubmission,
+  subscribePendingSubmission,
   type PendingDraftSubmission,
 } from "@/lib/drafts/submission-recovery";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -31,18 +32,35 @@ type RecordingStatus =
 /** Mount under a key scoped to the draft and signed-in subject. */
 export function useDraftSubmissionRecording(
   draft: RecordableDraft,
-  subject: string
+  subject: string,
 ) {
   const key = draftSubmissionStorageKey(draft.id, subject);
   const { markSubmitted } = useMarkSubmitted(draft.shareSlug);
   const [pending, setPending] = useState<PendingDraftSubmission | null>(null);
   const [status, setStatus] = useState<RecordingStatus>(
-    draft.status === "submitted" ? "recorded" : null
+    draft.status === "submitted" ? "recorded" : null,
   );
   const [error, setError] = useState<string | null>(null);
+  const pendingHash = useRef<string | null>(null);
   const attemptedHash = useRef<string | null>(null);
   const recordingHash = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (draft.status !== "published") return;
+    const restore = () => {
+      const saved = readPendingSubmission(key);
+      if (saved && saved.transactionHash !== pendingHash.current) {
+        pendingHash.current = saved.transactionHash;
+        attemptedHash.current = null;
+        setPending(saved);
+        setError(null);
+        setStatus("confirming");
+      }
+    };
+    const unsubscribe = subscribePendingSubmission(key, restore);
+    restore();
+    return unsubscribe;
+  }, [key, draft.status]);
 
   const onProposalSubmitted = useCallback(
     ({
@@ -55,13 +73,14 @@ export function useDraftSubmissionRecording(
       if (draft.status !== "published") return;
       const next = { transactionHash: hash, governorAddress };
       // Persist at broadcast, before either the receipt or the API write.
+      pendingHash.current = hash;
       savePendingSubmission(key, next);
       attemptedHash.current = null;
       setPending(next);
       setError(null);
       setStatus("confirming");
     },
-    [key, draft.status]
+    [key, draft.status],
   );
 
   const {
@@ -71,7 +90,6 @@ export function useDraftSubmissionRecording(
   } = useWaitForTransactionReceipt({
     chainId: ARBITRUM_CHAIN_ID,
     hash: pending?.transactionHash,
-
   });
 
   const receipt = awaitedReceipt;
@@ -85,8 +103,10 @@ export function useDraftSubmissionRecording(
       try {
         await markSubmitted(submission);
         clearPendingSubmission(key, submission.transactionHash);
-        if (attemptedHash.current === submission.transactionHash)
+        if (attemptedHash.current === submission.transactionHash) {
+          pendingHash.current = null;
           setStatus("recorded");
+        }
       } catch (cause) {
         if (attemptedHash.current === submission.transactionHash) {
           setStatus("failed");
@@ -96,7 +116,7 @@ export function useDraftSubmissionRecording(
         recordingHash.current = null;
       }
     },
-    [key, markSubmitted]
+    [key, markSubmitted],
   );
 
   useEffect(() => {
@@ -115,11 +135,12 @@ export function useDraftSubmissionRecording(
     if (attemptedHash.current === pending.transactionHash) return;
     attemptedHash.current = pending.transactionHash;
     if (receipt.status === "reverted") {
+      pendingHash.current = null;
       clearPendingSubmission(key, pending.transactionHash);
       setPending(null);
       setStatus("receipt-error");
       setError(
-        "Proposal transaction reverted. The draft was not marked submitted."
+        "Proposal transaction reverted. The draft was not marked submitted.",
       );
       return;
     }
@@ -127,10 +148,32 @@ export function useDraftSubmissionRecording(
     if (checked.kind === "match") {
       void record(checked.submission);
     } else {
+      pendingHash.current = null;
       clearPendingSubmission(key, pending.transactionHash);
       setStatus(checked.kind);
     }
   }, [draft, pending, receipt, receiptError, key, record]);
 
-  return { status, error, canRetry: false, retry: async () => {}, onProposalSubmitted };
+  const canRetry =
+    status === "failed" ||
+    (status === "receipt-error" && !!pending && !!receiptError);
+  const retry = async () => {
+    if (!pending || pendingHash.current !== pending.transactionHash) return;
+    const retryHash = pending.transactionHash;
+    if (status === "receipt-error" && pending && receiptError) {
+      setStatus("confirming");
+      setError(null);
+      const result = await refetch();
+      if (pendingHash.current !== retryHash) return;
+      if (result.error) {
+        setStatus("receipt-error");
+        setError(getErrorMessage(result.error, "confirm proposal"));
+      }
+      return;
+    }
+    if (!receipt || status !== "failed") return;
+    const checked = checkDraftReceipt(receipt, draft);
+    if (checked.kind === "match") await record(checked.submission);
+  };
+  return { status, error, canRetry, retry, onProposalSubmitted };
 }
