@@ -129,12 +129,17 @@ it("surfaces a revert to the form and the recorder through wagmi's retries", asy
     await waitFor(() =>
       expect(view.result.current.recorder.status).toBe("receipt-error")
     );
-    expect(view.result.current.recorder.canRetry).toBe(true);
+    // The raw receipt read after the error verifies the revert, so the
+    // recorder reports it as final instead of offering a retry.
+    await waitFor(() =>
+      expect(view.result.current.recorder.error).toContain("reverted")
+    );
+    expect(view.result.current.recorder.canRetry).toBe(false);
     expect(
       request.mock.calls.filter(
         ([{ method }]) => method === "eth_getTransactionReceipt"
       )
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   } finally {
     view.unmount();
     queryClient.clear();
