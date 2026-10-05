@@ -6,6 +6,7 @@ import { GovernanceStatCards } from "@/components/container/GovernanceStatCards"
 import { ProposalsTabs } from "@/components/container/ProposalsTabs";
 import Search from "@/components/container/Search";
 import SearchSkeleton from "@/components/container/SearchSkeleton";
+import { useSiwe } from "@/hooks/use-siwe";
 
 export interface HomeViewProps {
   /**
@@ -23,6 +24,7 @@ export interface HomeViewProps {
  */
 export function HomeView({ banner }: HomeViewProps) {
   const [proposalCount, setProposalCount] = useState<number | null>(null);
+  const { isSignedIn } = useSiwe();
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,7 +34,7 @@ export function HomeView({ banner }: HomeViewProps) {
         {banner}
         <GovernanceStatCards proposalCount={proposalCount} />
       </div>
-      <ProposalsTabs>
+      <ProposalsTabs showNewProposal={isSignedIn}>
         <Suspense fallback={<SearchSkeleton />}>
           <Search onProposalCountChange={setProposalCount} />
         </Suspense>
