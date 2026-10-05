@@ -96,3 +96,44 @@ function GateCard({
     </Card>
   );
 }
+
+/** Connect or sign in inside the caller's own layout. */
+export function SiweAction() {
+  const { open } = useAppKit();
+  const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
+    useSiwe();
+  if (isSignedIn) return null;
+  if (!isConnected) {
+    return (
+      <div data-testid="siwe-connect">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void open({ view: "Connect" })}
+        >
+          Connect Wallet
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="siwe-sign-in"
+        disabled={isSigningIn}
+        onClick={() => {
+          signIn().catch(() => {});
+        }}
+      >
+        {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
+      </Button>
+      {signInError ? (
+        <p className="text-sm text-destructive" data-testid="siwe-error">
+          {signInError.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
