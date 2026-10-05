@@ -42,37 +42,14 @@ export function resolveDraftBinding(
   // an update that would fail after the user has typed.
   const isEditable = !opened || opened.status === "draft";
 
-  if (saved) {
-    return {
-      isEditable,
-      draftId: saved.id,
-      initialTitle: saved.title,
-      saveAsNew: false,
-    };
-  }
-
-  if (!opened) {
-    return {
-      isEditable,
-      draftId: null,
-      initialTitle: undefined,
-      saveAsNew: false,
-    };
-  }
-
-  return isEditable
-    ? {
-        isEditable,
-        draftId: opened.id,
-        initialTitle: opened.title,
-        saveAsNew: false,
-      }
-    : {
-        isEditable,
-        draftId: null,
-        initialTitle: `${opened.title} (copy)`,
-        saveAsNew: true,
-      };
+  const bound = saved ?? (isEditable ? opened : null);
+  return {
+    isEditable,
+    draftId: bound?.id ?? null,
+    initialTitle:
+      bound?.title ?? (opened ? `${opened.title} (copy)` : undefined),
+    saveAsNew: !bound && !!opened,
+  };
 }
 
 /** The draft the last save returned, and the ?draft= the page had at the time. */
