@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useWaitForTransactionReceipt } from "wagmi";
+import { useTransactionReceipt, useWaitForTransactionReceipt } from "wagmi";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { draftSubmissionStorageKey } from "@/config/storage-keys";
@@ -100,7 +100,15 @@ export function useDraftSubmissionRecording(
     },
   });
 
-  const receipt = awaitedReceipt;
+  // wagmi's wait action throws for reverted receipts. Read the raw receipt
+  // after an error to distinguish a verified revert from an RPC outage.
+  const { data: rawReceipt, refetch: refetchReceipt } = useTransactionReceipt({
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: pending?.transactionHash,
+    scopeKey: key,
+    query: { enabled: !!pending && !!receiptError, retry: false },
+  });
+  const receipt = awaitedReceipt ?? rawReceipt;
 
   const record = useCallback(
     async (submission: DraftSubmission) => {
@@ -167,8 +175,11 @@ export function useDraftSubmissionRecording(
       setError(null);
       const result = await refetch();
       if (result.error) {
-        setStatus("receipt-error");
-        setError(getErrorMessage(result.error, "confirm proposal"));
+        const verified = await refetchReceipt();
+        if (!verified.data) {
+          setStatus("receipt-error");
+          setError(getErrorMessage(result.error, "confirm proposal"));
+        }
       }
       return;
     }
