@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { SiweAction } from "@/components/siwe/SiweGate";
 import { Button } from "@/components/ui/Button";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useDraftMutations, useDraftsList } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -138,6 +139,7 @@ function DraftsContent() {
 function DraftRow({ draft }: { draft: DraftSummary }) {
   const { publishDraft, deleteDraft, isPublishing, isDeleting } =
     useDraftMutations();
+  const { copy, copied } = useCopyToClipboard();
   const [confirming, setConfirming] = useState<"publish" | "delete" | null>(
     null
   );
@@ -211,7 +213,9 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
             >
               {isEditable
                 ? "Continue editing"
-                : "Open as copy"}
+                : draft.status === "published"
+                  ? "Open to submit"
+                  : "Open as copy"}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -225,6 +229,28 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
               <Share2 className="mr-1.5 h-3.5 w-3.5" />
               Publish
             </Button>
+          ) : null}
+          {draft.shareSlug ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="copy-share-link"
+                onClick={() =>
+                  copy(
+                    `${window.location.origin}/drafts/shared/${draft.shareSlug}`
+                  )
+                }
+              >
+                {copied ? "Copied!" : "Copy share link"}
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <Link href={`/drafts/shared/${draft.shareSlug}`}>
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+            </>
           ) : null}
           {isEditable ? (
             <Button
