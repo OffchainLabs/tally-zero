@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }));
 
+vi.mock("@reown/appkit/react", () => ({
+  useAppKit: () => ({ open: vi.fn() }),
+}));
+
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 vi.mock("@/hooks/use-drafts", () => ({
   useSharedDraft: mocks.useSharedDraft,
