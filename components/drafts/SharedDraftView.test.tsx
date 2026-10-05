@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SiweApiError } from "@/lib/siwe/client";
@@ -18,12 +18,11 @@ const mocks = vi.hoisted(() => ({
   useSiwe: vi.fn(),
   useSharedDraft: vi.fn(),
   markSubmitted: vi.fn(),
-  submitError: null as Error | null,
-  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+  open: vi.fn(),
 }));
 
 vi.mock("@reown/appkit/react", () => ({
-  useAppKit: () => ({ open: vi.fn() }),
+  useAppKit: () => ({ open: mocks.open }),
 }));
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
@@ -32,10 +31,9 @@ vi.mock("@/hooks/use-drafts", () => ({
   useMarkSubmitted: () => ({
     markSubmitted: mocks.markSubmitted,
     isSubmitting: false,
-    error: mocks.submitError,
+    error: null,
   }),
 }));
-vi.mock("sonner", () => ({ toast: mocks.toast }));
 
 const AUTHOR = "0x1111111111111111111111111111111111111111";
 const GOVERNOR = "0x3333333333333333333333333333333333333333";
@@ -74,6 +72,7 @@ const signedIn = () =>
   mocks.useSiwe.mockReturnValue({
     isConnected: true,
     isSignedIn: true,
+    effectiveAddress: AUTHOR,
     signIn: vi.fn(),
     isSigningIn: false,
     signInError: null,
@@ -82,8 +81,6 @@ const signedIn = () =>
 describe("SharedDraftView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.submitError = null;
-    mocks.markSubmitted.mockResolvedValue(draft({ status: "submitted" }));
     signedIn();
   });
 
@@ -218,7 +215,7 @@ describe("SharedDraftView", () => {
     ).toContain("text only");
   });
 
-  it("shows the submission instead of the form once on chain", () => {
+  it("shows the recorded submission once on chain", () => {
     loaded(
       draft({
         status: "submitted",
@@ -232,12 +229,12 @@ describe("SharedDraftView", () => {
       })
     );
 
-    const { container, queryByTestId } = render(
-      <SharedDraftView slug="abc123" />
-    );
+    const { container } = render(<SharedDraftView slug="abc123" />);
 
     expect(container.textContent).toContain("Submitted on chain");
-    expect(queryByTestId("mark-submitted")).toBeNull();
+    expect(
+      container.querySelector('a[href="/proposal/new?draft=d1"]')
+    ).toBeNull();
     expect(
       container.querySelector(`a[href="https://arbiscan.io/tx/${TX}"]`)
     ).not.toBeNull();
@@ -246,109 +243,61 @@ describe("SharedDraftView", () => {
     ).not.toBeNull();
   });
 
-  // The read is public; the record is not, because the server signs it with the
-  // session's subject. The gate's copy has to be about this page, not profiles.
-  it("keeps the draft public but gates the form behind a session", () => {
+  it("lets the author open a published draft in the proposal form", () => {
+    loaded(draft());
+    const { container } = render(<SharedDraftView slug="abc123" />);
+
+    expect(container.textContent).toContain("Open to submit on chain");
+    expect(
+      container.querySelector('a[href="/proposal/new?draft=d1"]')
+    ).not.toBeNull();
+    expect(container.querySelector("input")).not.toBeNull();
+  });
+
+  it("keeps the published draft readable without offering submission to a reviewer", () => {
     loaded(draft());
     mocks.useSiwe.mockReturnValue({
       isConnected: false,
       isSignedIn: false,
-      signIn: vi.fn(),
-      isSigningIn: false,
-      signInError: null,
+      effectiveAddress: null,
     });
 
-    const disconnected = render(<SharedDraftView slug="abc123" />);
-    expect(disconnected.queryByTestId("shared-draft-title")).not.toBeNull();
-    expect(disconnected.queryByTestId("mark-submitted")).toBeNull();
-    // The connect step has no button of its own to hang a test on, so the card
-    // carries the hook. The drafts e2e spec matches on it rather than the copy.
-    expect(disconnected.queryByTestId("siwe-connect")).not.toBeNull();
-    expect(disconnected.container.textContent).toContain(
-      "record this draft's on-chain submission"
-    );
-    expect(disconnected.container.textContent).not.toContain(
-      "delegate profile"
-    );
-    cleanup();
-
-    mocks.useSiwe.mockReturnValue({
-      isConnected: true,
-      isSignedIn: false,
-      signIn: vi.fn(),
-      isSigningIn: false,
-      signInError: null,
-    });
-
-    const connected = render(<SharedDraftView slug="abc123" />);
-    expect(connected.queryByTestId("siwe-sign-in")).not.toBeNull();
-    expect(connected.queryByTestId("mark-submitted")).toBeNull();
+    const view = render(<SharedDraftView slug="abc123" />);
+    expect(view.getByTestId("shared-draft-title")).toBeDefined();
+    expect(view.container.textContent).toContain("not been submitted on chain");
+    expect(
+      view.container.querySelector('a[href="/proposal/new?draft=d1"]')
+    ).toBeNull();
+    expect(view.container.querySelector("input")).toBeNull();
   });
-
-  it("stays disabled until every field matches what the server accepts", () => {
+  it("lets a signed-in delegate record another author's submission", async () => {
     loaded(draft());
-
-    const { getByTestId } = render(<SharedDraftView slug="abc123" />);
-    const button = getByTestId("mark-submitted") as HTMLButtonElement;
-
-    expect(button.disabled).toBe(true);
-
-    fireEvent.change(getByTestId("draft-tx-hash"), { target: { value: TX } });
-    fireEvent.change(getByTestId("draft-governor"), {
+    signedIn();
+    mocks.useSiwe.mockReturnValue({
+      ...mocks.useSiwe(),
+      effectiveAddress: GOVERNOR,
+    });
+    mocks.markSubmitted.mockResolvedValue(undefined);
+    const view = render(<SharedDraftView slug="abc123" />);
+    expect(
+      view.queryByRole("link", { name: "Open to submit on chain" })
+    ).toBeNull();
+    fireEvent.change(view.getByLabelText("Transaction hash"), {
+      target: { value: TX },
+    });
+    fireEvent.change(view.getByLabelText("Governor address"), {
       target: { value: GOVERNOR },
     });
-    // The server wants a decimal string; a hex id would 400.
-    fireEvent.change(getByTestId("draft-proposal-id"), {
-      target: { value: "0x2a" },
-    });
-    expect(button.disabled).toBe(true);
-
-    fireEvent.change(getByTestId("draft-proposal-id"), {
+    fireEvent.change(view.getByLabelText("Proposal id"), {
       target: { value: "42" },
     });
-    expect(button.disabled).toBe(false);
-
-    fireEvent.change(getByTestId("draft-tx-hash"), {
-      target: { value: "0x1234" },
-    });
-    expect(button.disabled).toBe(true);
-  });
-
-  it("submits the trimmed fields", async () => {
-    loaded(draft());
-
-    const { getByTestId } = render(<SharedDraftView slug="abc123" />);
-    fireEvent.change(getByTestId("draft-tx-hash"), {
-      target: { value: ` ${TX} ` },
-    });
-    fireEvent.change(getByTestId("draft-governor"), {
-      target: { value: `${GOVERNOR} ` },
-    });
-    fireEvent.change(getByTestId("draft-proposal-id"), {
-      target: { value: " 42" },
-    });
-    fireEvent.click(getByTestId("mark-submitted"));
-
-    await waitFor(() =>
-      expect(mocks.markSubmitted).toHaveBeenCalledWith({
-        transactionHash: TX,
-        governorAddress: GOVERNOR,
-        proposalId: "42",
-      })
+    await act(async () =>
+      fireEvent.click(view.getByRole("button", { name: "Mark as submitted" }))
     );
-    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
-  });
-
-  it("shows the server's rejection under the form", () => {
-    loaded(draft());
-    mocks.submitError = new Error(
-      "Only a published draft can be marked submitted (status: submitted)."
-    );
-
-    const { getByTestId } = render(<SharedDraftView slug="abc123" />);
-
-    expect(getByTestId("draft-submit-error").textContent).toContain(
-      "Only a published draft"
-    );
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      transactionHash: TX,
+      governorAddress: GOVERNOR,
+      proposalId: "42",
+    });
   });
 });
