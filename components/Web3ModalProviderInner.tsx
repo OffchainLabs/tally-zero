@@ -6,6 +6,7 @@ import { type ReactNode } from "react";
 import { http } from "viem";
 import { WagmiProvider, type Config } from "wagmi";
 
+import { WalletSessionReconciler } from "@/components/siwe/WalletSessionReconciler";
 import { ARBITRUM_RPC_URL } from "@/config/arbitrum-governance";
 import { STORAGE_KEYS } from "@/config/storage-keys";
 import { APPKIT_NETWORKS, createGovernanceAppKit } from "@/lib/appkit";
@@ -63,6 +64,7 @@ export default function Web3ModalProviderInner({
 }) {
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig as Config}>
+      <WalletSessionReconciler />
       {children}
     </WagmiProvider>
   );
