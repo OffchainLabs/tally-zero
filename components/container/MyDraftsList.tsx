@@ -29,6 +29,12 @@ const GOVERNOR_LABEL: Record<DraftGovernorType, string> = {
   TREASURY: "Treasury",
 };
 
+/**
+ * Draft lifecycle: draft (private and editable) → published (frozen and shared)
+ * → submitted (an on-chain submission has been recorded).
+ * Publishing and deleting are irreversible, so the second click stays on the
+ * row to make it clear which draft is about to change.
+ */
 const STATUS_LABEL: Record<DraftStatus, string> = {
   draft: "Draft",
   published: "Published",
@@ -63,7 +69,6 @@ export default function MyDraftsList() {
     </div>
   );
 }
-
 
 function LoadingState() {
   return (
