@@ -104,4 +104,44 @@ describe("SharedDraftView manual submission", () => {
       proposalId: id,
     });
   });
+
+  it("shows generic rejection feedback, retains values, and allows retry", async () => {
+    const view = render(<SharedDraftView slug="abc123" />);
+    fill(view);
+    const rejection = new Error("Private upstream recording failure");
+    mocks.markSubmitted.mockImplementationOnce(async () => {
+      mocks.error = rejection;
+      throw rejection;
+    });
+    const button = view.getByRole("button", {
+      name: "Mark as submitted",
+    }) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    view.rerender(<SharedDraftView slug="abc123" />);
+    expect(view.getByTestId("draft-submit-error").textContent).toBe(
+      "Could not record this submission. Please try again."
+    );
+    expect(view.container.textContent).not.toContain(rejection.message);
+    for (const [label, value] of [
+      ["Transaction hash", TX],
+      ["Governor address", GOVERNOR],
+      ["Proposal id", "42"],
+    ]) {
+      expect((view.getByLabelText(label) as HTMLInputElement).value).toBe(
+        value
+      );
+    }
+    expect(button.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(mocks.markSubmitted).toHaveBeenCalledTimes(2);
+    expect(mocks.markSubmitted).toHaveBeenLastCalledWith({
+      transactionHash: TX,
+      governorAddress: GOVERNOR,
+      proposalId: "42",
+    });
+  });
 });
