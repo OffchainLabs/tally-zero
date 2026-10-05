@@ -228,4 +228,31 @@ describe("MyDraftsList", () => {
     expect(view.getByTestId("delete-draft")).toBeDefined();
     expect(view.queryByTestId("copy-share-link")).toBeNull();
   });
+
+  it.each([
+    ["published", "Open to submit"],
+    ["submitted", "Open as copy"],
+  ] as const)(
+    "offers the form and share controls for a %s draft",
+    (status, label) => {
+      list([summary({ status, shareSlug: "abc123" })]);
+      const view = render(<MyDraftsList />);
+      expect(view.getByTestId("open-draft").textContent).toContain(label);
+      expect(view.queryByTestId("publish-draft")).toBeNull();
+      expect(view.queryByTestId("delete-draft")).toBeNull();
+      expect(view.getByTestId("copy-share-link")).toBeDefined();
+      expect(
+        view.container.querySelector('a[href="/drafts/shared/abc123"]')
+      ).not.toBeNull();
+    }
+  );
+
+  it("copies the absolute share link", () => {
+    list([summary({ status: "published", shareSlug: "abc123" })]);
+    const view = render(<MyDraftsList />);
+    fireEvent.click(view.getByTestId("copy-share-link"));
+    expect(mocks.copy).toHaveBeenCalledWith(
+      `${window.location.origin}/drafts/shared/abc123`
+    );
+  });
 });
