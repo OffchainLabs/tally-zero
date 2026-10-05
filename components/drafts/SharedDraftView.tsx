@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { isAddress, isHash } from "viem";
 
 import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
@@ -22,11 +23,6 @@ import { getAddressExplorerUrl, getTxExplorerUrl } from "@/lib/explorer-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { SiweApiError } from "@/lib/siwe/client";
 import type { Draft } from "@/lib/siwe/types";
-
-const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
-// The server's `requireDecimalString`: the id from ProposalCreated, in decimal.
-const DECIMAL_RE = /^\d+$/;
 
 /**
  * Public read of a published draft, addressed by its share slug.
@@ -148,29 +144,21 @@ export function SharedDraftView({ slug }: { slug: string }) {
 }
 
 function DraftActions({ draft }: { draft: Draft }) {
-  if (draft.actions.length === 0) {
-    return (
-      <Card variant="glass">
-        <CardHeader>
-          <CardTitle className="text-base">Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No actions yet — this draft is text only.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="text-base">
-          Actions ({draft.actions.length})
+          Actions{draft.actions.length > 0 && ` (${draft.actions.length})`}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent
+        className={draft.actions.length > 0 ? "space-y-3" : undefined}
+      >
+        {draft.actions.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No actions yet — this draft is text only.
+          </p>
+        )}
         {draft.actions.map((action, index) => (
           <div
             key={`${action.target}-${index}`}
@@ -252,9 +240,9 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
 
   // Mirrors the server's validators so a rejection is never a surprise.
   const isValid =
-    TX_HASH_RE.test(transactionHash.trim()) &&
-    ADDRESS_RE.test(governorAddress.trim()) &&
-    DECIMAL_RE.test(proposalId.trim());
+    isHash(transactionHash.trim()) &&
+    isAddress(governorAddress.trim(), { strict: false }) &&
+    /^\d+$/.test(proposalId.trim());
 
   async function submit() {
     if (!isValid || isSubmitting) return;
