@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TransactionReceipt } from "viem";
-import { useWaitForTransactionReceipt } from "wagmi";
+import { useTransactionReceipt, useWaitForTransactionReceipt } from "wagmi";
 
 import type { ProposalReplacement } from "@/components/form/CreateProposalForm";
 
@@ -136,7 +136,14 @@ export function useDraftSubmissionRecording(
     onReplaced: onProposalReplaced,
   });
 
-  const receipt = awaitedReceipt;
+  // wagmi's wait action throws for reverted receipts. Read the raw receipt
+  // after an error to distinguish a verified revert from an RPC outage.
+  const { data: rawReceipt, refetch: refetchReceipt } = useTransactionReceipt({
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: pending?.transactionHash,
+    query: { enabled: !!pending && !!receiptError, retry: false },
+  });
+  const receipt = awaitedReceipt ?? rawReceipt;
 
   const record = useCallback(
     async (submission: DraftSubmission) => {
@@ -220,8 +227,12 @@ export function useDraftSubmissionRecording(
       const result = await refetch();
       if (pendingHash.current !== retryHash) return;
       if (result.error) {
-        setStatus("receipt-error");
-        setError(getErrorMessage(result.error, "confirm proposal"));
+        const verified = await refetchReceipt();
+        if (pendingHash.current !== retryHash) return;
+        if (!verified.data) {
+          setStatus("receipt-error");
+          setError(getErrorMessage(result.error, "confirm proposal"));
+        }
       }
       return;
     }
