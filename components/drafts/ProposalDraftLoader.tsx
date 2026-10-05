@@ -7,6 +7,8 @@ import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
 import CreateProposalForm, {
   type ServerSaveEvent,
 } from "@/components/form/CreateProposalForm";
+import { Button } from "@/components/ui/Button";
+import { useDraftSubmissionRecording, type RecordableDraft } from "@/hooks/use-draft-submission-recording";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useDraft } from "@/hooks/use-drafts";
@@ -216,5 +218,61 @@ export function ProposalDraftLoader() {
 
       <CreateProposalForm {...formProps} />
     </div>
+  );
+}
+
+/** Recording belongs to the loaded shared draft, independently of form state. */
+function DraftSubmissionForm({
+  draft,
+  subject,
+  ...formProps
+}: ProposalFormProps & {
+  draft: RecordableDraft;
+  subject: string;
+}) {
+  const { status, error, canRetry, retry, onProposalSubmitted } =
+    useDraftSubmissionRecording(draft, subject);
+  return (
+    <>
+      {status && (
+        <div role="status" className="text-sm space-y-2">
+          {status === "confirming" && (
+            <p>Waiting for the draft&apos;s proposal transaction to confirm…</p>
+          )}
+          {status === "recording" && <p>Recording this draft as submitted…</p>}
+          {status === "recorded" && (
+            <p className="text-emerald-400">
+              This draft is now marked submitted.
+            </p>
+          )}
+          {status === "different" && (
+            <p className="text-amber-400">
+              This proposal differs from the published draft, so that draft
+              remains published.
+            </p>
+          )}
+          {status === "missing" && (
+            <p className="text-amber-400">
+              The confirmed transaction did not contain the expected proposal
+              event, so the draft was not marked submitted.
+            </p>
+          )}
+          {(status === "failed" || status === "receipt-error") && (
+            <p className="text-destructive">{error}</p>
+          )}
+          {canRetry && (
+            <Button variant="outline" onClick={retry}>
+              {status === "receipt-error"
+                ? "Retry transaction verification"
+                : "Retry recording submission"}
+            </Button>
+          )}
+        </div>
+      )}
+      <CreateProposalForm
+        {...formProps}
+        onProposalSubmitted={onProposalSubmitted}
+      />
+    </>
   );
 }
