@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -11,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useSiwe } from "@/hooks/use-siwe";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
 import {
   getProposalPreviewRehypePlugins,
@@ -35,6 +37,7 @@ const DECIMAL_RE = /^\d+$/;
  */
 export function SharedDraftView({ slug }: { slug: string }) {
   const { data: draft, isLoading, error } = useSharedDraft(slug);
+  const { effectiveAddress } = useSiwe();
 
   useEffect(() => {
     if (error && !(error instanceof SiweApiError && error.status === 404)) {
@@ -116,11 +119,29 @@ export function SharedDraftView({ slug }: { slug: string }) {
       {draft.onchain ? (
         <SubmittedCard draft={draft} />
       ) : (
-        // The read above stays public; only recording a submission needs a
-        // session, because the server signs the record with whoever made it.
-        <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
-          <MarkSubmittedForm slug={slug} />
-        </SiweGate>
+        <Card variant="glass">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+            <p className="text-sm text-muted-foreground">
+              This draft has not been submitted on chain.
+            </p>
+            {draft.status === "published" &&
+              effectiveAddress?.toLowerCase() ===
+                draft.author.toLowerCase() && (
+                <Button size="sm" asChild>
+                  <Link
+                    href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
+                  >
+                    Open to submit on chain
+                  </Link>
+                </Button>
+              )}
+          </CardContent>
+          <CardContent>
+            <SiweGate connectDescription="Connect your wallet to sign in and record this draft's on-chain submission.">
+              <MarkSubmittedForm slug={slug} />
+            </SiweGate>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
