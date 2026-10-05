@@ -12,91 +12,6 @@ import {
 } from "@/components/ui/Card";
 import { useSiwe } from "@/hooks/use-siwe";
 
-/**
- * Renders `children` only once a wallet is connected and a SIWE session exists,
- * standing in the connect and sign-in steps until then. Every authenticated
- * surface needs the same two screens, so they live here rather than in each one.
- *
- * `connectDescription` names what connecting is for. The default is the
- * delegate-profile wording the gate was written for; a surface that asks for
- * something else (recording a draft's submission, say) passes its own.
- */
-export function SiweGate({
-  children,
-  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
-}: {
-  children: React.ReactNode;
-  connectDescription?: string;
-}) {
-  const { open } = useAppKit();
-  const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
-    useSiwe();
-
-  if (!isConnected) {
-    return (
-      <GateCard
-        title="Connect your wallet"
-        description={connectDescription}
-        testId="siwe-connect"
-      >
-        <Button onClick={() => void open({ view: "Connect" })}>
-          Connect Wallet
-        </Button>
-      </GateCard>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <GateCard
-        title="Sign in"
-        description="Sign a message to prove wallet ownership. No transaction, no gas."
-      >
-        <Button
-          data-testid="siwe-sign-in"
-          disabled={isSigningIn}
-          onClick={() => {
-            signIn().catch(() => {});
-          }}
-        >
-          {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
-        </Button>
-        {signInError ? (
-          <p className="text-sm text-destructive" data-testid="siwe-error">
-            {signInError.message}
-          </p>
-        ) : null}
-      </GateCard>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-function GateCard({
-  title,
-  description,
-  testId,
-  children,
-}: {
-  title: string;
-  description: string;
-  /** The sign-in step has its button to hang a test on; the connect step has
-      only the Reown web component, so the card carries the hook instead. */
-  testId?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card variant="glass" data-testid={testId}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
-    </Card>
-  );
-}
-
 /** Connect or sign in inside the caller's own layout. */
 export function SiweAction() {
   const { open } = useAppKit();
@@ -135,5 +50,32 @@ export function SiweAction() {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** Show the connect/sign-in card until authenticated content can mount. */
+export function SiweGate({
+  children,
+  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
+}: {
+  children: React.ReactNode;
+  connectDescription?: string;
+}) {
+  const { isConnected, isSignedIn } = useSiwe();
+  if (isSignedIn) return <>{children}</>;
+  return (
+    <Card variant="glass">
+      <CardHeader>
+        <CardTitle>{isConnected ? "Sign in" : "Connect your wallet"}</CardTitle>
+        <CardDescription>
+          {isConnected
+            ? "Sign a message to prove wallet ownership. No transaction, no gas."
+            : connectDescription}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <SiweAction />
+      </CardContent>
+    </Card>
   );
 }
