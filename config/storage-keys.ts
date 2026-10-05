@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   L1_RPC: "tally-zero-l1-rpc",
   L2_RPC: "tally-zero-l2-rpc",
   PROPOSAL_DRAFT: "tally-zero-proposal-draft",
+  DRAFT_SUBMISSION: "tally-zero-draft-submission",
   BLOCK_RANGE: "tally-zero-block-range",
   L1_BLOCK_RANGE: "tally-zero-l1-block-range",
   STAGES_CACHE_PREFIX: "tally-zero-stages-",
@@ -76,6 +77,14 @@ export function proposalDraftStorageKey(draftId: string | null): string {
   return draftId
     ? `${STORAGE_KEYS.PROPOSAL_DRAFT}:${draftId}`
     : STORAGE_KEYS.PROPOSAL_DRAFT;
+}
+
+/** Pending submission recording belongs to one draft and effective subject. */
+export function draftSubmissionStorageKey(
+  draftId: string,
+  subject: string
+): string {
+  return `${STORAGE_KEYS.DRAFT_SUBMISSION}:${subject.toLowerCase()}:${encodeURIComponent(draftId)}`;
 }
 
 /** Available cache TTL options for user settings (values in seconds) */
