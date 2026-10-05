@@ -1,5 +1,7 @@
 import { isAddress, isHash } from "viem";
 
+const RECOVERY_CHANGE_EVENT = "arbitrum:draft-submission-recovery";
+
 export type PendingDraftSubmission = {
   transactionHash: `0x${string}`;
   governorAddress: string;
@@ -35,6 +37,9 @@ export function savePendingSubmission(
 ): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(submission));
+    window.dispatchEvent(
+      new CustomEvent(RECOVERY_CHANGE_EVENT, { detail: key })
+    );
   } catch {
     // Recording and the in-page retry still work when browser storage is disabled.
   }
@@ -51,8 +56,27 @@ export function clearPendingSubmission(
       transactionHash.toLowerCase()
     ) {
       window.localStorage.removeItem(key);
+      window.dispatchEvent(
+        new CustomEvent(RECOVERY_CHANGE_EVENT, { detail: key })
+      );
     }
   } catch {
     // Storage may be disabled.
   }
+}
+
+/** Observe both other-tab storage writes and broadcasts from detached forms. */
+export function subscribePendingSubmission(key: string, onChange: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === key || event.key === null) onChange();
+  };
+  const onRecoveryChange = (event: Event) => {
+    if ((event as CustomEvent<string>).detail === key) onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(RECOVERY_CHANGE_EVENT, onRecoveryChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(RECOVERY_CHANGE_EVENT, onRecoveryChange);
+  };
 }
