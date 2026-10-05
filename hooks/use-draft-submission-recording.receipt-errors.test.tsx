@@ -124,3 +124,90 @@ it("clears a verified revert even though real wagmi exposes it as an error", asy
     harness.queryClient.clear();
   }
 });
+
+it("does not clear a newer submission when an older raw receipt arrives late", async () => {
+  const harness = mount();
+  const newerHash = `0x${"cd".repeat(32)}` as const;
+  harness.wait
+    .mockResolvedValueOnce(receipt({ status: "reverted" }))
+    .mockImplementation(() => new Promise(() => {}));
+  let finishReceipt!: (value: ReturnType<typeof receipt>) => void;
+  harness.getReceipt.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishReceipt = resolve;
+      })
+  );
+  savePendingSubmission(key, pending);
+  const view = harness.open();
+  try {
+    await waitFor(() => expect(harness.getReceipt).toHaveBeenCalledOnce());
+    act(() =>
+      view.result.current.onProposalSubmitted({
+        hash: newerHash,
+        governorAddress: governor,
+      })
+    );
+    await waitFor(() => expect(harness.wait).toHaveBeenCalledTimes(2));
+    await act(async () => finishReceipt(receipt({ status: "reverted" })));
+    expect(readPendingSubmission(key)).toEqual({
+      ...pending,
+      transactionHash: newerHash,
+    });
+    expect(view.result.current.status).toBe("confirming");
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    harness.queryClient.clear();
+  }
+});
+
+it("preserves recovery through an RPC outage and records after verification succeeds", async () => {
+  const harness = mount();
+  // Error wording alone must never be used as proof of a revert.
+  const outage = new Error("execution reverted: RPC temporarily unavailable");
+  harness.wait.mockRejectedValue(outage);
+  harness.getReceipt.mockRejectedValue(outage);
+  savePendingSubmission(key, pending);
+  const view = harness.open();
+  try {
+    await waitFor(() => expect(view.result.current.canRetry).toBe(true));
+    await waitFor(() => expect(harness.getReceipt).toHaveBeenCalledOnce());
+    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+    harness.getReceipt.mockResolvedValue(receipt());
+    await act(async () => view.result.current.retry());
+    await waitFor(() => expect(view.result.current.status).toBe("recorded"));
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      ...pending,
+      proposalId,
+    });
+    expect(readPendingSubmission(key)).toBeNull();
+    expect(view.result.current.canRetry).toBe(false);
+  } finally {
+    view.unmount();
+    harness.queryClient.clear();
+  }
+});
+
+it("clears recovery when a retry verifies a revert after the raw receipt was unavailable", async () => {
+  const harness = mount();
+  harness.wait.mockResolvedValue(receipt({ status: "reverted" }));
+  harness.getReceipt.mockRejectedValue(new Error("RPC unavailable"));
+  savePendingSubmission(key, pending);
+  const view = harness.open();
+  try {
+    await waitFor(() => expect(view.result.current.canRetry).toBe(true));
+    await waitFor(() => expect(harness.getReceipt).toHaveBeenCalledOnce());
+    expect(readPendingSubmission(key)).toEqual(pending);
+    harness.getReceipt.mockResolvedValue(receipt({ status: "reverted" }));
+    await act(async () => view.result.current.retry());
+    await waitFor(() => expect(readPendingSubmission(key)).toBeNull());
+    expect(view.result.current.canRetry).toBe(false);
+    expect(view.result.current.error).toContain("reverted");
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    harness.queryClient.clear();
+  }
+});
