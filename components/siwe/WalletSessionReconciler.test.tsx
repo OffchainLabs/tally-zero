@@ -81,4 +81,73 @@ describe("WalletSessionReconciler", () => {
     expect(client.getQueryData(siweKeys.drafts(FIRST))).toBeUndefined();
     client.clear();
   });
+
+  it("does not revoke a matching cookie when the cached session is from another tab", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(siweKeys.me, session(FIRST));
+    mocks.useAccount.mockReturnValue({ address: SECOND, isConnected: true });
+    vi.spyOn(siweApi, "me").mockResolvedValue(session(SECOND));
+    const logout = vi.spyOn(siweApi, "logout").mockResolvedValue();
+
+    render(
+      <QueryClientProvider client={client}>
+        <WalletSessionReconciler />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() =>
+      expect(client.getQueryData(siweKeys.me)).toEqual(session(SECOND))
+    );
+    expect(logout).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it.each(["switching back", "disconnecting", "unmounting"])(
+    "abandons a pending wallet check after %s",
+    async (change) => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      client.setQueryData(siweKeys.me, session(FIRST));
+      client.setQueryData(siweKeys.drafts(FIRST), ["first draft"]);
+      let resolveMe!: (value: MeResponse) => void;
+      const me = vi.spyOn(siweApi, "me").mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveMe = resolve;
+          })
+      );
+      const logout = vi.spyOn(siweApi, "logout").mockResolvedValue();
+      mocks.useAccount.mockReturnValue({ address: SECOND, isConnected: true });
+      const content = (
+        <QueryClientProvider client={client}>
+          <WalletSessionReconciler />
+        </QueryClientProvider>
+      );
+      const view = render(content);
+      await waitFor(() => expect(me).toHaveBeenCalledOnce());
+      if (change === "unmounting") view.unmount();
+      else {
+        mocks.useAccount.mockReturnValue(
+          change === "switching back"
+            ? { address: FIRST, isConnected: true }
+            : { address: undefined, isConnected: false }
+        );
+        view.rerender(
+          <QueryClientProvider client={client}>
+            <WalletSessionReconciler />
+          </QueryClientProvider>
+        );
+      }
+      await act(async () => resolveMe(session(FIRST)));
+      expect(logout).not.toHaveBeenCalled();
+      expect(client.getQueryData(siweKeys.me)).toEqual(session(FIRST));
+      expect(client.getQueryData(siweKeys.drafts(FIRST))).toEqual([
+        "first draft",
+      ]);
+      client.clear();
+    }
+  );
 });
