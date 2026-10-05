@@ -1,14 +1,20 @@
-import type { ReactNode } from "react";
+// @vitest-environment jsdom
+import {
+  cleanup,
+  fireEvent,
+  render as renderView,
+} from "@testing-library/react";
+import { useState, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Draft } from "@/lib/siwe/types";
 
 import {
-  type LastSaved,
   ProposalDraftLoader,
   resolveDraftBinding,
   saveAppliesTo,
+  type LastSaved,
 } from "./ProposalDraftLoader";
 
 /**
@@ -25,6 +31,9 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   useSiwe: vi.fn(),
   useDraft: vi.fn(),
+  onProposalSubmitted: vi.fn(),
+  recording: vi.fn(),
+  recordingResult: vi.fn(),
   form: vi.fn(),
   dialog: vi.fn(),
 }));
@@ -37,7 +46,16 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 
-vi.mock("@/hooks/use-drafts", () => ({ useDraft: mocks.useDraft }));
+vi.mock("@/hooks/use-drafts", () => ({
+  useDraft: mocks.useDraft,
+}));
+
+vi.mock("@/hooks/use-draft-submission-recording", () => ({
+  useDraftSubmissionRecording: (draft: unknown, subject: string) => {
+    mocks.recording(draft, subject);
+    return mocks.recordingResult();
+  },
+}));
 
 // The dialog pulls in the drafts hooks and the SIWE session; none of that is
 // under test here. Only what the loader hands it is.
@@ -52,12 +70,16 @@ vi.mock("@/components/drafts/SaveToAccountDialog", () => ({
 // and render the render prop's output the way the real form's submit row would,
 // so the (mocked) dialog sees its props.
 vi.mock("@/components/form/CreateProposalForm", () => ({
-  default: (props: {
+  default: function MockProposalForm(props: {
     renderDraftActions?: (snapshot: unknown) => ReactNode;
-  }) => {
+  }) {
+    const [confirmed, setConfirmed] = useState(false);
     mocks.form(props);
     return (
       <div data-testid="form">
+        <button onClick={() => setConfirmed(true)}>
+          {confirmed ? "Proposal created successfully" : "Submit proposal"}
+        </button>
         {props.renderDraftActions?.({
           description: "",
           governorType: "treasury",
@@ -70,7 +92,7 @@ vi.mock("@/components/form/CreateProposalForm", () => ({
 
 const DRAFT: Draft = {
   id: "d1",
-  author: "0xauthor",
+  author: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
   title: "Stored",
   description: "# Stored\n\nbody",
   governorType: "TREASURY",
@@ -111,8 +133,17 @@ function draftQuery(
 const render = () => renderToStaticMarkup(<ProposalDraftLoader />);
 
 describe("ProposalDraftLoader", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.recordingResult.mockReturnValue({
+      status: null,
+      error: null,
+      canRetry: false,
+      retry: vi.fn(),
+      onProposalSubmitted: mocks.onProposalSubmitted,
+    });
     mocks.searchParams = new URLSearchParams("draft=d1");
     session();
     draftQuery();
@@ -194,8 +225,7 @@ describe("ProposalDraftLoader", () => {
     });
   });
 
-  // PATCH answers 409 not_editable once a draft is published, so the user must
-  // learn that before typing, and saving has to create a copy instead.
+  // PATCH answers 409 once published, but the original can still be submitted.
   it.each(["published", "submitted"] as const)(
     "opens a %s draft as a copy rather than an update",
     (status) => {
