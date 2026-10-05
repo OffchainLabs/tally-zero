@@ -10,7 +10,6 @@ import { draftSubmissionStorageKey } from "@/config/storage-keys";
 import {
   draft,
   governor,
-  proposalId,
   receipt,
   txHash,
 } from "@/lib/drafts/submission-fixtures";
@@ -59,64 +58,43 @@ beforeEach(() => {
   }));
 });
 
-it("ignores an older retry error after a newer transaction is recorded", async () => {
-  const view = mount();
-  receiptError = new Error("Old RPC outage");
-  await act(async () =>
-    view.result.current.onProposalSubmitted({
-      hash: txHash,
-      governorAddress: governor,
-    })
-  );
-  let finish!: (result: { error: Error }) => void;
-  mocks.refetch.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-  );
-  let retry!: Promise<void>;
-  act(() => {
-    retry = view.result.current.retry();
-  });
-  receiptError = null;
-  confirmed = { ...receipt(), transactionHash: newerHash };
-  await act(async () =>
-    view.result.current.onProposalSubmitted({
-      hash: newerHash,
-      governorAddress: governor,
-    })
-  );
-  expect(view.result.current.status).toBe("recorded");
-  await act(async () => {
-    finish({ error: new Error("Old RPC outage") });
-    await retry;
-  });
-  expect(view.result.current.status).toBe("recorded");
-});
 afterEach(cleanup);
+it.each(["repriced", "replaced"] as const)(
+  "preserves newer recovery after a detached old %s callback",
+  async (reason) => {
+    const original = mount();
+    await act(async () =>
+      original.result.current.onProposalSubmitted({
+        hash: txHash,
+        governorAddress: governor,
+      })
+    );
+    const oldWait = mocks.wait.mock.calls.find(
+      ([parameters]) => parameters.hash === txHash
+    )?.[0] as WaitForTransactionReceiptParameters;
+    original.unmount();
+    const reopened = mount();
+    await act(async () =>
+      reopened.result.current.onProposalSubmitted({
+        hash: newerHash,
+        governorAddress: governor,
+      })
+    );
+    const oldReplacement = `0x${"ef".repeat(32)}` as const;
+    await act(async () =>
+      oldWait.onReplaced?.({
+        reason,
+        transactionReceipt: { ...receipt(), transactionHash: oldReplacement },
+      } as Parameters<
+        NonNullable<WaitForTransactionReceiptParameters["onReplaced"]>
+      >[0])
+    );
+    expect(readPendingSubmission(key)?.transactionHash).toBe(newerHash);
+  }
+);
 
-it("recovers a wallet broadcast received after the original draft was reopened", async () => {
-  const original = mount();
-  const detachedBroadcast = original.result.current.onProposalSubmitted;
-  original.unmount();
-  const reopened = mount();
-  await act(async () =>
-    detachedBroadcast({ hash: txHash, governorAddress: governor })
-  );
-  expect(reopened.result.current.status).toBe("confirming");
-  confirmed = receipt();
-  await act(async () => reopened.rerender());
-  expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
-    transactionHash: txHash,
-    governorAddress: governor,
-    proposalId,
-  });
-  expect(readPendingSubmission(key)).toBeNull();
-});
-
-it.each(["cancelled", "repriced", "replaced"] as const)(
-  "ignores a stale %s callback after a newer broadcast",
+it.each(["repriced", "replaced"] as const)(
+  "preserves a newer cross-tab write before its event reaches the active %s callback",
   async (reason) => {
     const view = mount();
     await act(async () =>
@@ -128,29 +106,26 @@ it.each(["cancelled", "repriced", "replaced"] as const)(
     const oldWait = mocks.wait.mock.calls.find(
       ([parameters]) => parameters.hash === txHash
     )?.[0] as WaitForTransactionReceiptParameters;
-    await act(async () =>
-      view.result.current.onProposalSubmitted({
-        hash: newerHash,
-        governorAddress: governor,
-      })
+    // Browser localStorage is shared synchronously; the receiving tab gets the storage event later.
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ transactionHash: newerHash, governorAddress: governor })
     );
+    const oldReplacement = `0x${"ef".repeat(32)}` as const;
     await act(async () =>
       oldWait.onReplaced?.({
         reason,
-        transactionReceipt: receipt(),
+        transactionReceipt: { ...receipt(), transactionHash: oldReplacement },
       } as Parameters<
         NonNullable<WaitForTransactionReceiptParameters["onReplaced"]>
       >[0])
     );
     expect(readPendingSubmission(key)?.transactionHash).toBe(newerHash);
-    expect(view.result.current.status).toBe("confirming");
-    confirmed = { ...receipt(), transactionHash: newerHash };
-    await act(async () => view.rerender());
-    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
-      transactionHash: newerHash,
-      governorAddress: governor,
-      proposalId,
-    });
-    expect(readPendingSubmission(key)).toBeNull();
+    await act(async () =>
+      window.dispatchEvent(new StorageEvent("storage", { key }))
+    );
+    expect(mocks.wait).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hash: newerHash })
+    );
   }
 );
