@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -36,6 +36,12 @@ const DECIMAL_RE = /^\d+$/;
 export function SharedDraftView({ slug }: { slug: string }) {
   const { data: draft, isLoading, error } = useSharedDraft(slug);
 
+  useEffect(() => {
+    if (error && !(error instanceof SiweApiError && error.status === 404)) {
+      console.error("Could not load shared draft:", error);
+    }
+  }, [error]);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -60,7 +66,7 @@ export function SharedDraftView({ slug }: { slug: string }) {
           >
             {isNotFound
               ? "This draft link is not valid. Only published drafts are readable by slug."
-              : error.message}
+              : "Could not load this draft. Please try again later."}
           </p>
         </CardContent>
       </Card>
