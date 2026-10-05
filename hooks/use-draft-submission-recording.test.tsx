@@ -190,4 +190,61 @@ describe("draft submission recording", () => {
     expect(view.result.current.status).toBe("recorded");
     expect(readPendingSubmission(key)).toBeNull();
   });
+
+  it("keeps receipt retry available when the RPC is still unavailable", async () => {
+    receiptError = new Error("RPC temporarily unavailable");
+    mocks.refetch.mockResolvedValue({ error: receiptError });
+    const view = mount();
+    await broadcast(view);
+    await act(async () => view.result.current.retry());
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+    expect(view.result.current.status).toBe("receipt-error");
+    expect(view.result.current.canRetry).toBe(true);
+    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("verifies receipts instead of trusting extra proposal metadata in storage", async () => {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ ...pending, proposalId: "42" })
+    );
+    confirmed = receipt();
+    mount();
+    await act(async () => {});
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith(submission);
+  });
+
+  it("does not accept a cached receipt for another transaction", async () => {
+    savePendingSubmission(key, pending);
+    confirmed = { ...receipt(), transactionHash: `0x${"cd".repeat(32)}` };
+    const view = mount();
+    await act(async () => {});
+    expect(view.result.current.status).toBe("confirming");
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+    expect(readPendingSubmission(key)).toEqual(pending);
+  });
+
+  it("keeps a repriced hash recoverable and clears a cancelled transaction", async () => {
+    const view = mount();
+    await broadcast(view);
+    const replacement = `0x${"cd".repeat(32)}` as const;
+    await act(async () =>
+      mocks.wait.mock.lastCall?.[0].onReplaced({
+        reason: "repriced",
+        transactionReceipt: { ...receipt(), transactionHash: replacement },
+      })
+    );
+    expect(readPendingSubmission(key)?.transactionHash).toBe(replacement);
+    await act(async () =>
+      mocks.wait.mock.lastCall?.[0].onReplaced({
+        reason: "cancelled",
+        transactionReceipt: receipt(),
+      })
+    );
+    expect(readPendingSubmission(key)).toBeNull();
+    expect(view.result.current.error).toContain("cancelled");
+    expect(view.result.current.canRetry).toBe(false);
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
 });
