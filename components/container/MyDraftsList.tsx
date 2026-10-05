@@ -4,6 +4,7 @@ import { ArrowRight, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { SiweAction } from "@/components/siwe/SiweGate";
 import { Button } from "@/components/ui/Button";
 import { useDraftsList } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
@@ -25,61 +26,31 @@ const STATUS_LABEL: Record<DraftStatus, string> = {
 };
 
 /**
- * "My Drafts" tab content: the signed-in subject's server-side drafts, newest
- * first, each opening in the New Proposal form. Published and submitted drafts
- * are frozen on the server, so those open as a copy (the loader handles the
- * fork); the label says so up front.
- *
- * Drafts need a SIWE session, so a signed-out visitor sees a prompt rather
- * than an empty list they might read as "nothing saved".
+ * Drafts content for /drafts, within the same page shell as /proposals.
  */
 export default function MyDraftsList() {
-  const { isSignedIn, isLoadingSession } = useSiwe();
-  const { drafts, isLoading, error } = useDraftsList();
-
-  if (isLoadingSession || (isSignedIn && isLoading)) {
-    return <LoadingState />;
-  }
-
-  if (!isSignedIn) {
-    return (
-      <EmptyState title="Sign in to see your drafts">
-        Drafts are saved to your account from the New Proposal page, so they
-        follow you across devices. Anything you have typed there is kept in this
-        browser until you save it.
-      </EmptyState>
-    );
-  }
-
-  if (error) {
-    return (
-      <p className="text-sm text-destructive" data-testid="drafts-error">
-        {error.message}
-      </p>
-    );
-  }
-
-  if (drafts.length === 0) {
-    return (
-      <EmptyState title="No drafts yet">
-        Save a proposal to your drafts from the New Proposal page and it will
-        show up here.
-      </EmptyState>
-    );
-  }
-
-  const sorted = [...drafts].sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt)
+  const { isConnected, isSignedIn, isLoadingSession } = useSiwe();
+  const content = isLoadingSession ? (
+    <LoadingState />
+  ) : !isConnected || !isSignedIn ? (
+    <EmptyState title="Sign in to see your drafts" action={<SiweAction />}>
+      Drafts are saved to your account from the New Proposal page, so they
+      follow you across devices. Anything you have typed there is kept in this
+      browser until you save it. Signing in only signs a message; no transaction
+      or gas is needed.
+    </EmptyState>
+  ) : (
+    <DraftsContent />
   );
 
   return (
-    <ul className="glass rounded-2xl overflow-clip divide-y divide-border/40">
-      {sorted.map((draft) => (
-        <li key={draft.id}>
-          <DraftRow draft={draft} />
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-4">
+      <p className="text-muted-foreground">
+        Proposal drafts saved to your account. Publish one to get a link you can
+        circulate for review before submitting on chain.
+      </p>
+      {content}
+    </div>
   );
 }
 
@@ -91,6 +62,59 @@ function LoadingState() {
       aria-hidden="true"
       data-testid="drafts-loading"
     />
+  );
+}
+
+
+function DraftsContent() {
+  const { drafts, isLoading, error } = useDraftsList();
+
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-destructive" data-testid="drafts-error">
+        {error.message}
+      </p>
+    );
+  }
+
+  const sorted = [...drafts].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
+
+  return (
+    <div className="space-y-4">
+      {sorted.length === 0 ? (
+        <EmptyState
+          title="No drafts yet"
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link href="/proposal/new">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Start a proposal
+              </Link>
+            </Button>
+          }
+        >
+          Save a proposal to your drafts from the New Proposal page and it will
+          show up here.
+        </EmptyState>
+      ) : (
+        <ul
+          className="glass rounded-2xl overflow-clip divide-y divide-border/40"
+          data-testid="drafts-list"
+        >
+          {sorted.map((draft) => (
+            <li key={draft.id}>
+              <DraftRow draft={draft} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -125,9 +149,11 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
 function EmptyState({
   title,
   children,
+  action,
 }: {
   title: string;
   children: ReactNode;
+  action: ReactNode;
 }) {
   return (
     <div className="glass rounded-2xl px-6 py-12 flex flex-col items-center gap-3 text-center">
@@ -138,12 +164,7 @@ function EmptyState({
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         <p className="text-sm text-muted-foreground max-w-sm">{children}</p>
       </div>
-      <Button asChild size="sm" variant="outline">
-        <Link href="/proposal/new">
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Start a proposal
-        </Link>
-      </Button>
+      {action}
     </div>
   );
 }
