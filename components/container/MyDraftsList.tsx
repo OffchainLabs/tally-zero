@@ -38,13 +38,7 @@ export default function MyDraftsList() {
   const { drafts, isLoading, error } = useDraftsList();
 
   if (isLoadingSession || (isSignedIn && isLoading)) {
-    return (
-      <div
-        className="glass rounded-2xl h-28 animate-pulse"
-        aria-hidden="true"
-        data-testid="drafts-loading"
-      />
-    );
+    return <LoadingState />;
   }
 
   if (!isSignedIn) {
@@ -86,6 +80,17 @@ export default function MyDraftsList() {
         </li>
       ))}
     </ul>
+  );
+}
+
+
+function LoadingState() {
+  return (
+    <div
+      className="glass rounded-2xl h-28 animate-pulse"
+      aria-hidden="true"
+      data-testid="drafts-loading"
+    />
   );
 }
 
