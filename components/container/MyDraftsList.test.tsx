@@ -217,4 +217,15 @@ describe("MyDraftsList", () => {
       view.container.querySelector('a[href="/proposal/new?draft=d1"]')
     ).not.toBeNull();
   });
+
+  it("offers open, publish, and delete only for editable drafts", () => {
+    list([summary()]);
+    const view = render(<MyDraftsList />);
+    expect(view.getByTestId("open-draft").textContent).toContain(
+      "Continue editing"
+    );
+    expect(view.getByTestId("publish-draft")).toBeDefined();
+    expect(view.getByTestId("delete-draft")).toBeDefined();
+    expect(view.queryByTestId("copy-share-link")).toBeNull();
+  });
 });
