@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { siweKeys } from "./keys";
+import { SAFES_SCOPE, siweKeys, SUBJECT_SCOPE } from "./keys";
 
 /**
  * Drop the cached session and re-read it from /api/me at once.
@@ -24,5 +24,7 @@ export function clearAndReconcileSession(
   queryClient: QueryClient
 ): Promise<void> {
   queryClient.setQueryData(siweKeys.me, null);
+  queryClient.removeQueries({ queryKey: SUBJECT_SCOPE });
+  queryClient.removeQueries({ queryKey: SAFES_SCOPE });
   return queryClient.invalidateQueries({ queryKey: siweKeys.me });
 }
