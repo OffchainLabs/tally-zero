@@ -1,8 +1,12 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { siweApi } from "./client";
 import { siweKeys } from "./keys";
-import { clearAndReconcileSession } from "./session-cache";
+import {
+  clearAndReconcileSession,
+  logoutPreviousWalletSession,
+} from "./session-cache";
 
 // No jsdom in this repo (vitest.config.ts sets environment "node"), so the hook
 // itself is not rendered here. The behaviour worth pinning is not React's
@@ -45,7 +49,6 @@ describe("clearAndReconcileSession", () => {
     });
     expect(queryClient.getQueryData(siweKeys.me)).toEqual(LIVE);
     expect(calls).toBe(1);
-
     queryClient.setQueryData(siweKeys.drafts(LIVE.address), ["old draft"]);
     queryClient.setQueryData(siweKeys.safes(LIVE.address), ["old safe"]);
 
@@ -103,5 +106,30 @@ describe("clearAndReconcileSession", () => {
     openGate();
     await pending;
     unsubscribe();
+  });
+});
+
+describe("wallet session logout", () => {
+  it("checks each concurrent caller's wallet even when the first caller matches the cookie", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const first = "0x1111111111111111111111111111111111111111";
+    const second = "0x2222222222222222222222222222222222222222";
+    vi.spyOn(siweApi, "me").mockResolvedValue({ address: first } as Awaited<
+      ReturnType<typeof siweApi.me>
+    >);
+    const logout = vi.spyOn(siweApi, "logout").mockResolvedValue();
+    try {
+      await Promise.all([
+        logoutPreviousWalletSession(client, first),
+        logoutPreviousWalletSession(client, second),
+      ]);
+      expect(logout).toHaveBeenCalledOnce();
+      expect(client.getQueryData(siweKeys.me)).toBeNull();
+    } finally {
+      client.clear();
+      vi.restoreAllMocks();
+    }
   });
 });
