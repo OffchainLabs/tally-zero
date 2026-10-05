@@ -200,4 +200,21 @@ describe("MyDraftsList", () => {
       empty.container.querySelector('a[href="/proposal/new"]')
     ).not.toBeNull();
   });
+
+  it("shows the current Safe and sorts drafts newest first", () => {
+    session({ actingAs: SAFE, effectiveAddress: SAFE });
+    list([
+      summary(),
+      summary({ id: "d2", title: "Newer", updatedAt: "2026-03-01T00:00:00Z" }),
+    ]);
+
+    const view = render(<MyDraftsList />);
+    expect(view.getByTestId("drafts-subject").textContent).toContain(SAFE);
+    expect(view.container.textContent?.indexOf("Newer")).toBeLessThan(
+      view.container.textContent!.indexOf("Fund documentation bounties")
+    );
+    expect(
+      view.container.querySelector('a[href="/proposal/new?draft=d1"]')
+    ).not.toBeNull();
+  });
 });
