@@ -79,7 +79,25 @@ export function useDraftSubmissionRecording(
   } = useWaitForTransactionReceipt({
     chainId: ARBITRUM_CHAIN_ID,
     hash: pending?.transactionHash,
-
+    // The form also waits for this hash. Give each query its own replacement
+    // callback; viem still shares the underlying transaction observer.
+    scopeKey: key,
+    onReplaced: ({ reason, transactionReceipt }) => {
+      if (!pending) return;
+      clearPendingSubmission(key, pending.transactionHash);
+      if (reason === "cancelled") {
+        setPending(null);
+        setStatus("receipt-error");
+        setError(
+          "Proposal transaction was cancelled. The draft was not marked submitted."
+        );
+      } else {
+        onProposalSubmitted({
+          hash: transactionReceipt.transactionHash,
+          governorAddress: pending.governorAddress,
+        });
+      }
+    },
   });
 
   const receipt = awaitedReceipt;
