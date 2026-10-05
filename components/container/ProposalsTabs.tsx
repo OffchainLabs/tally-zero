@@ -21,6 +21,7 @@ export interface ProposalsTabsProps {
   /** Content shown below the navigation. */
   children: ReactNode;
   active?: ProposalView;
+  showNewProposal?: boolean;
 }
 
 /**
@@ -30,6 +31,7 @@ export interface ProposalsTabsProps {
 export function ProposalsTabs({
   children,
   active = "proposals",
+  showNewProposal = true,
 }: ProposalsTabsProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -55,7 +57,7 @@ export function ProposalsTabs({
           ))}
         </nav>
 
-        {active === "proposals" ? (
+        {active === "proposals" && showNewProposal ? (
           <Button asChild size="sm" variant="outline">
             <Link href="/proposal/new">
               <Plus className="h-3.5 w-3.5 mr-1" />
