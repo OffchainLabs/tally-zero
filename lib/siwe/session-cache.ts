@@ -1,6 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { siweApi } from "./client";
 import { SAFES_SCOPE, siweKeys, SUBJECT_SCOPE } from "./keys";
+import { meQueryOptions } from "./queries";
+
+const pendingWalletLogouts = new WeakMap<QueryClient, Promise<void>>();
 
 /**
  * Drop the cached session and re-read it from /api/me at once.
@@ -27,4 +31,42 @@ export function clearAndReconcileSession(
   queryClient.removeQueries({ queryKey: SUBJECT_SCOPE });
   queryClient.removeQueries({ queryKey: SAFES_SCOPE });
   return queryClient.invalidateQueries({ queryKey: siweKeys.me });
+}
+
+/** Revoke a live session if it belongs to a different connected wallet. */
+export async function logoutPreviousWalletSession(
+  queryClient: QueryClient,
+  connectedAddress: string,
+  signal?: AbortSignal
+): Promise<void> {
+  // Every caller checks its own wallet after any earlier revocation finishes.
+  await pendingWalletLogouts.get(queryClient);
+  if (signal?.aborted) return;
+  const session = await queryClient.fetchQuery({
+    ...meQueryOptions,
+    staleTime: 0,
+  });
+  if (
+    signal?.aborted ||
+    !session ||
+    session.address.toLowerCase() === connectedAddress.toLowerCase()
+  ) {
+    return;
+  }
+  return logoutWalletSessionSingleFlight(queryClient);
+}
+
+/** Share only the address-independent cookie revocation. */
+function logoutWalletSessionSingleFlight(
+  queryClient: QueryClient
+): Promise<void> {
+  const pending = pendingWalletLogouts.get(queryClient);
+  if (pending) return pending;
+
+  const logout = (async () => {
+    await siweApi.logout();
+    await clearAndReconcileSession(queryClient);
+  })().finally(() => pendingWalletLogouts.delete(queryClient));
+  pendingWalletLogouts.set(queryClient, logout);
+  return logout;
 }
