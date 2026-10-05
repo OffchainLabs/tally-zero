@@ -1,16 +1,25 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 
 import { SaveToAccountDialog } from "@/components/drafts/SaveToAccountDialog";
 import CreateProposalForm, {
   type ServerSaveEvent,
 } from "@/components/form/CreateProposalForm";
 import { Button } from "@/components/ui/Button";
-import { useDraftSubmissionRecording, type RecordableDraft } from "@/hooks/use-draft-submission-recording";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  useDraftSubmissionRecording,
+  type RecordableDraft,
+} from "@/hooks/use-draft-submission-recording";
 import { useDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { draftToFormState } from "@/lib/drafts/mapping";
@@ -155,6 +164,15 @@ export function ProposalDraftLoader() {
 
   const restored = draft ? draftToFormState(draft) : null;
   const binding = resolveDraftBinding(draft, savedDraft);
+  // Keep the recorder mounted when its API write refreshes the draft to
+  // submitted, so that the form keeps its transaction success screen.
+  const recordingDraft =
+    draft?.status !== "draft" &&
+    draft?.shareSlug &&
+    effectiveAddress?.toLowerCase() === draft.author.toLowerCase()
+      ? { ...draft, shareSlug: draft.shareSlug }
+      : null;
+
   const formProps: ProposalFormProps = {
     initialDraft: restored,
     // The autosave slot is named after the draft on screen, while the save
@@ -195,7 +213,6 @@ export function ProposalDraftLoader() {
     ),
   };
 
-
   return (
     <div className="flex flex-col gap-4">
       {needsSignIn ? (
@@ -207,6 +224,12 @@ export function ProposalDraftLoader() {
           That draft could not be loaded — it may have been deleted, or belong
           to a different account. Starting a blank proposal instead.
         </p>
+      ) : draft?.status === "published" ? (
+        <p className="text-sm text-amber-400">
+          This published draft is ready to submit on chain. Publishing froze its
+          shared contents; if you change them here, you can save your changes as
+          a new draft, and the original will remain published.
+        </p>
       ) : draft && !binding.isEditable ? (
         // Shown until the first save: that save creates the copy and moves the
         // URL to it, and the copy is an ordinary editable draft from then on.
@@ -216,7 +239,16 @@ export function ProposalDraftLoader() {
         </p>
       ) : null}
 
-      <CreateProposalForm {...formProps} />
+      {recordingDraft && effectiveAddress ? (
+        <DraftSubmissionForm
+          key={`${recordingDraft.id}:${effectiveAddress.toLowerCase()}`}
+          draft={recordingDraft}
+          subject={effectiveAddress}
+          {...formProps}
+        />
+      ) : (
+        <CreateProposalForm {...formProps} />
+      )}
     </div>
   );
 }
