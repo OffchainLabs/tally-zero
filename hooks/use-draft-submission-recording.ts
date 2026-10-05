@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useWaitForTransactionReceipt } from "wagmi";
+import { useTransactionReceipt, useWaitForTransactionReceipt } from "wagmi";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { draftSubmissionStorageKey } from "@/config/storage-keys";
@@ -32,7 +32,7 @@ type RecordingStatus =
 /** Mount under a key scoped to the draft and signed-in subject. */
 export function useDraftSubmissionRecording(
   draft: RecordableDraft,
-  subject: string,
+  subject: string
 ) {
   const key = draftSubmissionStorageKey(draft.id, subject);
   const recorderId = useId();
@@ -46,7 +46,7 @@ export function useDraftSubmissionRecording(
   const { markSubmitted } = useMarkSubmitted(draft.shareSlug);
   const [pending, setPending] = useState<PendingDraftSubmission | null>(null);
   const [status, setStatus] = useState<RecordingStatus>(
-    draft.status === "submitted" ? "recorded" : null,
+    draft.status === "submitted" ? "recorded" : null
   );
   const [error, setError] = useState<string | null>(null);
   const pendingHash = useRef<string | null>(null);
@@ -88,7 +88,7 @@ export function useDraftSubmissionRecording(
       setError(null);
       setStatus("confirming");
     },
-    [key, draft.status],
+    [key, draft.status]
   );
 
   const {
@@ -115,7 +115,7 @@ export function useDraftSubmissionRecording(
         setPending(null);
         setStatus("receipt-error");
         setError(
-          "Proposal transaction was cancelled. The draft was not marked submitted.",
+          "Proposal transaction was cancelled. The draft was not marked submitted."
         );
       } else {
         onProposalSubmitted({
@@ -126,7 +126,15 @@ export function useDraftSubmissionRecording(
     },
   });
 
-  const receipt = awaitedReceipt;
+  // wagmi's wait action throws for reverted receipts. Read the raw receipt
+  // after an error to distinguish a verified revert from an RPC outage.
+  const { data: rawReceipt, refetch: refetchReceipt } = useTransactionReceipt({
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: pending?.transactionHash,
+    scopeKey: `${key}:${recorderId}`,
+    query: { enabled: !!pending && !!receiptError, retry: false },
+  });
+  const receipt = awaitedReceipt ?? rawReceipt;
 
   const record = useCallback(
     async (submission: DraftSubmission) => {
@@ -150,7 +158,7 @@ export function useDraftSubmissionRecording(
         recordingHash.current = null;
       }
     },
-    [key, markSubmitted],
+    [key, markSubmitted]
   );
 
   useEffect(() => {
@@ -174,7 +182,7 @@ export function useDraftSubmissionRecording(
       setPending(null);
       setStatus("receipt-error");
       setError(
-        "Proposal transaction reverted. The draft was not marked submitted.",
+        "Proposal transaction reverted. The draft was not marked submitted."
       );
       return;
     }
@@ -200,8 +208,12 @@ export function useDraftSubmissionRecording(
       const result = await refetch();
       if (pendingHash.current !== retryHash) return;
       if (result.error) {
-        setStatus("receipt-error");
-        setError(getErrorMessage(result.error, "confirm proposal"));
+        const verified = await refetchReceipt();
+        if (pendingHash.current !== retryHash) return;
+        if (!verified.data) {
+          setStatus("receipt-error");
+          setError(getErrorMessage(result.error, "confirm proposal"));
+        }
       }
       return;
     }
