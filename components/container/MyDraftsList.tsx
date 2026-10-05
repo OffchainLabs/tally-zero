@@ -65,8 +65,8 @@ function LoadingState() {
   );
 }
 
-
 function DraftsContent() {
+  const { actingAs, effectiveAddress } = useSiwe();
   const { drafts, isLoading, error } = useDraftsList();
 
   if (isLoading) {
@@ -87,6 +87,16 @@ function DraftsContent() {
 
   return (
     <div className="space-y-4">
+      {actingAs ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="drafts-subject"
+        >
+          Showing drafts for{" "}
+          <span className="font-mono">{effectiveAddress}</span>{" "}
+          <span className="text-amber-500">(Safe)</span>
+        </p>
+      ) : null}
       {sorted.length === 0 ? (
         <EmptyState
           title="No drafts yet"
