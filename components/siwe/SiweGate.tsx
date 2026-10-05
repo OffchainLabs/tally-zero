@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppKit } from "@reown/appkit/react";
+
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -26,6 +28,7 @@ export function SiweGate({
   children: React.ReactNode;
   connectDescription?: string;
 }) {
+  const { open } = useAppKit();
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
 
@@ -36,8 +39,9 @@ export function SiweGate({
         description={connectDescription}
         testId="siwe-connect"
       >
-        {/* Reown connect control; test-wallet path auto-connects. */}
-        <appkit-button />
+        <Button onClick={() => void open({ view: "Connect" })}>
+          Connect Wallet
+        </Button>
       </GateCard>
     );
   }
