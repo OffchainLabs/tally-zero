@@ -84,8 +84,16 @@ export function SharedDraftView({ slug }: { slug: string }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            By <span className="font-mono">{draft.author}</span> · updated{" "}
-            {new Date(draft.updatedAt).toLocaleString()}
+            By{" "}
+            <a
+              className="break-all font-mono text-primary hover:underline"
+              href={getAddressExplorerUrl(draft.author)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {draft.author}
+            </a>{" "}
+            · updated {new Date(draft.updatedAt).toLocaleString()}
           </p>
 
           <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground">
