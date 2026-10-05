@@ -322,7 +322,7 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
             className="text-sm text-destructive"
             data-testid="draft-submit-error"
           >
-            {error.message}
+            Could not record this submission. Please try again.
           </p>
         ) : null}
 
