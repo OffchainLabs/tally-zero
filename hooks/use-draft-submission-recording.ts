@@ -64,5 +64,73 @@ export function useDraftSubmissionRecording(
     [key, draft.status]
   );
 
+  const {
+    data: awaitedReceipt,
+    error: receiptError,
+    refetch,
+  } = useWaitForTransactionReceipt({
+    chainId: ARBITRUM_CHAIN_ID,
+    hash: pending?.transactionHash,
+
+  });
+
+  const receipt = awaitedReceipt;
+
+  const record = useCallback(
+    async (submission: DraftSubmission) => {
+      if (recordingHash.current) return;
+      recordingHash.current = submission.transactionHash;
+      setStatus("recording");
+      setError(null);
+      try {
+        await markSubmitted(submission);
+        clearPendingSubmission(key, submission.transactionHash);
+        if (attemptedHash.current === submission.transactionHash)
+          setStatus("recorded");
+      } catch (cause) {
+        if (attemptedHash.current === submission.transactionHash) {
+          setStatus("failed");
+          setError(getErrorMessage(cause, "record draft submission"));
+        }
+      } finally {
+        recordingHash.current = null;
+      }
+    },
+    [key, markSubmitted]
+  );
+
+  useEffect(() => {
+    if (!pending || draft.status !== "published") return;
+    const matchesPending =
+      receipt?.transactionHash.toLowerCase() ===
+      pending.transactionHash.toLowerCase();
+    if (receiptError && !matchesPending) {
+      // An RPC error or timeout does not prove the transaction failed.
+      // Keep its hash so verification can be retried here or after reopening.
+      setStatus("receipt-error");
+      setError(getErrorMessage(receiptError, "confirm proposal"));
+      return;
+    }
+    if (!receipt || !matchesPending) return;
+    if (attemptedHash.current === pending.transactionHash) return;
+    attemptedHash.current = pending.transactionHash;
+    if (receipt.status === "reverted") {
+      clearPendingSubmission(key, pending.transactionHash);
+      setPending(null);
+      setStatus("receipt-error");
+      setError(
+        "Proposal transaction reverted. The draft was not marked submitted."
+      );
+      return;
+    }
+    const checked = checkDraftReceipt(receipt, draft);
+    if (checked.kind === "match") {
+      void record(checked.submission);
+    } else {
+      clearPendingSubmission(key, pending.transactionHash);
+      setStatus(checked.kind);
+    }
+  }, [draft, pending, receipt, receiptError, key, record]);
+
   return { status, error, canRetry: false, retry: async () => {}, onProposalSubmitted };
 }
