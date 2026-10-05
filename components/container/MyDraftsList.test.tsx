@@ -255,4 +255,46 @@ describe("MyDraftsList", () => {
       `${window.location.origin}/drafts/shared/abc123`
     );
   });
+
+  it("publishes only after confirmation", async () => {
+    list([summary()]);
+    const view = render(<MyDraftsList />);
+    fireEvent.click(view.getByTestId("publish-draft"));
+    expect(mocks.publishDraft).not.toHaveBeenCalled();
+    expect(view.container.textContent).toContain("This cannot be undone");
+    fireEvent.click(view.getByTestId("confirm-publish"));
+    await waitFor(() => expect(mocks.publishDraft).toHaveBeenCalledWith("d1"));
+    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+  });
+
+  it("cancels deletion and deletes only after confirmation", async () => {
+    list([summary()]);
+    const view = render(<MyDraftsList />);
+    fireEvent.click(view.getByTestId("delete-draft"));
+    fireEvent.click(view.getByText("Cancel"));
+    expect(mocks.deleteDraft).not.toHaveBeenCalled();
+    fireEvent.click(view.getByTestId("delete-draft"));
+    fireEvent.click(view.getByTestId("confirm-delete"));
+    await waitFor(() => expect(mocks.deleteDraft).toHaveBeenCalledWith("d1"));
+    await waitFor(() =>
+      expect(mocks.toast.success).toHaveBeenCalledWith("Draft deleted.")
+    );
+  });
+
+  it("shows a failed publish and restores the row controls", async () => {
+    mocks.publishDraft.mockRejectedValue(
+      new Error("Draft is already published.")
+    );
+    list([summary()]);
+    const view = render(<MyDraftsList />);
+    fireEvent.click(view.getByTestId("publish-draft"));
+    fireEvent.click(view.getByTestId("confirm-publish"));
+    await waitFor(() =>
+      expect(mocks.toast.error).toHaveBeenCalledWith(
+        "Draft is already published."
+      )
+    );
+    expect(view.queryByTestId("confirm-publish")).toBeNull();
+    expect(view.getByTestId("publish-draft")).toBeDefined();
+  });
 });
