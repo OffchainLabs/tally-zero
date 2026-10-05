@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
-import type { TransactionReceipt } from "viem";
+import type {
+  TransactionReceipt,
+  WaitForTransactionReceiptParameters,
+} from "viem";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { draftSubmissionStorageKey } from "@/config/storage-keys";
@@ -32,7 +35,7 @@ const key = draftSubmissionStorageKey(draft.id, draft.author);
 const newerHash = `0x${"cd".repeat(32)}` as const;
 const mount = () =>
   renderHook(() =>
-    useDraftSubmissionRecording({ ...draft, shareSlug: "slug" }, draft.author),
+    useDraftSubmissionRecording({ ...draft, shareSlug: "slug" }, draft.author)
   );
 
 beforeEach(() => {
@@ -63,14 +66,14 @@ it("ignores an older retry error after a newer transaction is recorded", async (
     view.result.current.onProposalSubmitted({
       hash: txHash,
       governorAddress: governor,
-    }),
+    })
   );
   let finish!: (result: { error: Error }) => void;
   mocks.refetch.mockImplementation(
     () =>
       new Promise((resolve) => {
         finish = resolve;
-      }),
+      })
   );
   let retry!: Promise<void>;
   act(() => {
@@ -82,7 +85,7 @@ it("ignores an older retry error after a newer transaction is recorded", async (
     view.result.current.onProposalSubmitted({
       hash: newerHash,
       governorAddress: governor,
-    }),
+    })
   );
   expect(view.result.current.status).toBe("recorded");
   await act(async () => {
@@ -99,7 +102,7 @@ it("recovers a wallet broadcast received after the original draft was reopened",
   original.unmount();
   const reopened = mount();
   await act(async () =>
-    detachedBroadcast({ hash: txHash, governorAddress: governor }),
+    detachedBroadcast({ hash: txHash, governorAddress: governor })
   );
   expect(reopened.result.current.status).toBe("confirming");
   confirmed = receipt();
@@ -111,3 +114,43 @@ it("recovers a wallet broadcast received after the original draft was reopened",
   });
   expect(readPendingSubmission(key)).toBeNull();
 });
+
+it.each(["cancelled", "repriced", "replaced"] as const)(
+  "ignores a stale %s callback after a newer broadcast",
+  async (reason) => {
+    const view = mount();
+    await act(async () =>
+      view.result.current.onProposalSubmitted({
+        hash: txHash,
+        governorAddress: governor,
+      })
+    );
+    const oldWait = mocks.wait.mock.calls.find(
+      ([parameters]) => parameters.hash === txHash
+    )?.[0] as WaitForTransactionReceiptParameters;
+    await act(async () =>
+      view.result.current.onProposalSubmitted({
+        hash: newerHash,
+        governorAddress: governor,
+      })
+    );
+    await act(async () =>
+      oldWait.onReplaced?.({
+        reason,
+        transactionReceipt: receipt(),
+      } as Parameters<
+        NonNullable<WaitForTransactionReceiptParameters["onReplaced"]>
+      >[0])
+    );
+    expect(readPendingSubmission(key)?.transactionHash).toBe(newerHash);
+    expect(view.result.current.status).toBe("confirming");
+    confirmed = { ...receipt(), transactionHash: newerHash };
+    await act(async () => view.rerender());
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      transactionHash: newerHash,
+      governorAddress: governor,
+      proposalId,
+    });
+    expect(readPendingSubmission(key)).toBeNull();
+  }
+);
