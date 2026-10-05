@@ -9,7 +9,7 @@ import { SIWE_CHAIN_ID } from "@/config/siwe";
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import { clearAndReconcileSession } from "@/lib/siwe/session-cache";
-import type { MeResponse } from "@/lib/siwe/types";
+import { meQueryOptions } from "@/lib/siwe/queries";
 
 const ME_KEY = siweKeys.me;
 
@@ -25,11 +25,7 @@ export function useSiwe() {
   const { signMessageAsync } = useSignMessage();
   const queryClient = useQueryClient();
 
-  const sessionQuery = useQuery<MeResponse | null>({
-    queryKey: ME_KEY,
-    queryFn: () => siweApi.me(),
-    staleTime: 30_000,
-  });
+  const sessionQuery = useQuery(meQueryOptions);
 
   const signIn = useMutation({
     mutationFn: async () => {
