@@ -29,8 +29,8 @@ export default async function SharedDraftPage({
         </Link>
         <h1 className="text-3xl font-bold tracking-tight">Shared Draft</h1>
         <p className="mt-2 text-muted-foreground">
-          A proposal draft shared for review. It has not been submitted on chain
-          unless marked below.
+          A proposal draft shared for review. Its on-chain submission status
+          appears below.
         </p>
       </div>
 
