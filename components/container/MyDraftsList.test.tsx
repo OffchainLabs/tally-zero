@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   useDraftsList: vi.fn(),
 }));
 
+vi.mock("@reown/appkit/react", () => ({
+  useAppKit: () => ({ open: vi.fn() }),
+}));
+
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 
 vi.mock("@/hooks/use-drafts", () => ({
@@ -34,6 +38,7 @@ const DRAFT: DraftSummary = {
 function session(overrides: Partial<ReturnType<typeof mocks.useSiwe>> = {}) {
   mocks.useSiwe.mockReturnValue({
     isSignedIn: true,
+    isConnected: true,
     isLoadingSession: false,
     ...overrides,
   });
