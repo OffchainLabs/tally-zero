@@ -145,7 +145,7 @@ describe("SharedDraftView", () => {
   it("renders the title, author, and markdown body", () => {
     loaded(draft());
 
-    const { getByTestId, container } = render(
+    const { getByTestId, getByRole, container } = render(
       <SharedDraftView slug="abc123" />
     );
 
@@ -153,6 +153,12 @@ describe("SharedDraftView", () => {
       "Fund the thing"
     );
     expect(container.textContent).toContain(AUTHOR);
+    const authorLink = getByRole("link", { name: AUTHOR });
+    expect(authorLink.getAttribute("href")).toBe(
+      `https://arbiscan.io/address/${AUTHOR}`
+    );
+    expect(authorLink.getAttribute("target")).toBe("_blank");
+    expect(authorLink.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.querySelector("strong")?.textContent).toBe("bold");
   });
 
