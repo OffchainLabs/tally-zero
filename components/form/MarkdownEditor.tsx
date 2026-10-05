@@ -131,7 +131,7 @@ export function MarkdownEditor({
   disabled,
   onBlur,
 }: MarkdownEditorProps) {
-  const { resolvedTheme } = useTheme();
+  const { forcedTheme, resolvedTheme } = useTheme();
   const [commands, setCommands] = useState<ICommand[]>();
   const [extraCommands, setExtraCommands] = useState<ICommand[]>();
   const [editorWrapper, setEditorWrapper] = useState<HTMLDivElement | null>(
@@ -175,7 +175,9 @@ export function MarkdownEditor({
   return (
     <div
       ref={setEditorWrapper}
-      data-color-mode={resolvedTheme === "dark" ? "dark" : "light"}
+      data-color-mode={
+        (forcedTheme ?? resolvedTheme) === "light" ? "light" : "dark"
+      }
       className="rounded-md"
     >
       <MDEditor
