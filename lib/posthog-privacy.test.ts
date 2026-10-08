@@ -132,6 +132,7 @@ describe("stripPrivateProperties", () => {
       $current_url: "https://example.test/proposals",
       $raw_user_agent: "Mozilla/5.0 ...",
       $host: "alt.gov.arbitrum.foundation",
+      $ip: "203.0.113.7",
       $geoip_disable: true,
     });
   });
