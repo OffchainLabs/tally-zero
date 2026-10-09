@@ -150,4 +150,71 @@ describe("WalletSessionReconciler", () => {
       client.clear();
     }
   );
+
+  it("waits for old-session logout before signing in the new wallet", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(siweKeys.me, session(FIRST));
+    mocks.useAccount.mockReturnValue({ address: SECOND, isConnected: true });
+    let finishLogout = () => {};
+    const logout = vi.spyOn(siweApi, "logout").mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLogout = resolve;
+        })
+    );
+    vi.spyOn(siweApi, "me")
+      .mockResolvedValueOnce(session(FIRST))
+      .mockResolvedValue(null);
+    const nonce = vi.spyOn(siweApi, "nonce").mockResolvedValue("nonce1234");
+    const verify = vi.spyOn(siweApi, "verify").mockResolvedValue();
+    mocks.signMessageAsync.mockResolvedValue("0x1234");
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <WalletSessionReconciler />
+        <SignInButton />
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(logout).toHaveBeenCalledOnce());
+    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    expect(nonce).not.toHaveBeenCalled();
+
+    finishLogout();
+    await waitFor(() => expect(verify).toHaveBeenCalledOnce());
+    expect(logout).toHaveBeenCalledOnce();
+    expect(nonce).toHaveBeenCalledOnce();
+    client.clear();
+  });
+
+  it("does not sign in the new wallet if revoking the old session fails", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(siweKeys.me, session(FIRST));
+    mocks.useAccount.mockReturnValue({ address: SECOND, isConnected: true });
+    vi.spyOn(siweApi, "me").mockResolvedValue(session(FIRST));
+    const logout = vi
+      .spyOn(siweApi, "logout")
+      .mockRejectedValue(new Error("logout unavailable"));
+    const nonce = vi.spyOn(siweApi, "nonce").mockResolvedValue("nonce1234");
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <WalletSessionReconciler />
+        <SignInButton />
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(logout).toHaveBeenCalledOnce());
+    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() =>
+      expect(view.getByText("logout unavailable")).toBeDefined()
+    );
+    expect(logout).toHaveBeenCalledTimes(2);
+    expect(nonce).not.toHaveBeenCalled();
+    expect(client.getQueryData(siweKeys.me)).toEqual(session(FIRST));
+    client.clear();
+  });
 });
