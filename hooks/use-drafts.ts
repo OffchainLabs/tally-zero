@@ -7,9 +7,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { siweApi } from "@/lib/siwe/client";
+import { siweApi, SiweApiError } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
-import type { Draft, DraftFields, DraftSummary } from "@/lib/siwe/types";
+import type {
+  Draft,
+  DraftFields,
+  DraftSubmission,
+  DraftSummary,
+} from "@/lib/siwe/types";
 
 import { useSiwe } from "./use-siwe";
 
@@ -115,4 +120,55 @@ export function useDraft(id: string | null) {
     queryFn: subject && id ? () => siweApi.getDraft(id) : skipToken,
     staleTime: 30_000,
   });
+}
+
+/**
+ * A published draft read by its share slug. No session involved: the slug is
+ * itself the capability, which is why this key carries no identity.
+ */
+export function useSharedDraft(slug: string) {
+  return useQuery<Draft>({
+    queryKey: siweKeys.sharedDraft(slug),
+    queryFn: () => siweApi.getSharedDraft(slug),
+    staleTime: 30_000,
+    // A 404 is the server's final answer about this slug, so retrying it only
+    // holds the reader on the skeleton. Everything else (the proxy's 502/503,
+    // a dropped connection) is worth the default three attempts.
+    retry: (count, error) =>
+      !(error instanceof SiweApiError && error.status === 404) && count < 3,
+  });
+}
+
+/**
+ * Records the on-chain submission of a published draft.
+ *
+ * Needs a session, but not the author's: any signed-in user can attach the
+ * transaction that submitted it, which is deliberate, since the person who
+ * submits a draft on chain is often not the person who wrote it. The server
+ * records the effective subject as `submittedBy`.
+ */
+export function useMarkSubmitted(slug: string) {
+  const subject = useDraftSubject();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (onchain: DraftSubmission) =>
+      siweApi.markSubmitted(slug, onchain),
+    onSuccess: (draft) => {
+      queryClient.setQueryData(siweKeys.sharedDraft(slug), draft);
+      // The submitter may be the author too, and their list would otherwise
+      // keep saying "Published" until it went stale.
+      if (subject) {
+        return queryClient.invalidateQueries({
+          queryKey: siweKeys.drafts(subject),
+        });
+      }
+    },
+  });
+
+  return {
+    markSubmitted: mutation.mutateAsync,
+    isSubmitting: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
 }

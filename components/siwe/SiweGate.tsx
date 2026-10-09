@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppKit } from "@reown/appkit/react";
+
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -10,70 +12,70 @@ import {
 } from "@/components/ui/Card";
 import { useSiwe } from "@/hooks/use-siwe";
 
-/**
- * Renders `children` only once a wallet is connected and a SIWE session exists,
- * standing in the connect and sign-in steps until then. Every authenticated
- * surface needs the same two screens, so they live here rather than in each one.
- */
-export function SiweGate({ children }: { children: React.ReactNode }) {
+/** Connect or sign in inside the caller's own layout. */
+export function SiweAction() {
+  const { open } = useAppKit();
   const { isConnected, isSignedIn, signIn, isSigningIn, signInError } =
     useSiwe();
-
+  if (isSignedIn) return null;
   if (!isConnected) {
     return (
-      <GateCard
-        title="Connect your wallet"
-        description="Connect your wallet to sign in and create your delegate profile."
-      >
-        {/* Reown connect control; test-wallet path auto-connects. */}
-        <appkit-button />
-      </GateCard>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <GateCard
-        title="Sign in"
-        description="Sign a message to prove wallet ownership. No transaction, no gas."
-      >
+      <div data-testid="siwe-connect">
         <Button
-          data-testid="siwe-sign-in"
-          disabled={isSigningIn}
-          onClick={() => {
-            signIn().catch(() => {});
-          }}
+          size="sm"
+          variant="outline"
+          onClick={() => void open({ view: "Connect" })}
         >
-          {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
+          Connect Wallet
         </Button>
-        {signInError ? (
-          <p className="text-sm text-destructive" data-testid="siwe-error">
-            {signInError.message}
-          </p>
-        ) : null}
-      </GateCard>
+      </div>
     );
   }
-
-  return <>{children}</>;
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="siwe-sign-in"
+        disabled={isSigningIn}
+        onClick={() => {
+          signIn().catch(() => {});
+        }}
+      >
+        {isSigningIn ? "Signing in…" : "Sign in with Ethereum"}
+      </Button>
+      {signInError ? (
+        <p className="text-sm text-destructive" data-testid="siwe-error">
+          {signInError.message}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
-function GateCard({
-  title,
-  description,
+/** Show the connect/sign-in card until authenticated content can mount. */
+export function SiweGate({
   children,
+  connectDescription = "Connect your wallet to sign in and create your delegate profile.",
 }: {
-  title: string;
-  description: string;
   children: React.ReactNode;
+  connectDescription?: string;
 }) {
+  const { isConnected, isSignedIn } = useSiwe();
+  if (isSignedIn) return <>{children}</>;
   return (
     <Card variant="glass">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle>{isConnected ? "Sign in" : "Connect your wallet"}</CardTitle>
+        <CardDescription>
+          {isConnected
+            ? "Sign a message to prove wallet ownership. No transaction, no gas."
+            : connectDescription}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
+      <CardContent className="space-y-3">
+        <SiweAction />
+      </CardContent>
     </Card>
   );
 }
