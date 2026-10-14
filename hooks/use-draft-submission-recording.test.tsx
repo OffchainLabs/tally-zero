@@ -94,4 +94,100 @@ describe("draft submission recording", () => {
     await act(async () => reopened.rerender());
     expect(mocks.markSubmitted).toHaveBeenCalledOnce();
   });
+
+  it("preserves a failed API recording for reopening and explicit retry", async () => {
+    confirmed = receipt();
+    mocks.markSubmitted.mockRejectedValue(new Error("Service unavailable"));
+    const view = mount();
+    await broadcast(view);
+    expect(view.result.current.status).toBe("failed");
+    expect(view.result.current.error).toBe("Service unavailable");
+    expect(readPendingSubmission(key)).toEqual(pending);
+    view.unmount();
+    const reopened = mount();
+    await act(async () => {});
+    expect(mocks.markSubmitted).toHaveBeenCalledTimes(2);
+    mocks.markSubmitted.mockResolvedValue(undefined);
+    await act(async () => reopened.result.current.retry());
+    expect(reopened.result.current.status).toBe("recorded");
+    expect(readPendingSubmission(key)).toBeNull();
+  });
+
+  it.each(["another draft", "another subject"])(
+    "isolates recovery from %s",
+    async (scope) => {
+      savePendingSubmission(key, pending);
+      confirmed = receipt();
+      const view = renderHook(() =>
+        useDraftSubmissionRecording(
+          { ...published, id: scope === "another draft" ? "d2" : draft.id },
+          scope === "another subject"
+            ? "0x5555555555555555555555555555555555555555"
+            : draft.author
+        )
+      );
+      await act(async () => {});
+      expect(view.result.current.status).toBeNull();
+      expect(mocks.markSubmitted).not.toHaveBeenCalled();
+      expect(readPendingSubmission(key)).toEqual(pending);
+    }
+  );
+
+  it.each(["missing", "different", "reverted"])(
+    "clears recovery after %s without marking the draft",
+    async (kind) => {
+      savePendingSubmission(key, pending);
+      if (kind === "missing") confirmed = { ...receipt(), logs: [] };
+      else if (kind === "different")
+        confirmed = receipt({ eventProposalId: "42" });
+      else confirmed = receipt({ status: "reverted" });
+      const view = mount();
+      await act(async () => {});
+      expect(mocks.markSubmitted).not.toHaveBeenCalled();
+      expect(readPendingSubmission(key)).toBeNull();
+      expect(view.result.current.status).toBe(
+        kind === "reverted" ? "receipt-error" : kind
+      );
+      expect(view.result.current.canRetry).toBe(false);
+      if (kind === "reverted")
+        expect(view.result.current.error).toContain("reverted");
+    }
+  );
+
+  it("retains a hash through a receipt outage and verifies it after reopening", async () => {
+    const view = mount();
+    await broadcast(view);
+    receiptError = new Error("RPC temporarily unavailable");
+    await act(async () => view.rerender());
+    expect(view.result.current.status).toBe("receipt-error");
+    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+    view.unmount();
+    receiptError = null;
+    confirmed = receipt();
+    const reopened = mount();
+    await act(async () => {});
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith(submission);
+    expect(reopened.result.current.status).toBe("recorded");
+    expect(readPendingSubmission(key)).toBeNull();
+  });
+
+  it("can retry receipt verification after an outage", async () => {
+    const view = mount();
+    await broadcast(view);
+    receiptError = new Error("RPC temporarily unavailable");
+    await act(async () => view.rerender());
+    expect(view.result.current.canRetry).toBe(true);
+    mocks.refetch.mockImplementation(async () => {
+      receiptError = null;
+      confirmed = receipt();
+      view.rerender();
+      return { data: confirmed, error: null };
+    });
+    await act(async () => view.result.current.retry());
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith(submission);
+    expect(view.result.current.status).toBe("recorded");
+    expect(readPendingSubmission(key)).toBeNull();
+  });
 });
