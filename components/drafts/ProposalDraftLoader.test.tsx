@@ -253,6 +253,85 @@ describe("ProposalDraftLoader", () => {
     }
   );
 
+  it("scopes recording to the loaded published draft and subject", () => {
+    const published: Draft = {
+      ...DRAFT,
+      status: "published",
+      shareSlug: "shared",
+    };
+    session({ isSignedIn: true });
+    draftQuery({ data: published });
+    render();
+    expect(mocks.recording).toHaveBeenCalledExactlyOnceWith(published, SUBJECT);
+    expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBe(
+      mocks.onProposalSubmitted
+    );
+  });
+
+  it("does not mount recording for an editable draft", () => {
+    session({ isSignedIn: true });
+    draftQuery({ data: DRAFT });
+    render();
+    expect(mocks.recording).not.toHaveBeenCalled();
+  });
+
+  it("offers transaction verification retry for recoverable receipt errors", () => {
+    session({ isSignedIn: true });
+    draftQuery({
+      data: { ...DRAFT, status: "published", shareSlug: "shared" },
+    });
+    const retry = vi.fn();
+    mocks.recordingResult.mockReturnValue({
+      status: "receipt-error",
+      error: "RPC unavailable",
+      canRetry: true,
+      retry,
+    });
+    const view = renderView(<ProposalDraftLoader />);
+    fireEvent.click(
+      view.getByRole("button", { name: "Retry transaction verification" })
+    );
+    expect(retry).toHaveBeenCalledOnce();
+    mocks.recordingResult.mockReturnValue({
+      status: "receipt-error",
+      error: "Transaction reverted",
+      canRetry: false,
+      retry,
+    });
+    view.rerender(<ProposalDraftLoader />);
+    expect(
+      view.queryByRole("button", { name: "Retry transaction verification" })
+    ).toBeNull();
+  });
+
+  it("preserves form success when recording refreshes a published draft to submitted", () => {
+    session({ isSignedIn: true });
+    const published: Draft = {
+      ...DRAFT,
+      status: "published",
+      shareSlug: "shared",
+    };
+    draftQuery({ data: published });
+    const view = renderView(<ProposalDraftLoader />);
+    fireEvent.click(view.getByRole("button", { name: "Submit proposal" }));
+
+    draftQuery({ data: { ...published, status: "submitted" } });
+    view.rerender(<ProposalDraftLoader />);
+
+    expect(
+      view.getByRole("button", { name: "Proposal created successfully" })
+    ).toBeDefined();
+  });
+
+  it("does not offer recording for a different signed-in subject", () => {
+    session({ isSignedIn: true, effectiveAddress: "0xother" });
+    draftQuery({
+      data: { ...DRAFT, status: "published", shareSlug: "shared" },
+    });
+    render();
+    expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBeUndefined();
+  });
+
   it("explains and falls back to a blank form when signed out", () => {
     session({ isSignedIn: false });
 
