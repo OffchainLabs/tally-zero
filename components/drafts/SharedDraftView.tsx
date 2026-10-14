@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { SiweGate } from "@/components/siwe/SiweGate";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { isAddress, isHash } from "viem";
 
-import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useSiwe } from "@/hooks/use-siwe";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
+import { useSiwe } from "@/hooks/use-siwe";
 import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
@@ -318,7 +318,7 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
             className="text-sm text-destructive"
             data-testid="draft-submit-error"
           >
-            {error.message}
+            Could not record this submission. Please try again.
           </p>
         ) : null}
 
