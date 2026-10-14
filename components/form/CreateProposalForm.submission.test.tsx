@@ -194,4 +194,48 @@ describe("proposal broadcast and failure", () => {
       "Your propose() transaction has been confirmed"
     );
   });
+
+  it("shows a reverted receipt as a failure and allows another submission", async () => {
+    const { state } = setupSubmission();
+    state.receipt = { ...state.receipt, status: "reverted" };
+    const view = render(<CreateProposalForm initialDraft={stored} />);
+    await submit(view);
+    expect(view.container.textContent).toContain(
+      "Proposal transaction reverted"
+    );
+    expect(view.container.textContent).not.toContain(
+      "Your propose() transaction has been confirmed"
+    );
+    expect(
+      view
+        .getByRole("button", { name: "Submit Proposal" })
+        .hasAttribute("disabled")
+    ).toBe(false);
+    expect(mocks.toast).not.toHaveBeenCalledWith("Proposal submitted.");
+  });
+
+  it("handles a rejected wallet request without reporting a broadcast", async () => {
+    const { writeContractAsync } = setupSubmission();
+    writeContractAsync.mockRejectedValue(
+      new Error("User rejected the request")
+    );
+    const onProposalSubmitted = vi.fn();
+    const view = render(
+      <CreateProposalForm
+        initialDraft={stored}
+        onProposalSubmitted={onProposalSubmitted}
+      />
+    );
+    await submit(view);
+    expect(writeContractAsync).toHaveBeenCalledOnce();
+    expect(onProposalSubmitted).not.toHaveBeenCalled();
+    expect(view.container.textContent).not.toContain(
+      "Your propose() transaction has been confirmed"
+    );
+    expect(
+      view
+        .getByRole("button", { name: "Submit Proposal" })
+        .hasAttribute("disabled")
+    ).toBe(false);
+  });
 });
