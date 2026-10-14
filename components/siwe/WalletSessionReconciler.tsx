@@ -11,7 +11,10 @@ import { logoutPreviousWalletSession } from "@/lib/siwe/session-cache";
 export function WalletSessionReconciler() {
   const { address, isConnected } = useAccount();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery(meQueryOptions);
+  const { data: session } = useQuery({
+    ...meQueryOptions,
+    enabled: isConnected && !!address,
+  });
 
   useEffect(() => {
     if (
