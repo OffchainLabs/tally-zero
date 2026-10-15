@@ -157,17 +157,24 @@ describe("WalletSessionReconciler", () => {
     });
     client.setQueryData(siweKeys.me, session(FIRST));
     mocks.useAccount.mockReturnValue({ address: SECOND, isConnected: true });
+    const events: string[] = [];
     let finishLogout = () => {};
     const logout = vi.spyOn(siweApi, "logout").mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          finishLogout = resolve;
+          finishLogout = () => {
+            events.push("logout resolved");
+            resolve();
+          };
         })
     );
     vi.spyOn(siweApi, "me")
       .mockResolvedValueOnce(session(FIRST))
       .mockResolvedValue(null);
-    const nonce = vi.spyOn(siweApi, "nonce").mockResolvedValue("nonce1234");
+    const nonce = vi.spyOn(siweApi, "nonce").mockImplementation(async () => {
+      events.push("nonce");
+      return "nonce1234";
+    });
     const verify = vi.spyOn(siweApi, "verify").mockResolvedValue();
     mocks.signMessageAsync.mockResolvedValue("0x1234");
 
@@ -179,12 +186,14 @@ describe("WalletSessionReconciler", () => {
     );
     await waitFor(() => expect(logout).toHaveBeenCalledOnce());
     fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    // Let sign-in run as far as it can, so a missing wait would reach nonce here.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
     expect(nonce).not.toHaveBeenCalled();
 
-    finishLogout();
+    act(() => finishLogout());
     await waitFor(() => expect(verify).toHaveBeenCalledOnce());
+    expect(events).toEqual(["logout resolved", "nonce"]);
     expect(logout).toHaveBeenCalledOnce();
-    expect(nonce).toHaveBeenCalledOnce();
     client.clear();
   });
 
