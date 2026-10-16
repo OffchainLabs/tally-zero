@@ -312,6 +312,13 @@ describe("SharedDraftView", () => {
       target: { value: "0x1234" },
     });
     expect(button.disabled).toBe(true);
+
+    // One digit short. viem's isHash passes this, and the server would store
+    // it and lock the draft to a tx that doesn't exist.
+    fireEvent.change(getByTestId("draft-tx-hash"), {
+      target: { value: TX.slice(0, -1) },
+    });
+    expect(button.disabled).toBe(true);
   });
 
   it("submits the trimmed fields", async () => {
