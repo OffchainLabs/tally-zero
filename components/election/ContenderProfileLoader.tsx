@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { ContenderProfile } from "@/components/election/ContenderProfile";
+import { SelfAuthoredNotice } from "@/components/election/SelfAuthoredNotice";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  useElections,
+  usePublicCandidateProfile,
+} from "@/hooks/use-candidate-profile";
+import { latestElectionId, resolveCandidate } from "@/lib/election-profile";
 import {
   getCandidate,
   type TallyElectionCandidate,
@@ -68,6 +74,15 @@ export function ContenderProfileLoader({
     };
   }, [address, hasInitialCandidate, initialCandidate]);
 
+  // A candidate can keep their own profile current through SIWE. That overlays
+  // the static Tally snapshot below — it never replaces it, so a field the
+  // candidate has not touched still shows what was exported.
+  const { data: elections } = useElections();
+  const { data: selfAuthored } = usePublicCandidateProfile(
+    latestElectionId(elections ?? []),
+    address
+  );
+
   const isLoading =
     !hasInitialCandidate && (state.address !== address || state.isLoading);
   const candidate =
@@ -100,5 +115,21 @@ export function ContenderProfileLoader({
     );
   }
 
-  return <ContenderProfile address={address} candidate={candidate} />;
+  // Nothing from either source: leave ContenderProfile to render its own
+  // address-only fallback rather than handing it a synthesized empty record.
+  if (!candidate && !selfAuthored) {
+    return <ContenderProfile address={address} candidate={null} />;
+  }
+
+  const resolved = resolveCandidate(address, candidate, selfAuthored ?? null);
+
+  return (
+    <div className="space-y-6">
+      <SelfAuthoredNotice
+        resolved={resolved}
+        isInCandidateRegistry={candidate !== null}
+      />
+      <ContenderProfile address={address} candidate={resolved.candidate} />
+    </div>
+  );
 }
