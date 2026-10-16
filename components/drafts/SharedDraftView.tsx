@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
-import { isAddress, isHash } from "viem";
+import { isAddress } from "viem";
 
 import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
@@ -13,8 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useSiwe } from "@/hooks/use-siwe";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
+import { useSiwe } from "@/hooks/use-siwe";
+import { TX_HASH_REGEX } from "@/lib/address-utils";
 import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
@@ -238,9 +239,12 @@ function MarkSubmittedForm({ slug }: { slug: string }) {
   const [governorAddress, setGovernorAddress] = useState("");
   const [proposalId, setProposalId] = useState("");
 
-  // Mirrors the server's validators so a rejection is never a surprise.
+  // Mirrors the server's validators so a rejection is never a surprise, except
+  // the hash: the server only checks it is hex, and a short one would stick,
+  // since a submitted draft can't be re-recorded. viem's isHash rounds size up
+  // and passes 63 digits, hence the exact-length regex.
   const isValid =
-    isHash(transactionHash.trim()) &&
+    TX_HASH_REGEX.test(transactionHash.trim()) &&
     isAddress(governorAddress.trim(), { strict: false }) &&
     /^\d+$/.test(proposalId.trim());
 
