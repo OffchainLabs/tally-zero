@@ -320,7 +320,6 @@ export default function CreateProposalForm({
     writeContractAsync,
   } = useWriteContract();
   const {
-    data: receipt,
     isLoading: isConfirming,
     isSuccess: isConfirmed,
     error: receiptError,
@@ -347,8 +346,9 @@ export default function CreateProposalForm({
       );
     },
   });
-  const hasConfirmedSubmission =
-    isConfirmed && receipt?.status === "success" && !!trackedTxHash;
+  // @wagmi/core throws on a reverted receipt, so a resolved receipt is always
+  // a success and a revert arrives as receiptError.
+  const hasConfirmedSubmission = isConfirmed && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
     isWriting,
@@ -481,12 +481,9 @@ export default function CreateProposalForm({
   const writeErrorMessage = writeError
     ? getErrorMessage(writeError, "submit proposal")
     : null;
-  const receiptErrorMessage =
-    receipt?.status === "reverted"
-      ? "Proposal transaction reverted. Your proposal was not submitted. Please try again."
-      : receiptError
-        ? getErrorMessage(receiptError, "confirm proposal")
-        : null;
+  const receiptErrorMessage = receiptError
+    ? getErrorMessage(receiptError, "confirm proposal")
+    : null;
 
   const canSubmit =
     submissionPhase === "idle" &&
