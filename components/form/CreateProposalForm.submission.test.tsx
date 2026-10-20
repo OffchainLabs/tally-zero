@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GOVERNORS } from "@/config/governors";
@@ -57,19 +58,56 @@ function setupSubmission() {
     isFetching: false,
   });
   const writeContractAsync = vi.fn().mockResolvedValue(transactionHash);
-  mocks.useWriteContract.mockReturnValue({
-    error: null,
-    isPending: false,
-    writeContractAsync,
+  // Mirrors useWriteContract: a rejected write rejects the promise and then
+  // surfaces as `error` on the next render. The form renders that `error`;
+  // the catch in handleSubmit only keeps the rejection from going unhandled.
+  mocks.useWriteContract.mockImplementation(() => {
+    const [error, setError] = useState<Error | null>(null);
+    return {
+      error,
+      isPending: false,
+      writeContractAsync: async (request: unknown) => {
+        try {
+          return await writeContractAsync(request);
+        } catch (writeFailure) {
+          setError(writeFailure as Error);
+          throw writeFailure;
+        }
+      },
+    };
   });
-  const state = { confirmed: true, receipt };
+  // Mirrors useWaitForTransactionReceipt: @wagmi/core throws on a reverted
+  // receipt, so a revert arrives as `error` with no data, never as a resolved
+  // receipt with status "reverted".
+  const state: { confirmed: boolean; receiptError: Error | null } = {
+    confirmed: true,
+    receiptError: null,
+  };
   mocks.useWaitForTransactionReceipt.mockImplementation(
-    ({ hash }: { hash?: string }) => ({
-      data: hash && state.confirmed ? state.receipt : undefined,
-      isLoading: Boolean(hash) && !state.confirmed,
-      isSuccess: Boolean(hash) && state.confirmed,
-      error: null,
-    })
+    ({ hash }: { hash?: string }) => {
+      if (!hash) {
+        return {
+          data: undefined,
+          isLoading: false,
+          isSuccess: false,
+          error: null,
+        };
+      }
+      if (state.receiptError) {
+        return {
+          data: undefined,
+          isLoading: false,
+          isSuccess: false,
+          error: state.receiptError,
+        };
+      }
+      return {
+        data: state.confirmed ? receipt : undefined,
+        isLoading: !state.confirmed,
+        isSuccess: state.confirmed,
+        error: null,
+      };
+    }
   );
 
   return {
@@ -147,13 +185,15 @@ describe("proposal broadcast and failure", () => {
     );
   });
 
-  it("shows a reverted receipt as a failure and allows another submission", async () => {
+  it("shows the revert reason as a failure and allows another submission", async () => {
     const { state } = setupSubmission();
-    state.receipt = { ...state.receipt, status: "reverted" };
+    state.receiptError = new Error(
+      "Governor: proposer votes below proposal threshold"
+    );
     const view = render(<CreateProposalForm initialDraft={stored} />);
     await submit(view);
     expect(view.container.textContent).toContain(
-      "Proposal transaction reverted"
+      "Governor: proposer votes below proposal threshold"
     );
     expect(view.container.textContent).not.toContain(
       "Your propose() transaction has been confirmed"
@@ -181,6 +221,7 @@ describe("proposal broadcast and failure", () => {
     await submit(view);
     expect(writeContractAsync).toHaveBeenCalledOnce();
     expect(onProposalSubmitted).not.toHaveBeenCalled();
+    expect(view.container.textContent).toContain("User rejected the request");
     expect(view.container.textContent).not.toContain(
       "Your propose() transaction has been confirmed"
     );
