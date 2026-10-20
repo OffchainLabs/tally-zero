@@ -2,72 +2,72 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import MyDraftsList from "@/components/container/MyDraftsList";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { Button } from "@components/ui/Button";
 
-type ProposalsTab = "proposals" | "drafts";
+type ProposalView = "proposals" | "drafts";
 
-const TABS: { id: ProposalsTab; label: string }[] = [
-  { id: "proposals", label: "Proposals" },
-  { id: "drafts", label: "My Drafts" },
+const VIEWS: { id: ProposalView; href: string; label: string }[] = [
+  { id: "proposals", href: "/proposals", label: "Proposals" },
+  { id: "drafts", href: "/drafts", label: "My Drafts" },
 ];
 
+const VIEW_LINK_CLASS =
+  "inline-flex h-9 items-center rounded-full px-5 text-sm font-medium transition-all duration-200";
+
 export interface ProposalsTabsProps {
-  /** Content shown under the "Proposals" tab, usually the proposals table. */
+  /** Content shown below the navigation. */
   children: ReactNode;
+  active?: ProposalView;
+  showNewProposal?: boolean;
 }
 
 /**
- * Segmented "Proposals / My Drafts" switcher plus the "New Proposal" action,
- * over either the caller's proposals content or the signed-in user's server
- * drafts. Shared by the home page and the proposals page so both get the same
- * nav above their table.
+ * Segmented navigation shared by the home, proposals, and drafts pages.
+ * Links keep both views directly accessible and bookmarkable.
  */
-export function ProposalsTabs({ children }: ProposalsTabsProps) {
-  const [tab, setTab] = useState<ProposalsTab>("proposals");
-
+export function ProposalsTabs({
+  children,
+  active = "proposals",
+  showNewProposal = true,
+}: ProposalsTabsProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <div
-          role="tablist"
+        <nav
           aria-label="Proposal views"
           className="inline-flex items-center gap-1 rounded-full glass-subtle backdrop-blur p-1"
         >
-          {TABS.map(({ id, label }) => {
-            const active = tab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(id)}
-                className={cn(
-                  "h-9 rounded-full px-5 text-sm font-medium transition-all duration-200",
-                  active
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+          {VIEWS.map(({ id, href, label }) => (
+            <Link
+              key={id}
+              href={href}
+              aria-current={active === id ? "true" : undefined}
+              className={cn(
+                VIEW_LINK_CLASS,
+                active === id
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
 
-        <Button asChild size="sm" variant="outline">
-          <Link href="/proposal/new">
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            New Proposal
-          </Link>
-        </Button>
+        {active === "proposals" && showNewProposal ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href="/proposal/new">
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              New Proposal
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
-      {tab === "proposals" ? children : <MyDraftsList />}
+      {children}
     </div>
   );
 }

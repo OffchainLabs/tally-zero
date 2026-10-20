@@ -134,6 +134,11 @@ interface CreateProposalFormProps {
    * client, and a router, which is also what keeps its tests cheap.
    */
   renderDraftActions?: (snapshot: ProposalFormSnapshot) => ReactNode;
+  /** Called as soon as the wallet broadcasts a proposal transaction. */
+  onProposalSubmitted?: (submission: {
+    hash: `0x${string}`;
+    governorAddress: string;
+  }) => void;
 }
 
 export default function CreateProposalForm({
@@ -142,6 +147,7 @@ export default function CreateProposalForm({
   serverSave = null,
   accountAddress = null,
   renderDraftActions,
+  onProposalSubmitted,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -162,7 +168,6 @@ export default function CreateProposalForm({
     string | null
   >(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-
   // Local autosave and the status bar. Nothing is written until the mount
   // effect has checked the browser for a copy to restore.
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
@@ -312,7 +317,7 @@ export default function CreateProposalForm({
   const {
     error: writeError,
     isPending: isWriting,
-    writeContract,
+    writeContractAsync,
   } = useWriteContract();
   const {
     isLoading: isConfirming,
@@ -341,6 +346,8 @@ export default function CreateProposalForm({
       );
     },
   });
+  // @wagmi/core throws on a reverted receipt, so a resolved receipt is always
+  // a success and a revert arrives as receiptError.
   const hasConfirmedSubmission = isConfirmed && !!trackedTxHash;
   const submissionPhase = getProposalSubmissionPhase({
     txHash: trackedTxHash,
@@ -528,7 +535,7 @@ export default function CreateProposalForm({
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setAttemptedSubmit(true);
     if (!canSubmit || !simulateData?.request) return;
     setReplacementErrorMessage(null);
@@ -536,14 +543,17 @@ export default function CreateProposalForm({
       proposalId: predictedProposalId,
       governorAddress: governor.address,
     });
-    writeContract(simulateData.request, {
-      onSuccess: (hash) => {
-        setTrackedTxHash(hash);
-      },
-      onError: () => {
-        setTrackedTxHash(undefined);
-      },
-    });
+    try {
+      // Await the write itself: per-call mutation callbacks are skipped when
+      // navigation unmounts the form before the wallet returns its hash.
+      // This closure keeps the draft callback and governor from submission time.
+      const hash = await writeContractAsync(simulateData.request);
+      onProposalSubmitted?.({ hash, governorAddress: governor.address });
+      setTrackedTxHash(hash);
+    } catch {
+      // useWriteContract exposes the wallet error in the form.
+      setTrackedTxHash(undefined);
+    }
   }
 
   if (submissionPhase === "confirmed" && trackedTxHash) {

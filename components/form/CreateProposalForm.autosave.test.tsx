@@ -16,6 +16,13 @@ import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
 import type { Draft } from "@/lib/siwe/types";
 
 import CreateProposalForm from "./CreateProposalForm";
+import {
+  ACCOUNT,
+  installStorage,
+  SERVER_UPDATED_AT,
+  stored,
+  STORED_TARGET,
+} from "./CreateProposalForm.test-helpers";
 
 /**
  * The browser autosave, run for real: which localStorage slot the form reads,
@@ -33,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   useDraft: vi.fn(),
   createDraft: vi.fn(),
   patchDraft: vi.fn(),
+  markSubmitted: vi.fn(),
   useAccount: vi.fn(),
   useGovernanceClock: vi.fn(),
   useReadContract: vi.fn(),
@@ -50,6 +58,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
 vi.mock("@/hooks/use-drafts", () => ({
   useDraft: mocks.useDraft,
+  useMarkSubmitted: () => ({ markSubmitted: mocks.markSubmitted }),
   useDraftMutations: () => ({
     createDraft: mocks.createDraft,
     patchDraft: mocks.patchDraft,
@@ -81,59 +90,11 @@ vi.mock("@/hooks/use-governance-clock", () => ({
   useGovernanceClock: mocks.useGovernanceClock,
 }));
 
-// Node ships its own experimental `localStorage` global, which stays undefined
-// without `--localstorage-file` and shadows jsdom's. An in-memory Storage is
-// all the form needs.
-function memoryStorage(): Storage {
-  const map = new Map<string, string>();
-  return {
-    get length() {
-      return map.size;
-    },
-    clear: () => map.clear(),
-    getItem: (key) => map.get(key) ?? null,
-    key: (index) => [...map.keys()][index] ?? null,
-    removeItem: (key) => {
-      map.delete(key);
-    },
-    setItem: (key, value) => {
-      map.set(key, String(value));
-    },
-  };
-}
-
-function installStorage() {
-  const storage = memoryStorage();
-  vi.stubGlobal("localStorage", storage);
-  if (window !== globalThis) {
-    Object.defineProperty(window, "localStorage", {
-      value: storage,
-      configurable: true,
-    });
-  }
-}
-
 const BARE_KEY = STORAGE_KEYS.PROPOSAL_DRAFT;
 const DRAFT_KEY = proposalDraftStorageKey("d1");
-const ACCOUNT = "0x1234567890abcdef1234567890abcdef12345678";
-const STORED_TARGET = "0x2222222222222222222222222222222222222222";
 const SCRATCH_TARGET = "0x3333333333333333333333333333333333333333";
 const TYPED_TARGET = "0x4444444444444444444444444444444444444444";
-
-// A draft stored on the server on New Year's Day; every local copy in these
-// tests is dated relative to it.
-const SERVER_UPDATED_AT = "2026-01-01T00:00:00Z";
 const SERVER_AT = Date.parse(SERVER_UPDATED_AT);
-
-const stored = {
-  title: "Stored draft",
-  description: "# Stored\n\nbody",
-  governorType: "core" as const,
-  actions: [
-    { id: "restored-0", target: STORED_TARGET, value: "5", calldata: "0x" },
-  ],
-  updatedAt: SERVER_UPDATED_AT,
-};
 
 const serverDraft: Draft = {
   id: "d1",
@@ -226,7 +187,7 @@ describe("CreateProposalForm browser autosave", () => {
     mocks.useWriteContract.mockReturnValue({
       error: null,
       isPending: false,
-      writeContract: vi.fn(),
+      writeContractAsync: vi.fn(),
     });
     mocks.useWaitForTransactionReceipt.mockReturnValue({
       isLoading: false,
