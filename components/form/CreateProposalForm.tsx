@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import type { ReplacementReturnType } from "viem";
 import {
   useAccount,
   useReadContract,
@@ -139,7 +140,17 @@ interface CreateProposalFormProps {
     hash: `0x${string}`;
     governorAddress: string;
   }) => void;
+  /**
+   * Called when the wallet replaces, reprices or cancels the broadcast
+   * transaction. The receipt belongs to the replacement.
+   */
+  onProposalReplaced?: (replacement: ProposalReplacement) => void;
 }
+
+export type ProposalReplacement = Pick<
+  ReplacementReturnType,
+  "reason" | "transactionReceipt"
+>;
 
 export default function CreateProposalForm({
   initialDraft,
@@ -148,6 +159,7 @@ export default function CreateProposalForm({
   accountAddress = null,
   renderDraftActions,
   onProposalSubmitted,
+  onProposalReplaced,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
@@ -326,7 +338,11 @@ export default function CreateProposalForm({
   } = useWaitForTransactionReceipt({
     chainId: ARBITRUM_CHAIN_ID,
     hash: trackedTxHash,
-    onReplaced: ({ reason, transactionReceipt }) => {
+    onReplaced: (replacement) => {
+      // A draft recorder shares this query, so it learns of the replacement
+      // from here rather than from a wait of its own.
+      onProposalReplaced?.(replacement);
+      const { reason, transactionReceipt } = replacement;
       if (reason === "cancelled") {
         setTrackedTxHash(undefined);
         setSubmittedProposalMeta(null);

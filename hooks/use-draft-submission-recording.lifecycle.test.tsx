@@ -154,3 +154,72 @@ it.each(["cancelled", "repriced", "replaced"] as const)(
     expect(readPendingSubmission(key)).toBeNull();
   }
 );
+
+it("shares the form's wait query instead of scoping its own", async () => {
+  const view = mount();
+  await act(async () =>
+    view.result.current.onProposalSubmitted({
+      hash: txHash,
+      governorAddress: governor,
+    })
+  );
+  const parameters = mocks.wait.mock.calls.at(-1)?.[0] as Record<
+    string,
+    unknown
+  >;
+  expect(parameters.hash).toBe(txHash);
+  expect(parameters).not.toHaveProperty("scopeKey");
+});
+
+it.each(["repriced", "replaced"] as const)(
+  "follows a %s transaction forwarded by the form",
+  async (reason) => {
+    const view = mount();
+    await act(async () =>
+      view.result.current.onProposalSubmitted({
+        hash: txHash,
+        governorAddress: governor,
+      })
+    );
+    await act(async () =>
+      view.result.current.onProposalReplaced({
+        reason,
+        transactionReceipt: { ...receipt(), transactionHash: newerHash },
+      })
+    );
+    expect(readPendingSubmission(key)?.transactionHash).toBe(newerHash);
+    expect(view.result.current.status).toBe("confirming");
+    confirmed = { ...receipt(), transactionHash: newerHash };
+    await act(async () => view.rerender());
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      transactionHash: newerHash,
+      governorAddress: governor,
+      proposalId,
+    });
+  }
+);
+
+it("clears the recording when the form forwards a cancellation", async () => {
+  const view = mount();
+  await act(async () =>
+    view.result.current.onProposalSubmitted({
+      hash: txHash,
+      governorAddress: governor,
+    })
+  );
+  await act(async () =>
+    view.result.current.onProposalReplaced({
+      reason: "cancelled",
+      transactionReceipt: {
+        ...receipt(),
+        transactionHash: newerHash,
+        logs: [],
+      },
+    })
+  );
+  expect(readPendingSubmission(key)).toBeNull();
+  expect(view.result.current.status).toBe("receipt-error");
+  expect(view.result.current.error).toContain("cancelled");
+  expect(view.result.current.canRetry).toBe(false);
+  expect(mocks.markSubmitted).not.toHaveBeenCalled();
+});
