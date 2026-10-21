@@ -93,6 +93,8 @@ export function L1ProposalPage({
             <GovernorBadge governorName={L1_VOTING_GOVERNOR_NAME} />
             {stateValue && (
               <Badge
+                data-testid="l1-proposal-state"
+                data-state={display.state.toUpperCase()}
                 className={cn(
                   "text-xs font-semibold inline-flex items-center",
                   stateValue.bgColor

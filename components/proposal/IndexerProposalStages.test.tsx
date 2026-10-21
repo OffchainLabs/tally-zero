@@ -115,6 +115,13 @@ describe("ProposalStages from the indexer", () => {
     expect(html).toContain("Est. completion");
     // No Arbiscan governor links for an L1 voting proposal
     expect(html).not.toContain("arbiscan.io/address");
+    // Stage roots carry the endpoint's type and status for e2e
+    expect(html).toContain(
+      'data-stage-type="PROPOSAL_QUEUED" data-stage-status="COMPLETED"'
+    );
+    expect(html).toContain(
+      'data-stage-type="L1_TIMELOCK" data-stage-status="PENDING"'
+    );
   });
 
   it("shows local chain hashes without a link", () => {

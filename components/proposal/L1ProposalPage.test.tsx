@@ -111,7 +111,9 @@ describe("ProposalPage for an L1 voting proposal", () => {
     const html = renderPage(`eip155:1337:${L1_GOVERNOR}`);
 
     expect(html).toContain("L1 Voting");
-    expect(html).toContain("Active");
+    expect(html).toMatch(
+      /data-testid="l1-proposal-state"[^>]*data-state="ACTIVE"|data-state="ACTIVE"[^>]*data-testid="l1-proposal-state"/
+    );
     expect(html).toContain("Recover the bridge");
     expect(html).toContain("Move funds back.");
   });

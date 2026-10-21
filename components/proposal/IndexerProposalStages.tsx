@@ -80,25 +80,31 @@ export default function IndexerProposalStages({
 
       <div className="relative">
         {stages.map((stage, idx) => (
-          <StageItem
+          // The endpoint's own status, before READY is derived, for e2e checks
+          <div
             key={stage.type}
-            stage={stage}
-            stageType={stage.type}
-            stageIndex={idx}
-            isLast={idx === stages.length - 1}
-            isTracking={false}
-            isLoading={false}
-            isRefreshing={false}
-            onRefresh={refetch}
-            estimatedCompletion={indexerStageEstimatedCompletion(
-              data.stages[idx]
-            )}
-            votingTimeRange={votingPeriod?.range ?? null}
-            extensionStillPossible={extensionStillPossible}
-            governorType={governorType}
-            proposalId={proposalId}
-            governorAddress={governorAddress}
-          />
+            data-stage-type={stage.type}
+            data-stage-status={data.stages[idx].status}
+          >
+            <StageItem
+              stage={stage}
+              stageType={stage.type}
+              stageIndex={idx}
+              isLast={idx === stages.length - 1}
+              isTracking={false}
+              isLoading={false}
+              isRefreshing={false}
+              onRefresh={refetch}
+              estimatedCompletion={indexerStageEstimatedCompletion(
+                data.stages[idx]
+              )}
+              votingTimeRange={votingPeriod?.range ?? null}
+              extensionStillPossible={extensionStillPossible}
+              governorType={governorType}
+              proposalId={proposalId}
+              governorAddress={governorAddress}
+            />
+          </div>
         ))}
       </div>
     </div>
