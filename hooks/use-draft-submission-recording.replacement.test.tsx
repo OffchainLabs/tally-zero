@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   createClient,
   custom,
@@ -38,7 +38,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("delivers transaction replacements to both the live form and the draft recorder with real wagmi queries", async () => {
+// The form and the recorder share one wagmi query. The form, as the child,
+// starts the fetch, so its onReplaced fires and forwards the event.
+it("delivers a transaction replacement to the form and the draft recorder through one shared wagmi query", async () => {
   const replacement = `0x${"cd".repeat(32)}` as const;
   const replacementReceipt = { ...receipt(), transactionHash: replacement };
   const waiters: {
@@ -85,16 +87,23 @@ it("delivers transaction replacements to both the live form and the draft record
   );
   const view = renderHook(
     () => {
+      const [formHash, setFormHash] = useState<`0x${string}`>();
+      const recorder =
+        useRef<ReturnType<typeof useDraftSubmissionRecording>>(null);
+      useWaitForTransactionReceipt({
+        chainId: arbitrum.id,
+        hash: formHash,
+        onReplaced: (replacement) => {
+          recorder.current?.onProposalReplaced(replacement);
+          setFormHash(replacement.transactionReceipt.transactionHash);
+        },
+      });
       const recording = useDraftSubmissionRecording(
         { ...draft, shareSlug: "slug" },
         draft.author
       );
-      const [formHash, setFormHash] = useState<`0x${string}`>();
-      useWaitForTransactionReceipt({
-        chainId: arbitrum.id,
-        hash: formHash,
-        onReplaced: ({ transactionReceipt }) =>
-          setFormHash(transactionReceipt.transactionHash),
+      useEffect(() => {
+        recorder.current = recording;
       });
       return { recording, formHash, setFormHash };
     },
@@ -108,17 +117,20 @@ it("delivers transaction replacements to both the live form and the draft record
       });
       view.result.current.setFormHash(txHash);
     });
-    await waitFor(() => expect(waiters).toHaveLength(2));
+    await waitFor(() => expect(waiters).toHaveLength(1));
+    await act(async () => view.rerender());
+    expect(
+      wait.mock.calls.filter(([{ hash }]) => hash === txHash)
+    ).toHaveLength(1);
     await act(async () => {
-      for (const { parameters, resolve } of waiters) {
-        parameters.onReplaced?.({
-          reason: "repriced",
-          transactionReceipt: replacementReceipt,
-        } as Parameters<
-          NonNullable<WaitForTransactionReceiptParameters["onReplaced"]>
-        >[0]);
-        resolve(replacementReceipt);
-      }
+      const [{ parameters, resolve }] = waiters;
+      parameters.onReplaced?.({
+        reason: "repriced",
+        transactionReceipt: replacementReceipt,
+      } as Parameters<
+        NonNullable<WaitForTransactionReceiptParameters["onReplaced"]>
+      >[0]);
+      resolve(replacementReceipt);
     });
     await waitFor(() =>
       expect(view.result.current.recording.status).toBe("recorded")
