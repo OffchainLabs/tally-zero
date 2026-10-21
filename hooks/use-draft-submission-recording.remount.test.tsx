@@ -32,13 +32,16 @@ afterEach(() => {
 });
 
 it.each(["repriced", "cancelled"] as const)(
-  "handles %s after reopening with original wait query still in flight",
+  "handles %s after reopening while the original wait is still in flight",
   async (reason) => {
     const replacement = `0x${"cd".repeat(32)}` as const;
+    const self = `0x${"11".repeat(20)}` as const;
+    // The reopened hook shares the in-flight query, whose onReplaced belongs
+    // to the unmounted instance, so it must follow the resolved receipt.
     const replacementReceipt = {
       ...receipt(),
       transactionHash: replacement,
-      ...(reason === "cancelled" ? { logs: [] } : {}),
+      ...(reason === "cancelled" ? { logs: [], from: self, to: self } : {}),
     };
     const waiters: {
       parameters: WaitForTransactionReceiptParameters;
@@ -103,7 +106,10 @@ it.each(["repriced", "cancelled"] as const)(
     await waitFor(() => expect(waiters).toHaveLength(1));
     original.unmount();
     const reopened = mount();
-    await waitFor(() => expect(waiters).toHaveLength(2));
+    await waitFor(() =>
+      expect(reopened.result.current.status).toBe("confirming")
+    );
+    expect(wait).toHaveBeenCalledOnce();
     await act(async () => {
       for (const { parameters, resolve } of waiters) {
         parameters.onReplaced?.({
