@@ -16,7 +16,7 @@
 // guaranteed 400. So blank rows are dropped on the way out, and anything left
 // that still would not pass is reported to the caller *before* the request.
 
-import type { GovernorType } from "@/config/governors";
+import type { L2GovernorType } from "@/config/governors";
 import {
   createFormProposalAction,
   type FormProposalAction,
@@ -45,21 +45,21 @@ export const DRAFT_TITLE_MAX_LENGTH = 120;
 
 const FALLBACK_DRAFT_TITLE = "Untitled draft";
 
-const GOVERNOR_TO_DRAFT: Record<GovernorType, DraftGovernorType> = {
+const GOVERNOR_TO_DRAFT: Record<L2GovernorType, DraftGovernorType> = {
   core: "CONSTITUTIONAL",
   treasury: "TREASURY",
 };
 
-const DRAFT_TO_GOVERNOR: Record<DraftGovernorType, GovernorType> = {
+const DRAFT_TO_GOVERNOR: Record<DraftGovernorType, L2GovernorType> = {
   CONSTITUTIONAL: "core",
   TREASURY: "treasury",
 };
 
-export function toDraftGovernorType(type: GovernorType): DraftGovernorType {
+export function toDraftGovernorType(type: L2GovernorType): DraftGovernorType {
   return GOVERNOR_TO_DRAFT[type];
 }
 
-export function fromDraftGovernorType(type: DraftGovernorType): GovernorType {
+export function fromDraftGovernorType(type: DraftGovernorType): L2GovernorType {
   return DRAFT_TO_GOVERNOR[type];
 }
 
@@ -111,7 +111,7 @@ function toDraftAction(action: ProposalAction): DraftAction {
  */
 export type ProposalFormSnapshot = {
   description: string;
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   actions: ProposalAction[];
 };
 
@@ -153,7 +153,7 @@ export function toDraftFields(state: DraftFormState): DraftFields {
 export type RestoredDraftFormState = {
   title: string;
   description: string;
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   actions: FormProposalAction[];
   /**
    * When the server last saw these contents. The form's autosave compares its

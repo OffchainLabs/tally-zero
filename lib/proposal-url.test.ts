@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { registerL1VotingGovernor } from "@/config/governors";
+
 import {
   buildGovernorId,
   buildProposalPath,
   normalizeProposalTab,
   parseGovernorId,
+  parseGovernorRef,
 } from "./proposal-url";
 
 describe("proposal-url", () => {
@@ -80,6 +83,52 @@ describe("proposal-url", () => {
           tab: "description",
         })
       ).toBe(`/proposal/${proposalId}?govId=${governorId}`);
+    });
+  });
+
+  describe("L1 voting governors", () => {
+    const l1Governor = "0x00000000000000000000000000000000000e11e1";
+    const proposalId = "42";
+
+    it("parses eip155:1 and eip155:1337 governor ids", () => {
+      expect(parseGovernorRef(`eip155:1:${l1Governor}`)).toEqual({
+        governorAddress: l1Governor,
+        chainId: 1,
+      });
+      expect(parseGovernorRef(`eip155:1337:${l1Governor}`)).toEqual({
+        governorAddress: l1Governor,
+        chainId: 1337,
+      });
+      expect(parseGovernorId(`eip155:1:${l1Governor}`)).toBe(l1Governor);
+    });
+
+    it("still parses Arbitrum One ids with their chain", () => {
+      expect(parseGovernorRef(governorId)).toEqual({
+        governorAddress,
+        chainId: 42161,
+      });
+    });
+
+    it("rejects chains no governor lives on", () => {
+      expect(parseGovernorRef(`eip155:10:${l1Governor}`)).toBeNull();
+      expect(parseGovernorRef(`eip155:x:${l1Governor}`)).toBeNull();
+    });
+
+    it("builds a path on the chain it is given", () => {
+      expect(
+        buildProposalPath({
+          proposalId,
+          governorAddress: l1Governor,
+          chainId: "1337",
+        })
+      ).toBe(`/proposal/${proposalId}?govId=eip155:1337:${l1Governor}`);
+    });
+
+    it("defaults to a registered governor's own chain", () => {
+      const registered = "0x00000000000000000000000000000000000f11f1";
+      expect(buildGovernorId(registered)).toBe(`eip155:42161:${registered}`);
+      registerL1VotingGovernor(registered, 1);
+      expect(buildGovernorId(registered)).toBe(`eip155:1:${registered}`);
     });
   });
 });

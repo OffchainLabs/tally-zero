@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { getGovernorType, isL1VotingGovernor } from "@/config/governors";
 import { getStateName } from "@/lib/state-utils";
+import type { TallyProposalIndexEntry } from "@/lib/tally-data/types";
 import type { ParsedProposal } from "@/types/proposal";
 
 import {
   applyGapScan,
   applyStateRefresh,
+  proposalFromSqliteIndexEntry,
+  selectProposalsNeedingRefresh,
   type ProposalSearchData,
 } from "./use-multi-governor-search";
 
@@ -188,5 +192,109 @@ describe("applyGapScan", () => {
     expect(next.proposals[0].creationTxHash).toBe("0x1f70");
     // Already known to the indexer, so not a new proposal
     expect(next.sourceInfo.rpcFreshCount).toBe(0);
+  });
+});
+
+describe("proposalFromSqliteIndexEntry", () => {
+  const L1_GOVERNOR = "0x00000000000000000000000000000000001a1a1a";
+
+  const l1Entry: TallyProposalIndexEntry = {
+    proposalId: "77",
+    governorAddress: L1_GOVERNOR,
+    governorType: "L1_VOTING",
+    chainId: 1337,
+    snapshotBlock: 120,
+    snapshotLocked: true,
+    executionPhase: "L2_RETRYABLE_PENDING",
+    executionCancelled: false,
+    state: "EXECUTED",
+    proposer: "0xb4c064f466931b8d0f637654c916e3f203c46f13",
+    description: "# Recover the DAO",
+  };
+
+  it("maps an L1 voting entry onto its own chain and governor", () => {
+    const proposal = proposalFromSqliteIndexEntry(l1Entry, null);
+
+    expect(proposal).toMatchObject({
+      id: "77",
+      networkId: "1337",
+      governorName: "L1 Voting Governor",
+      governorType: "L1_VOTING",
+      snapshotLocked: true,
+      executionPhase: "L2_RETRYABLE_PENDING",
+      executionCancelled: false,
+      startBlock: "120",
+      state: "Executed",
+    });
+  });
+
+  it("registers the L1 voting governor for address-only lookups", () => {
+    proposalFromSqliteIndexEntry(l1Entry, null);
+    expect(isL1VotingGovernor(L1_GOVERNOR)).toBe(true);
+    expect(getGovernorType(L1_GOVERNOR)).toBe("l1");
+  });
+
+  it("keeps an L2 entry on Arbitrum One, with or without the new fields", () => {
+    const legacy = proposalFromSqliteIndexEntry(
+      {
+        proposalId: "1",
+        governorAddress: CORE_GOVERNOR,
+        snapshotBlock: 5,
+        state: "ACTIVE",
+        proposer: null,
+        description: null,
+      },
+      null
+    );
+    expect(legacy).toMatchObject({
+      networkId: "42161",
+      governorName: "Core Governor",
+      snapshotLocked: null,
+      executionPhase: null,
+      executionCancelled: false,
+    });
+    expect(legacy.governorType).toBeUndefined();
+
+    const current = proposalFromSqliteIndexEntry(
+      {
+        proposalId: "2",
+        governorAddress: CORE_GOVERNOR,
+        governorType: "CONSTITUTIONAL",
+        chainId: 42161,
+        snapshotBlock: 5,
+        snapshotLocked: null,
+        executionPhase: "L1_CHALLENGE_PERIOD",
+        state: "EXECUTED",
+        proposer: null,
+        description: null,
+      },
+      null
+    );
+    expect(current).toMatchObject({
+      networkId: "42161",
+      governorName: "Core Governor",
+      governorType: "CONSTITUTIONAL",
+      executionPhase: "L1_CHALLENGE_PERIOD",
+    });
+  });
+});
+
+describe("selectProposalsNeedingRefresh", () => {
+  it("never sends an L1 voting proposal to the Arbitrum One governor read", () => {
+    const l2Active = makeProposal({ id: "1", state: "Active" });
+    const l1Active = makeProposal({
+      id: "2",
+      state: "Active",
+      governorType: "L1_VOTING",
+      networkId: "1",
+      contractAddress:
+        "0x00000000000000000000000000000000002b2b2b" as ParsedProposal["contractAddress"],
+    });
+
+    expect(
+      selectProposalsNeedingRefresh([l2Active, l1Active], 1000).map(
+        (proposal) => proposal.id
+      )
+    ).toEqual(["1"]);
   });
 });

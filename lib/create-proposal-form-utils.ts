@@ -3,7 +3,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-import type { GovernorType } from "@/config/governors";
+import type { L2GovernorType } from "@/config/governors";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { emptyAction, type ProposalAction } from "@/lib/propose-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
@@ -26,7 +26,7 @@ export const PROPOSAL_DRAFT_VERSION = 1;
 export interface ProposalDraft {
   version: typeof PROPOSAL_DRAFT_VERSION;
   savedAt: number;
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   description: string;
   actions: ProposalAction[];
 }
@@ -37,7 +37,7 @@ export interface RestoredProposalDraft extends Omit<ProposalDraft, "actions"> {
 
 /** The form's contents as they are saved anywhere: rows without their ids. */
 export interface ProposalSnapshotLike {
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   description: string;
   actions: ProposalAction[];
 }
@@ -55,7 +55,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isGovernorType(value: unknown): value is GovernorType {
+function isGovernorType(value: unknown): value is L2GovernorType {
   return value === "core" || value === "treasury";
 }
 

@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { isElectionProposal } from "@gzeoneth/gov-tracker";
 
 import { Button } from "@/components/ui/Button";
-import { isTreasuryGovernor } from "@/config/governors";
+import { getGovernorType } from "@/config/governors";
 import { useL1BlockTimestamps } from "@/hooks/use-l1-block-timestamps";
 import {
   getAllStageTypes,
@@ -69,8 +69,10 @@ export default function ProposalStages({
     currentL1Block,
   });
 
-  const isTreasuryProposal = isTreasuryGovernor(governorAddress);
-  const governorType = isTreasuryProposal ? "treasury" : "core";
+  // Unknown addresses keep the Core timings, as before. An L1 voting proposal
+  // never gets here (it has no gov-tracker stages), but keeps its own type
+  // rather than borrowing Core's if it does.
+  const governorType = getGovernorType(governorAddress) ?? "core";
 
   const allStageTypes = getAllStageTypes();
   const stageMap = useMemo(
@@ -111,7 +113,7 @@ export default function ProposalStages({
         if (isDefeated) {
           return currentIdx <= votingIdx;
         }
-        if (isTreasuryProposal) {
+        if (governorType === "treasury") {
           return currentIdx <= l2ExecutedIdx;
         }
         return true;
@@ -125,7 +127,7 @@ export default function ProposalStages({
           getStageEstimatedDays(meta.type, meta.estimatedDays, governorType) ??
           meta.estimatedDays,
       }));
-  }, [allStageTypes, isDefeated, isTreasuryProposal, isElection, governorType]);
+  }, [allStageTypes, isDefeated, isElection, governorType]);
 
   // Real timestamps for already-mined voting boundary blocks, so past
   // voting dates are exact instead of extrapolated at 12s per block.
