@@ -76,7 +76,10 @@ export const StageItem = memo(function StageItem({
   const status = stage?.status || "NOT_STARTED";
   const isActive = isTracking && !stage;
   const canRefresh = Boolean(stage && !isLoading);
-  const extraInfo = getStageExtraInfo(stageType, governorAddress);
+  // The extra info and voting details describe the Arbitrum One governors;
+  // an L1 voting proposal shows its own on the proposal page.
+  const isL1 = governorType === "l1";
+  const extraInfo = isL1 ? null : getStageExtraInfo(stageType, governorAddress);
 
   return (
     <div className="relative flex gap-4">
@@ -154,7 +157,7 @@ export const StageItem = memo(function StageItem({
         </p>
 
         {/* Voting stage specific content */}
-        {stageType === "VOTING_ACTIVE" && (
+        {stageType === "VOTING_ACTIVE" && !isL1 && (
           <VotingStageContent
             stage={stage}
             votingTimeRange={votingTimeRange}

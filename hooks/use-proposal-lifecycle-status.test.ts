@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GOVERNORS } from "@/config/governors";
 import { LIFECYCLE_WINDOW_DAYS } from "@/lib/proposal-utils";
 import { BLOCKS_PER_DAY } from "@config/block-times";
 
 import { shouldTrackProposalLifecycle } from "./use-proposal-lifecycle-status";
+
+const mocks = vi.hoisted(() => ({
+  env: {} as Record<string, string | undefined>,
+}));
+
+vi.mock("@/env", () => ({ env: mocks.env }));
 
 const CREATION_TX =
   "0x1f709032574f9c3986dbda8767f3bb9ff4f9c48cb67529f390dd9fa9b3bf853d";
@@ -27,6 +33,10 @@ function proposal(overrides: Record<string, unknown> = {}) {
 }
 
 describe("shouldTrackProposalLifecycle", () => {
+  afterEach(() => {
+    delete mocks.env.NEXT_PUBLIC_STAGES_SOURCE;
+  });
+
   // The governor answers Executed the moment the L2 timelock operation runs,
   // which is where the L2 -> L1 -> retryable round trip starts. This is the one
   // case where the stages know something state() does not.
@@ -81,5 +91,12 @@ describe("shouldTrackProposalLifecycle", () => {
     expect(
       shouldTrackProposalLifecycle(proposal({ creationTxHash: "" }), L1_HEAD)
     ).toBe(false);
+  });
+
+  it("needs no creation transaction when the indexer serves the stages", () => {
+    mocks.env.NEXT_PUBLIC_STAGES_SOURCE = "indexer";
+    expect(
+      shouldTrackProposalLifecycle(proposal({ creationTxHash: "" }), L1_HEAD)
+    ).toBe(true);
   });
 });

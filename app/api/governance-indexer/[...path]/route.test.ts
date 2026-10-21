@@ -70,17 +70,15 @@ describe("governance indexer proxy", () => {
 
   it("forwards a POST body + cookie and relays the session set-cookie (no-store)", async () => {
     vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://indexer.example.test");
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        jsonResponse(
-          { address: "0xabc" },
-          {
-            status: 200,
-            setCookie: "siwe_session=tok; Path=/; HttpOnly; SameSite=Lax",
-          }
-        )
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse(
+        { address: "0xabc" },
+        {
+          status: 200,
+          setCookie: "siwe_session=tok; Path=/; HttpOnly; SameSite=Lax",
+        }
+      )
+    );
 
     const response = await POST(
       new Request(
@@ -164,5 +162,21 @@ describe("governance indexer proxy", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Indexer upstream error.",
     });
+  });
+
+  it("keeps an upstream no-store response out of the shared cache", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "http://indexer.test");
+    const upstream = jsonResponse({ steps: [] }, { status: 200 });
+    upstream.headers.set("cache-control", "no-store");
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(upstream);
+
+    const response = await GET(
+      new Request(
+        "https://example.test/api/governance-indexer/api/l1-voting/vote-plan/1?delegate=0x1"
+      ),
+      context(["api", "l1-voting", "vote-plan", "1"])
+    );
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

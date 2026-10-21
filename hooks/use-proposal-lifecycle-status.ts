@@ -16,12 +16,15 @@
  *
  * A trace costs around eight seconds against a cold cache and runs two at a
  * time, so it is spent only where it changes the answer: see
- * `shouldTrackProposalLifecycle`.
+ * `shouldTrackProposalLifecycle`. Under `NEXT_PUBLIC_STAGES_SOURCE=indexer`
+ * the same stages are one indexer request instead of a trace.
  */
 
 import { isCoreGovernor } from "@/config/governors";
+import { useIndexerProposalStages } from "@/hooks/use-indexer-proposal-stages";
 import { useL1Block } from "@/hooks/use-l1-block";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
+import { getStagesSource } from "@/lib/indexer-stages";
 import {
   getEffectiveDisplayState,
   type ProposalDisplayStatus,
@@ -98,8 +101,9 @@ export function shouldTrackProposalLifecycle(
  * how old they are, so only these wait for the clock before the status settles.
  */
 function isRoundTripCandidate(proposal: ProposalLifecycleInput): boolean {
+  // The indexer needs no creation hash; gov-tracker cannot start without one.
   return (
-    Boolean(proposal.creationTxHash) &&
+    (getStagesSource() === "indexer" || Boolean(proposal.creationTxHash)) &&
     normalizeProposalStateName(proposal.state) === "Executed" &&
     isCoreGovernor(proposal.contractAddress)
   );
@@ -130,6 +134,21 @@ export function useProposalLifecycleStatus(
   const isAwaitingClock =
     enabled && isClockLoading && isRoundTripCandidate(proposal);
 
+  const fromIndexer = getStagesSource() === "indexer";
+  const traced = useProposalStages({
+    proposalId: proposal.id,
+    creationTxHash: proposal.creationTxHash || "",
+    governorAddress: proposal.contractAddress,
+    enabled: isTracked && !fromIndexer,
+  });
+  const indexed = useIndexerProposalStages({
+    proposalId: proposal.id,
+    governorAddress: proposal.contractAddress,
+    enabled: isTracked && fromIndexer,
+  });
+
+  // The indexer answers in one request: no queue, no partial results, and a
+  // response is a finished answer.
   const {
     stages,
     currentStageIndex,
@@ -140,12 +159,19 @@ export function useProposalLifecycleStatus(
     error,
     result,
     isBackgroundRefreshing,
-  } = useProposalStages({
-    proposalId: proposal.id,
-    creationTxHash: proposal.creationTxHash || "",
-    governorAddress: proposal.contractAddress,
-    enabled: isTracked,
-  });
+  } = fromIndexer
+    ? {
+        stages: indexed.stages,
+        currentStageIndex: indexed.stages.length - 1,
+        isLoading: indexed.isLoading,
+        isQueued: false,
+        queuePosition: null,
+        isComplete: indexed.data !== null,
+        error: indexed.error,
+        result: indexed.data,
+        isBackgroundRefreshing: false,
+      }
+    : traced;
 
   // Stage statuses always win when there are any: they were read from the
   // chain, even if the trace later failed. With none, a failed trace leaves
