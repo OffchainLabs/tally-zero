@@ -2,7 +2,7 @@
 
 import { useAppKit } from "@reown/appkit/react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   type Address,
@@ -13,7 +13,12 @@ import {
   isAddressEqual,
   zeroAddress,
 } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  usePublicClient,
+  useSignTypedData,
+  useWriteContract,
+} from "wagmi";
 
 import { Button } from "@/components/ui/Button";
 import { l1VotingChainId, l2ChainId } from "@/config/chains";
@@ -25,11 +30,18 @@ import { l1VotingApi } from "@/lib/l1-voting/api";
 import {
   approvalsIfExecutedBy,
   execArgs,
+  mergedSignatures,
   prevalidatedSignatures,
   readSafeTx,
   SAFE_ABI,
   type SafeTxState,
+  safeTxTypedData,
 } from "@/lib/l1-voting/safe";
+import {
+  ecdsaConfirmations,
+  safeTxServiceClient,
+  safeTxServiceUrl,
+} from "@/lib/l1-voting/safe-tx-service";
 
 function Row({
   label,
@@ -50,7 +62,8 @@ function Row({
  * Register for L1 voting. A delegate names, on Arbitrum One, the Ethereum address that votes for
  * it (required for a contract delegate such as a Safe; an EOA delegate can sign at vote time
  * instead), and that Ethereum address accepts the delegate on Ethereum. A Safe delegate's claim
- * goes through the Safe: owners approve the transaction, and one executes it.
+ * goes through the Safe: owners approve the transaction (on chain, or by signing it into the Safe
+ * Transaction Service where one serves the chain), and one executes it.
  */
 export function L1Registration() {
   const { address, isConnected } = useAccount();
@@ -63,6 +76,12 @@ export function L1Registration() {
   const ensureL2 = useEnsureChain(l2);
   const ensureL1 = useEnsureChain(l1);
   const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
+  const serviceUrl = safeTxServiceUrl(l2);
+  const service = useMemo(
+    () => (serviceUrl ? safeTxServiceClient(serviceUrl) : null),
+    [serviceUrl]
+  );
 
   const [delegateInput, setDelegateInput] = useState("");
   const [l1VoterInput, setL1VoterInput] = useState("");
@@ -107,6 +126,18 @@ export function L1Registration() {
       }) as Promise<Address>,
     enabled: !!address && !!deployment && !!l1Client,
   });
+
+  // null: the service has never seen this transaction
+  const { data: serviceConfirmations, refetch: refetchConfirmations } =
+    useQuery({
+      queryKey: ["l1-voting", "safe-service", safeTx?.safeTxHash],
+      queryFn: () => service!.confirmations(safeTx!.safeTxHash),
+      enabled: !!service && !!safeTx,
+      refetchInterval: 15_000,
+    });
+  const offchainSignatures = serviceConfirmations
+    ? ecdsaConfirmations(serviceConfirmations)
+    : [];
 
   async function act(label: string, run: () => Promise<void>) {
     setBusy(label);
@@ -177,10 +208,42 @@ export function L1Registration() {
       await refreshSafeTx();
     });
 
+  /** The connected owner's EIP-712 signature over the Safe transaction */
+  async function signSafeTx(state: SafeTxState) {
+    // Wallets refuse typed data whose domain chain is not the active one.
+    await ensureL2.ensure();
+    return signTypedDataAsync({
+      account: address,
+      ...safeTxTypedData(state, l2),
+    });
+  }
+
+  const proposeToService = () =>
+    act("propose to Safe owners", async () => {
+      const signature = await signSafeTx(safeTx!);
+      await service!.propose(safeTx!, address!, signature);
+      await refetchConfirmations();
+      toast.success("Proposed to the Safe's owners");
+    });
+
+  const confirmOnService = () =>
+    act("sign in the Safe service", async () => {
+      const signature = await signSafeTx(safeTx!);
+      await service!.confirm(safeTx!.safeTxHash, signature);
+      await refetchConfirmations();
+    });
+
   const executeSafeTx = () =>
     act("execute Safe transaction", async () => {
       await ensureL2.ensure();
       const fresh = await readSafeTx(l2Client!, safeTx!.safe, safeTx!.call);
+      // Off-chain signatures only count for the transaction they signed.
+      const offchain =
+        service && fresh.safeTxHash === safeTx!.safeTxHash
+          ? ecdsaConfirmations(
+              (await service.confirmations(fresh.safeTxHash)) ?? []
+            )
+          : [];
       await waitL2(
         await writeContractAsync({
           address: fresh.safe,
@@ -188,7 +251,9 @@ export function L1Registration() {
           functionName: "execTransaction",
           args: [
             ...execArgs(fresh.call),
-            prevalidatedSignatures(fresh.approvedBy, address),
+            offchain.length > 0
+              ? mergedSignatures(fresh, offchain, address)
+              : prevalidatedSignatures(fresh.approvedBy, address),
           ],
           chainId: l2,
         })
@@ -226,7 +291,13 @@ export function L1Registration() {
 
   const owner =
     safeTx && address && safeTx.owners.some((o) => isAddressEqual(o, address));
-  const reachable = safeTx ? approvalsIfExecutedBy(safeTx, address) : 0;
+  const offchainSigners = offchainSignatures.map((s) => s.owner);
+  const reachable = safeTx
+    ? approvalsIfExecutedBy(safeTx, address, offchainSigners)
+    : 0;
+  const proposedToService = !!serviceConfirmations;
+  const signedOnService =
+    !!address && offchainSigners.some((o) => isAddressEqual(o, address));
   const acceptedOnL1 =
     !!myL1Claim &&
     !!delegate &&
@@ -325,10 +396,26 @@ export function L1Registration() {
                     : ""}
                 </span>
               </Row>
+              {service && (
+                <Row label="Signed via Safe service">
+                  <span data-testid="safe-service-confirmations">
+                    {proposedToService
+                      ? offchainSigners.length
+                        ? offchainSigners.join(", ")
+                        : "nobody yet"
+                      : "not proposed yet"}
+                  </span>
+                </Row>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => act("refresh", refreshSafeTx)}
+                  onClick={() =>
+                    act("refresh", async () => {
+                      await refreshSafeTx();
+                      if (service) await refetchConfirmations();
+                    })
+                  }
                 >
                   Refresh approvals
                 </Button>
@@ -340,6 +427,26 @@ export function L1Registration() {
                     onClick={approveSafeTx}
                   >
                     Approve
+                  </Button>
+                )}
+                {owner && service && !proposedToService && (
+                  <Button
+                    variant="outline"
+                    data-testid="safe-service-propose"
+                    disabled={!!busy}
+                    onClick={proposeToService}
+                  >
+                    Propose to Safe owners
+                  </Button>
+                )}
+                {owner && service && proposedToService && !signedOnService && (
+                  <Button
+                    variant="outline"
+                    data-testid="safe-service-confirm"
+                    disabled={!!busy}
+                    onClick={confirmOnService}
+                  >
+                    Sign in Safe service
                   </Button>
                 )}
                 <Button
