@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/Button";
 import type { GovernorType } from "@/config/governors";
 import { useIndexerProposalStages } from "@/hooks/use-indexer-proposal-stages";
 import { useVotingPeriod } from "@/hooks/use-voting-period";
-import { indexerStageEstimatedCompletion } from "@/lib/indexer-stages";
+import {
+  indexerStageEstimatedCompletion,
+  indexerTimelockExecution,
+} from "@/lib/indexer-stages";
 import { ReloadIcon } from "@radix-ui/react-icons";
 
 import { LoadingSkeleton, StageItem } from "./stages";
+import { ExecuteTimelockButton } from "./stages/ExecuteTimelockButton";
 
 export interface IndexerProposalStagesProps {
   proposalId: string;
@@ -23,6 +27,8 @@ export interface IndexerProposalStagesProps {
  * The Lifecycle tab drawn from the indexer's `/stages` endpoint: exactly the
  * stages it returns, in its order, through the same `StageItem` gov-tracker's
  * stages use. There is no per-stage re-trace; refreshing re-reads the endpoint.
+ * A timelock past its ETA gets an execute button when the indexer knows its
+ * calls and salt.
  */
 export default function IndexerProposalStages({
   proposalId,
@@ -67,6 +73,13 @@ export default function IndexerProposalStages({
     );
   }
 
+  // The indexer's classification wins for the Arbitrum One governors, so the
+  // stage estimates follow the proposal rather than the governor's address.
+  const effectiveGovernorType: GovernorType =
+    !isL1 && (data.proposalType === "core" || data.proposalType === "treasury")
+      ? data.proposalType
+      : governorType;
+
   return (
     <div className="p-4" data-testid="indexer-proposal-stages">
       <div className="mb-4 pb-3 border-b border-border/50">
@@ -74,38 +87,53 @@ export default function IndexerProposalStages({
         <p className="text-xs text-muted-foreground">
           {data.executionCancelled
             ? "A timelock operation was cancelled"
-            : "Stages from the governance indexer"}
+            : data.proposalType === "election"
+              ? "Security Council election stages from the governance indexer"
+              : "Stages from the governance indexer"}
         </p>
       </div>
 
       <div className="relative">
-        {stages.map((stage, idx) => (
-          // The endpoint's own status, before READY is derived, for e2e checks
-          <div
-            key={stage.type}
-            data-stage-type={stage.type}
-            data-stage-status={data.stages[idx].status}
-          >
-            <StageItem
-              stage={stage}
-              stageType={stage.type}
-              stageIndex={idx}
-              isLast={idx === stages.length - 1}
-              isTracking={false}
-              isLoading={false}
-              isRefreshing={false}
-              onRefresh={refetch}
-              estimatedCompletion={indexerStageEstimatedCompletion(
-                data.stages[idx]
-              )}
-              votingTimeRange={votingPeriod?.range ?? null}
-              extensionStillPossible={extensionStillPossible}
-              governorType={governorType}
-              proposalId={proposalId}
-              governorAddress={governorAddress}
-            />
-          </div>
-        ))}
+        {stages.map((stage, idx) => {
+          const execution = indexerTimelockExecution(data.stages[idx]);
+          return (
+            // The endpoint's own status, before READY is derived, for e2e checks
+            <div
+              key={stage.type}
+              data-stage-type={stage.type}
+              data-stage-status={data.stages[idx].status}
+            >
+              <StageItem
+                stage={stage}
+                stageType={stage.type}
+                stageIndex={idx}
+                isLast={idx === stages.length - 1}
+                isTracking={false}
+                isLoading={false}
+                isRefreshing={false}
+                onRefresh={refetch}
+                estimatedCompletion={indexerStageEstimatedCompletion(
+                  data.stages[idx]
+                )}
+                votingTimeRange={votingPeriod?.range ?? null}
+                extensionStillPossible={extensionStillPossible}
+                governorType={effectiveGovernorType}
+                proposalId={proposalId}
+                governorAddress={governorAddress}
+                footer={
+                  execution && (
+                    <div className="mt-2" data-testid="timelock-execute">
+                      <ExecuteTimelockButton
+                        operation={execution}
+                        onSuccess={refetch}
+                      />
+                    </div>
+                  )
+                }
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

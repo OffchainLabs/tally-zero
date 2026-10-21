@@ -9,6 +9,7 @@ import {
   getStagesSource,
   hasPendingIndexerStage,
   indexerStageEstimatedCompletion,
+  indexerTimelockExecution,
   mapIndexerStage,
   mapIndexerStages,
   usesIndexerStages,
@@ -23,6 +24,13 @@ vi.mock("@/env", () => ({ env: mocks.env }));
 const TX = `0x${"ab".repeat(32)}`;
 const LEG_TX = `0x${"cd".repeat(32)}`;
 const NOW = 1_800_000_000;
+const SCHEDULE_TX = `0x${"ef".repeat(32)}`;
+const OPERATION_ID = `0x${"11".repeat(32)}`;
+const SALT = `0x${"22".repeat(32)}`;
+const PREDECESSOR = `0x${"33".repeat(32)}`;
+const TIMELOCK = "0x0000000000000000000000000000000000000Ae1";
+const TICKET = `0x${"44".repeat(32)}`;
+const E18 = BigInt(10) ** BigInt(18);
 
 function stage(overrides: Partial<IndexerProposalStage>): IndexerProposalStage {
   return {
@@ -247,5 +255,350 @@ describe("stage list helpers", () => {
       )
     ).toBeUndefined();
     expect(indexerStageEstimatedCompletion(stage({}))).toBeUndefined();
+  });
+});
+
+describe("stage details from the extended endpoint", () => {
+  beforeEach(() => {
+    for (const key of Object.keys(mocks.env)) delete mocks.env[key];
+  });
+
+  it("gives the voting stage gov-tracker's tallies and quorum", () => {
+    const mapped = mapIndexerStage(
+      stage({
+        type: "VOTING_ACTIVE",
+        status: "COMPLETED",
+        chain: "arb1",
+        txHash: TX,
+        detail: {
+          result: "SUCCEEDED",
+          startBlock: "100",
+          endBlock: "200",
+          forVotes: (BigInt(90) * E18).toString(),
+          againstVotes: (BigInt(5) * E18).toString(),
+          abstainVotes: (BigInt(15) * E18).toString(),
+          quorum: (BigInt(100) * E18).toString(),
+        },
+      }),
+      NOW
+    );
+    expect(mapped.data).toMatchObject({
+      forVotesRaw: (BigInt(90) * E18).toString(),
+      againstVotesRaw: (BigInt(5) * E18).toString(),
+      abstainVotesRaw: (BigInt(15) * E18).toString(),
+      quorumRaw: (BigInt(100) * E18).toString(),
+      // For and Abstain count toward quorum: 105 of 100
+      quorumReached: true,
+      startBlock: "100",
+      deadline: "200",
+      proposalState: "SUCCEEDED",
+    });
+  });
+
+  it("leaves quorum unreached below it, and old tallies-free voting stages alone", () => {
+    const below = mapIndexerStage(
+      stage({
+        type: "VOTING_ACTIVE",
+        detail: {
+          forVotes: "10",
+          againstVotes: null,
+          abstainVotes: null,
+          quorum: "100",
+        },
+      }),
+      NOW
+    );
+    expect(below.data).toMatchObject({
+      quorumReached: false,
+      againstVotesRaw: "0",
+    });
+
+    const old = mapIndexerStage(
+      stage({
+        type: "VOTING_ACTIVE",
+        status: "COMPLETED",
+        txHash: TX,
+        detail: { result: "SUCCEEDED", snapshotLocked: true },
+      }),
+      NOW
+    );
+    expect(old.data).toEqual({});
+  });
+
+  it("lists a completed timelock's schedule and execute transactions", () => {
+    const mapped = mapIndexerStage(
+      stage({
+        type: "L2_TIMELOCK",
+        status: "COMPLETED",
+        chain: "arb1",
+        startedAt: NOW - 100,
+        completedAt: NOW - 10,
+        txHash: TX,
+        detail: {
+          operationId: OPERATION_ID,
+          calls: 2,
+          scheduledTxHash: SCHEDULE_TX,
+          salt: SALT,
+          predecessor: PREDECESSOR,
+          timelockAddress: TIMELOCK,
+          chainId: 42161,
+        },
+      }),
+      NOW
+    );
+    expect(mapped.transactions).toEqual([
+      expect.objectContaining({
+        hash: SCHEDULE_TX,
+        description: "scheduled",
+        timestamp: NOW - 100,
+      }),
+      expect.objectContaining({
+        hash: TX,
+        description: "executed",
+        timestamp: NOW - 10,
+      }),
+    ]);
+    expect(mapped.data).toMatchObject({
+      operationId: OPERATION_ID,
+      timelockAddress: TIMELOCK,
+      salt: SALT,
+      predecessor: PREDECESSOR,
+      isBatchOperation: true,
+    });
+  });
+
+  it("lists a pending timelock's schedule transaction once", () => {
+    const mapped = mapIndexerStage(
+      stage({
+        txHash: SCHEDULE_TX,
+        detail: { operationId: OPERATION_ID, scheduledTxHash: SCHEDULE_TX },
+      }),
+      NOW
+    );
+    expect(mapped.transactions).toEqual([
+      expect.objectContaining({ hash: SCHEDULE_TX, description: "scheduled" }),
+    ]);
+  });
+
+  it("puts a timelock on the chain the indexer names", () => {
+    const mapped = mapIndexerStage(
+      stage({
+        chain: "ethereum",
+        detail: { operationId: OPERATION_ID, chainId: 1337 },
+      }),
+      NOW
+    );
+    expect(mapped.chainId).toBe(1337);
+  });
+
+  it("carries L2-to-L1 messages and their sending transactions", () => {
+    const message = {
+      position: "7",
+      l2TxHash: LEG_TX,
+      caller: TIMELOCK,
+      destination: "0x0000000000000000000000000000000000000001",
+      arbBlockNum: "500",
+      ethBlockNum: "400",
+      timestamp: String(NOW - 30),
+      callvalue: "0",
+      data: "0x",
+    };
+    const mapped = mapIndexerStage(
+      stage({
+        type: "L2_TO_L1_MESSAGE",
+        chain: "ethereum",
+        detail: { l1OperationId: OPERATION_ID, messages: [message] },
+      }),
+      NOW
+    );
+    expect(mapped.data).toMatchObject({
+      messageCount: 1,
+      messagePositions: ["7"],
+      l2TxHash: LEG_TX,
+      l2ToL1Messages: [message],
+    });
+    expect(mapped.transactions).toEqual([
+      expect.objectContaining({
+        hash: LEG_TX,
+        chainId: 42161,
+        description: "message sent",
+        timestamp: NOW - 30,
+      }),
+    ]);
+  });
+
+  it("gives each own retryable leg its status and ticket id", () => {
+    const mapped = mapIndexerStage(
+      stage({
+        type: "RETRYABLE_EXECUTED",
+        chain: "arb1",
+        detail: {
+          legs: [
+            {
+              executionKey: "0x1",
+              executed: true,
+              executedAt: NOW - 5,
+              txHash: LEG_TX,
+              ticketId: `0x${"55".repeat(32)}`,
+              status: "REDEEMED",
+            },
+            {
+              executionKey: "0x2",
+              executed: false,
+              txHash: null,
+              ticketId: TICKET,
+              status: "REDEEMABLE",
+            },
+            {
+              executionKey: null,
+              foreign: true,
+              executed: false,
+              txHash: null,
+              ticketId: null,
+              status: "FOREIGN",
+            },
+          ],
+        },
+      }),
+      NOW
+    );
+    expect(mapped.data).toEqual({
+      ticketCount: 2,
+      redemptionDetails: [
+        expect.objectContaining({
+          index: 0,
+          status: "REDEEMED",
+          l2TxHash: LEG_TX,
+          targetChainId: 42161,
+        }),
+        expect.objectContaining({
+          index: 1,
+          status: "REDEEMABLE",
+          l2TxHash: null,
+          ticketId: TICKET,
+        }),
+      ],
+    });
+  });
+
+  it("maps election stages with a summary of their detail", () => {
+    const nominee = mapIndexerStage(
+      stage({
+        type: "NOMINEE_ELECTION",
+        chain: "arb1",
+        txHash: TX,
+        detail: { cohort: 1, startBlock: "10", endBlock: "20" },
+      }),
+      NOW
+    );
+    expect(nominee.type).toBe("NOMINEE_ELECTION");
+    expect(nominee.data).toEqual({
+      note: "Cohort 1, Nominee voting blocks 10 to 20",
+    });
+
+    const vetting = mapIndexerStage(
+      stage({
+        type: "NOMINEE_VETTING",
+        chain: "arb1",
+        txHash: TX,
+        detail: { cohort: 0, vettingEndBlock: "30" },
+      }),
+      NOW
+    );
+    expect(vetting.data).toEqual({
+      note: "Cohort 0, Vetting ends at block 30",
+    });
+
+    const member = mapIndexerStage(
+      stage({
+        type: "MEMBER_ELECTION",
+        chain: "arb1",
+        txHash: TX,
+        detail: {
+          cohort: 0,
+          memberProposalId: "9",
+          memberStartBlock: "40",
+          memberEndBlock: "50",
+        },
+      }),
+      NOW
+    );
+    expect(member.data).toEqual({
+      note: "Cohort 0, Member voting blocks 40 to 50",
+    });
+  });
+});
+
+describe("indexerTimelockExecution", () => {
+  beforeEach(() => {
+    for (const key of Object.keys(mocks.env)) delete mocks.env[key];
+  });
+
+  const call = {
+    target: "0x0000000000000000000000000000000000000001",
+    value: "0",
+    data: "0x1234",
+  };
+  const ready = stage({
+    type: "L2_TIMELOCK",
+    chain: "arb1",
+    etaAt: NOW - 1,
+    detail: {
+      operationId: OPERATION_ID,
+      calls: 1,
+      salt: SALT,
+      predecessor: PREDECESSOR,
+      timelockAddress: TIMELOCK,
+      chainId: 42161,
+      operations: [call],
+    },
+  });
+
+  it("returns the inputs of a pending timelock past its ETA", () => {
+    expect(indexerTimelockExecution(ready, NOW)).toEqual({
+      operationId: OPERATION_ID,
+      timelockAddress: TIMELOCK,
+      chainId: 42161,
+      calls: [call],
+      predecessor: PREDECESSOR,
+      salt: SALT,
+    });
+  });
+
+  it("runs an L1 timelock on the L1 voting chain when the indexer names none", () => {
+    mocks.env.NEXT_PUBLIC_LOCAL_CHAINS = "1";
+    const l1 = indexerTimelockExecution(
+      {
+        ...ready,
+        type: "L1_TIMELOCK",
+        chain: "ethereum",
+        detail: { ...ready.detail!, chainId: null, predecessor: null },
+      },
+      NOW
+    );
+    expect(l1?.chainId).toBe(1337);
+    expect(l1?.predecessor).toBe(`0x${"0".repeat(64)}`);
+  });
+
+  it("returns null before the ETA, once done, without a salt, or without calls", () => {
+    expect(indexerTimelockExecution(ready, NOW - 2)).toBeNull();
+    expect(
+      indexerTimelockExecution({ ...ready, status: "COMPLETED" }, NOW)
+    ).toBeNull();
+    expect(
+      indexerTimelockExecution(
+        { ...ready, detail: { ...ready.detail!, salt: null } },
+        NOW
+      )
+    ).toBeNull();
+    expect(
+      indexerTimelockExecution(
+        { ...ready, detail: { ...ready.detail!, operations: undefined } },
+        NOW
+      )
+    ).toBeNull();
+    expect(
+      indexerTimelockExecution({ ...ready, type: "PROPOSAL_QUEUED" }, NOW)
+    ).toBeNull();
   });
 });

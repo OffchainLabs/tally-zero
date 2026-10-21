@@ -10,6 +10,14 @@ const mocks = vi.hoisted(() => ({
   env: {} as Record<string, string | undefined>,
   useIndexerProposalStages: vi.fn(),
   useProposalStages: vi.fn(),
+  ExecuteTimelockButton: vi.fn(),
+}));
+
+vi.mock("./stages/ExecuteTimelockButton", () => ({
+  ExecuteTimelockButton: (props: unknown) => {
+    mocks.ExecuteTimelockButton(props);
+    return <button data-testid="execute-timelock-mock" />;
+  },
 }));
 
 vi.mock("@/env", () => ({ env: mocks.env }));
@@ -188,5 +196,134 @@ describe("ProposalStages from the indexer", () => {
 
     expect(html).toContain('data-testid="indexer-proposal-stages"');
     expect(mocks.useProposalStages).not.toHaveBeenCalled();
+  });
+
+  function withStages(stages: IndexerProposalStages["stages"], extra = {}) {
+    const response = { ...RESPONSE, ...extra, stages };
+    mocks.useIndexerProposalStages.mockReturnValue({
+      data: response,
+      stages: mapIndexerStages(response),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  }
+
+  const SALT = `0x${"22".repeat(32)}`;
+  const OPERATION_ID = `0x${"11".repeat(32)}`;
+  const TIMELOCK = "0x0000000000000000000000000000000000000Ae1";
+  const readyTimelock = {
+    ...RESPONSE.stages[2],
+    etaAt: 1_700_000_000,
+    detail: {
+      operationId: OPERATION_ID,
+      calls: 1,
+      salt: SALT,
+      predecessor: null,
+      timelockAddress: TIMELOCK,
+      chainId: 1,
+      operations: [
+        {
+          target: "0x0000000000000000000000000000000000000001",
+          value: "0",
+          data: "0x",
+        },
+      ],
+    },
+  };
+
+  it("offers execution of a timelock past its ETA with a known salt", () => {
+    withStages([RESPONSE.stages[0], RESPONSE.stages[1], readyTimelock]);
+
+    const html = render();
+
+    expect(html).toContain('data-testid="execute-timelock-mock"');
+    expect(mocks.ExecuteTimelockButton).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: expect.objectContaining({
+          operationId: OPERATION_ID,
+          timelockAddress: TIMELOCK,
+          chainId: 1,
+          salt: SALT,
+        }),
+      })
+    );
+  });
+
+  it("offers no execution before the ETA or without a salt", () => {
+    withStages([{ ...readyTimelock, etaAt: 4_000_000_000 }]);
+    expect(render()).not.toContain("execute-timelock-mock");
+
+    withStages([
+      { ...readyTimelock, detail: { ...readyTimelock.detail, salt: null } },
+    ]);
+    expect(render()).not.toContain("execute-timelock-mock");
+  });
+
+  it("draws an L1 voting proposal's tallies on the voting stage", () => {
+    withStages([
+      {
+        type: "VOTING_ACTIVE",
+        status: "COMPLETED",
+        chain: "ethereum",
+        startedAt: null,
+        completedAt: null,
+        etaAt: null,
+        txHash: null,
+        detail: {
+          result: "SUCCEEDED",
+          forVotes: "3000000000000000000",
+          againstVotes: "1000000000000000000",
+          abstainVotes: "0",
+          quorum: "2000000000000000000",
+        },
+      },
+    ]);
+
+    const html = render();
+
+    expect(html).toContain("Votes");
+    expect(html).toContain("Quorum Reached");
+    expect(html).toContain("100%");
+  });
+
+  it("renders an election proposal's election stages", () => {
+    mocks.env.NEXT_PUBLIC_STAGES_SOURCE = "indexer";
+    const electionStage = (type: string, status: string) => ({
+      type,
+      status,
+      chain: "arb1",
+      startedAt: 1_700_000_000,
+      completedAt: null,
+      etaAt: null,
+      txHash: null,
+      detail: { cohort: 1 },
+    });
+    withStages(
+      [
+        electionStage("CREATE_ELECTION", "COMPLETED"),
+        electionStage("NOMINEE_ELECTION", "COMPLETED"),
+        electionStage("NOMINEE_VETTING", "PENDING"),
+        electionStage("MEMBER_ELECTION", "NOT_STARTED"),
+      ] as IndexerProposalStages["stages"],
+      { proposalType: "election", governorType: "NOMINEE_ELECTION" }
+    );
+
+    const html = render({
+      governorAddress: "0x8a1cDA8dee421cD06023470608605934c16A05a0",
+      indexerGovernorType: undefined,
+      networkId: "42161",
+    });
+
+    for (const type of [
+      "CREATE_ELECTION",
+      "NOMINEE_ELECTION",
+      "NOMINEE_VETTING",
+      "MEMBER_ELECTION",
+    ]) {
+      expect(html).toContain(`data-stage-type="${type}"`);
+    }
+    expect(html).toContain("Security Council election");
+    expect(html).toContain("Cohort 1");
   });
 });

@@ -185,7 +185,14 @@ export type IndexerStageType =
   | "L2_TIMELOCK"
   | "L2_TO_L1_MESSAGE"
   | "L1_TIMELOCK"
-  | "RETRYABLE_EXECUTED";
+  | "RETRYABLE_EXECUTED"
+  | "CREATE_ELECTION"
+  | "NOMINEE_ELECTION"
+  | "NOMINEE_VETTING"
+  | "MEMBER_ELECTION";
+
+/** How the indexer classifies a proposal's lifecycle */
+export type IndexerProposalType = "core" | "treasury" | "l1" | "election";
 
 export type IndexerStageStatus =
   | "COMPLETED"
@@ -202,6 +209,75 @@ export type IndexerRetryableLeg = {
   /** Unix seconds */
   executedAt?: number | null;
   txHash: string | null;
+  /** The ticket id to redeem; null when the indexer has not resolved it */
+  ticketId?: string | null;
+  /** Older indexer deployments do not report it */
+  status?: IndexerRetryableStatus;
+};
+
+export type IndexerRetryableStatus =
+  | "REDEEMED"
+  | "REDEEMABLE"
+  | "PENDING"
+  | "EXPIRED"
+  | "FOREIGN";
+
+/** One call of a scheduled timelock operation; `value` is a decimal string */
+export type IndexerTimelockCall = {
+  target: string;
+  value: string;
+  data: string;
+};
+
+/** One L2-to-L1 message; the numbers are decimal strings */
+export type IndexerL2ToL1Message = {
+  position: string;
+  l2TxHash: string | null;
+  caller: string;
+  destination: string;
+  arbBlockNum: string;
+  ethBlockNum: string;
+  timestamp: string;
+  callvalue: string;
+  data: string;
+};
+
+/**
+ * The per-stage `detail`, by stage type. Every field is optional because an
+ * older indexer deployment serves fewer of them; numbers are decimal strings.
+ */
+export type IndexerStageDetail = {
+  // VOTING_ACTIVE
+  result?: string | null;
+  snapshotLocked?: boolean | null;
+  startBlock?: string | null;
+  endBlock?: string | null;
+  forVotes?: string | null;
+  againstVotes?: string | null;
+  abstainVotes?: string | null;
+  quorum?: string | null;
+  // L2_TIMELOCK, L1_TIMELOCK
+  operationId?: string;
+  calls?: number;
+  scheduledTxHash?: string | null;
+  predecessor?: string | null;
+  /** Null when the indexer cannot recover it */
+  salt?: string | null;
+  timelockAddress?: string | null;
+  chainId?: number | null;
+  operations?: IndexerTimelockCall[];
+  // L2_TO_L1_MESSAGE
+  l1OperationId?: string | null;
+  messages?: IndexerL2ToL1Message[];
+  // RETRYABLE_EXECUTED
+  legs?: IndexerRetryableLeg[];
+  // Election stages
+  cohort?: number | string | null;
+  vettingEndBlock?: string | null;
+  memberProposalId?: string | null;
+  memberStartBlock?: string | null;
+  memberEndBlock?: string | null;
+  [key: string]: unknown;
 };
 
 export type IndexerProposalStage = {
@@ -216,11 +292,7 @@ export type IndexerProposalStage = {
   etaAt: number | null;
   /** The transaction that completed the stage */
   txHash: string | null;
-  detail: {
-    operationId?: string;
-    legs?: IndexerRetryableLeg[];
-    [key: string]: unknown;
-  } | null;
+  detail: IndexerStageDetail | null;
 };
 
 /** `/api/tally/proposals/:governor/:proposalId/stages` */
@@ -230,6 +302,8 @@ export type IndexerProposalStages = {
   governorType: IndexerGovernorType | string;
   executionPhase: IndexerExecutionPhase | null;
   executionCancelled: boolean;
+  /** Older indexer deployments do not report it */
+  proposalType?: IndexerProposalType;
   stages: IndexerProposalStage[];
 };
 

@@ -45,6 +45,8 @@ export interface VotingStageContentProps {
   stageType: StageType;
   proposalId: string;
   governorAddress: string;
+  /** Off for an L1 voting proposal, whose voters are not the Arbitrum One delegates */
+  showTopDelegates?: boolean;
 }
 
 export const VotingStageContent = memo(function VotingStageContent({
@@ -56,6 +58,7 @@ export const VotingStageContent = memo(function VotingStageContent({
   stageType,
   proposalId,
   governorAddress,
+  showTopDelegates = true,
 }: VotingStageContentProps) {
   const votingData = getVotingData(stage);
   const votesTowardQuorum = sumVoteCounts(
@@ -87,10 +90,12 @@ export const VotingStageContent = memo(function VotingStageContent({
         </VotingPeriodPanel>
       )}
 
-      <TopDelegatesNotVoted
-        proposalId={proposalId}
-        governorAddress={governorAddress}
-      />
+      {showTopDelegates && (
+        <TopDelegatesNotVoted
+          proposalId={proposalId}
+          governorAddress={governorAddress}
+        />
+      )}
 
       {Boolean(votingData?.quorumRaw) && (
         <QuorumProgressBar

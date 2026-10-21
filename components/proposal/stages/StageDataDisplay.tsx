@@ -3,8 +3,10 @@
 import { memo } from "react";
 
 import { formatEtaTimestamp } from "@/lib/date-utils";
+import type { IndexerL2ToL1Message } from "@/lib/tally-data/types";
 import type { TrackedStage } from "@gzeoneth/gov-tracker";
 
+import { L2ToL1MessageDetails } from "./L2ToL1MessageDetails";
 import {
   RetryableCreationDetails,
   RetryableRedemptionDetails,
@@ -19,11 +21,14 @@ const ETA_RELEVANT_STATUSES = new Set(["PENDING", "READY"]);
 export interface StageDataDisplayProps {
   data: TrackedStage["data"];
   status: string;
+  /** Re-reads the stage, e.g. after a retryable is redeemed from here */
+  onRefresh?: () => void;
 }
 
 export const StageDataDisplay = memo(function StageDataDisplay({
   data,
   status,
+  onRefresh,
 }: StageDataDisplayProps) {
   const eta =
     "eta" in data && data.eta && ETA_RELEVANT_STATUSES.has(status)
@@ -45,7 +50,21 @@ export const StageDataDisplay = memo(function StageDataDisplay({
       ? data.redemptionDetails
       : null;
 
-  if (!eta && !note && !message && !creationDetails && !redemptionDetails) {
+  const l2ToL1Messages =
+    "l2ToL1Messages" in data &&
+    Array.isArray(data.l2ToL1Messages) &&
+    data.l2ToL1Messages.length > 0
+      ? (data.l2ToL1Messages as IndexerL2ToL1Message[])
+      : null;
+
+  if (
+    !eta &&
+    !note &&
+    !message &&
+    !creationDetails &&
+    !redemptionDetails &&
+    !l2ToL1Messages
+  ) {
     return null;
   }
 
@@ -66,7 +85,13 @@ export const StageDataDisplay = memo(function StageDataDisplay({
         <RetryableCreationDetails details={creationDetails} />
       ) : null}
       {redemptionDetails ? (
-        <RetryableRedemptionDetails details={redemptionDetails} />
+        <RetryableRedemptionDetails
+          details={redemptionDetails}
+          onRedeemed={onRefresh}
+        />
+      ) : null}
+      {l2ToL1Messages ? (
+        <L2ToL1MessageDetails messages={l2ToL1Messages} />
       ) : null}
     </div>
   );
