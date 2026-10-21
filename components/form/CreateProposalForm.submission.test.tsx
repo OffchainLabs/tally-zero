@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GOVERNORS } from "@/config/governors";
 
-import CreateProposalForm from "./CreateProposalForm";
+import CreateProposalForm, {
+  type ProposalReplacement,
+} from "./CreateProposalForm";
 import { installStorage, stored } from "./CreateProposalForm.test-helpers";
 
 const mocks = vi.hoisted(() => ({
@@ -79,12 +81,24 @@ function setupSubmission() {
   // Mirrors useWaitForTransactionReceipt: @wagmi/core throws on a reverted
   // receipt, so a revert arrives as `error` with no data, never as a resolved
   // receipt with status "reverted".
-  const state: { confirmed: boolean; receiptError: Error | null } = {
+  const state: {
+    confirmed: boolean;
+    receiptError: Error | null;
+    onReplaced: ((replacement: ProposalReplacement) => void) | undefined;
+  } = {
     confirmed: true,
     receiptError: null,
+    onReplaced: undefined,
   };
   mocks.useWaitForTransactionReceipt.mockImplementation(
-    ({ hash }: { hash?: string }) => {
+    ({
+      hash,
+      onReplaced,
+    }: {
+      hash?: string;
+      onReplaced?: (replacement: ProposalReplacement) => void;
+    }) => {
+      state.onReplaced = onReplaced;
       if (!hash) {
         return {
           data: undefined,
@@ -204,6 +218,71 @@ describe("proposal broadcast and failure", () => {
         .hasAttribute("disabled")
     ).toBe(false);
     expect(mocks.toast).not.toHaveBeenCalledWith("Proposal submitted.");
+  });
+
+  it.each([
+    ["repriced", "Proposal transaction gas fee was updated in your wallet."],
+    ["replaced", "Proposal transaction was replaced in your wallet."],
+  ] as const)(
+    "forwards a %s transaction to onProposalReplaced",
+    async (reason, notice) => {
+      const { state, transactionHash } = setupSubmission();
+      state.confirmed = false;
+      const onProposalReplaced = vi.fn();
+      const view = render(
+        <CreateProposalForm
+          initialDraft={stored}
+          onProposalReplaced={onProposalReplaced}
+        />
+      );
+      await submit(view);
+      const replacement = {
+        reason,
+        transactionReceipt: {
+          status: "success",
+          transactionHash: `0x${"cd".repeat(32)}`,
+          logs: [],
+        },
+      } as unknown as ProposalReplacement;
+      await act(async () => state.onReplaced?.(replacement));
+      expect(onProposalReplaced).toHaveBeenCalledExactlyOnceWith(replacement);
+      expect(mocks.toast).toHaveBeenCalledWith(notice);
+      expect(
+        mocks.useWaitForTransactionReceipt.mock.calls.at(-1)?.[0].hash
+      ).toBe(replacement.transactionReceipt.transactionHash);
+      expect(
+        mocks.useWaitForTransactionReceipt.mock.calls.at(-1)?.[0].hash
+      ).not.toBe(transactionHash);
+    }
+  );
+
+  it("forwards a cancellation to onProposalReplaced and stops tracking", async () => {
+    const { state } = setupSubmission();
+    state.confirmed = false;
+    const onProposalReplaced = vi.fn();
+    const view = render(
+      <CreateProposalForm
+        initialDraft={stored}
+        onProposalReplaced={onProposalReplaced}
+      />
+    );
+    await submit(view);
+    const replacement = {
+      reason: "cancelled",
+      transactionReceipt: {
+        status: "success",
+        transactionHash: `0x${"cd".repeat(32)}`,
+        logs: [],
+      },
+    } as unknown as ProposalReplacement;
+    await act(async () => state.onReplaced?.(replacement));
+    expect(onProposalReplaced).toHaveBeenCalledExactlyOnceWith(replacement);
+    expect(view.container.textContent).toContain(
+      "Proposal transaction was cancelled in your wallet."
+    );
+    expect(
+      mocks.useWaitForTransactionReceipt.mock.calls.at(-1)?.[0].hash
+    ).toBeUndefined();
   });
 
   it("handles a rejected wallet request without reporting a broadcast", async () => {
