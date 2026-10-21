@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import { cn } from "@/lib/utils";
 import { ParsedProposal } from "@/types/proposal";
 
@@ -28,14 +29,19 @@ export function HasVotedBadge({
   className,
 }: HasVotedBadgeProps) {
   const { isConnected } = useAccount();
+  // An L1 voting proposal is voted from an L1 address on behalf of an L2
+  // delegate, so the connected account's own hasVoted on Arbitrum One says
+  // nothing about it; the L1 vote panel owns that answer.
+  const isL1Voting = isL1VotingProposal(proposal);
   const { hasVoted, isLoadingHasVoted } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress as `0x${string}`,
+    enabled: !isL1Voting,
   });
 
   const textSize = size === "sm" ? "text-[10px]" : "text-xs";
 
-  if (!isConnected || hasVoted === undefined) {
+  if (isL1Voting || !isConnected || hasVoted === undefined) {
     if (isConnected && isLoadingHasVoted) {
       return <Skeleton className={cn("h-5 w-16", className)} />;
     }

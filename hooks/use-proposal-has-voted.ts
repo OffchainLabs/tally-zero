@@ -7,9 +7,12 @@ import { useAccount, useReadContract } from "wagmi";
 export function useProposalHasVoted({
   proposalId,
   governorAddress,
+  enabled = true,
 }: {
   proposalId: string;
   governorAddress: `0x${string}`;
+  /** Set false to skip the read, e.g. for a governor not on Arbitrum One */
+  enabled?: boolean;
 }) {
   const { address, isConnected } = useAccount();
   const accountAddress = address ?? zeroAddress;
@@ -18,7 +21,7 @@ export function useProposalHasVoted({
   const { data, isLoading } = useReadContract({
     ...readHasVoted(proposalId, accountAddress, governorAddress),
     query: {
-      enabled: canReadAccountData,
+      enabled: enabled && canReadAccountData,
     },
   });
 
