@@ -122,8 +122,19 @@ describe("mapIndexerStage", () => {
         chain: "arb1",
         detail: {
           legs: [
-            { executionKey: "0x1", executed: true, txHash: LEG_TX },
+            {
+              executionKey: "0x1",
+              executed: true,
+              executedAt: NOW - 5,
+              txHash: LEG_TX,
+            },
             { executionKey: "0x2", executed: false, txHash: null },
+            {
+              executionKey: null,
+              foreign: true,
+              executed: false,
+              txHash: null,
+            },
           ],
         },
       }),
@@ -131,7 +142,12 @@ describe("mapIndexerStage", () => {
     );
 
     expect(mapped.transactions).toEqual([
-      expect.objectContaining({ hash: LEG_TX, chain: "arb1", chainId: 42161 }),
+      expect.objectContaining({
+        hash: LEG_TX,
+        chain: "arb1",
+        chainId: 42161,
+        timestamp: NOW - 5,
+      }),
     ]);
     expect(mapped.data).toEqual({
       note: "Retryable tickets executed: 1/2",

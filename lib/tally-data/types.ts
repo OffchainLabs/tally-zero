@@ -195,8 +195,12 @@ export type IndexerStageStatus =
 
 /** One retryable ticket of a proposal's L1 timelock execution */
 export type IndexerRetryableLeg = {
-  executionKey: string;
+  executionKey: string | null;
+  /** A retryable some other operation created; not counted toward done */
+  foreign?: boolean;
   executed: boolean;
+  /** Unix seconds */
+  executedAt?: number | null;
   txHash: string | null;
 };
 

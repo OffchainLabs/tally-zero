@@ -75,7 +75,8 @@ function transaction(
 
 function stageNote(stage: IndexerProposalStage): string | null {
   const parts: string[] = [];
-  const legs = stage.detail?.legs;
+  // A foreign leg belongs to another operation and does not decide this one.
+  const legs = stage.detail?.legs?.filter((leg) => !leg.foreign);
   if (legs && legs.length > 0) {
     const executed = legs.filter((leg) => leg.executed).length;
     parts.push(`Retryable tickets executed: ${executed}/${legs.length}`);
@@ -110,12 +111,17 @@ export function mapIndexerStage(
 
   const transactions: StageTransaction[] = [];
   if (stage.txHash) {
-    transactions.push(transaction(stage.txHash, chainId, stage.completedAt));
+    // A pending timelock's hash is the schedule transaction, dated by its start.
+    transactions.push(
+      transaction(stage.txHash, chainId, stage.completedAt ?? stage.startedAt)
+    );
   }
   for (const leg of stage.detail?.legs ?? []) {
     if (!leg.txHash || leg.txHash === stage.txHash) continue;
     // Retryables are redeemed on Arbitrum, whatever chain the stage reports.
-    transactions.push(transaction(leg.txHash, l2ChainId(), null, "redeemed"));
+    transactions.push(
+      transaction(leg.txHash, l2ChainId(), leg.executedAt ?? null, "redeemed")
+    );
   }
 
   const note = stageNote(stage);
