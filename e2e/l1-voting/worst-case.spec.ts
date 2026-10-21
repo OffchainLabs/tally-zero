@@ -78,6 +78,10 @@ async function recoveryId(): Promise<string> {
 }
 
 async function expectStage(page: Page, type: string, status: string) {
+  // Stages live on the L1 proposal page's Lifecycle tab.
+  const lifecycle = page.getByRole("tab", { name: "Lifecycle" });
+  await lifecycle.waitFor({ timeout: 120_000 });
+  await lifecycle.click();
   await expect(
     page.locator(`[data-stage-type="${type}"]`).first()
   ).toHaveAttribute("data-stage-status", status, { timeout: 120_000 });
@@ -98,7 +102,9 @@ test("1. a Safe delegate registers its L1 voter through the UI", async ({
 }) => {
   test.setTimeout(30 * 60_000);
   deployment ??= await api("/api/l1-voting/deployment");
-  // Owner #1 builds the Safe transaction; owner #2 approves it (scripted); owner #1 executes.
+  // A real multisig: the baked Safe is 1-of-2, so make it 2-of-2 first. Owner #1 builds the
+  // Safe transaction; owner #2 approves it (scripted); owner #1 executes.
+  await scenario("safe-threshold", safe, 2);
   const owner = await walletPage(
     browser,
     DEV_WALLETS.profile,
@@ -228,9 +234,10 @@ test("5. the first voter votes in the UI on stale state, and locks the snapshot"
   );
   expect(plan.assertionHash).toBe(state.stalledAssertion);
   await page.reload();
+  await page.getByRole("tab", { name: "Voters" }).click();
   await expect(page.getByTestId("l1-proposal-voters")).toContainText(
     DEV_WALLETS.second.address.slice(0, 6),
-    { timeout: 120_000 }
+    { timeout: 120_000, ignoreCase: true }
   );
 });
 

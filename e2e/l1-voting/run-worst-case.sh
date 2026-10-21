@@ -55,6 +55,7 @@ until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do sleep 1; done
 step "indexer (:$INDEXER_PORT)"
 (cd "$INDEXER_REPO/packages/indexer" && \
   PONDER_RPC_URL_LOCAL_L1="http://127.0.0.1:$PROXY_PORT" SIWE_CHAIN_ID=412346 L1_VOTING_PROOF_POLL_MS=5000 \
+  SIWE_DOMAINS="localhost:$WEB_PORT" \
   exec ./node_modules/.bin/ponder start --schema "worst_case_$(date +%s)" --port "$INDEXER_PORT") \
   >"$ART/indexer.log" 2>&1 &
 PIDS+=($!)
