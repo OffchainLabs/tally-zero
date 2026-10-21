@@ -5,6 +5,7 @@ import { memo } from "react";
 import type { L2Chain } from "@gzeoneth/gov-tracker";
 import { ExternalLinkIcon } from "@radix-ui/react-icons";
 
+import { RedeemRetryableButton } from "./RedeemRetryableButton";
 import { getStageTxExplorerUrl } from "./stage-utils";
 
 export interface RetryableCreationDetailsProps {
@@ -57,12 +58,17 @@ export interface RetryableRedemptionDetailsProps {
     targetChain: L2Chain;
     status: string;
     l2TxHash: string | null;
+    /** Set by the indexer; a REDEEMABLE ticket with one gets a Redeem button */
+    ticketId?: string | null;
   }>;
+  /** Called after a manual redeem is mined */
+  onRedeemed?: () => void;
 }
 
 export const RetryableRedemptionDetails = memo(
   function RetryableRedemptionDetails({
     details,
+    onRedeemed,
   }: RetryableRedemptionDetailsProps) {
     const redeemedCount = details.filter((d) => d.l2TxHash).length;
 
@@ -75,6 +81,8 @@ export const RetryableRedemptionDetails = memo(
           <div
             key={`redemption-${detail.index}`}
             className="flex items-center gap-2"
+            data-ticket-id={detail.ticketId ?? undefined}
+            data-status={detail.status}
           >
             <span className="text-xs px-1 py-0.5 rounded bg-arb-blue/15 text-arb-blue dark:bg-arb-navy/60 dark:text-arb-teal">
               {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
@@ -95,6 +103,12 @@ export const RetryableRedemptionDetails = memo(
               </a>
             ) : (
               <span className="text-muted-foreground">{detail.status}</span>
+            )}
+            {detail.status === "REDEEMABLE" && detail.ticketId && (
+              <RedeemRetryableButton
+                ticketId={detail.ticketId}
+                onRedeemed={onRedeemed}
+              />
             )}
           </div>
         ))}
