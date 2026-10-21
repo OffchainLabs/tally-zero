@@ -52,6 +52,14 @@ export default defineConfig({
       NEXT_PUBLIC_SIWE_CHAIN_ID:
         process.env.NEXT_PUBLIC_SIWE_CHAIN_ID ?? "412346",
       STORAGE_DRIVER: process.env.STORAGE_DRIVER ?? "local",
+      // The local testnode pair (L1 1337, L2 412346) the backend runs on.
+      NEXT_PUBLIC_LOCAL_CHAINS: process.env.NEXT_PUBLIC_LOCAL_CHAINS ?? "1",
+      NEXT_PUBLIC_LOCAL_L1_RPC:
+        process.env.NEXT_PUBLIC_LOCAL_L1_RPC ?? "http://127.0.0.1:8545",
+      NEXT_PUBLIC_LOCAL_L2_RPC:
+        process.env.NEXT_PUBLIC_LOCAL_L2_RPC ?? "http://127.0.0.1:8547",
+      NEXT_PUBLIC_STAGES_SOURCE:
+        process.env.NEXT_PUBLIC_STAGES_SOURCE ?? "gov-tracker",
     },
   },
 });
