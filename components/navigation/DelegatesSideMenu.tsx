@@ -1,6 +1,6 @@
 "use client";
 
-import { UserPlus, Users, Vote } from "lucide-react";
+import { Landmark, UserPlus, Users, Vote } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,6 +19,11 @@ const items: SideMenuItem[] = [
     href: "/delegates/register",
     title: "Create Delegate Profile",
     icon: UserPlus,
+  },
+  {
+    href: "/delegates/l1-registration",
+    title: "L1 Voting Registration",
+    icon: Landmark,
   },
 ];
 
