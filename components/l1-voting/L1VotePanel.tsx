@@ -6,7 +6,7 @@ import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Address, Hex } from "viem";
-import { formatUnits, isAddressEqual } from "viem";
+import { formatUnits, getAddress, isAddressEqual } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -70,9 +70,10 @@ export function L1VotePanel({
   });
   const choices = useMemo(() => {
     if (!address) return [];
+    // The indexer serves lowercase addresses; offer them checksummed, like the wallet's own.
     const named = (registered ?? [])
       .filter((r) => isAddressEqual(r.l1Address, address))
-      .map((r) => r.l2Delegate);
+      .map((r) => getAddress(r.l2Delegate));
     return [address, ...named.filter((d) => !isAddressEqual(d, address))];
   }, [address, registered]);
   const forDelegate = delegate ?? choices[0] ?? null;
