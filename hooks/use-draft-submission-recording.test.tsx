@@ -215,14 +215,21 @@ describe("draft submission recording", () => {
     expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith(submission);
   });
 
-  it("does not accept a cached receipt for another transaction", async () => {
+  it("follows a receipt resolved for a replacement of the pending transaction", async () => {
+    // viem only resolves a foreign hash under the pending hash's query when
+    // the wallet replaced the transaction, so the recorder follows it even
+    // when the onReplaced callback belonged to another hook instance.
     savePendingSubmission(key, pending);
-    confirmed = { ...receipt(), transactionHash: `0x${"cd".repeat(32)}` };
+    const replacement = `0x${"cd".repeat(32)}` as const;
+    confirmed = { ...receipt(), transactionHash: replacement };
     const view = mount();
     await act(async () => {});
-    expect(view.result.current.status).toBe("confirming");
-    expect(mocks.markSubmitted).not.toHaveBeenCalled();
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(view.result.current.status).toBe("recorded");
+    expect(mocks.markSubmitted).toHaveBeenCalledExactlyOnceWith({
+      ...submission,
+      transactionHash: replacement,
+    });
+    expect(readPendingSubmission(key)).toBeNull();
   });
 
   it("keeps a repriced hash recoverable and clears a cancelled transaction", async () => {
