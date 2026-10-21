@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   useSiwe: vi.fn(),
   useDraft: vi.fn(),
   onProposalSubmitted: vi.fn(),
+  onProposalReplaced: vi.fn(),
   recording: vi.fn(),
   recordingResult: vi.fn(),
   form: vi.fn(),
@@ -143,6 +144,7 @@ describe("ProposalDraftLoader", () => {
       canRetry: false,
       retry: vi.fn(),
       onProposalSubmitted: mocks.onProposalSubmitted,
+      onProposalReplaced: mocks.onProposalReplaced,
     });
     mocks.searchParams = new URLSearchParams("draft=d1");
     session();
@@ -266,6 +268,9 @@ describe("ProposalDraftLoader", () => {
     expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBe(
       mocks.onProposalSubmitted
     );
+    expect(mocks.form.mock.calls[0][0].onProposalReplaced).toBe(
+      mocks.onProposalReplaced
+    );
   });
 
   it("does not mount recording for an editable draft", () => {
@@ -330,6 +335,7 @@ describe("ProposalDraftLoader", () => {
     });
     render();
     expect(mocks.form.mock.calls[0][0].onProposalSubmitted).toBeUndefined();
+    expect(mocks.form.mock.calls[0][0].onProposalReplaced).toBeUndefined();
   });
 
   it("explains and falls back to a blank form when signed out", () => {
