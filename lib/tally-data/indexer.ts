@@ -7,6 +7,7 @@ import {
 import type {
   DelegateCountParams,
   DelegatePageParams,
+  IndexerProposalStages,
   TallyAddressDisplayRecord,
   TallyCandidateSummary,
   TallyDataClient,
@@ -231,6 +232,15 @@ export class IndexerTallyDataClient implements TallyDataClient {
   getProposalIndexEntry(proposalId: string, governorAddress: string) {
     return fetchIndexer<TallyProposalIndexEntry | null>(
       `api/tally/proposals/${normalizeAddress(governorAddress)}/${proposalId}`
+    );
+  }
+
+  /** Lifecycle stages from the indexer's own timelock and retryable records */
+  getProposalStages(proposalId: string, governorAddress: string) {
+    return fetchIndexer<IndexerProposalStages | null>(
+      `api/tally/proposals/${normalizeAddress(
+        governorAddress
+      )}/${proposalId}/stages`
     );
   }
 

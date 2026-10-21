@@ -177,6 +177,58 @@ export type TallyProposalIndexEntry = {
   creationTxHash?: string | null;
 };
 
+/** Lifecycle stage kinds; the names match gov-tracker's `StageType` */
+export type IndexerStageType =
+  | "PROPOSAL_CREATED"
+  | "VOTING_ACTIVE"
+  | "PROPOSAL_QUEUED"
+  | "L2_TIMELOCK"
+  | "L2_TO_L1_MESSAGE"
+  | "L1_TIMELOCK"
+  | "RETRYABLE_EXECUTED";
+
+export type IndexerStageStatus =
+  | "COMPLETED"
+  | "PENDING"
+  | "NOT_STARTED"
+  | "CANCELED";
+
+/** One retryable ticket of a proposal's L1 timelock execution */
+export type IndexerRetryableLeg = {
+  executionKey: string;
+  executed: boolean;
+  txHash: string | null;
+};
+
+export type IndexerProposalStage = {
+  type: IndexerStageType;
+  status: IndexerStageStatus;
+  chain: "arb1" | "ethereum";
+  /** Unix seconds */
+  startedAt: number | null;
+  /** Unix seconds */
+  completedAt: number | null;
+  /** Unix seconds at which a timelock operation becomes executable */
+  etaAt: number | null;
+  /** The transaction that completed the stage */
+  txHash: string | null;
+  detail: {
+    operationId?: string;
+    legs?: IndexerRetryableLeg[];
+    [key: string]: unknown;
+  } | null;
+};
+
+/** `/api/tally/proposals/:governor/:proposalId/stages` */
+export type IndexerProposalStages = {
+  proposalId: string;
+  governorAddress: string;
+  governorType: IndexerGovernorType | string;
+  executionPhase: IndexerExecutionPhase | null;
+  executionCancelled: boolean;
+  stages: IndexerProposalStage[];
+};
+
 export type TallyAddressDisplayRecord = {
   address: string;
   label: string | null;
@@ -243,6 +295,10 @@ export interface TallyDataClient {
     proposalId: string,
     governorAddress: string
   ): Promise<TallyProposalIndexEntry | null>;
+  getProposalStages(
+    proposalId: string,
+    governorAddress: string
+  ): Promise<IndexerProposalStages | null>;
   getDelegateVotesWatermarkBlock(): Promise<number>;
   getStats(): Promise<TallyDataStats>;
 }

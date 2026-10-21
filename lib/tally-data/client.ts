@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { IndexerTallyDataClient } from "@/lib/tally-data/indexer";
 import type {
+  IndexerProposalStages,
   TallyAddressDisplayRecord,
   TallyDataClient,
 } from "@/lib/tally-data/types";
@@ -27,6 +28,14 @@ export type AddressDisplayRecordsState = {
 export function getTallyDataClient(): TallyDataClient {
   client ??= new IndexerTallyDataClient();
   return client;
+}
+
+/** A proposal's lifecycle stages from the indexer, or null when unknown */
+export function getProposalStages(
+  governorAddress: string,
+  proposalId: string
+): Promise<IndexerProposalStages | null> {
+  return getTallyDataClient().getProposalStages(proposalId, governorAddress);
 }
 
 function cacheDisplayRecords(
