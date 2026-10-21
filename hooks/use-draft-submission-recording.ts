@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt } from "wagmi";
+
+import type { ProposalReplacement } from "@/components/form/CreateProposalForm";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { draftSubmissionStorageKey } from "@/config/storage-keys";
@@ -32,13 +35,20 @@ type RecordingStatus =
 /** Mount under a key scoped to the draft and signed-in subject. */
 export function useDraftSubmissionRecording(
   draft: RecordableDraft,
-  subject: string,
+  subject: string
 ) {
   const key = draftSubmissionStorageKey(draft.id, subject);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const { markSubmitted } = useMarkSubmitted(draft.shareSlug);
   const [pending, setPending] = useState<PendingDraftSubmission | null>(null);
   const [status, setStatus] = useState<RecordingStatus>(
-    draft.status === "submitted" ? "recorded" : null,
+    draft.status === "submitted" ? "recorded" : null
   );
   const [error, setError] = useState<string | null>(null);
   const pendingHash = useRef<string | null>(null);
@@ -80,7 +90,35 @@ export function useDraftSubmissionRecording(
       setError(null);
       setStatus("confirming");
     },
-    [key, draft.status],
+    [key, draft.status]
+  );
+
+  /** Follow a wallet replacement of the pending transaction. */
+  const onProposalReplaced = useCallback(
+    ({ reason, transactionReceipt }: ProposalReplacement) => {
+      if (
+        !mounted.current ||
+        !pending ||
+        pendingHash.current !== pending.transactionHash
+      )
+        return;
+      const saved = readPendingSubmission(key);
+      if (saved && saved.transactionHash !== pending.transactionHash) return;
+      clearPendingSubmission(key, pending.transactionHash);
+      if (reason === "cancelled") {
+        setPending(null);
+        setStatus("receipt-error");
+        setError(
+          "Proposal transaction was cancelled. The draft was not marked submitted."
+        );
+      } else {
+        onProposalSubmitted({
+          hash: transactionReceipt.transactionHash,
+          governorAddress: pending.governorAddress,
+        });
+      }
+    },
+    [key, pending, onProposalSubmitted]
   );
 
   const {
@@ -90,6 +128,12 @@ export function useDraftSubmissionRecording(
   } = useWaitForTransactionReceipt({
     chainId: ARBITRUM_CHAIN_ID,
     hash: pending?.transactionHash,
+    // The form waits for this hash too, and both waits must share one wagmi
+    // query. viem keys its receipt observer by hash alone, and with wagmi's
+    // zero timeout a second concurrent wait leaves a listener behind that
+    // hangs every later wait on the hash: retries, refetch, the raw receipt
+    // fallback. The form forwards replacements it detects to onProposalReplaced.
+    onReplaced: onProposalReplaced,
   });
 
   const receipt = awaitedReceipt;
@@ -116,7 +160,7 @@ export function useDraftSubmissionRecording(
         recordingHash.current = null;
       }
     },
-    [key, markSubmitted],
+    [key, markSubmitted]
   );
 
   useEffect(() => {
@@ -131,7 +175,17 @@ export function useDraftSubmissionRecording(
       setError(getErrorMessage(receiptError, "confirm proposal"));
       return;
     }
-    if (!receipt || !matchesPending) return;
+    if (!receipt) return;
+    if (!matchesPending) {
+      // viem resolves a replacement's receipt under the replaced hash. The
+      // shared query's onReplaced belongs to whichever hook started the fetch,
+      // which may be an instance unmounted since, so follow the receipt here.
+      onProposalReplaced({
+        reason: looksCancelled(receipt) ? "cancelled" : "replaced",
+        transactionReceipt: receipt,
+      });
+      return;
+    }
     if (attemptedHash.current === pending.transactionHash) return;
     attemptedHash.current = pending.transactionHash;
     if (receipt.status === "reverted") {
@@ -140,7 +194,7 @@ export function useDraftSubmissionRecording(
       setPending(null);
       setStatus("receipt-error");
       setError(
-        "Proposal transaction reverted. The draft was not marked submitted.",
+        "Proposal transaction reverted. The draft was not marked submitted."
       );
       return;
     }
@@ -152,7 +206,7 @@ export function useDraftSubmissionRecording(
       clearPendingSubmission(key, pending.transactionHash);
       setStatus(checked.kind);
     }
-  }, [draft, pending, receipt, receiptError, key, record]);
+  }, [draft, pending, receipt, receiptError, key, record, onProposalReplaced]);
 
   const canRetry =
     status === "failed" ||
@@ -175,5 +229,21 @@ export function useDraftSubmissionRecording(
     const checked = checkDraftReceipt(receipt, draft);
     if (checked.kind === "match") await record(checked.submission);
   };
-  return { status, error, canRetry, retry, onProposalSubmitted };
+  return {
+    status,
+    error,
+    canRetry,
+    retry,
+    onProposalSubmitted,
+    onProposalReplaced,
+  };
+}
+
+/** A wallet cancellation is a zero-value self-transfer, so it emits no logs. */
+function looksCancelled(receipt: TransactionReceipt) {
+  return (
+    receipt.logs.length === 0 &&
+    receipt.to !== null &&
+    receipt.from.toLowerCase() === receipt.to.toLowerCase()
+  );
 }
