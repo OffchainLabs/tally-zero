@@ -178,4 +178,46 @@ describe("RetryableRedemptionDetails", () => {
     expect(buttons).toHaveLength(1);
     expect(rows[1].contains(buttons[0])).toBe(true);
   });
+
+  it("links a leg's creation transaction on Ethereum, or shows it bare locally", () => {
+    const CREATION_TX = `0x${"77".repeat(32)}`;
+    const leg = (creationChain: "ethereum" | "unknown") => ({
+      index: 0,
+      targetChain: "arb1" as const,
+      status: "PENDING",
+      l2TxHash: null,
+      creationTxHash: CREATION_TX,
+      creationChain,
+    });
+
+    const mainnet = render(
+      <RetryableRedemptionDetails details={[leg("ethereum")]} />
+    ).container;
+    const link = mainnet.querySelector(
+      '[data-testid="retryable-creation-tx"] a'
+    );
+    expect(link?.getAttribute("href")).toBe(
+      `https://etherscan.io/tx/${CREATION_TX}`
+    );
+    cleanup();
+
+    const local = render(
+      <RetryableRedemptionDetails details={[leg("unknown")]} />
+    ).container;
+    const created = local.querySelector(
+      '[data-testid="retryable-creation-tx"]'
+    );
+    expect(created?.querySelector("a")).toBeNull();
+    expect(created?.querySelector(`[title="${CREATION_TX}"]`)).not.toBeNull();
+
+    cleanup();
+    const none = render(
+      <RetryableRedemptionDetails
+        details={[{ ...leg("ethereum"), creationTxHash: null }]}
+      />
+    ).container;
+    expect(
+      none.querySelector('[data-testid="retryable-creation-tx"]')
+    ).toBeNull();
+  });
 });

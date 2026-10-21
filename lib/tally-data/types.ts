@@ -213,6 +213,8 @@ export type IndexerRetryableLeg = {
   ticketId?: string | null;
   /** Older indexer deployments do not report it */
   status?: IndexerRetryableStatus;
+  /** The L1 execution transaction that created the ticket */
+  creationTxHash?: string | null;
 };
 
 export type IndexerRetryableStatus =
@@ -256,6 +258,7 @@ export type IndexerStageDetail = {
   againstVotes?: string | null;
   abstainVotes?: string | null;
   quorum?: string | null;
+  wasExtended?: boolean | null;
   // L2_TIMELOCK, L1_TIMELOCK
   operationId?: string;
   calls?: number;

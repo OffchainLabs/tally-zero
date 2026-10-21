@@ -481,6 +481,66 @@ describe("stage details from the extended endpoint", () => {
     });
   });
 
+  it("carries the voting extension to the Extended badge", () => {
+    const voting = (wasExtended?: boolean | null) =>
+      mapIndexerStage(
+        stage({
+          type: "VOTING_ACTIVE",
+          status: "COMPLETED",
+          chain: "arb1",
+          txHash: TX,
+          detail: { forVotes: "1", quorum: "1", wasExtended },
+        }),
+        NOW
+      ).data as Record<string, unknown>;
+    expect(voting(true).wasExtended).toBe(true);
+    expect(voting(false).wasExtended).toBe(false);
+    expect(voting(null)).not.toHaveProperty("wasExtended");
+    expect(voting()).not.toHaveProperty("wasExtended");
+  });
+
+  it("gives each leg its L1 creation transaction", () => {
+    const CREATION_TX = `0x${"77".repeat(32)}`;
+    const legs = () =>
+      (
+        mapIndexerStage(
+          stage({
+            type: "RETRYABLE_EXECUTED",
+            chain: "arb1",
+            detail: {
+              legs: [
+                {
+                  executionKey: "0x1",
+                  executed: false,
+                  txHash: null,
+                  ticketId: TICKET,
+                  status: "REDEEMABLE",
+                  creationTxHash: CREATION_TX,
+                },
+                {
+                  executionKey: "0x2",
+                  executed: false,
+                  txHash: null,
+                  status: "PENDING",
+                },
+              ],
+            },
+          }),
+          NOW
+        ).data as unknown as { redemptionDetails: Record<string, unknown>[] }
+      ).redemptionDetails;
+
+    expect(legs()[0]).toMatchObject({
+      creationTxHash: CREATION_TX,
+      creationChain: "ethereum",
+    });
+    expect(legs()[1].creationTxHash).toBeNull();
+
+    // The local L1 has no explorer
+    mocks.env.NEXT_PUBLIC_LOCAL_CHAINS = "1";
+    expect(legs()[0].creationChain).toBe("unknown");
+  });
+
   it("maps election stages with a summary of their detail", () => {
     const nominee = mapIndexerStage(
       stage({
