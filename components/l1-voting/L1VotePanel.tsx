@@ -78,11 +78,16 @@ export function L1VotePanel({
   }, [address, registered]);
   const forDelegate = delegate ?? choices[0] ?? null;
 
-  const { data: plan, refetch } = useQuery({
+  const {
+    data: plan,
+    error: planError,
+    refetch,
+  } = useQuery({
     queryKey: ["l1-voting", "vote-plan", proposalId, forDelegate, address],
     queryFn: () => l1VotingApi.votePlan(proposalId, forDelegate!, address!),
     enabled: !!forDelegate && !!address && !running,
     refetchInterval: running ? false : 15_000,
+    retry: 1,
   });
   const shown = lastPlan ?? plan;
 
@@ -95,6 +100,10 @@ export function L1VotePanel({
       await ensure();
       const onProgress = (event: PlanProgress) => {
         if (event.type === "plan") setLastPlan(event.plan);
+        if (event.type === "replan")
+          toast.info("The chain moved on; re-checking what is left to send.", {
+            id: "l1-vote-replan",
+          });
         if (event.type === "step")
           setSteps((rows) => [
             ...rows.filter((r) => r.key !== `${event.step.kind}`),
@@ -150,6 +159,7 @@ export function L1VotePanel({
           return hash;
         },
         onProgress,
+        isUserRejection: isUserRejectedError,
       });
       setVoteTx(tx);
       toast.success("Vote cast on Ethereum");
@@ -235,6 +245,12 @@ export function L1VotePanel({
           Voting power at the snapshot: <strong>{power} ARB</strong>
         </p>
       )}
+
+      {planError && !running ? (
+        <p data-testid="l1-vote-error" className="text-sm text-destructive">
+          Could not load what is left to send ({planError.message}). Retrying…
+        </p>
+      ) : null}
 
       {shown?.blockers.length ? (
         <ul

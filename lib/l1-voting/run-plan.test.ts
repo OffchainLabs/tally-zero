@@ -97,4 +97,41 @@ describe("runVotePlan", () => {
     ).rejects.toBeInstanceOf(VotePlanBlockedError);
     expect(sendStep).not.toHaveBeenCalled();
   });
+
+  it("re-plans after a step reverts, but not after the user refuses", async () => {
+    const plans = [
+      plan([step("bundle")]), // reverts: someone locked first
+      plan([step("bundle", { calls: ["Prove your voting power"] })]),
+      plan([]),
+    ];
+    const sendStep = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("execution reverted: SNAPSHOT_LOCKED"))
+      .mockResolvedValueOnce("0xb0" as `0x${string}`);
+    const events: string[] = [];
+    const tx = await runVotePlan({
+      fetchPlan: async () => plans.shift()!,
+      sendStep,
+      signTypedData: vi.fn(),
+      waitForBlock: vi.fn(),
+      castVote: async () => "0xv" as `0x${string}`,
+      isUserRejection: () => false,
+      onProgress: (e) => events.push(e.type),
+    });
+    expect(tx).toBe("0xv");
+    expect(sendStep).toHaveBeenCalledTimes(2);
+    expect(events).toContain("replan");
+
+    const refused = new Error("User rejected the request.");
+    await expect(
+      runVotePlan({
+        fetchPlan: async () => plan([step("bundle")]),
+        sendStep: vi.fn().mockRejectedValue(refused),
+        signTypedData: vi.fn(),
+        waitForBlock: vi.fn(),
+        castVote: vi.fn(),
+        isUserRejection: (e) => e === refused,
+      })
+    ).rejects.toBe(refused);
+  });
 });

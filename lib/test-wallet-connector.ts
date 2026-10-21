@@ -43,6 +43,25 @@ const defaultRpcRequest: RpcRequest = (chain, method, params) => {
   >[0]);
 };
 
+/** Requests a real wallet would ask the user to approve. */
+const USER_ACTIONS = new Set([
+  "personal_sign",
+  "eth_signTypedData_v4",
+  "eth_sendTransaction",
+]);
+
+/**
+ * e2e hook: while `window.__TEST_WALLET_REJECT__` is a positive count, the next that many user
+ * actions are refused the way a wallet reports a user clicking Reject (EIP-1193 code 4001).
+ */
+function takeRejection(): boolean {
+  const scope = globalThis as { __TEST_WALLET_REJECT__?: number };
+  const left = scope.__TEST_WALLET_REJECT__ ?? 0;
+  if (left <= 0) return false;
+  scope.__TEST_WALLET_REJECT__ = left - 1;
+  return true;
+}
+
 /**
  * The EIP-1193 provider behind the signing test wallet.
  *
@@ -81,6 +100,11 @@ export function createTestWalletProvider({
     method: string;
     params?: unknown[];
   }): Promise<unknown> => {
+    if (USER_ACTIONS.has(method) && takeRejection()) {
+      throw Object.assign(new Error("User rejected the request."), {
+        code: 4001,
+      });
+    }
     switch (method) {
       case "eth_chainId":
         return numberToHex(chain.id);

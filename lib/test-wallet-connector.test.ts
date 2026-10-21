@@ -246,4 +246,24 @@ describe("testWalletConnector", () => {
       "Chain 10 not configured"
     );
   });
+
+  it("refuses the next user actions like a wallet's Reject when asked to", async () => {
+    const scope = globalThis as { __TEST_WALLET_REJECT__?: number };
+    scope.__TEST_WALLET_REJECT__ = 1;
+    const provider = createTestWalletProvider({
+      account: privateKeyToAccount(
+        "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+      ),
+      initialChainId: 412346,
+      rpcRequest: async () => "0x1",
+    });
+    await expect(
+      provider.request({ method: "personal_sign", params: ["0x01"] })
+    ).rejects.toMatchObject({ code: 4001 });
+    // Only one: the next signature goes through.
+    await expect(
+      provider.request({ method: "personal_sign", params: ["0x01"] })
+    ).resolves.toMatch(/^0x/);
+    delete scope.__TEST_WALLET_REJECT__;
+  });
 });
