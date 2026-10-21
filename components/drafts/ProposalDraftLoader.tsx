@@ -262,8 +262,14 @@ function DraftSubmissionForm({
   draft: RecordableDraft;
   subject: string;
 }) {
-  const { status, error, canRetry, retry, onProposalSubmitted } =
-    useDraftSubmissionRecording(draft, subject);
+  const {
+    status,
+    error,
+    canRetry,
+    retry,
+    onProposalSubmitted,
+    onProposalReplaced,
+  } = useDraftSubmissionRecording(draft, subject);
   return (
     <>
       {status && (
@@ -304,6 +310,7 @@ function DraftSubmissionForm({
       <CreateProposalForm
         {...formProps}
         onProposalSubmitted={onProposalSubmitted}
+        onProposalReplaced={onProposalReplaced}
       />
     </>
   );
