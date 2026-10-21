@@ -12,10 +12,10 @@
  *
  * Run it with e2e/l1-voting/run-worst-case.sh, which boots the whole stack.
  */
-import { type Browser, type Page, expect, test } from "@playwright/test";
+import { type Page, expect, test } from "@playwright/test";
 
-import { useWallet } from "../fixtures/session";
-import { DEV_WALLETS, type DevWallet } from "../fixtures/wallets";
+import { DEV_WALLETS } from "../fixtures/wallets";
+import { recordedPage, saveVideos } from "./recording";
 import {
   INDEXER_REPO,
   scenario,
@@ -28,6 +28,7 @@ const L1_CHAIN = 1337;
 
 test.skip(!INDEXER_REPO, "set WORST_CASE_INDEXER_REPO (run-worst-case.sh)");
 test.describe.configure({ mode: "serial" });
+test.afterEach(async ({}, testInfo) => saveVideos(testInfo));
 
 async function api<T = any>(path: string): Promise<T> {
   const res = await fetch(`${INDEXER}${path}`);
@@ -54,18 +55,6 @@ async function eventually<T>(
   throw new Error(`timed out: ${label}${last ? ` (${String(last)})` : ""}`);
 }
 
-async function walletPage(
-  browser: Browser,
-  wallet: DevWallet,
-  path: string
-): Promise<Page> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await useWallet(page, wallet);
-  await page.goto(path);
-  return page;
-}
-
 let deployment: { governor: string; l2DelegateMapping: string };
 const safe = "0x8Df5b801aD8FD2F9589c284979e6795f418A5c9B"; // baked test Safe (owners dev1, dev2)
 const safeVoter = DEV_WALLETS.candidates; // the L1 address the Safe registers in this run
@@ -87,11 +76,11 @@ async function expectStage(page: Page, type: string, status: string) {
   ).toHaveAttribute("data-stage-status", status, { timeout: 120_000 });
 }
 
-test("0. the stack is up and governance works", async ({ page }) => {
+test("0. the stack is up and governance works", async ({ browser }) => {
   test.setTimeout(10 * 60_000);
   await scenario("preflight");
   deployment = await api("/api/l1-voting/deployment");
-  await page.goto("/proposals");
+  const page = await recordedPage(browser, null, "/proposals");
   await expect(page.getByText("L1 Voting").first()).toBeVisible({
     timeout: 60_000,
   });
@@ -105,7 +94,7 @@ test("1. a Safe delegate registers its L1 voter through the UI", async ({
   // A real multisig: the baked Safe is 1-of-2, so make it 2-of-2 first. Owner #1 builds the
   // Safe transaction; owner #2 approves it (scripted); owner #1 executes.
   await scenario("safe-threshold", safe, 2);
-  const owner = await walletPage(
+  const owner = await recordedPage(
     browser,
     DEV_WALLETS.profile,
     "/delegates/l1-registration"
@@ -128,7 +117,7 @@ test("1. a Safe delegate registers its L1 voter through the UI", async ({
   await expect(owner.getByTestId("l1-reg-provable")).toContainText("not yet");
 
   // The Safe's new voter accepts the Safe on Ethereum.
-  const voter = await walletPage(
+  const voter = await recordedPage(
     browser,
     safeVoter,
     "/delegates/l1-registration"
@@ -155,7 +144,7 @@ test("1. a Safe delegate registers its L1 voter through the UI", async ({
   );
 });
 
-test("2. a bad upgrade bricks the core governor", async ({ page }) => {
+test("2. a bad upgrade bricks the core governor", async ({ browser }) => {
   test.setTimeout(150 * 60_000);
   const brick = await scenario("brick");
   const state = await scenarioState();
@@ -163,7 +152,7 @@ test("2. a bad upgrade bricks the core governor", async ({ page }) => {
     `/api/tally/proposals/${(await api("/api/tally/proposals")).find((p: any) => p.proposalId === state.brickProposalId)?.governorAddress}/${state.brickProposalId}`
   );
   expect(indexed.executionPhase).toBe("FULLY_EXECUTED");
-  await page.goto("/proposals");
+  const page = await recordedPage(browser, null, "/proposals");
   await expect(page.getByText("governor upgrade").first()).toBeVisible({
     timeout: 60_000,
   });
@@ -178,12 +167,12 @@ test("3. the rollup stalls: no new confirmed state", async () => {
 });
 
 test("4. an L1 proposal to restore the governor goes up during the stall", async ({
-  page,
+  browser,
 }) => {
   test.setTimeout(60 * 60_000);
   await scenario("propose");
   const id = await recoveryId();
-  await page.goto(proposalPath(id));
+  const page = await recordedPage(browser, null, proposalPath(id));
   await expect(page.getByTestId("l1-proposal-page")).toBeVisible({
     timeout: 120_000,
   });
@@ -202,7 +191,11 @@ test("5. the first voter votes in the UI on stale state, and locks the snapshot"
 }) => {
   test.setTimeout(30 * 60_000);
   const id = await recoveryId();
-  const page = await walletPage(browser, DEV_WALLETS.second, proposalPath(id));
+  const page = await recordedPage(
+    browser,
+    DEV_WALLETS.second,
+    proposalPath(id)
+  );
   const panel = page.getByTestId("l1-vote-panel");
   await expect(panel).toBeVisible({ timeout: 120_000 });
   await expect(panel.getByTestId("l1-vote-plan")).toContainText("Checkpoint", {
@@ -277,7 +270,7 @@ test("8. the Safe votes through its L1 voter in the UI", async ({
 }) => {
   test.setTimeout(30 * 60_000);
   const id = await recoveryId();
-  const page = await walletPage(browser, safeVoter, proposalPath(id));
+  const page = await recordedPage(browser, safeVoter, proposalPath(id));
   const panel = page.getByTestId("l1-vote-panel");
   await expect(panel.getByTestId("l1-vote-delegate")).toBeVisible({
     timeout: 120_000,
@@ -304,21 +297,21 @@ test("8. the Safe votes through its L1 voter in the UI", async ({
 });
 
 test("9. the proposal passes and executes on Ethereum; the retryable waits", async ({
-  page,
+  browser,
 }) => {
   test.setTimeout(60 * 60_000);
   await scenario("finish");
   const id = await recoveryId();
-  await page.goto(proposalPath(id, "stages"));
+  const page = await recordedPage(browser, null, proposalPath(id));
   await expectStage(page, "L1_TIMELOCK", "COMPLETED");
   await expectStage(page, "RETRYABLE_EXECUTED", "PENDING");
 });
 
-test("10. a manual redeem restores the governor", async ({ page }) => {
+test("10. a manual redeem restores the governor", async ({ browser }) => {
   test.setTimeout(30 * 60_000);
   await scenario("redeem");
   const id = await recoveryId();
-  await page.goto(proposalPath(id, "stages"));
+  const page = await recordedPage(browser, null, proposalPath(id));
   await expectStage(page, "RETRYABLE_EXECUTED", "COMPLETED");
   const row = await api(
     `/api/tally/proposals/${deployment.governor.toLowerCase()}/${id}`
@@ -326,10 +319,10 @@ test("10. a manual redeem restores the governor", async ({ page }) => {
   expect(row.executionPhase).toBe("FULLY_EXECUTED");
 });
 
-test("11. core governance runs end to end again", async ({ page }) => {
+test("11. core governance runs end to end again", async ({ browser }) => {
   test.setTimeout(150 * 60_000);
   await scenario("continue");
-  await page.goto("/proposals");
+  const page = await recordedPage(browser, null, "/proposals");
   await expect(page.getByText("business as usual").first()).toBeVisible({
     timeout: 60_000,
   });

@@ -26,53 +26,86 @@ export GOVERNANCE_ADDRESSES_FILE="$INDEXER_REPO/.testnode/config/governance.json
 export ARBITRUM_TESTNODE_CONFIG_DIR="$INDEXER_REPO/.testnode/config"
 export ARBITRUM_TESTNODE_DEPLOYMENT_JSON="$INDEXER_REPO/.testnode/config/deployment.json"
 export E2E_INDEXER_URL="http://127.0.0.1:$INDEXER_PORT"
-export SCENARIO_STATE="$ART/scenario-state.json"
 
 PIDS=()
-cleanup() { for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done; }
+cleanup() {
+  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+  pkill -f "start --schema worst_case_" 2>/dev/null || true
+  pkill -f "scenario rpc-proxy" 2>/dev/null || true
+}
 trap cleanup EXIT
 
 step() { echo "▸ $*" | tee -a "$ART/run.log"; }
 
-step "boot testnode ($IMAGE_REF) and Postgres"
-docker rm -f arbitrum-testnode-l3-eth gov-local-pg >/dev/null 2>&1 || true
-docker run -d --name gov-local-pg -p "$PG_PORT:5432" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
-docker run -d --platform linux/amd64 --name arbitrum-testnode-l3-eth -e TESTNODE_VARIANT=l3-eth \
-  -p "127.0.0.1:$L1_PORT:8545" -p "127.0.0.1:$L2_PORT:8547" -p "127.0.0.1:$((L2_PORT + 1)):8548" \
-  "$IMAGE_REF" >/dev/null
-until cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; do sleep 3; done
-until docker exec gov-local-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-# The image's exported config (addresses, rollup deployment) is fixed at bake time; one
-# `pnpm testnode:up` of this image in the indexer repo exports it.
-[ -f "$GOVERNANCE_ADDRESSES_FILE" ] || { echo "no $GOVERNANCE_ADDRESSES_FILE: run pnpm testnode:up once"; exit 1; }
-(cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"
+boot_stack() {
+  export SCENARIO_STATE="$ART/scenario-state-$(date +%s).json"
+  step "boot testnode ($IMAGE_REF) and Postgres"
+  docker rm -f arbitrum-testnode-l3-eth gov-local-pg >/dev/null 2>&1 || true
+  docker run -d --name gov-local-pg -p "$PG_PORT:5432" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
+  docker run -d --platform linux/amd64 --name arbitrum-testnode-l3-eth -e TESTNODE_VARIANT=l3-eth \
+    -p "127.0.0.1:$L1_PORT:8545" -p "127.0.0.1:$L2_PORT:8547" -p "127.0.0.1:$((L2_PORT + 1)):8548" \
+    "$IMAGE_REF" >/dev/null
+  until cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; do sleep 3; done
+  # The port forward can lag the first answer: wait for three in a row from both chains.
+  ok=0
+  until [ $ok -ge 3 ]; do
+    if cast block-number --rpc-url "$ARBITRUM_TESTNODE_L1_RPC_URL" >/dev/null 2>&1 &&
+       cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; then ok=$((ok + 1)); else ok=0; fi
+    sleep 1
+  done
+  until docker exec gov-local-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+  # The image's exported config (addresses, rollup deployment) is fixed at bake time; one
+  # `pnpm testnode:up` of this image in the indexer repo exports it.
+  [ -f "$GOVERNANCE_ADDRESSES_FILE" ] || { echo "no $GOVERNANCE_ADDRESSES_FILE: run pnpm testnode:up once"; exit 1; }
+  (cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"
 
-step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
-(cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy.log" 2>&1 &
-PIDS+=($!)
-until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do sleep 1; done
+  step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
+  (cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy.log" 2>&1 &
+  PIDS+=($!)
+  until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do sleep 1; done
 
-step "indexer (:$INDEXER_PORT)"
-(cd "$INDEXER_REPO/packages/indexer" && \
-  PONDER_RPC_URL_LOCAL_L1="http://127.0.0.1:$PROXY_PORT" SIWE_CHAIN_ID=412346 L1_VOTING_PROOF_POLL_MS=5000 \
-  SIWE_DOMAINS="localhost:$WEB_PORT" \
-  exec ./node_modules/.bin/ponder start --schema "worst_case_$(date +%s)" --port "$INDEXER_PORT") \
-  >"$ART/indexer.log" 2>&1 &
-PIDS+=($!)
-until [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_INDEXER_URL/ready")" = 200 ]; do sleep 5; done
+  step "indexer (:$INDEXER_PORT), restarted after a 45s outage whenever it is killed"
+  SCHEMA="worst_case_$(date +%s)"
+  (
+    cd "$INDEXER_REPO/packages/indexer"
+    while true; do
+      PONDER_RPC_URL_LOCAL_L1="http://127.0.0.1:$PROXY_PORT" SIWE_CHAIN_ID=412346 L1_VOTING_PROOF_POLL_MS=5000 \
+      SIWE_DOMAINS="localhost:$WEB_PORT" \
+        ./node_modules/.bin/ponder start --schema "$SCHEMA" --port "$INDEXER_PORT" || true
+      echo "▸ indexer exited; restarting in 45s" >&2
+      sleep 45
+    done
+  ) >"$ART/indexer.log" 2>&1 &
+  PIDS+=($!)
+  until [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_INDEXER_URL/ready")" = 200 ]; do sleep 5; done
+}
 
-step "frontend + worst-case spec"
-cd "$FRONTEND_DIR"
-WORST_CASE_INDEXER_REPO="$INDEXER_REPO" \
-WORST_CASE_RPC_CONTROL="http://127.0.0.1:$PROXY_CONTROL" \
-GOVERNANCE_INDEXER_URL="$E2E_INDEXER_URL" \
-NEXT_PUBLIC_LOCAL_CHAINS=1 \
-NEXT_PUBLIC_LOCAL_L1_RPC="$ARBITRUM_TESTNODE_L1_RPC_URL" \
-NEXT_PUBLIC_LOCAL_L2_RPC="$ARBITRUM_TESTNODE_L2_RPC_URL" \
-NEXT_PUBLIC_STAGES_SOURCE=indexer \
-PORT="$WEB_PORT" CI=1 \
-  pnpm exec playwright test e2e/l1-voting/worst-case.spec.ts --project=chromium --reporter=list \
-  2>&1 | tee "$ART/playwright.log"
-status=${PIPESTATUS[0]}
-step "artifacts in $ART (exit $status)"
-exit "$status"
+SPECS="${SPECS:-e2e/l1-voting/worst-case.spec.ts e2e/l1-voting/permutations.spec.ts}"
+
+# Each spec gets its own fresh stack: anvil keeps every mined L1 block's state (~300 KB each) and
+# litro's image cannot prune it, so one chain running every spec grows past the VM's disk and
+# memory (measured: 9.6 GB of cache and 10.5 GiB RSS after both specs on one boot).
+overall=0
+for spec in $SPECS; do
+  name="$(basename "$spec" .spec.ts)"
+  boot_stack
+  step "frontend + $spec (videos in $ART/videos)"
+  (cd "$FRONTEND_DIR" && \
+  WORST_CASE_INDEXER_REPO="$INDEXER_REPO" \
+  WORST_CASE_RPC_CONTROL="http://127.0.0.1:$PROXY_CONTROL" \
+  GOVERNANCE_INDEXER_URL="$E2E_INDEXER_URL" \
+  NEXT_PUBLIC_LOCAL_CHAINS=1 \
+  NEXT_PUBLIC_LOCAL_L1_RPC="$ARBITRUM_TESTNODE_L1_RPC_URL" \
+  NEXT_PUBLIC_LOCAL_L2_RPC="$ARBITRUM_TESTNODE_L2_RPC_URL" \
+  NEXT_PUBLIC_STAGES_SOURCE=indexer \
+  L1_VOTING_VIDEO_DIR="$ART/videos" \
+  PORT="$WEB_PORT" CI=1 \
+    pnpm exec playwright test "$spec" --project=chromium --reporter=list) 2>&1 | tee "$ART/playwright-$name.log"
+  status=${PIPESTATUS[0]}
+  step "$spec exit $status"
+  [ "$status" -ne 0 ] && overall=$status
+  cleanup
+  PIDS=()
+done
+step "artifacts in $ART (exit $overall)"
+exit "$overall"
