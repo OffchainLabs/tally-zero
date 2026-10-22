@@ -105,6 +105,8 @@ for spec in $SPECS; do
     service_url="http://127.0.0.1:$SAFE_TXS_PORT"
   fi
   step "frontend + $spec (videos in $ART/videos)"
+  # A failing spec must not end the run (errexit + pipefail would): record it and go on.
+  set +e
   # Only with the service: the frontend validates it as a URL, so an empty value fails the build.
   (cd "$FRONTEND_DIR" && unset NEXT_PUBLIC_SAFE_TX_SERVICE_URL && \
   { [ -z "$service_url" ] || export NEXT_PUBLIC_SAFE_TX_SERVICE_URL="$service_url"; } && \
@@ -119,8 +121,9 @@ for spec in $SPECS; do
   PORT="$WEB_PORT" CI=1 \
     pnpm exec playwright test "$spec" --project=chromium --reporter=list) 2>&1 | tee "$ART/playwright-$name.log"
   status=${PIPESTATUS[0]}
+  set -e
   step "$spec exit $status"
-  [ "$status" -ne 0 ] && overall=$status
+  if [ "$status" -ne 0 ]; then overall=$status; fi
   cleanup
   [ "$name" = "safe-service" ] && "$FRONTEND_DIR/e2e/l1-voting/safe-tx-service.sh" down
   PIDS=()
