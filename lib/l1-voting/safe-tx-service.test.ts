@@ -335,14 +335,17 @@ describe("Safe Transaction Service client", () => {
       signature: `0x${"ab".repeat(65)}`,
       signatureType: "EOA",
     };
-    respond(200, { count: 1, results: [confirmation] });
+    // Read from the transaction: the real service (v6.11.0, checked against the e2e
+    // stack) answers /confirmations/ with an empty 200 even for an unknown hash, but the
+    // transaction itself with a 404.
+    respond(200, { safeTxHash: s.safeTxHash, confirmations: [confirmation] });
     respond(404, { detail: "Not found." });
     const client = safeTxServiceClient(BASE, fetcher);
 
     expect(await client.confirmations(s.safeTxHash)).toEqual([confirmation]);
     expect(await client.confirmations(s.safeTxHash)).toBeNull();
     expect(sent()[0]).toBe(
-      `${BASE}/api/v1/multisig-transactions/${s.safeTxHash}/confirmations/`
+      `${BASE}/api/v1/multisig-transactions/${s.safeTxHash}/`
     );
     expect(sent()[1].method).toBe("GET");
   });

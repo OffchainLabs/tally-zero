@@ -156,8 +156,7 @@ describe("L1Registration Safe paths", () => {
       .mockResolvedValueOnce(json(201))
       .mockResolvedValue(
         json(200, {
-          count: 1,
-          results: [
+          confirmations: [
             { owner: ALICE, signature: ALICE_SIG, signatureType: "EOA" },
           ],
         })
@@ -202,8 +201,7 @@ describe("L1Registration Safe paths", () => {
   it("lets another owner confirm, then executes with the merged signatures", async () => {
     mocks.env.NEXT_PUBLIC_SAFE_TX_SERVICE_URL = SERVICE;
     const bobOnly = json(200, {
-      count: 1,
-      results: [{ owner: BOB, signature: BOB_SIG, signatureType: "EOA" }],
+      confirmations: [{ owner: BOB, signature: BOB_SIG, signatureType: "EOA" }],
     });
     mocks.fetch.mockImplementation(async (_url: string, init?: RequestInit) =>
       init?.method === "POST" ? json(201) : bobOnly.clone()

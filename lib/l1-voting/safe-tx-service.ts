@@ -129,15 +129,19 @@ export function safeTxServiceClient(baseUrl: string, fetcher: Fetch = fetch) {
       );
     },
 
-    /** The confirmations so far; null when the service has never seen the transaction */
+    /**
+     * The confirmations so far; null when the service has never seen the transaction. Read from
+     * the transaction itself: the service answers its confirmations list with an empty 200 even
+     * for a hash it does not know, but the transaction with a 404.
+     */
     async confirmations(
       safeTxHash: Hex
     ): Promise<SafeServiceConfirmation[] | null> {
-      const page = await request<{ results: SafeServiceConfirmation[] }>(
+      const tx = await request<{ confirmations?: SafeServiceConfirmation[] }>(
         fetcher,
-        `${api}/multisig-transactions/${safeTxHash}/confirmations/`
+        `${api}/multisig-transactions/${safeTxHash}/`
       );
-      return page ? page.results : null;
+      return tx ? (tx.confirmations ?? []) : null;
     },
 
     /** Adds an owner's signature to a proposed transaction */
