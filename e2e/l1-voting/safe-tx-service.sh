@@ -29,9 +29,19 @@ up() {
   docker network connect --alias testnode "$NET" "$TESTNODE"
   docker run -d --name safe-txs-db --network "$NET" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
   docker run -d --name safe-txs-redis --network "$NET" redis:7-alpine >/dev/null
-  docker run -d --name safe-txs-rabbitmq --network "$NET" rabbitmq:3-alpine >/dev/null
   until docker exec safe-txs-db pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-  until docker exec safe-txs-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; do sleep 2; done
+  # RabbitMQ can die at boot (once: EACCES on a fresh volume's .erlang.cookie); waiting on a dead
+  # container hangs forever, so recreate it a few times, then give up.
+  local tries=0
+  until docker exec safe-txs-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; do
+    if [ "$(docker inspect -f '{{.State.Running}}' safe-txs-rabbitmq 2>/dev/null)" != "true" ]; then
+      tries=$((tries + 1))
+      [ "$tries" -le 3 ] || { echo "RabbitMQ would not start"; docker logs --tail 20 safe-txs-rabbitmq; exit 1; }
+      docker rm -f -v safe-txs-rabbitmq >/dev/null 2>&1 || true
+      docker run -d --name safe-txs-rabbitmq --network "$NET" rabbitmq:3-alpine >/dev/null
+    fi
+    sleep 2
+  done
 
   local env=(
     -e PYTHONPATH=/app/ -e DJANGO_SETTINGS_MODULE=config.settings.production
