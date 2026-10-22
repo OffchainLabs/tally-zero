@@ -80,7 +80,8 @@ boot_stack() {
   until [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_INDEXER_URL/ready")" = 200 ]; do sleep 5; done
 }
 
-SPECS="${SPECS:-e2e/l1-voting/worst-case.spec.ts e2e/l1-voting/permutations.spec.ts}"
+SPECS="${SPECS:-e2e/l1-voting/worst-case.spec.ts e2e/l1-voting/permutations.spec.ts e2e/l1-voting/safe-service.spec.ts}"
+SAFE_TXS_PORT="${SAFE_TXS_PORT:-28888}"
 
 # Each spec gets its own fresh stack: anvil keeps every mined L1 block's state (~300 KB each) and
 # litro's image cannot prune it, so one chain running every spec grows past the VM's disk and
@@ -89,6 +90,12 @@ overall=0
 for spec in $SPECS; do
   name="$(basename "$spec" .spec.ts)"
   boot_stack
+  service_url=""
+  if [ "$name" = "safe-service" ]; then
+    step "Safe Transaction Service (:$SAFE_TXS_PORT)"
+    SAFE_TXS_PORT="$SAFE_TXS_PORT" "$FRONTEND_DIR/e2e/l1-voting/safe-tx-service.sh" up 2>&1 | tail -1 | tee -a "$ART/run.log"
+    service_url="http://127.0.0.1:$SAFE_TXS_PORT"
+  fi
   step "frontend + $spec (videos in $ART/videos)"
   (cd "$FRONTEND_DIR" && \
   WORST_CASE_INDEXER_REPO="$INDEXER_REPO" \
@@ -98,6 +105,7 @@ for spec in $SPECS; do
   NEXT_PUBLIC_LOCAL_L1_RPC="$ARBITRUM_TESTNODE_L1_RPC_URL" \
   NEXT_PUBLIC_LOCAL_L2_RPC="$ARBITRUM_TESTNODE_L2_RPC_URL" \
   NEXT_PUBLIC_STAGES_SOURCE=indexer \
+  NEXT_PUBLIC_SAFE_TX_SERVICE_URL="$service_url" \
   L1_VOTING_VIDEO_DIR="$ART/videos" \
   PORT="$WEB_PORT" CI=1 \
     pnpm exec playwright test "$spec" --project=chromium --reporter=list) 2>&1 | tee "$ART/playwright-$name.log"
@@ -105,6 +113,7 @@ for spec in $SPECS; do
   step "$spec exit $status"
   [ "$status" -ne 0 ] && overall=$status
   cleanup
+  [ "$name" = "safe-service" ] && "$FRONTEND_DIR/e2e/l1-voting/safe-tx-service.sh" down
   PIDS=()
 done
 step "artifacts in $ART (exit $overall)"

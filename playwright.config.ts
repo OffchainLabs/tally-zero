@@ -58,6 +58,9 @@ export default defineConfig({
         process.env.NEXT_PUBLIC_LOCAL_L1_RPC ?? "http://127.0.0.1:8545",
       NEXT_PUBLIC_LOCAL_L2_RPC:
         process.env.NEXT_PUBLIC_LOCAL_L2_RPC ?? "http://127.0.0.1:8547",
+      // e2e/l1-voting/safe-tx-service.sh: a local Safe Transaction Service on the testnode.
+      NEXT_PUBLIC_SAFE_TX_SERVICE_URL:
+        process.env.NEXT_PUBLIC_SAFE_TX_SERVICE_URL ?? "",
       NEXT_PUBLIC_STAGES_SOURCE:
         process.env.NEXT_PUBLIC_STAGES_SOURCE ?? "gov-tracker",
     },
