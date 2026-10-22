@@ -1,7 +1,8 @@
 /* eslint-disable no-process-env */
 /**
  * Worst case, end to end: Arbitrum One governance is bricked by a bad upgrade, the rollup stops
- * confirming, the indexer loses Ethereum for a while, and the retryable carrying the fix is never
+ * confirming, then Arbitrum goes down completely (no blocks, no RPC) while delegates vote on L1,
+ * the indexer loses Ethereum for a while, and the retryable carrying the fix is never
  * auto-redeemed — and the DAO still recovers through L1 voting, with this frontend and the indexer
  * in use the whole time.
  *
@@ -186,7 +187,16 @@ test("4. an L1 proposal to restore the governor goes up during the stall", async
   ).toBeVisible();
 });
 
-test("5. the first voter votes in the UI on stale state, and locks the snapshot", async ({
+test("5. Arbitrum goes down completely: no blocks, no batches, no RPC", async () => {
+  test.setTimeout(30 * 60_000);
+  // The sequencer and validator are frozen (not killed): nothing is produced and the L2 RPC never
+  // answers, and the indexer, this frontend and L1 voting have to carry on without it.
+  await scenario("halt-l2");
+  const health = await fetch(`${INDEXER}/health`).catch(() => null);
+  expect(health?.ok, "indexer still serving").toBe(true);
+});
+
+test("6. the first voter votes in the UI with Arbitrum down, and locks the snapshot", async ({
   browser,
 }) => {
   test.setTimeout(30 * 60_000);
@@ -234,38 +244,7 @@ test("5. the first voter votes in the UI on stale state, and locks the snapshot"
   );
 });
 
-test("6. the indexer loses Ethereum; a vote lands anyway and is indexed on recovery", async () => {
-  test.setTimeout(30 * 60_000);
-  const id = await recoveryId();
-  await setIndexerL1Rpc(false);
-  try {
-    await scenario("direct-vote", 0, 1);
-    await new Promise((r) => setTimeout(r, 30_000));
-    const health = await fetch(`${INDEXER}/health`).catch(() => null);
-    expect(health?.ok, "indexer still serving during the outage").toBe(true);
-  } finally {
-    await setIndexerL1Rpc(true);
-  }
-  await eventually(
-    "the outage vote is indexed",
-    async () => {
-      const votes = await api<any[]>(
-        `/api/tally/proposals/${deployment.governor.toLowerCase()}/${id}/votes`
-      );
-      return votes.some(
-        (v) => v.voter === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
-      );
-    },
-    600_000
-  );
-});
-
-test("7. the rollup recovers", async () => {
-  test.setTimeout(30 * 60_000);
-  await scenario("unstall");
-});
-
-test("8. the Safe votes through its L1 voter in the UI", async ({
+test("7. the Safe votes through its L1 voter in the UI, Arbitrum still down", async ({
   browser,
 }) => {
   test.setTimeout(30 * 60_000);
@@ -296,7 +275,43 @@ test("8. the Safe votes through its L1 voter in the UI", async ({
   });
 });
 
-test("9. the proposal passes and executes on Ethereum; the retryable waits", async ({
+test("8. Arbitrum comes back with its history intact, and the indexer catches up", async () => {
+  test.setTimeout(30 * 60_000);
+  await scenario("resume-l2");
+});
+
+test("9. the indexer loses Ethereum; a vote lands anyway and is indexed on recovery", async () => {
+  test.setTimeout(30 * 60_000);
+  const id = await recoveryId();
+  await setIndexerL1Rpc(false);
+  try {
+    await scenario("direct-vote", 0, 1);
+    await new Promise((r) => setTimeout(r, 30_000));
+    const health = await fetch(`${INDEXER}/health`).catch(() => null);
+    expect(health?.ok, "indexer still serving during the outage").toBe(true);
+  } finally {
+    await setIndexerL1Rpc(true);
+  }
+  await eventually(
+    "the outage vote is indexed",
+    async () => {
+      const votes = await api<any[]>(
+        `/api/tally/proposals/${deployment.governor.toLowerCase()}/${id}/votes`
+      );
+      return votes.some(
+        (v) => v.voter === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+      );
+    },
+    600_000
+  );
+});
+
+test("10. the rollup recovers", async () => {
+  test.setTimeout(30 * 60_000);
+  await scenario("unstall");
+});
+
+test("11. the proposal passes and executes on Ethereum; the retryable waits", async ({
   browser,
 }) => {
   test.setTimeout(60 * 60_000);
@@ -307,7 +322,7 @@ test("9. the proposal passes and executes on Ethereum; the retryable waits", asy
   await expectStage(page, "RETRYABLE_EXECUTED", "PENDING");
 });
 
-test("10. a delegate redeems the stuck retryable from the UI; the governor is restored", async ({
+test("12. a delegate redeems the stuck retryable from the UI; the governor is restored", async ({
   browser,
 }) => {
   test.setTimeout(30 * 60_000);
@@ -338,7 +353,7 @@ test("10. a delegate redeems the stuck retryable from the UI; the governor is re
   expect(row.executionPhase).toBe("FULLY_EXECUTED");
 });
 
-test("11. core governance runs end to end again", async ({ browser }) => {
+test("13. core governance runs end to end again", async ({ browser }) => {
   test.setTimeout(150 * 60_000);
   await scenario("continue");
   const page = await recordedPage(browser, null, "/proposals");
@@ -347,7 +362,7 @@ test("11. core governance runs end to end again", async ({ browser }) => {
   });
 });
 
-test("12. a full re-index reproduces what the live indexer served", async () => {
+test("14. a full re-index reproduces what the live indexer served", async () => {
   test.setTimeout(60 * 60_000);
   await scenario("reindex-check");
 });
