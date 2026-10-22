@@ -19,6 +19,8 @@ export interface PlanRunnerDeps {
   onProgress?: (event: PlanProgress) => void;
   /** A refusal by the user is final; anything else (a revert) is worth re-planning. */
   isUserRejection?: (error: unknown) => boolean;
+  /** Pause between attempts at a plan request that failed (default 2s). */
+  retryDelayMs?: number;
 }
 
 export type PlanProgress =
@@ -42,12 +44,28 @@ export class VotePlanBlockedError extends Error {
 const MAX_ROUNDS = 12;
 /** Failed steps re-planned before giving up: another voter can lock or prove first. */
 const MAX_REPLANS = 2;
+/** Attempts at one plan request: the indexer can fail briefly while the chain moves under it. */
+const PLAN_ATTEMPTS = 4;
+
+async function fetchPlanWithRetry(
+  deps: PlanRunnerDeps,
+  signature: Hex | undefined
+): Promise<VotePlan> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await deps.fetchPlan(signature);
+    } catch (error) {
+      if (attempt >= PLAN_ATTEMPTS) throw error;
+      await new Promise((r) => setTimeout(r, deps.retryDelayMs ?? 2_000));
+    }
+  }
+}
 
 export async function runVotePlan(deps: PlanRunnerDeps): Promise<Hex> {
   let signature: Hex | undefined;
   let replans = 0;
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const plan = await deps.fetchPlan(signature);
+    const plan = await fetchPlanWithRetry(deps, signature);
     deps.onProgress?.({ type: "plan", plan });
     if (plan.blockers.length) throw new VotePlanBlockedError(plan.blockers);
     const step = plan.steps[0];

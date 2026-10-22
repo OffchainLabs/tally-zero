@@ -134,4 +134,37 @@ describe("runVotePlan", () => {
       })
     ).rejects.toBe(refused);
   });
+
+  it("retries a plan request the indexer fails briefly, then gives up", async () => {
+    const fetchPlan = vi
+      .fn()
+      .mockResolvedValueOnce(plan([step("l1Claim")]))
+      .mockRejectedValueOnce(new Error("Indexer upstream error"))
+      .mockRejectedValueOnce(new Error("Indexer upstream error"))
+      .mockResolvedValueOnce(plan([]));
+    const tx = await runVotePlan({
+      fetchPlan,
+      sendStep: async () => "0xc1" as `0x${string}`,
+      signTypedData: vi.fn(),
+      waitForBlock: vi.fn(),
+      castVote: async () => "0xv" as `0x${string}`,
+      retryDelayMs: 0,
+    });
+    expect(tx).toBe("0xv");
+    expect(fetchPlan).toHaveBeenCalledTimes(4);
+
+    const down = new Error("Indexer upstream error");
+    const failing = vi.fn().mockRejectedValue(down);
+    await expect(
+      runVotePlan({
+        fetchPlan: failing,
+        sendStep: vi.fn(),
+        signTypedData: vi.fn(),
+        waitForBlock: vi.fn(),
+        castVote: vi.fn(),
+        retryDelayMs: 0,
+      })
+    ).rejects.toBe(down);
+    expect(failing).toHaveBeenCalledTimes(4);
+  });
 });

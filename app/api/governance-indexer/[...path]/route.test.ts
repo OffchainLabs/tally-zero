@@ -179,4 +179,38 @@ describe("governance indexer proxy", () => {
 
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
+
+  it("waits longer for a vote plan than for other reads", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://indexer.example.test/");
+    vi.useFakeTimers();
+    try {
+      // Resolves only if not aborted first.
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        (_url, init) =>
+          new Promise((resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError"))
+            );
+            setTimeout(() => resolve(jsonResponse({ ok: true })), 20_000);
+          })
+      );
+      const plan = GET(
+        new Request(
+          "https://example.test/api/governance-indexer/api/l1-voting/vote-plan/1?delegate=0x1"
+        ),
+        context(["api", "l1-voting", "vote-plan", "1"])
+      );
+      const stats = GET(
+        new Request(
+          "https://example.test/api/governance-indexer/api/tally/stats"
+        ),
+        context(["api", "tally", "stats"])
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect((await plan).status).toBe(200);
+      expect((await stats).status).toBe(502);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
