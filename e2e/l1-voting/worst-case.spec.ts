@@ -307,12 +307,31 @@ test("9. the proposal passes and executes on Ethereum; the retryable waits", asy
   await expectStage(page, "RETRYABLE_EXECUTED", "PENDING");
 });
 
-test("10. a manual redeem restores the governor", async ({ browser }) => {
+test("10. a delegate redeems the stuck retryable from the UI; the governor is restored", async ({
+  browser,
+}) => {
   test.setTimeout(30 * 60_000);
-  await scenario("redeem");
   const id = await recoveryId();
-  const page = await recordedPage(browser, null, proposalPath(id));
+  // Anyone can redeem a ticket; a delegate does it from the proposal's Lifecycle tab.
+  const page = await recordedPage(
+    browser,
+    DEV_WALLETS.drafts,
+    proposalPath(id)
+  );
+  const lifecycle = page.getByRole("tab", { name: "Lifecycle" });
+  await lifecycle.waitFor({ timeout: 120_000 });
+  await lifecycle.click();
+  const redeem = page.getByTestId("retryable-redeem").first();
+  await expect(redeem).toBeVisible({ timeout: 180_000 });
+  await redeem.click();
   await expectStage(page, "RETRYABLE_EXECUTED", "COMPLETED");
+  await expect(page.locator("[data-ticket-id]").first()).toHaveAttribute(
+    "data-status",
+    "REDEEMED",
+    { timeout: 180_000 }
+  );
+  // The scenario confirms on chain and through the API (and skips its own redeem).
+  await scenario("redeem");
   const row = await api(
     `/api/tally/proposals/${deployment.governor.toLowerCase()}/${id}`
   );
