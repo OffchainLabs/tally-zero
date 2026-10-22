@@ -16,6 +16,10 @@ INDEXER_REPO="$(cd "${WORST_CASE_INDEXER_REPO:?set WORST_CASE_INDEXER_REPO}" && 
 IMAGE_REF="${TESTNODE_IMAGE_REF:-ghcr.io/offchainlabs/arbitrum-governance-indexer/testnode:v0.2.0}"
 L1_PORT="${L1_PORT:-28545}" L2_PORT="${L2_PORT:-28547}"
 PROXY_PORT="${PROXY_PORT:-28645}" PROXY_CONTROL="${PROXY_CONTROL:-28646}"
+# Our own container names: the indexer repo's testnode tooling (a bake, `testnode:up`) uses
+# arbitrum-testnode-l3-eth and would be removed by this script's fresh boot, or remove ours.
+export TESTNODE_CONTAINER="${TESTNODE_CONTAINER:-l1-voting-e2e-testnode}"
+TESTNODE="$TESTNODE_CONTAINER" PG_CONTAINER="${PG_CONTAINER:-l1-voting-e2e-pg}"
 PG_PORT="${PG_PORT:-5434}" INDEXER_PORT="${INDEXER_PORT:-42069}" WEB_PORT="${WEB_PORT:-3100}"
 ART="$FRONTEND_DIR/e2e/l1-voting/.artifacts/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$ART"
@@ -39,32 +43,55 @@ trap cleanup EXIT
 
 step() { echo "▸ $*" | tee -a "$ART/run.log"; }
 
-boot_stack() {
-  export SCENARIO_STATE="$ART/scenario-state-$(date +%s).json"
-  step "boot testnode ($IMAGE_REF) and Postgres"
-  docker rm -f arbitrum-testnode-l3-eth gov-local-pg >/dev/null 2>&1 || true
-  docker run -d --name gov-local-pg -p "$PG_PORT:5432" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
-  docker run -d --platform linux/amd64 --name arbitrum-testnode-l3-eth -e TESTNODE_VARIANT=l3-eth \
-    -p "127.0.0.1:$L1_PORT:8545" -p "127.0.0.1:$L2_PORT:8547" -p "127.0.0.1:$((L2_PORT + 1)):8548" \
-    "$IMAGE_REF" >/dev/null
-  until cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; do sleep 3; done
+# Wait for both chains, then prepare and verify the testnode. Fails (instead of hanging) if the
+# container dies on the way.
+boot_ready() {
+  local alive='[ "$(docker inspect -f "{{.State.Running}}" $TESTNODE 2>/dev/null)" = "true" ]'
+  until cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; do
+    eval "$alive" || return 1
+    sleep 3
+  done
   # The port forward can lag the first answer: wait for three in a row from both chains.
-  ok=0
+  local ok=0
   until [ $ok -ge 3 ]; do
+    eval "$alive" || return 1
     if cast block-number --rpc-url "$ARBITRUM_TESTNODE_L1_RPC_URL" >/dev/null 2>&1 &&
        cast block-number --rpc-url "$ARBITRUM_TESTNODE_L2_RPC_URL" >/dev/null 2>&1; then ok=$((ok + 1)); else ok=0; fi
     sleep 1
   done
-  until docker exec gov-local-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-  # The image's exported config (addresses, rollup deployment) is fixed at bake time; one
-  # `pnpm testnode:up` of this image in the indexer repo exports it.
-  [ -f "$GOVERNANCE_ADDRESSES_FILE" ] || { echo "no $GOVERNANCE_ADDRESSES_FILE: run pnpm testnode:up once"; exit 1; }
   # A just-booted L2 under host load can abort an eth_call at its 5s limit: retry, don't fail the run.
+  local attempt
   for attempt in 1 2 3 4 5; do
-    if (cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"; then break; fi
+    if (cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"; then return 0; fi
+    eval "$alive" || return 1
     [ "$attempt" -lt 5 ] || { echo "testnode verify failed $attempt times"; exit 1; }
     echo "verify attempt $attempt failed; retrying in 15s" | tee -a "$ART/run.log"
     sleep 15
+  done
+}
+
+boot_stack() {
+  export SCENARIO_STATE="$ART/scenario-state-$(date +%s).json"
+  step "boot testnode ($IMAGE_REF) and Postgres"
+  docker rm -f $TESTNODE $PG_CONTAINER >/dev/null 2>&1 || true
+  docker run -d --name $PG_CONTAINER -p "$PG_PORT:5432" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
+  until docker exec $PG_CONTAINER pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+  # The image's exported config (addresses, rollup deployment) is fixed at bake time; one
+  # `pnpm testnode:up` of this image in the indexer repo exports it.
+  [ -f "$GOVERNANCE_ADDRESSES_FILE" ] || { echo "no $GOVERNANCE_ADDRESSES_FILE: run pnpm testnode:up once"; exit 1; }
+  # The image exits when any of its processes dies, and under amd64 emulation one sometimes dies
+  # silently while the L3 node starts (~10s after the L2 answers): boot again rather than run
+  # on a dead chain. A boot counts once the container is still up 20s after verify passed.
+  local boots=0
+  while true; do
+    boots=$((boots + 1))
+    [ "$boots" -le 3 ] || { echo "testnode would not stay up"; docker logs --tail 40 $TESTNODE; exit 1; }
+    docker rm -f $TESTNODE >/dev/null 2>&1 || true
+    docker run -d --platform linux/amd64 --name $TESTNODE -e TESTNODE_VARIANT=l3-eth \
+      -p "127.0.0.1:$L1_PORT:8545" -p "127.0.0.1:$L2_PORT:8547" -p "127.0.0.1:$((L2_PORT + 1)):8548" \
+      "$IMAGE_REF" >/dev/null
+    if boot_ready && sleep 20 && [ "$(docker inspect -f '{{.State.Running}}' $TESTNODE 2>/dev/null)" = "true" ]; then break; fi
+    echo "testnode died while booting (attempt $boots); booting again" | tee -a "$ART/run.log"
   done
 
   step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
