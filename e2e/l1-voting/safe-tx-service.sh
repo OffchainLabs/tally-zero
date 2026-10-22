@@ -7,6 +7,8 @@
 #   e2e/l1-voting/safe-tx-service.sh up    # needs the testnode container running
 #   e2e/l1-voting/safe-tx-service.sh down
 set -euo pipefail
+# Pin the Docker daemon: the CLI's current context can change under a long run (it did once).
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima}"
 
 IMAGE="${SAFE_TXS_IMAGE:-safeglobal/safe-transaction-service:v6.11.0}"
 NET=safe-txs

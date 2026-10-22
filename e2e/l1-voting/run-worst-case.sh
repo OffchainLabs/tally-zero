@@ -8,6 +8,8 @@
 # Host ports default to 285xx (L1 28545, L2 28547, RPC proxy 28645/28646), Postgres 5434,
 # indexer 42069, frontend 3100, so it can run next to a stock testnode on 8545/8547.
 set -euo pipefail
+# Pin the Docker daemon: the CLI's current context can change under a long run (it did once).
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima}"
 
 FRONTEND_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 INDEXER_REPO="$(cd "${WORST_CASE_INDEXER_REPO:?set WORST_CASE_INDEXER_REPO}" && pwd)"
@@ -57,7 +59,13 @@ boot_stack() {
   # The image's exported config (addresses, rollup deployment) is fixed at bake time; one
   # `pnpm testnode:up` of this image in the indexer repo exports it.
   [ -f "$GOVERNANCE_ADDRESSES_FILE" ] || { echo "no $GOVERNANCE_ADDRESSES_FILE: run pnpm testnode:up once"; exit 1; }
-  (cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"
+  # A just-booted L2 under host load can abort an eth_call at its 5s limit: retry, don't fail the run.
+  for attempt in 1 2 3 4 5; do
+    if (cd "$INDEXER_REPO" && pnpm -s testnode:prepare && pnpm -s testnode:verify "$GOVERNANCE_ADDRESSES_FILE") 2>&1 | tee -a "$ART/run.log"; then break; fi
+    [ "$attempt" -lt 5 ] || { echo "testnode verify failed $attempt times"; exit 1; }
+    echo "verify attempt $attempt failed; retrying in 15s" | tee -a "$ART/run.log"
+    sleep 15
+  done
 
   step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
   (cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy.log" 2>&1 &
@@ -97,7 +105,9 @@ for spec in $SPECS; do
     service_url="http://127.0.0.1:$SAFE_TXS_PORT"
   fi
   step "frontend + $spec (videos in $ART/videos)"
-  (cd "$FRONTEND_DIR" && \
+  # Only with the service: the frontend validates it as a URL, so an empty value fails the build.
+  (cd "$FRONTEND_DIR" && unset NEXT_PUBLIC_SAFE_TX_SERVICE_URL && \
+  { [ -z "$service_url" ] || export NEXT_PUBLIC_SAFE_TX_SERVICE_URL="$service_url"; } && \
   WORST_CASE_INDEXER_REPO="$INDEXER_REPO" \
   WORST_CASE_RPC_CONTROL="http://127.0.0.1:$PROXY_CONTROL" \
   GOVERNANCE_INDEXER_URL="$E2E_INDEXER_URL" \
@@ -105,7 +115,6 @@ for spec in $SPECS; do
   NEXT_PUBLIC_LOCAL_L1_RPC="$ARBITRUM_TESTNODE_L1_RPC_URL" \
   NEXT_PUBLIC_LOCAL_L2_RPC="$ARBITRUM_TESTNODE_L2_RPC_URL" \
   NEXT_PUBLIC_STAGES_SOURCE=indexer \
-  NEXT_PUBLIC_SAFE_TX_SERVICE_URL="$service_url" \
   L1_VOTING_VIDEO_DIR="$ART/videos" \
   PORT="$WEB_PORT" CI=1 \
     pnpm exec playwright test "$spec" --project=chromium --reporter=list) 2>&1 | tee "$ART/playwright-$name.log"
