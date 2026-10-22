@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 import { getErrorMessage } from "@/lib/error-utils";
 import { hasPendingIndexerStage, mapIndexerStages } from "@/lib/indexer-stages";
@@ -11,6 +11,24 @@ import type { ProposalStage } from "@/types/proposal-stage";
 
 /** How often a proposal with a stage still pending is re-read */
 const PENDING_REFETCH_INTERVAL_MS = 60_000;
+/** After the user acts on a stage (redeem, execute), how often and how long to follow it */
+const FOLLOW_UP_INTERVAL_MS = 5_000;
+const FOLLOW_UP_WINDOW_MS = 120_000;
+
+/**
+ * When to re-read: never once nothing is pending; quickly for a while after the user acted
+ * (the indexer records the result seconds later), otherwise at the slow cadence.
+ */
+export function stagesPollInterval(
+  hasPending: boolean,
+  followUntil: number,
+  now = Date.now()
+): number | false {
+  if (!hasPending) return false;
+  return now < followUntil
+    ? FOLLOW_UP_INTERVAL_MS
+    : PENDING_REFETCH_INTERVAL_MS;
+}
 
 export interface UseIndexerProposalStagesOptions {
   proposalId: string;
@@ -50,6 +68,7 @@ export function useIndexerProposalStages({
   enabled = true,
 }: UseIndexerProposalStagesOptions): UseIndexerProposalStagesResult {
   const isEnabled = enabled && Boolean(proposalId && governorAddress);
+  const followUntil = useRef(0);
 
   const query = useQuery({
     queryKey: indexerProposalStagesQueryKey(governorAddress, proposalId),
@@ -57,9 +76,10 @@ export function useIndexerProposalStages({
     enabled: isEnabled,
     staleTime: PENDING_REFETCH_INTERVAL_MS / 2,
     refetchInterval: (current) =>
-      hasPendingIndexerStage(current.state.data)
-        ? PENDING_REFETCH_INTERVAL_MS
-        : false,
+      stagesPollInterval(
+        hasPendingIndexerStage(current.state.data),
+        followUntil.current
+      ),
   });
 
   const data = query.data ?? null;
@@ -71,6 +91,10 @@ export function useIndexerProposalStages({
     stages,
     isLoading: isEnabled && query.isPending,
     error: query.error ? getErrorMessage(query.error) : null,
-    refetch: () => void refetch(),
+    // A refetch follows a user action on a stage: keep watching until the indexer has it.
+    refetch: () => {
+      followUntil.current = Date.now() + FOLLOW_UP_WINDOW_MS;
+      void refetch();
+    },
   };
 }
