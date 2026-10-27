@@ -97,7 +97,12 @@ boot_stack() {
   step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
   (cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy.log" 2>&1 &
   PIDS+=($!)
-  until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do sleep 1; done
+  proxy_pid=$!
+  # Fail, don't hang, if the proxy dies before it answers.
+  until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do
+    kill -0 "$proxy_pid" 2>/dev/null || { echo "RPC proxy exited:"; tail -20 "$ART/rpc-proxy.log"; exit 1; }
+    sleep 1
+  done
 
   step "indexer (:$INDEXER_PORT), restarted after a 45s outage whenever it is killed"
   SCHEMA="worst_case_$(date +%s)"
