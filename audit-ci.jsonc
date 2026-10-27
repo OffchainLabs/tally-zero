@@ -18,10 +18,13 @@
     // from: @reown/appkit-adapter-wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>query-string>decode-uri-component (0.2.2)
     "GHSA-vcc3-ghjq-m6fr",
 
-    // https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
-    // braces stack exhaustion on deeply nested brace patterns.
-    // No patched release exists (every version <=3.0.3 is affected). Only reachable through ESLint's fast-glob/micromatch while linting, with glob patterns we author in config, never untrusted input or runtime code.
-    // from: eslint-config-next>@next/eslint-plugin-next>fast-glob>micromatch>braces (3.0.3)
-    "GHSA-vfj7-8cjw-p6xm",
+    // https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+    // zod memory exhaustion: $ZodArray collects an issue object for every failing element of an array schema that has no length constraint, so an oversized array can OOM the process.
+    // No fixed release exists on the 3.x line (the fix landed in 4.6.6 only), and zod 4 is a breaking upgrade that @t3-oss/env-nextjs 0.10 and @hookform/resolvers 3 do not support yet.
+    // Not reachable here: the only zod parses are env.ts validating NEXT_PUBLIC_* scalars at boot and voteSchema (one string field) through zodResolver in the browser. No API route or server module parses with zod, and proposalSchema's arrays are used for z.infer types plus unit tests only.
+    // The transitive 4.x copies (porto, @vercel/cli-config) are pinned to >=4.6.6 by the "zod@4" pnpm override, so only the 3.x copies remain.
+    // from: zod (3.25.76)
+    // from: @reown/appkit>@reown/appkit-wallet>zod (3.22.4)
+    "GHSA-mrhx-c7xc-m3w5",
   ],
 }
