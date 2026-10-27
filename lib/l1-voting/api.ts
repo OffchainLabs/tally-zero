@@ -1,6 +1,7 @@
 // The indexer's L1 voting surface, read through the same-origin proxy. Vote plans and
 // registration status are read live from the chain by the indexer, so they are never cached.
 
+import type { VotePlan } from "@offchainlabs/l1-voting-proving";
 import type { Address, Hex } from "viem";
 
 const BASE = "/api/governance-indexer/api/l1-voting";
@@ -17,46 +18,12 @@ export interface L1VotingDeployment {
   multicall3: Address;
 }
 
-export type VotePlanStepKind =
-  | "checkpoint"
-  | "l1Claim"
-  | "signature"
-  | "bundle";
-
-export interface VotePlanStep {
-  kind: VotePlanStepKind;
-  label: string;
-  signer: "any" | "l1Voter" | "l2Delegate";
-  chainId: number;
-  to?: Address;
-  data?: Hex;
-  calls?: string[];
-  waitForBlock?: string;
-  typedData?: {
-    domain: Record<string, unknown>;
-    types: Record<string, { name: string; type: string }[]>;
-    primaryType: string;
-    message: Record<string, unknown>;
-  };
-}
-
-export interface VotePlan {
-  proposalId: string;
-  governor: Address;
-  chainId: number;
-  delegate: Address;
-  l1Voter: Address;
-  state: string;
-  snapshotLocked: boolean;
-  snapshotBlock: string;
-  checkpointBlock: string | null;
-  assertionHash: Hex | null;
-  provenVotingPower: string | null;
-  blockers: { code: string; message: string }[];
-  steps: VotePlanStep[];
-  vote: { to: Address; chainId: number } | null;
-  head: string;
-}
+// Plans come from the same library the indexer builds them with.
+export type {
+  VotePlan,
+  PlanStep as VotePlanStep,
+  StepKind as VotePlanStepKind,
+} from "@offchainlabs/l1-voting-proving";
 
 export interface ClaimRecord {
   source: string;

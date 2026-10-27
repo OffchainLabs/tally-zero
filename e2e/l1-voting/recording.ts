@@ -19,11 +19,15 @@ const open: { context: BrowserContext; page: Page }[] = [];
 
 export type Wallet = { key: string; address: string };
 
-/** A page with `wallet` connected (or none), recording video, at `path`. */
+/**
+ * A page with `wallet` connected (or none), recording video, at `path`. `before` runs ahead of
+ * the first navigation, e.g. to rewrite or block the indexer's responses with page.route.
+ */
 export async function recordedPage(
   browser: Browser,
   wallet: Wallet | null,
-  path: string
+  path: string,
+  before?: (page: Page) => Promise<void>
 ): Promise<Page> {
   const context = await browser.newContext({
     viewport: VIEWPORT,
@@ -31,6 +35,7 @@ export async function recordedPage(
   });
   const page = await context.newPage();
   if (wallet) await useWallet(page, wallet as never);
+  await before?.(page);
   await page.goto(path);
   open.push({ context, page });
   return page;

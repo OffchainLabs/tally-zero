@@ -6,7 +6,7 @@ import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Address, Hex } from "viem";
-import { formatUnits, getAddress, isAddressEqual } from "viem";
+import { formatUnits, getAddress, isAddress, isAddressEqual } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -16,16 +16,31 @@ import {
 } from "wagmi";
 
 import { Button } from "@/components/ui/Button";
-import { l1VotingChainId } from "@/config/chains";
+import {
+  isLocalChainsEnabled,
+  l1VotingChainId,
+  LOCAL_L2_RPC_URL,
+} from "@/config/chains";
+import { STORAGE_KEYS } from "@/config/storage-keys";
 import { L1ArbitrumGovernorAbi } from "@/data/abis/L1ArbitrumGovernorAbi";
 import { useEnsureChain } from "@/hooks/use-ensure-chain";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { getErrorMessage, isUserRejectedError } from "@/lib/error-utils";
 import { l1VotingApi, type VotePlan } from "@/lib/l1-voting/api";
+import {
+  ArchiveRpcError,
+  createLocalPlanner,
+} from "@/lib/l1-voting/local-plan";
 import {
   type PlanProgress,
   runVotePlan,
   VotePlanBlockedError,
 } from "@/lib/l1-voting/run-plan";
+import {
+  checkPlan,
+  type PinnedDeployment,
+  UnsafePlanError,
+} from "@/lib/l1-voting/trust";
 
 const SUPPORT = [
   { value: 1, label: "For" },
@@ -34,17 +49,29 @@ const SUPPORT = [
 ] as const;
 
 type StepRow = { key: string; label: string; status: "running" | "done" };
+type PlanSource = "indexer" | "own";
 
 /**
- * Vote on an L1 voting proposal. The indexer's vote plan lists what is still missing before the
- * connected address can vote for a delegate (its L1 claim, a checkpoint, a signature, a bundle of
- * proofs); the panel sends each in turn and then the vote, re-reading the plan after every step.
+ * Vote on an L1 voting proposal. A vote plan lists what is still missing before the connected
+ * address can vote for a delegate (its L1 claim, a checkpoint, a signature, a bundle of proofs);
+ * the panel sends each in turn and then the vote, re-reading the plan after every step.
+ *
+ * The plan comes from the indexer, or (the "own RPCs" option) is built in the browser by the same
+ * library from the user's Ethereum RPC and an Arbitrum archive RPC. Either way every step is
+ * checked against the pinned deployment before the wallet sees it, and the vote goes to the
+ * pinned governor.
  */
 export function L1VotePanel({
   proposalId,
+  governorAddress,
+  deployment,
+  blockedReason,
 }: {
   proposalId: string;
   governorAddress: string;
+  deployment: PinnedDeployment | null | undefined;
+  /** Set when the page could not confirm the proposal's content on Ethereum. */
+  blockedReason?: string | null;
 }) {
   const { address, isConnected } = useAccount();
   const { open } = useAppKit();
@@ -61,8 +88,25 @@ export function L1VotePanel({
   const [running, setRunning] = useState(false);
   const [voteTx, setVoteTx] = useState<Hex | null>(null);
   const [lastPlan, setLastPlan] = useState<VotePlan | null>(null);
+  const [source, setSource] = useLocalStorage<PlanSource>(
+    STORAGE_KEYS.L1_VOTE_PLAN_SOURCE,
+    "indexer"
+  );
+  const [storedArchiveRpc, setArchiveRpc] = useLocalStorage(
+    STORAGE_KEYS.L2_ARCHIVE_RPC,
+    ""
+  );
+  const archiveRpc =
+    storedArchiveRpc || (isLocalChainsEnabled() ? LOCAL_L2_RPC_URL : "");
+  const [delegateInput, setDelegateInput] = useState("");
+  const ownRpcs = source === "own";
 
-  // Delegates this address may vote for: itself, and any delegate whose Arbitrum One claim names it.
+  const governorMismatch =
+    !!deployment &&
+    !isAddressEqual(governorAddress as Address, deployment.governor);
+
+  // Delegates this address may vote for: itself, and any delegate whose Arbitrum One claim names
+  // it. With its own RPCs the voter can also name one, since the indexer may be unreachable.
   const { data: registered } = useQuery({
     queryKey: ["l1-voting", "registrations"],
     queryFn: () => l1VotingApi.registrations(),
@@ -76,23 +120,81 @@ export function L1VotePanel({
       .map((r) => getAddress(r.l2Delegate));
     return [address, ...named.filter((d) => !isAddressEqual(d, address))];
   }, [address, registered]);
-  const forDelegate = delegate ?? choices[0] ?? null;
+  const typed =
+    ownRpcs && isAddress(delegateInput) ? getAddress(delegateInput) : null;
+  const forDelegate = typed ?? delegate ?? choices[0] ?? null;
 
+  const planner = useMemo(
+    () =>
+      ownRpcs && deployment && publicClient && archiveRpc
+        ? createLocalPlanner({
+            l1: publicClient,
+            l2RpcUrl: archiveRpc,
+            deployment,
+          })
+        : null,
+    [ownRpcs, deployment, publicClient, archiveRpc]
+  );
+
+  async function fetchPlan(
+    forWhom: Address,
+    voter: Address,
+    signature?: Hex
+  ): Promise<VotePlan> {
+    if (!deployment)
+      throw new Error("L1 voting is not deployed on this network.");
+    const plan = ownRpcs
+      ? await planner!({
+          proposalId,
+          delegate: forWhom,
+          l1Voter: voter,
+          signature,
+        })
+      : await l1VotingApi.votePlan(proposalId, forWhom, voter, signature);
+    return checkPlan(plan, {
+      deployment,
+      proposalId,
+      delegate: forWhom,
+      l1Voter: voter,
+    });
+  }
+
+  const ready =
+    !!forDelegate &&
+    !!address &&
+    !!deployment &&
+    !governorMismatch &&
+    (!ownRpcs || !!planner);
   const {
     data: plan,
     error: planError,
     refetch,
   } = useQuery({
-    queryKey: ["l1-voting", "vote-plan", proposalId, forDelegate, address],
-    queryFn: () => l1VotingApi.votePlan(proposalId, forDelegate!, address!),
-    enabled: !!forDelegate && !!address && !running,
+    queryKey: [
+      "l1-voting",
+      "vote-plan",
+      source,
+      archiveRpc,
+      proposalId,
+      forDelegate,
+      address,
+    ],
+    queryFn: () => fetchPlan(forDelegate!, address!),
+    enabled: ready && !running,
     refetchInterval: running ? false : 15_000,
-    retry: 1,
+    retry: (count, error) =>
+      !(error instanceof UnsafePlanError || error instanceof ArchiveRpcError) &&
+      count < 1,
   });
   const shown = lastPlan ?? plan;
+  const unsafe = planError instanceof UnsafePlanError ? planError : null;
+  const indexerTrouble =
+    !ownRpcs &&
+    ((planError && !unsafe) ||
+      shown?.blockers.some((b) => b.code === "PROOF_UNAVAILABLE"));
 
   async function vote() {
-    if (!address || !forDelegate || !publicClient) return;
+    if (!address || !forDelegate || !publicClient || !deployment) return;
     setRunning(true);
     setSteps([]);
     setVoteTx(null);
@@ -120,8 +222,7 @@ export function L1VotePanel({
           ]);
       };
       const tx = await runVotePlan({
-        fetchPlan: (signature) =>
-          l1VotingApi.votePlan(proposalId, forDelegate, address, signature),
+        fetchPlan: (signature) => fetchPlan(forDelegate, address, signature),
         sendStep: async (step) => {
           const hash = await sendTransactionAsync({
             to: step.to!,
@@ -137,15 +238,16 @@ export function L1VotePanel({
         },
         signTypedData: (typedData) =>
           signTypedDataAsync(
-            typedData as Parameters<typeof signTypedDataAsync>[0]
+            typedData as unknown as Parameters<typeof signTypedDataAsync>[0]
           ),
         waitForBlock: async (block) => {
           while ((await publicClient.getBlockNumber()) < block)
             await new Promise((r) => setTimeout(r, 2_000));
         },
-        castVote: async (current) => {
+        // The pinned governor, never an address from the plan.
+        castVote: async () => {
           const hash = await writeContractAsync({
-            address: current.vote!.to,
+            address: deployment.governor,
             abi: L1ArbitrumGovernorAbi,
             functionName: "castVote",
             args: [BigInt(proposalId), support],
@@ -159,12 +261,17 @@ export function L1VotePanel({
           return hash;
         },
         onProgress,
-        isUserRejection: isUserRejectedError,
+        isUserRejection: (error) =>
+          isUserRejectedError(error) || error instanceof UnsafePlanError,
       });
       setVoteTx(tx);
       toast.success("Vote cast on Ethereum");
     } catch (error) {
-      if (error instanceof VotePlanBlockedError) {
+      if (
+        error instanceof VotePlanBlockedError ||
+        error instanceof UnsafePlanError ||
+        error instanceof ArchiveRpcError
+      ) {
         toast.error(error.message, { id: "l1-vote" });
       } else if (!isUserRejectedError(error)) {
         toast.error(getErrorMessage(error, "vote"), { id: "l1-vote" });
@@ -192,10 +299,17 @@ export function L1VotePanel({
   const power = shown?.provenVotingPower
     ? Number(formatUnits(BigInt(shown.provenVotingPower), 18)).toLocaleString()
     : null;
+  const stopReason =
+    deployment === null
+      ? "L1 voting is not deployed on this network."
+      : governorMismatch
+        ? "This page's governor is not the L1 voting governor this site knows, so voting is disabled."
+        : (blockedReason ?? null);
 
   return (
     <div
       data-testid="l1-vote-panel"
+      data-plan-source={source}
       className="rounded-lg border p-4 space-y-4"
     >
       <div className="space-y-1">
@@ -207,7 +321,13 @@ export function L1VotePanel({
         </p>
       </div>
 
-      {choices.length > 1 && (
+      {stopReason ? (
+        <p data-testid="l1-vote-stopped" className="text-sm text-destructive">
+          {stopReason}
+        </p>
+      ) : null}
+
+      {choices.length > 1 && !typed && (
         <label className="block text-sm space-y-1">
           <span>Voting for</span>
           <select
@@ -246,9 +366,26 @@ export function L1VotePanel({
         </p>
       )}
 
-      {planError && !running ? (
+      {unsafe ? (
+        <div
+          data-testid="l1-vote-unsafe"
+          className="text-sm text-destructive space-y-1"
+        >
+          <p className="font-semibold">
+            The vote plan asked for a transaction this site doesn&apos;t
+            recognise, so nothing was sent.
+          </p>
+          <ul className="list-disc pl-4 text-xs">
+            {unsafe.violations.map((v) => (
+              <li key={v}>{v}</li>
+            ))}
+          </ul>
+        </div>
+      ) : planError && !running ? (
         <p data-testid="l1-vote-error" className="text-sm text-destructive">
-          Could not load what is left to send ({planError.message}). Retrying…
+          {planError instanceof ArchiveRpcError
+            ? planError.message
+            : `Could not load what is left to send (${planError.message}). Retrying…`}
         </p>
       ) : null}
 
@@ -265,7 +402,18 @@ export function L1VotePanel({
         </ul>
       ) : null}
 
-      {!running && shown && !shown.blockers.length && (
+      {(indexerTrouble || unsafe) && !ownRpcs ? (
+        <Button
+          type="button"
+          variant="outline"
+          data-testid="l1-vote-use-own-rpcs"
+          onClick={() => setSource("own")}
+        >
+          Build my vote with my own RPCs instead
+        </Button>
+      ) : null}
+
+      {!running && shown && !shown.blockers.length && !unsafe && (
         <ol className="text-sm space-y-1" data-testid="l1-vote-plan">
           {shown.steps.map((s) => (
             <li key={s.kind} data-kind={s.kind}>
@@ -312,11 +460,67 @@ export function L1VotePanel({
         <Button
           data-testid="l1-vote-submit"
           onClick={vote}
-          disabled={running || !shown || shown.blockers.length > 0}
+          disabled={
+            running ||
+            !!stopReason ||
+            !!unsafe ||
+            !shown ||
+            shown.blockers.length > 0
+          }
         >
           {running ? "Voting…" : "Vote"}
         </Button>
       )}
+
+      <details
+        className="text-xs space-y-2"
+        open={ownRpcs}
+        data-testid="l1-vote-advanced"
+      >
+        <summary className="cursor-pointer text-muted-foreground">
+          Advanced: vote without the indexer
+        </summary>
+        <label className="flex items-center gap-2 pt-2">
+          <input
+            type="checkbox"
+            data-testid="l1-vote-own-rpcs"
+            checked={ownRpcs}
+            disabled={running}
+            onChange={(e) => setSource(e.target.checked ? "own" : "indexer")}
+          />
+          <span>Build my vote myself, with my own RPCs</span>
+        </label>
+        {ownRpcs && (
+          <div className="space-y-2">
+            <p className="text-muted-foreground">
+              The plan is built in this browser from your Ethereum RPC (in
+              settings) and an Arbitrum archive RPC, with the same code the
+              indexer runs. The indexer is not used.
+            </p>
+            <label className="block space-y-1">
+              <span>Arbitrum archive RPC</span>
+              <input
+                data-testid="l1-vote-archive-rpc"
+                type="url"
+                className="w-full rounded border bg-background p-2 font-mono"
+                placeholder="https://… (needs state from about a week ago)"
+                value={storedArchiveRpc}
+                onChange={(e) => setArchiveRpc(e.target.value.trim())}
+              />
+            </label>
+            <label className="block space-y-1">
+              <span>Delegate (Arbitrum One), if not yourself</span>
+              <input
+                data-testid="l1-vote-delegate-input"
+                className="w-full rounded border bg-background p-2 font-mono"
+                placeholder={address}
+                value={delegateInput}
+                onChange={(e) => setDelegateInput(e.target.value.trim())}
+              />
+            </label>
+          </div>
+        )}
+      </details>
     </div>
   );
 }

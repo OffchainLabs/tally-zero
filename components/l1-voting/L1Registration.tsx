@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/Button";
 import { l1VotingChainId, l2ChainId } from "@/config/chains";
 import { DelegateMappingAbi } from "@/data/abis/DelegateMappingAbi";
 import { useEnsureChain } from "@/hooks/use-ensure-chain";
+import { useL1VotingDeployment } from "@/hooks/use-l1-voting-trust";
 import { useSiwe } from "@/hooks/use-siwe";
 import { getErrorMessage, isUserRejectedError } from "@/lib/error-utils";
 import { l1VotingApi } from "@/lib/l1-voting/api";
@@ -97,10 +98,8 @@ export function L1Registration() {
   const delegate = isAddress(delegateInput) ? getAddress(delegateInput) : null;
   const l1Voter = isAddress(l1VoterInput) ? getAddress(l1VoterInput) : null;
 
-  const { data: deployment } = useQuery({
-    queryKey: ["l1-voting", "deployment"],
-    queryFn: () => l1VotingApi.deployment(),
-  });
+  // Claim targets come from the pinned deployment, never from the indexer.
+  const { data: deployment } = useL1VotingDeployment();
   const { data: status, refetch: refetchStatus } = useQuery({
     queryKey: ["l1-voting", "registration", delegate],
     queryFn: () => l1VotingApi.registration(delegate!),

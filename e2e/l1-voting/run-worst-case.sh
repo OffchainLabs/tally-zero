@@ -115,7 +115,7 @@ boot_stack() {
   until [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_INDEXER_URL/ready")" = 200 ]; do sleep 5; done
 }
 
-SPECS="${SPECS:-e2e/l1-voting/worst-case.spec.ts e2e/l1-voting/permutations.spec.ts e2e/l1-voting/safe-service.spec.ts}"
+SPECS="${SPECS:-e2e/l1-voting/worst-case.spec.ts e2e/l1-voting/permutations.spec.ts e2e/l1-voting/safe-service.spec.ts e2e/l1-voting/own-rpcs.spec.ts}"
 SAFE_TXS_PORT="${SAFE_TXS_PORT:-28888}"
 
 # Each spec gets its own fresh stack: anvil keeps every mined L1 block's state (~300 KB each) and
@@ -141,6 +141,7 @@ for spec in $SPECS; do
   WORST_CASE_RPC_CONTROL="http://127.0.0.1:$PROXY_CONTROL" \
   GOVERNANCE_INDEXER_URL="$E2E_INDEXER_URL" \
   NEXT_PUBLIC_LOCAL_CHAINS=1 \
+  NEXT_PUBLIC_LOCAL_L1_VOTING_GOVERNOR="$(node -p "require('$GOVERNANCE_ADDRESSES_FILE').l1Voting.contracts.governor")" \
   NEXT_PUBLIC_LOCAL_L1_RPC="$ARBITRUM_TESTNODE_L1_RPC_URL" \
   NEXT_PUBLIC_LOCAL_L2_RPC="$ARBITRUM_TESTNODE_L2_RPC_URL" \
   NEXT_PUBLIC_STAGES_SOURCE=indexer \

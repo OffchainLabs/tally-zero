@@ -56,14 +56,19 @@ vi.mock("@/hooks/use-ensure-chain", () => ({
     isSwitching: false,
   }),
 }));
-vi.mock("@/lib/l1-voting/api", () => ({
-  l1VotingApi: {
-    deployment: async () => ({
+// Claim targets come from the pinned deployment, not the indexer.
+vi.mock("@/hooks/use-l1-voting-trust", () => ({
+  useL1VotingDeployment: () => ({
+    data: {
       l2DelegateMapping: L2_MAPPING,
       l1DelegateMapping: getAddress(
         "0x00000000000000000000000000000000000d0e11"
       ),
-    }),
+    },
+  }),
+}));
+vi.mock("@/lib/l1-voting/api", () => ({
+  l1VotingApi: {
     registration: async () => ({
       l2Claim: null,
       l2ClaimProvable: false,
