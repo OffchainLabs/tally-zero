@@ -27,7 +27,9 @@ describe("council actions helpers", () => {
   describe("classifyCouncilAction", () => {
     it("classifies hyphenated non-emergency titles", () => {
       expect(
-        classifyCouncilAction("Non-Emergency Security Action to Correct Total DVP")
+        classifyCouncilAction(
+          "Non-Emergency Security Action to Correct Total DVP"
+        )
       ).toBe("non-emergency");
     });
 

@@ -5,6 +5,7 @@
 import {
   knownDeployment,
   pinDeployment,
+  UnsafePlanError,
   validatePlan,
   type PinnedDeployment,
   type VotePlan,
@@ -15,17 +16,10 @@ import { isLocalChainsEnabled, LOCAL_L2_CHAIN_ID } from "@/config/chains";
 import { env } from "@/env";
 import { l1VotingApi } from "@/lib/l1-voting/api";
 
-export type { PinnedDeployment } from "@offchainlabs/l1-voting-proving";
-
-/** A plan with a step this site doesn't recognise. Nothing from it was sent. */
-export class UnsafePlanError extends Error {
-  constructor(public violations: string[]) {
-    super(
-      `The vote plan asked for a transaction this site doesn't recognise, so nothing was sent. ${violations.join("; ")}`
-    );
-    this.name = "UnsafePlanError";
-  }
-}
+export {
+  UnsafePlanError,
+  type PinnedDeployment,
+} from "@offchainlabs/l1-voting-proving";
 
 /** Throws UnsafePlanError unless every step of `plan` is one L1 voting needs. */
 export function checkPlan(

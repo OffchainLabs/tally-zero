@@ -4,6 +4,7 @@ import {
   estimateL1BlockDate,
   getL1VotingDeadline,
   l1BlockTimeSeconds,
+  l1ProposalView,
   resolveL1ProposalState,
   snapshotLockExplanation,
 } from "./l1-proposal";
@@ -62,5 +63,72 @@ describe("resolveL1ProposalState", () => {
   it("falls back to the indexed state until the read arrives", () => {
     expect(resolveL1ProposalState(undefined, "Queued")).toBe("Queued");
     expect(resolveL1ProposalState(undefined, null)).toBe("Unknown");
+  });
+});
+
+describe("l1ProposalView", () => {
+  const entry = {
+    state: "Active",
+    executionPhase: null,
+    executionCancelled: false,
+    description: "# Recover the bridge",
+    snapshotBlock: 120,
+    snapshotLocked: true,
+    quorum: "100",
+  };
+  const verified = {
+    description: "# Recover the bridge",
+    startBlock: BigInt(110),
+  };
+  const view = (over: Partial<Parameters<typeof l1ProposalView>[0]> = {}) =>
+    l1ProposalView({
+      proposalId: "7",
+      entry,
+      onChain: { state: 1 },
+      verified,
+      verifyError: null,
+      ...over,
+    });
+
+  it("is verified, and lets the vote through, when Ethereum agrees with the indexer", () => {
+    expect(view()).toMatchObject({
+      verified: true,
+      mismatch: false,
+      fromChainOnly: false,
+      voteBlocked: null,
+      quorum: "100",
+    });
+  });
+
+  it("shows Ethereum's text and blocks the vote when the indexer's differs", () => {
+    const v = view({
+      entry: { ...entry, description: "# Harmless housekeeping" },
+    })!;
+    expect(v.description).toBe("# Recover the bridge");
+    expect(v).toMatchObject({ verified: false, mismatch: true });
+    expect(v.voteBlocked).toMatch(/differs/);
+  });
+
+  it("stands on Ethereum alone when the indexer is unreachable", () => {
+    expect(view({ entry: null })).toMatchObject({
+      fromChainOnly: true,
+      verified: true,
+      description: "# Recover the bridge",
+      snapshotBlock: 110,
+      quorum: null,
+      voteBlocked: null,
+    });
+  });
+
+  it("blocks the vote until the proposal is confirmed, and says why when it can't be", () => {
+    expect(view({ verified: undefined })!.voteBlocked).toMatch(/Checking/);
+    expect(
+      view({ verified: undefined, verifyError: "no ProposalCreated event" })!
+        .voteBlocked
+    ).toMatch(/Could not confirm .*(no ProposalCreated event)/);
+  });
+
+  it("is nothing when neither source knows the proposal", () => {
+    expect(view({ entry: null, verified: undefined })).toBeNull();
   });
 });

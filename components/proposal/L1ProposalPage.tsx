@@ -32,10 +32,9 @@ import {
 import { formatVotingPower } from "@/lib/format-utils";
 import {
   getL1VotingDeadline,
-  resolveL1ProposalState,
+  l1ProposalView,
   snapshotLockExplanation,
 } from "@/lib/l1-proposal";
-import { getL1DisplayState } from "@/lib/lifecycle-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
 import { findStateByValue } from "@/lib/state-utils";
 import type { TallyProposalVoteSummary } from "@/lib/tally-data/types";
@@ -69,51 +68,31 @@ export function L1ProposalPage({
   const { data: deployment } = useL1VotingDeployment();
   const verification = useVerifiedProposal(proposalId, deployment);
 
-  // Without the indexer the page still stands on Ethereum alone: the verified proposal and the
-  // governor's own state, so a delegate can vote with their own RPCs while the indexer is down.
-  const fromChainOnly = !entry && !!verification.data;
-  if (!fromChainOnly) {
-    if (
-      isLoading ||
-      ((error || !entry) && deployment && verification.isPending)
-    )
+  // Without the indexer the page still stands on Ethereum alone (see l1ProposalView), so a
+  // delegate can vote with their own RPCs while the indexer is down.
+  const view = l1ProposalView({
+    proposalId,
+    entry,
+    onChain,
+    verified: verification.data?.proposal,
+    verifyError: verification.isError ? verification.error.message : null,
+  });
+  if (!view) {
+    if (isLoading || (deployment && verification.isPending))
       return <ProposalPageSkeleton />;
-    if (error) {
+    if (error)
       return (
         <ProposalPageError title="Failed to load proposal" message={error} />
       );
-    }
-    if (!entry) {
-      return (
-        <ProposalPageError
-          title="Proposal not found"
-          message={`Could not find proposal ${proposalId}.`}
-        />
-      );
-    }
+    return (
+      <ProposalPageError
+        title="Proposal not found"
+        message={`Could not find proposal ${proposalId}.`}
+      />
+    );
   }
-
-  const state = resolveL1ProposalState(onChain.state, entry?.state);
-  const display = getL1DisplayState(
-    state,
-    entry?.executionPhase,
-    entry?.executionCancelled ?? false
-  );
+  const { display, description } = view;
   const stateValue = findStateByValue(display.state);
-  const onChainText = verification.data?.proposal.description;
-  const mismatch =
-    onChainText !== undefined &&
-    entry?.description != null &&
-    entry.description !== onChainText;
-  const description =
-    onChainText ?? entry?.description ?? `Proposal ${proposalId}`;
-  const voteBlocked = verification.isError
-    ? `Could not confirm this proposal's content on Ethereum (${verification.error.message}), so voting is disabled.`
-    : mismatch
-      ? "The indexer's description differs from the proposal on Ethereum, so voting is disabled."
-      : !verification.data
-        ? "Checking the proposal's content on Ethereum…"
-        : null;
   const title = truncateText(extractProposalTitle(description), 140);
 
   return (
@@ -147,7 +126,7 @@ export function L1ProposalPage({
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             {title}
           </h1>
-          {verification.data && !mismatch ? (
+          {view.verified ? (
             <p
               data-testid="l1-proposal-verified"
               className="text-xs text-green-700 dark:text-green-400"
@@ -156,7 +135,7 @@ export function L1ProposalPage({
               proposal&apos;s own, read from its creation transaction.
             </p>
           ) : null}
-          {fromChainOnly ? (
+          {view.fromChainOnly ? (
             <p
               data-testid="l1-proposal-indexer-down"
               className="text-sm text-amber-700 dark:text-amber-400"
@@ -167,7 +146,7 @@ export function L1ProposalPage({
               panel).
             </p>
           ) : null}
-          {mismatch ? (
+          {view.mismatch ? (
             <p
               data-testid="l1-proposal-mismatch"
               className="text-sm text-destructive"
@@ -193,23 +172,17 @@ export function L1ProposalPage({
         <div className="space-y-6 min-w-0">
           <L1VotingStatus
             chainId={chainId}
-            snapshotBlock={
-              onChain.snapshotBlock ??
-              entry?.snapshotBlock ??
-              Number(verification.data?.proposal.startBlock ?? 0)
-            }
-            snapshotLocked={
-              onChain.snapshotLocked ?? Boolean(entry?.snapshotLocked)
-            }
+            snapshotBlock={view.snapshotBlock}
+            snapshotLocked={view.snapshotLocked}
             deadlineBlock={onChain.deadlineBlock}
             currentBlock={currentBlock}
           />
-          <L1Tallies voteSummary={voteSummary} quorum={entry?.quorum ?? null} />
+          <L1Tallies voteSummary={voteSummary} quorum={view.quorum} />
           <L1VotePanel
             proposalId={proposalId}
             governorAddress={governorAddress}
             deployment={deployment}
-            blockedReason={voteBlocked}
+            blockedReason={view.voteBlocked}
           />
         </div>
 

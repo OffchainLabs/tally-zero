@@ -82,7 +82,7 @@ describe("checkPlan", () => {
   it("throws when the vote would go anywhere but the pinned governor", () => {
     expect(() =>
       checkPlan({ ...plan([]), vote: { to: addr(0xbad), chainId: 1 } }, ctx)
-    ).toThrow(/doesn't recognise/);
+    ).toThrow(UnsafePlanError);
   });
 });
 
