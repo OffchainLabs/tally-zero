@@ -73,7 +73,7 @@ boot_ready() {
 boot_stack() {
   export SCENARIO_STATE="$ART/scenario-state-$(date +%s).json"
   step "boot testnode ($IMAGE_REF) and Postgres"
-  docker rm -f $TESTNODE $PG_CONTAINER >/dev/null 2>&1 || true
+  docker rm -fv $TESTNODE $PG_CONTAINER >/dev/null 2>&1 || true
   docker run -d --name $PG_CONTAINER -p "$PG_PORT:5432" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
   until docker exec $PG_CONTAINER pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
   # The image's exported config (addresses, rollup deployment) is fixed at bake time; one
@@ -86,7 +86,7 @@ boot_stack() {
   while true; do
     boots=$((boots + 1))
     [ "$boots" -le 3 ] || { echo "testnode would not stay up"; docker logs --tail 40 $TESTNODE; exit 1; }
-    docker rm -f $TESTNODE >/dev/null 2>&1 || true
+    docker rm -fv $TESTNODE >/dev/null 2>&1 || true
     docker run -d --platform linux/amd64 --name $TESTNODE -e TESTNODE_VARIANT=l3-eth \
       -p "127.0.0.1:$L1_PORT:8545" -p "127.0.0.1:$L2_PORT:8547" -p "127.0.0.1:$((L2_PORT + 1)):8548" \
       "$IMAGE_REF" >/dev/null
