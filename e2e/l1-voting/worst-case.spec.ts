@@ -108,8 +108,14 @@ test("1. a Safe delegate registers its L1 voter through the UI", async ({
     .textContent())!.trim();
   await expect(owner.getByTestId("safe-approvals")).toContainText("0 of 2");
   await scenario("safe-approve", safe, safeTxHash);
-  await owner.getByRole("button", { name: "Refresh approvals" }).click();
-  await expect(owner.getByTestId("safe-approvals")).toContainText("1 of 2");
+  // Approvals are re-read only on Refresh, and the Arbitrum node can serve the approval a beat
+  // after the scenario's receipt: refresh until it shows.
+  await expect(async () => {
+    await owner.getByRole("button", { name: "Refresh approvals" }).click();
+    await expect(owner.getByTestId("safe-approvals")).toContainText("1 of 2", {
+      timeout: 3_000,
+    });
+  }).toPass({ timeout: 60_000 });
   await owner.getByTestId("safe-execute").click();
   await expect(owner.getByTestId("l1-reg-l2-claim")).toContainText(
     safeVoter.address,
