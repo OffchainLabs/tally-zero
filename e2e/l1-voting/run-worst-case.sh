@@ -95,12 +95,12 @@ boot_stack() {
   done
 
   step "Ethereum RPC proxy for the indexer (:$PROXY_PORT, control :$PROXY_CONTROL)"
-  (cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy.log" 2>&1 &
+  (cd "$INDEXER_REPO/packages/e2e" && exec pnpm -s scenario rpc-proxy "$PROXY_PORT" "$PROXY_CONTROL") >"$ART/rpc-proxy-$name.log" 2>&1 &
   PIDS+=($!)
   proxy_pid=$!
   # Fail, don't hang, if the proxy dies before it answers.
   until curl -s "http://127.0.0.1:$PROXY_CONTROL/up" >/dev/null; do
-    kill -0 "$proxy_pid" 2>/dev/null || { echo "RPC proxy exited:"; tail -20 "$ART/rpc-proxy.log"; exit 1; }
+    kill -0 "$proxy_pid" 2>/dev/null || { echo "RPC proxy exited:"; tail -20 "$ART/rpc-proxy-$name.log"; exit 1; }
     sleep 1
   done
 
@@ -115,7 +115,7 @@ boot_stack() {
       echo "▸ indexer exited; restarting in 45s" >&2
       sleep 45
     done
-  ) >"$ART/indexer.log" 2>&1 &
+  ) >"$ART/indexer-$name.log" 2>&1 &
   PIDS+=($!)
   until [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_INDEXER_URL/ready")" = 200 ]; do sleep 5; done
 }

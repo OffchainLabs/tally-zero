@@ -67,6 +67,8 @@ test("setup: delegates and an active proposal", async () => {
   governor = (await api("/api/l1-voting/deployment")).governor;
   for (const name of ["tamper", "rewrite", "own"])
     w[name] = await sc("new-delegate");
+  // A confirmed assertion must cover their delegations, or the snapshot proves zero power.
+  await sc("settle");
   proposalId = (await sc("propose-l1", "own rpcs case", "active")).proposalId;
 });
 
@@ -123,7 +125,7 @@ test("an indexer that rewrites the proposal's text cannot get a vote for it", as
     timeout: 120_000,
   });
   // The page shows what was proposed on Ethereum, not the indexer's story.
-  await expect(p.locator("h1")).toContainText("own rpcs case");
+  await expect(p.locator("h1").first()).toContainText("own rpcs case");
   await expect(panelOf(p).getByTestId("l1-vote-stopped")).toContainText(
     "differs"
   );
