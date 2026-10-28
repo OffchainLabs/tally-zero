@@ -75,6 +75,20 @@ describe("draft submission recording", () => {
   });
   afterEach(cleanup);
 
+  it("starts idle when the draft was already submitted on load", async () => {
+    savePendingSubmission(key, pending);
+    confirmed = receipt();
+    const view = renderHook(() =>
+      useDraftSubmissionRecording(
+        { ...published, status: "submitted" },
+        draft.author
+      )
+    );
+    await act(async () => {});
+    expect(view.result.current.status).toBeNull();
+    expect(mocks.markSubmitted).not.toHaveBeenCalled();
+  });
+
   it("persists before confirmation and recovers after a reload mid-confirmation", async () => {
     const view = mount();
     await broadcast(view);

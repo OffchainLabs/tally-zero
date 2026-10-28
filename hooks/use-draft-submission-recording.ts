@@ -47,9 +47,10 @@ export function useDraftSubmissionRecording(
   }, []);
   const { markSubmitted } = useMarkSubmitted(draft.shareSlug);
   const [pending, setPending] = useState<PendingDraftSubmission | null>(null);
-  const [status, setStatus] = useState<RecordingStatus>(
-    draft.status === "submitted" ? "recorded" : null
-  );
+  // A draft that loads as submitted shows no recording outcome: the loader's
+  // banner already says it was submitted, and "recorded" is for a write that
+  // happened in this session.
+  const [status, setStatus] = useState<RecordingStatus>(null);
   const [error, setError] = useState<string | null>(null);
   const pendingHash = useRef<string | null>(null);
   const attemptedHash = useRef<string | null>(null);
