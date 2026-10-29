@@ -6,6 +6,7 @@ import { createSiweMessage } from "viem/siwe";
 import { useAccount, useSignMessage } from "wagmi";
 
 import { SIWE_CHAIN_ID } from "@/config/siwe";
+import { addressesEqual } from "@/lib/address-utils";
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import { meQueryOptions } from "@/lib/siwe/queries";
@@ -77,9 +78,7 @@ export function useSiwe() {
   // and actions never appear under the wrong wallet.
   const cachedSession = sessionQuery.data ?? null;
   const session =
-    isConnected &&
-    address &&
-    cachedSession?.address.toLowerCase() === address.toLowerCase()
+    isConnected && addressesEqual(cachedSession?.address, address)
       ? cachedSession
       : null;
   return {

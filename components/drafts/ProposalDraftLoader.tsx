@@ -22,6 +22,7 @@ import {
 } from "@/hooks/use-draft-submission-recording";
 import { useDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
+import { addressesEqual } from "@/lib/address-utils";
 import { draftToFormState } from "@/lib/drafts/mapping";
 import type { Draft } from "@/lib/siwe/types";
 
@@ -169,7 +170,7 @@ export function ProposalDraftLoader() {
   const recordingDraft =
     draft?.status !== "draft" &&
     draft?.shareSlug &&
-    effectiveAddress?.toLowerCase() === draft.author.toLowerCase()
+    addressesEqual(effectiveAddress, draft.author)
       ? { ...draft, shareSlug: draft.shareSlug }
       : null;
 
