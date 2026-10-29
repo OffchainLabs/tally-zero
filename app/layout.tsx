@@ -12,7 +12,6 @@ import { ButtonNav } from "@components/navigation/ButtonNav";
 import { MainNav } from "@components/navigation/MainNav";
 import { SiteFooter } from "@components/navigation/SiteFooter";
 
-import { Analytics } from "@components/Analytics";
 import { PostHogProvider } from "@components/PostHogProvider";
 import { ThemeProvider } from "@components/ThemeProvider";
 import { DeepLinkProvider } from "@context/DeepLinkContext";
@@ -92,7 +91,6 @@ export default function RootLayout({ children }: RootLayoutProps) {
                     <SiteFooter />
 
                     <Toaster />
-                    <Analytics />
                   </SettingsSheetProvider>
                 </DeepLinkProvider>
               </NerdModeProvider>
