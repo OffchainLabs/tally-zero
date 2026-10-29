@@ -189,7 +189,7 @@ describe("SharedDraftView", () => {
     ).toBeUndefined();
   });
 
-  it("lists actions with explorer links", () => {
+  it("renders actions as the proposal payload with explorer links", () => {
     loaded(
       draft({
         actions: [{ target: GOVERNOR, value: "1000", calldata: "0xdeadbeef" }],
@@ -198,7 +198,7 @@ describe("SharedDraftView", () => {
 
     const { container } = render(<SharedDraftView slug="abc123" />);
 
-    expect(container.textContent).toContain("Actions (1)");
+    expect(container.textContent).toContain("Proposal Payload (1)");
     expect(
       container.querySelector(
         `a[href="https://arbiscan.io/address/${GOVERNOR}"]`
@@ -264,7 +264,9 @@ describe("SharedDraftView", () => {
 
     const view = render(<SharedDraftView slug="abc123" />);
     expect(view.getByTestId("shared-draft-title")).toBeDefined();
-    expect(view.container.textContent).toContain("No on-chain submission has been recorded for this draft.");
+    expect(view.container.textContent).toContain(
+      "No on-chain submission has been recorded for this draft."
+    );
     expect(
       view.container.querySelector('a[href="/proposal/new?draft=d1"]')
     ).toBeNull();

@@ -1,6 +1,5 @@
-import MyDraftsList from "@/components/container/MyDraftsList";
+import { DraftsView } from "@/components/container/DraftsView";
 import { ProposalsPageShell } from "@/components/container/ProposalsPageShell";
-import { ProposalsTabs } from "@/components/container/ProposalsTabs";
 
 export const metadata = {
   title: "My Drafts | Arbitrum Governance",
@@ -11,9 +10,7 @@ export const metadata = {
 export default function DraftsPage() {
   return (
     <ProposalsPageShell>
-      <ProposalsTabs active="drafts">
-        <MyDraftsList />
-      </ProposalsTabs>
+      <DraftsView />
     </ProposalsPageShell>
   );
 }
