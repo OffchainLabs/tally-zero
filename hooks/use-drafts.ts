@@ -143,8 +143,11 @@ export function useSharedDraft(slug: string) {
  * Records the on-chain submission of a published draft.
  *
  * Any signed-in user may record it, including a delegate submitting another
- * author's proposal. The server records the effective subject as `submittedBy`.
- * Receipt verification in the browser is a UI safeguard, not a trust boundary.
+ * author's proposal. The server records the effective subject as `submittedBy`
+ * and stores what it is sent without reading the chain. Both callers check the
+ * receipt in the browser first (the recorder as the transaction confirms, the
+ * shared page's form before it enables submit); that is a UI safeguard, not a
+ * trust boundary.
  */
 export function useMarkSubmitted(slug: string) {
   const subject = useDraftSubject();
