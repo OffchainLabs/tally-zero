@@ -218,6 +218,9 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           <Button
             size="sm"
             variant="outline"
+            // A request already sent cannot be cancelled; hiding the prompt
+            // would only make it look as though it had been.
+            disabled={isPublishing || isDeleting}
             onClick={() => setConfirming(null)}
           >
             Cancel
