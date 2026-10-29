@@ -50,11 +50,18 @@ export const proposalSanitizeSchema = {
     "summary",
   ],
   attributes: {
-    a: ["href", "title", "rel", "target"],
+    // No `target`: the body is authored by anyone who can publish a draft and
+    // the shared-draft page is public, so an author-chosen target with no
+    // matching rel is not worth allowing.
+    a: ["href", "title", "rel"],
     th: ["align", "valign", "scope"],
     td: ["align", "valign"],
-    code: ["className"],
-    pre: ["className"],
+    // Only fenced-code language classes. A bare `className` allowlist lets an
+    // author apply any utility class in the Tailwind build (`fixed inset-0
+    // z-50 bg-background` paints over the page) wherever raw HTML is expanded
+    // before sanitising, as the shared-draft page does.
+    code: [["className", /^language-./]],
+    pre: [["className", /^language-./]],
     "*": ["id"],
   },
   protocols: {
