@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { isAddress } from "viem";
 
+import { PayloadView } from "@/components/payload";
 import { SiweGate } from "@/components/siwe/SiweGate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { GOVERNORS } from "@/config/governors";
 import { useMarkSubmitted, useSharedDraft } from "@/hooks/use-drafts";
 import { useSiwe } from "@/hooks/use-siwe";
 import { TX_HASH_REGEX } from "@/lib/address-utils";
@@ -20,6 +22,7 @@ import {
   getProposalPreviewRehypePlugins,
   getProposalPreviewRemarkPlugins,
 } from "@/lib/create-proposal-form-utils";
+import { fromDraftGovernorType } from "@/lib/drafts/mapping";
 import { getAddressExplorerUrl, getTxExplorerUrl } from "@/lib/explorer-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { SiweApiError } from "@/lib/siwe/client";
@@ -144,45 +147,38 @@ export function SharedDraftView({ slug }: { slug: string }) {
   );
 }
 
+/**
+ * The draft's actions, rendered with the same PayloadView the proposal page
+ * uses for "Proposal Payload", so a reviewer sees decoded calldata and the
+ * governance execution route exactly as they will once the proposal is on
+ * chain. Read-only: calldata overrides are a nerd-mode feature of live
+ * proposals and have no meaning for a draft.
+ */
 function DraftActions({ draft }: { draft: Draft }) {
+  const governorAddress =
+    GOVERNORS[fromDraftGovernorType(draft.governorType)].address;
+
   return (
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="text-base">
-          Actions{draft.actions.length > 0 && ` (${draft.actions.length})`}
+          Proposal Payload
+          {draft.actions.length > 0 && ` (${draft.actions.length})`}
         </CardTitle>
       </CardHeader>
-      <CardContent
-        className={draft.actions.length > 0 ? "space-y-3" : undefined}
-      >
-        {draft.actions.length === 0 && (
+      <CardContent>
+        {draft.actions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No actions yet — this draft is text only.
           </p>
+        ) : (
+          <PayloadView
+            targets={draft.actions.map((action) => action.target)}
+            values={draft.actions.map((action) => action.value)}
+            calldatas={draft.actions.map((action) => action.calldata)}
+            governorAddress={governorAddress}
+          />
         )}
-        {draft.actions.map((action, index) => (
-          <div
-            key={`${action.target}-${index}`}
-            className="space-y-1 rounded-md border border-white/10 p-3"
-          >
-            <p className="text-xs text-muted-foreground">Target</p>
-            <a
-              className="block font-mono text-xs break-all text-primary hover:underline"
-              href={getAddressExplorerUrl(action.target)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {action.target}
-            </a>
-            <p className="text-xs text-muted-foreground">
-              Value: <span className="font-mono">{action.value}</span> wei
-            </p>
-            <p className="text-xs text-muted-foreground">Calldata</p>
-            <code className="block break-all font-mono text-xs text-muted-foreground">
-              {action.calldata}
-            </code>
-          </div>
-        ))}
       </CardContent>
     </Card>
   );

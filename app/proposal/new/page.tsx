@@ -17,11 +17,11 @@ export default function NewProposalPage() {
       <div className="container flex flex-col gap-6">
         <div>
           <Link
-            href="/proposals"
+            href="/drafts"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Proposals
+            Back to Proposal Drafts
           </Link>
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
             New Proposal

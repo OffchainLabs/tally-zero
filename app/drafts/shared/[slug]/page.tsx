@@ -21,11 +21,11 @@ export default async function SharedDraftPage({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div>
         <Link
-          href="/proposals"
+          href="/drafts"
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Proposals
+          Back to Proposal Drafts
         </Link>
         <h1 className="text-3xl font-bold tracking-tight">Shared Draft</h1>
         <p className="mt-2 text-muted-foreground">

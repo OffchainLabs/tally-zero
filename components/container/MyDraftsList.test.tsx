@@ -186,6 +186,17 @@ describe("MyDraftsList", () => {
     ).not.toBeNull();
   });
 
+  it("shows New Proposal on /drafts once signed in", () => {
+    session();
+    list([summary()]);
+    const view = render(<DraftsPage />);
+
+    expect(
+      view.getByRole("link", { name: "New Proposal" }).getAttribute("href")
+    ).toBe("/proposal/new");
+    expect(view.getByTestId("drafts-list")).toBeDefined();
+  });
+
   it("shows the list error or an empty state with a new proposal link", () => {
     list([], new Error("upstream unavailable"));
     expect(
