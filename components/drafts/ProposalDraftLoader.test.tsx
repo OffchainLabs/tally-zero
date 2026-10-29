@@ -143,6 +143,8 @@ describe("ProposalDraftLoader", () => {
       error: null,
       canRetry: false,
       retry: vi.fn(),
+      canDiscard: false,
+      discard: vi.fn(),
       onProposalSubmitted: mocks.onProposalSubmitted,
       onProposalReplaced: mocks.onProposalReplaced,
     });
@@ -345,6 +347,40 @@ describe("ProposalDraftLoader", () => {
     expect(
       view.queryByRole("button", { name: "Retry transaction verification" })
     ).toBeNull();
+  });
+
+  it("offers to discard a pending transaction only once the recorder allows it", () => {
+    session({ isSignedIn: true });
+    draftQuery({
+      data: { ...DRAFT, status: "published", shareSlug: "shared" },
+    });
+    const discard = vi.fn();
+    mocks.recordingResult.mockReturnValue({
+      status: "confirming",
+      error: null,
+      canRetry: false,
+      retry: vi.fn(),
+      canDiscard: false,
+      discard,
+    });
+    const view = renderView(<ProposalDraftLoader />);
+    expect(
+      view.queryByRole("button", { name: "Discard pending transaction" })
+    ).toBeNull();
+
+    mocks.recordingResult.mockReturnValue({
+      status: "confirming",
+      error: null,
+      canRetry: false,
+      retry: vi.fn(),
+      canDiscard: true,
+      discard,
+    });
+    view.rerender(<ProposalDraftLoader />);
+    fireEvent.click(
+      view.getByRole("button", { name: "Discard pending transaction" })
+    );
+    expect(discard).toHaveBeenCalledOnce();
   });
 
   it("preserves form success when recording refreshes a published draft to submitted", () => {

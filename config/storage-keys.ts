@@ -68,6 +68,9 @@ export const L1_BLOCK_CACHE_FRESHNESS_MS = 30 * MS_PER_SECOND;
 /** Delay after the last edit before the proposal form autosaves to localStorage */
 export const PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS = 2 * MS_PER_SECOND;
 
+/** How long a broadcast proposal may wait unconfirmed before its author may discard it */
+export const DRAFT_SUBMISSION_DISCARD_AFTER_MS = 30 * MS_PER_MINUTE;
+
 /**
  * The proposal form's autosave slot. The bare key holds the anonymous form;
  * a form bound to a server draft gets a slot per draft id, so a server

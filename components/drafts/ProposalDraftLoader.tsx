@@ -278,6 +278,8 @@ function DraftSubmissionForm({
     error,
     canRetry,
     retry,
+    canDiscard,
+    discard,
     onProposalSubmitted,
     onProposalReplaced,
   } = useDraftSubmissionRecording(draft, subject);
@@ -287,6 +289,19 @@ function DraftSubmissionForm({
         <div role="status" className="text-sm space-y-2">
           {status === "confirming" && (
             <p>Waiting for the draft&apos;s proposal transaction to confirm…</p>
+          )}
+          {canDiscard && (
+            // A hash dropped from the mempool never confirms and never errors,
+            // so after a long wait the user is the only one who can let go.
+            <div className="space-y-1">
+              <p className="text-muted-foreground">
+                Still waiting after a long time. If the wallet dropped or
+                replaced this transaction, discard it and submit again.
+              </p>
+              <Button variant="outline" onClick={discard}>
+                Discard pending transaction
+              </Button>
+            </div>
           )}
           {status === "recording" && <p>Recording this draft as submitted…</p>}
           {status === "recorded" && (

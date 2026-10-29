@@ -205,7 +205,10 @@ it("delivers a transaction replacement to the form and the recorder through viem
     ).toHaveLength(1);
     expect(
       readPendingSubmission(draftSubmissionStorageKey(draft.id, draft.author))
-    ).toEqual({ transactionHash: replacement, governorAddress: governor });
+    ).toMatchObject({
+      transactionHash: replacement,
+      governorAddress: governor,
+    });
     await waitFor(() =>
       expect(view.result.current.recording.status).toBe("receipt-error")
     );

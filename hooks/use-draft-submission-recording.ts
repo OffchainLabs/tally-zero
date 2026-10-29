@@ -7,7 +7,10 @@ import { useTransactionReceipt, useWaitForTransactionReceipt } from "wagmi";
 import type { ProposalReplacement } from "@/components/form/CreateProposalForm";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
-import { draftSubmissionStorageKey } from "@/config/storage-keys";
+import {
+  DRAFT_SUBMISSION_DISCARD_AFTER_MS,
+  draftSubmissionStorageKey,
+} from "@/config/storage-keys";
 import { checkDraftReceipt } from "@/lib/drafts/submission";
 import {
   clearPendingSubmission,
@@ -55,6 +58,15 @@ export function useDraftSubmissionRecording(
   const pendingHash = useRef<string | null>(null);
   const attemptedHash = useRef<string | null>(null);
   const recordingHash = useRef<string | null>(null);
+  const [, setDiscardTick] = useState(0);
+
+  const reset = useCallback(() => {
+    pendingHash.current = null;
+    attemptedHash.current = null;
+    setPending(null);
+    setError(null);
+    setStatus(null);
+  }, []);
 
   useEffect(() => {
     if (draft.status !== "published") return;
@@ -66,12 +78,20 @@ export function useDraftSubmissionRecording(
         setPending(saved);
         setError(null);
         setStatus("confirming");
+      } else if (
+        !saved &&
+        pendingHash.current &&
+        attemptedHash.current === pendingHash.current
+      ) {
+        // The hashes agree only while a record is in flight or has failed,
+        // so the entry went away because another tab recorded it.
+        reset();
       }
     };
     const unsubscribe = subscribePendingSubmission(key, restore);
     restore();
     return unsubscribe;
-  }, [key, draft.status]);
+  }, [key, draft.status, reset]);
 
   const onProposalSubmitted = useCallback(
     ({
@@ -82,10 +102,12 @@ export function useDraftSubmissionRecording(
       governorAddress: string;
     }) => {
       if (draft.status !== "published") return;
-      const next = { transactionHash: hash, governorAddress };
       // Persist at broadcast, before either the receipt or the API write.
       pendingHash.current = hash;
-      savePendingSubmission(key, next);
+      const next = savePendingSubmission(key, {
+        transactionHash: hash,
+        governorAddress,
+      });
       attemptedHash.current = null;
       setPending(next);
       setError(null);
@@ -154,11 +176,12 @@ export function useDraftSubmissionRecording(
       setError(null);
       try {
         await markSubmitted(submission);
-        clearPendingSubmission(key, submission.transactionHash);
         if (attemptedHash.current === submission.transactionHash) {
           pendingHash.current = null;
           setStatus("recorded");
         }
+        // Clearing notifies this tab's restore too, so settle first.
+        clearPendingSubmission(key, submission.transactionHash);
       } catch (cause) {
         if (attemptedHash.current === submission.transactionHash) {
           setStatus("failed");
@@ -186,8 +209,9 @@ export function useDraftSubmissionRecording(
     if (!receipt) return;
     if (!matchesPending) {
       // viem resolves a replacement's receipt under the replaced hash. The
-      // shared query's onReplaced belongs to whichever hook started the fetch,
-      // which may be an instance unmounted since, so follow the receipt here.
+      // shared query runs the queryFn of whichever observer most recently set
+      // its options, so the onReplaced that fires may belong to the form or to
+      // an instance unmounted since; follow the receipt here regardless.
       onProposalReplaced({
         reason: looksCancelled(receipt) ? "cancelled" : "replaced",
         transactionReceipt: receipt,
@@ -216,6 +240,42 @@ export function useDraftSubmissionRecording(
     }
   }, [draft, pending, receipt, receiptError, key, record, onProposalReplaced]);
 
+  useEffect(() => {
+    if (!pending || draft.status !== "submitted") return;
+    // The draft was recorded while this hash was pending: by another tab, or
+    // by a write here whose response was lost.
+    const recorded =
+      !!draft.onchain &&
+      attemptedHash.current?.toLowerCase() ===
+        draft.onchain.transactionHash.toLowerCase();
+    reset();
+    clearPendingSubmission(key, pending.transactionHash);
+    if (recorded) setStatus("recorded");
+  }, [draft, pending, key, reset]);
+
+  // Nothing re-renders while the wait polls, so wake once the window passes.
+  const discardAt = pending
+    ? pending.broadcastAt + DRAFT_SUBMISSION_DISCARD_AFTER_MS
+    : null;
+  const canDiscard =
+    status === "confirming" && discardAt !== null && Date.now() >= discardAt;
+  useEffect(() => {
+    if (status !== "confirming" || discardAt === null) return;
+    const remaining = discardAt - Date.now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(
+      () => setDiscardTick((tick) => tick + 1),
+      remaining
+    );
+    return () => clearTimeout(timer);
+  }, [status, discardAt]);
+  /** Drop a hash that has waited unconfirmed past the discard window. */
+  const discard = () => {
+    if (!canDiscard || !pending) return;
+    reset();
+    clearPendingSubmission(key, pending.transactionHash);
+  };
+
   const canRetry =
     status === "failed" ||
     (status === "receipt-error" && !!pending && !!receiptError);
@@ -239,13 +299,22 @@ export function useDraftSubmissionRecording(
     }
     if (!receipt || status !== "failed") return;
     const checked = checkDraftReceipt(receipt, draft);
-    if (checked.kind === "match") await record(checked.submission);
+    if (checked.kind === "match") {
+      await record(checked.submission);
+    } else {
+      pendingHash.current = null;
+      clearPendingSubmission(key, retryHash);
+      setError(null);
+      setStatus(checked.kind);
+    }
   };
   return {
     status,
     error,
     canRetry,
     retry,
+    canDiscard,
+    discard,
     onProposalSubmitted,
     onProposalReplaced,
   };
