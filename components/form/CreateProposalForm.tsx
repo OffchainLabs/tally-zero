@@ -52,6 +52,7 @@ import {
   buildSubmittedProposalPath,
   createFormProposalAction,
   createProposalDraft,
+  getProposalEligibilityBlocker,
   getProposalSubmissionPhase,
   parseProposalDraft,
   parseServerTimestamp,
@@ -217,6 +218,7 @@ export default function CreateProposalForm({
     proposalThreshold,
     snapshotBlock,
     isLoading: isLoadingEligibility,
+    isError: isEligibilityError,
   } = useProposalEligibility(governorType);
   const meetsThreshold = eligibility === "meets";
 
@@ -641,6 +643,7 @@ export default function CreateProposalForm({
         <SubmitSection
           isConnected={isConnected}
           eligibility={eligibility}
+          isEligibilityError={isEligibilityError}
           proposalThreshold={proposalThreshold}
           governorName={governor.name}
           predictedProposalId={predictedProposalId}
@@ -658,15 +661,17 @@ export default function CreateProposalForm({
           status={saveStatus}
           isDirty={isDraftHydrated && isDirty}
           restoredFromLocal={restoredFromLocal}
+          // Whatever disables the save button (below, a failed read, or reads
+          // still in flight) replaces the bar's save prompt. Signed out, the
+          // button explains itself and the prompt stands.
           saveToAccountBlocked={
-            eligibility === "below"
-              ? `Saving to your drafts needs voting power at or above the ${
-                  governor.name
-                } proposal threshold${
-                  proposalThreshold !== undefined
-                    ? ` of ${formatVotingPower(proposalThreshold)} ARB`
-                    : ""
-                }; this wallet is below it.`
+            isConnected
+              ? getProposalEligibilityBlocker(
+                  eligibility,
+                  governor.name,
+                  "Saving to your drafts",
+                  { proposalThreshold, isError: isEligibilityError }
+                )
               : null
           }
           actions={
@@ -1181,6 +1186,7 @@ function DescriptionEditor({
 interface SubmitSectionProps {
   isConnected: boolean;
   eligibility: ProposalEligibility;
+  isEligibilityError: boolean;
   proposalThreshold: bigint | undefined;
   governorName: string;
   predictedProposalId: string | null;
@@ -1197,6 +1203,7 @@ interface SubmitSectionProps {
 function SubmitSection({
   isConnected,
   eligibility,
+  isEligibilityError,
   proposalThreshold,
   governorName,
   predictedProposalId,
@@ -1211,6 +1218,12 @@ function SubmitSection({
 }: SubmitSectionProps) {
   // Messages only. The "Save to my drafts" and "Submit Proposal" buttons sit
   // in the sticky DraftSaveStatusBar below, next to the save state.
+  const eligibilityBlocker = isConnected
+    ? getProposalEligibilityBlocker(eligibility, governorName, "Submitting", {
+        proposalThreshold,
+        isError: isEligibilityError,
+      })
+    : null;
   return (
     <Card variant="glass">
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -1220,19 +1233,21 @@ function SubmitSection({
           </p>
         )}
 
-        {isConnected && eligibility === "below" && (
+        {eligibilityBlocker && eligibility === "below" && (
           <p className="text-sm text-amber-400" data-testid="below-threshold">
-            Your voting power is below the {governorName} proposal threshold
-            {proposalThreshold !== undefined
-              ? ` of ${formatVotingPower(proposalThreshold)} ARB`
-              : ""}
-            . The transaction will revert if submitted.
+            {eligibilityBlocker} The transaction will revert if submitted.
           </p>
         )}
 
-        {isConnected && eligibility === "unknown" && (
-          <p className="text-sm text-muted-foreground">
-            Checking your voting power and proposal threshold.
+        {eligibilityBlocker && eligibility === "unknown" && (
+          <p
+            className={
+              isEligibilityError
+                ? "text-sm text-amber-400"
+                : "text-sm text-muted-foreground"
+            }
+          >
+            {eligibilityBlocker}
           </p>
         )}
 

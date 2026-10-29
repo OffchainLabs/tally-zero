@@ -54,6 +54,8 @@ vi.mock("next/link", () => ({
 }));
 
 const SAFE = "0x2222222222222222222222222222222222222222";
+const SIGNER = "0x1111111111111111111111111111111111111111";
+const THRESHOLD = BigInt(1_000_000) * BigInt(10) ** BigInt(18);
 const summary = (overrides: Partial<DraftSummary> = {}): DraftSummary => ({
   id: "d1",
   title: "Fund documentation bounties",
@@ -71,7 +73,7 @@ function session(overrides: Record<string, unknown> = {}) {
     isConnected: true,
     isLoadingSession: false,
     actingAs: null,
-    effectiveAddress: "0x1111111111111111111111111111111111111111",
+    effectiveAddress: SIGNER,
     signIn: mocks.signIn,
     isSigningIn: false,
     signInError: null,
@@ -247,11 +249,15 @@ describe("MyDraftsList", () => {
     expect(view.queryByTestId("copy-share-link")).toBeNull();
   });
 
-  // Publishing mints the share link, which the server only grants to wallets at
-  // or above the draft's governor threshold. Editing stays open: the form's
-  // browser autosave does not need the threshold.
-  it("disables publish, with the reason, for a wallet below the threshold", () => {
-    mocks.useProposalEligibility.mockReturnValue({ eligibility: "below" });
+  // Publishing mints the share link, which only a subject at or above the
+  // draft's governor threshold may do: the subject the drafts belong to, so
+  // the Safe when acting as one. Editing stays open: the form's browser
+  // autosave does not need the threshold.
+  it("disables publish, with the reason, for a subject below the threshold", () => {
+    mocks.useProposalEligibility.mockReturnValue({
+      eligibility: "below",
+      proposalThreshold: THRESHOLD,
+    });
     list([summary({ governorType: "CONSTITUTIONAL" })]);
 
     const view = render(<MyDraftsList />);
@@ -259,9 +265,11 @@ describe("MyDraftsList", () => {
 
     expect(publish.disabled).toBe(true);
     expect(publish.title).toBe(
-      "Publishing a draft requires voting power at or above the Core Governor proposal threshold."
+      "Publishing a draft requires voting power at or above the Core Governor proposal threshold of 1M ARB."
     );
-    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("core");
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("core", {
+      address: SIGNER,
+    });
     expect(view.getByTestId("publish-threshold-notice").textContent).toBe(
       publish.title
     );
@@ -269,6 +277,17 @@ describe("MyDraftsList", () => {
     expect(
       (view.getByTestId("delete-draft") as HTMLButtonElement).disabled
     ).toBe(false);
+  });
+
+  it("measures the Safe being acted as, not the signer", () => {
+    session({ actingAs: SAFE, effectiveAddress: SAFE });
+    list([summary()]);
+
+    render(<MyDraftsList />);
+
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("treasury", {
+      address: SAFE,
+    });
   });
 
   it("disables publish while eligibility is still being read", () => {
@@ -281,6 +300,27 @@ describe("MyDraftsList", () => {
     expect(publish.disabled).toBe(true);
     expect(publish.title).toContain("Checking your voting power");
     expect(view.queryByTestId("publish-threshold-notice")).toBeNull();
+  });
+
+  // A failed read does not retry on its own, and the tooltip is lost on touch,
+  // so the reason is written out under the buttons as well.
+  it("disables publish, with a visible reason, when the reads failed", () => {
+    mocks.useProposalEligibility.mockReturnValue({
+      eligibility: "unknown",
+      isError: true,
+    });
+    list([summary()]);
+
+    const view = render(<MyDraftsList />);
+    const publish = view.getByTestId("publish-draft") as HTMLButtonElement;
+
+    expect(publish.disabled).toBe(true);
+    expect(publish.title).toBe(
+      "Could not check your voting power against the Treasury Governor proposal threshold. Check your RPC in Settings and try again."
+    );
+    expect(view.getByTestId("publish-threshold-notice").textContent).toBe(
+      publish.title
+    );
   });
 
   it.each([

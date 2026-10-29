@@ -32,8 +32,9 @@ import type { Draft } from "@/lib/siwe/types";
  * to this browser on its own; this is the named copy that other devices and
  * the drafts list can see, and the only save path that needs a SIWE session.
  *
- * Only a wallet at or above the governor's proposal threshold may save: the
- * indexer refuses the rest, so the button is disabled with the reason first.
+ * Only a subject at or above the governor's proposal threshold may save, the
+ * subject being the signer or the Safe it acts as. The indexer does not
+ * enforce this yet, so the disabled button, with the reason, is the only gate.
  *
  * The title lives here rather than as a field on the form because it is draft
  * metadata — a proposal's real title is the first heading of its markdown — and
@@ -64,26 +65,29 @@ export function SaveToAccountDialog({
    */
   onSaved?: (draft: Draft) => void;
 }) {
-  const { isSignedIn } = useSiwe();
+  const { isSignedIn, effectiveAddress } = useSiwe();
   const { createDraft, patchDraft, isCreating, isPatching } =
     useDraftMutations();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const { eligibility } = useProposalEligibility(snapshot.governorType);
+  const { eligibility, proposalThreshold, isError } = useProposalEligibility(
+    snapshot.governorType,
+    { address: effectiveAddress }
+  );
 
   const isSaving = isCreating || isPatching;
-  // Contents the API would reject first; then the proposal threshold, which
-  // the server also enforces: a wallet below it cannot store a draft at all.
-  // The status bar's detail line spells the threshold out; the tooltip only
-  // has to say it once more on the button itself.
+  // Contents the API would reject first; then the proposal threshold, measured
+  // for the subject the draft is stored under. The tooltip is the only place
+  // this button explains itself, so it names the amount and a failed read.
   const blocker =
     getDraftBlocker(snapshot) ??
     getProposalEligibilityBlocker(
       eligibility,
       GOVERNORS[snapshot.governorType].name,
-      "Saving a draft"
+      "Saving a draft",
+      { proposalThreshold, isError }
     );
 
   function openWith(next: boolean) {

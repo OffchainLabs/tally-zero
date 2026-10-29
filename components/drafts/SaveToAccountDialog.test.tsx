@@ -28,6 +28,9 @@ vi.mock("@/hooks/use-drafts", () => ({
 }));
 
 const VALID_TARGET = "0x1111111111111111111111111111111111111111";
+const SIGNER = "0x3333333333333333333333333333333333333333";
+const SAFE = "0x2222222222222222222222222222222222222222";
+const THRESHOLD = BigInt(1_000_000) * BigInt(10) ** BigInt(18);
 
 const snapshot = (
   overrides: Partial<ProposalFormSnapshot> = {}
@@ -47,7 +50,10 @@ const isDisabled = (tag: string) => /\sdisabled=""/.test(tag);
 describe("SaveToAccountDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.useSiwe.mockReturnValue({ isSignedIn: true });
+    mocks.useSiwe.mockReturnValue({
+      isSignedIn: true,
+      effectiveAddress: SIGNER,
+    });
     mocks.useProposalEligibility.mockReturnValue({ eligibility: "meets" });
     mocks.useDraftMutations.mockReturnValue({
       createDraft: vi.fn(),
@@ -147,10 +153,14 @@ describe("SaveToAccountDialog", () => {
     expect(button(markup)).toContain('title="Fix the errors in your actions');
   });
 
-  // The server refuses drafts from wallets below the proposal threshold, so the
-  // button says so up front rather than after a failed save.
-  it("is disabled with the threshold as its tooltip for a wallet below it", () => {
-    mocks.useProposalEligibility.mockReturnValue({ eligibility: "below" });
+  // Drafts belong to the SIWE subject, so that is the address whose voting
+  // power is measured. The tooltip is this button's only explanation, so it
+  // names the amount.
+  it("is disabled with the threshold as its tooltip for a subject below it", () => {
+    mocks.useProposalEligibility.mockReturnValue({
+      eligibility: "below",
+      proposalThreshold: THRESHOLD,
+    });
 
     const markup = renderToStaticMarkup(
       <SaveToAccountDialog snapshot={snapshot()} draftId="d1" />
@@ -158,9 +168,21 @@ describe("SaveToAccountDialog", () => {
 
     expect(isDisabled(button(markup))).toBe(true);
     expect(button(markup)).toContain(
-      'title="Saving a draft requires voting power at or above the Treasury Governor proposal threshold."'
+      'title="Saving a draft requires voting power at or above the Treasury Governor proposal threshold of 1M ARB."'
     );
-    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("treasury");
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("treasury", {
+      address: SIGNER,
+    });
+  });
+
+  it("measures the Safe being acted as, not the signer", () => {
+    mocks.useSiwe.mockReturnValue({ isSignedIn: true, effectiveAddress: SAFE });
+
+    renderToStaticMarkup(<SaveToAccountDialog snapshot={snapshot()} />);
+
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("treasury", {
+      address: SAFE,
+    });
   });
 
   it("is disabled while eligibility is still being read", () => {
@@ -172,6 +194,24 @@ describe("SaveToAccountDialog", () => {
 
     expect(isDisabled(button(markup))).toBe(true);
     expect(button(markup)).toContain('title="Checking your voting power');
+  });
+
+  // A failed read never resolves on its own, so "checking" would be a lie.
+  it("is disabled with the failed read as its tooltip", () => {
+    mocks.useProposalEligibility.mockReturnValue({
+      eligibility: "unknown",
+      isError: true,
+    });
+
+    const markup = renderToStaticMarkup(
+      <SaveToAccountDialog snapshot={snapshot()} />
+    );
+
+    expect(isDisabled(button(markup))).toBe(true);
+    expect(button(markup)).toContain(
+      'title="Could not check your voting power against the Treasury Governor proposal threshold. Check your RPC in Settings and try again."'
+    );
+    expect(button(markup)).not.toContain("Checking your voting power");
   });
 
   it("names the contents problem before the threshold", () => {
