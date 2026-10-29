@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAccount } from "wagmi";
 
+import { addressesEqual } from "@/lib/address-utils";
 import { meQueryOptions } from "@/lib/siwe/queries";
 import { logoutPreviousWalletSession } from "@/lib/siwe/session-cache";
 
@@ -21,7 +22,7 @@ export function WalletSessionReconciler() {
       !isConnected ||
       !address ||
       !session ||
-      session.address.toLowerCase() === address.toLowerCase()
+      addressesEqual(session.address, address)
     ) {
       return;
     }

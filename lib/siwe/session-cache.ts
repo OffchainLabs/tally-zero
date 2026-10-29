@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { addressesEqual } from "@/lib/address-utils";
+
 import { siweApi } from "./client";
 import { SAFES_SCOPE, siweKeys, SUBJECT_SCOPE } from "./keys";
 import { meQueryOptions } from "./queries";
@@ -49,7 +51,7 @@ export async function logoutPreviousWalletSession(
   if (
     signal?.aborted ||
     !session ||
-    session.address.toLowerCase() === connectedAddress.toLowerCase()
+    addressesEqual(session.address, connectedAddress)
   ) {
     return;
   }
