@@ -247,6 +247,27 @@ export function getProposalEligibility(
   return votingPower >= proposalThreshold ? "meets" : "below";
 }
 
+/**
+ * Why a server-draft action (saving, publishing) is blocked for this wallet, or
+ * null when it may proceed. Only a wallet that clears the governor's proposal
+ * threshold may store a draft or mint its share link; "unknown" blocks too,
+ * since the reads have not settled yet and the server will refuse anyway.
+ */
+export function getProposalEligibilityBlocker(
+  eligibility: ProposalEligibility,
+  governorName: string,
+  action: string
+): string | null {
+  switch (eligibility) {
+    case "meets":
+      return null;
+    case "below":
+      return `${action} requires voting power at or above the ${governorName} proposal threshold.`;
+    case "unknown":
+      return "Checking your voting power against the proposal threshold…";
+  }
+}
+
 export function getProposalSubmissionPhase({
   txHash,
   isWriting,

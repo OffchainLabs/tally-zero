@@ -14,9 +14,14 @@ import { SaveToAccountDialog } from "./SaveToAccountDialog";
 const mocks = vi.hoisted(() => ({
   useSiwe: vi.fn(),
   useDraftMutations: vi.fn(),
+  useProposalEligibility: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-siwe", () => ({ useSiwe: mocks.useSiwe }));
+
+vi.mock("@/hooks/use-proposal-eligibility", () => ({
+  useProposalEligibility: mocks.useProposalEligibility,
+}));
 
 vi.mock("@/hooks/use-drafts", () => ({
   useDraftMutations: mocks.useDraftMutations,
@@ -43,6 +48,7 @@ describe("SaveToAccountDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useSiwe.mockReturnValue({ isSignedIn: true });
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "meets" });
     mocks.useDraftMutations.mockReturnValue({
       createDraft: vi.fn(),
       patchDraft: vi.fn(),
@@ -139,6 +145,43 @@ describe("SaveToAccountDialog", () => {
 
     expect(isDisabled(button(markup))).toBe(true);
     expect(button(markup)).toContain('title="Fix the errors in your actions');
+  });
+
+  // The server refuses drafts from wallets below the proposal threshold, so the
+  // button says so up front rather than after a failed save.
+  it("is disabled with the threshold as its tooltip for a wallet below it", () => {
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "below" });
+
+    const markup = renderToStaticMarkup(
+      <SaveToAccountDialog snapshot={snapshot()} draftId="d1" />
+    );
+
+    expect(isDisabled(button(markup))).toBe(true);
+    expect(button(markup)).toContain(
+      'title="Saving a draft requires voting power at or above the Treasury Governor proposal threshold."'
+    );
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("treasury");
+  });
+
+  it("is disabled while eligibility is still being read", () => {
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "unknown" });
+
+    const markup = renderToStaticMarkup(
+      <SaveToAccountDialog snapshot={snapshot()} />
+    );
+
+    expect(isDisabled(button(markup))).toBe(true);
+    expect(button(markup)).toContain('title="Checking your voting power');
+  });
+
+  it("names the contents problem before the threshold", () => {
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "below" });
+
+    const markup = renderToStaticMarkup(
+      <SaveToAccountDialog snapshot={snapshot({ description: "  " })} />
+    );
+
+    expect(button(markup)).toContain('title="Add a description');
   });
 
   it("is enabled for a fully valid action", () => {

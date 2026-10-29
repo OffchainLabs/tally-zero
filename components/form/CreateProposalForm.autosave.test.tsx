@@ -178,10 +178,14 @@ describe("CreateProposalForm browser autosave", () => {
       address: "0x1111111111111111111111111111111111111111",
       isConnected: true,
     });
-    mocks.useReadContract.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    });
+    // Saving to the account needs the wallet to clear the proposal threshold,
+    // so the quorum and voting-power reads resolve above a zero threshold.
+    mocks.useReadContract.mockImplementation(
+      ({ functionName }: { functionName: string }) => ({
+        data: functionName === "proposalThreshold" ? BigInt(0) : BigInt(100),
+        isLoading: false,
+      })
+    );
     mocks.useSimulateContract.mockReturnValue({
       data: undefined,
       error: null,

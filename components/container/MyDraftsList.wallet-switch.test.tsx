@@ -21,6 +21,9 @@ vi.mock("wagmi", () => ({
 vi.mock("@reown/appkit/react", () => ({
   useAppKit: () => ({ open: vi.fn() }),
 }));
+vi.mock("@/hooks/use-proposal-eligibility", () => ({
+  useProposalEligibility: () => ({ eligibility: "meets" }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,

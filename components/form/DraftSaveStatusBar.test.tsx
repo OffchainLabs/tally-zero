@@ -54,6 +54,47 @@ describe("DraftSaveStatusBar", () => {
     expect(markup).toContain("Restored unsaved edits from this browser");
   });
 
+  it("replaces the save prompt with the reason saving is blocked", () => {
+    const reason = "Saving to your drafts needs more voting power.";
+
+    const local = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "local", at: Date.now() }}
+        isDirty={false}
+        restoredFromLocal
+        saveToAccountBlocked={reason}
+      />
+    );
+    expect(local).toContain("Restored unsaved edits from this browser");
+    expect(local).toContain(reason);
+    expect(local).not.toContain(
+      "Save to your drafts to keep it across devices."
+    );
+
+    const never = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "never" }}
+        isDirty={false}
+        saveToAccountBlocked={reason}
+      />
+    );
+    expect(never).toContain("Autosaves to this browser as you type.");
+    expect(never).toContain(reason);
+    expect(never).not.toContain(
+      "Save to your drafts to keep it across devices."
+    );
+
+    // While typing, the reason follows the usual "last saved" note.
+    const dirty = renderToStaticMarkup(
+      <DraftSaveStatusBar
+        status={{ kind: "local", at: Date.now() }}
+        isDirty
+        saveToAccountBlocked={reason}
+      />
+    );
+    expect(dirty).toContain(`Last saved on this browser. ${reason}`);
+  });
+
   it("names the account a server save went to", () => {
     const markup = renderToStaticMarkup(
       <DraftSaveStatusBar
