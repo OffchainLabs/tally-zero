@@ -18,11 +18,40 @@ import {
 } from "viem";
 
 import { ETH_ADDRESS_REGEX } from "@/lib/address-utils";
+import type { KnownChain } from "@gzeoneth/gov-tracker";
 
-export interface ProposalAction {
+/**
+ * Where an action runs. Only the Core Governor can reach Ethereum or Nova,
+ * through the L1 timelock (see lib/core-governor-payload.ts). Treasury
+ * Governor actions always run on Arbitrum One.
+ */
+export type ActionChain = KnownChain;
+
+export const ACTION_CHAINS: readonly ActionChain[] = [
+  "ethereum",
+  "arb1",
+  "nova",
+];
+
+export const ACTION_CHAIN_LABELS: Record<ActionChain, string> = {
+  ethereum: "Ethereum",
+  arb1: "Arbitrum One",
+  nova: "Arbitrum Nova",
+};
+
+export function isActionChain(value: unknown): value is ActionChain {
+  return (ACTION_CHAINS as readonly unknown[]).includes(value);
+}
+
+/** A call as the governor sees it: no chain, because that is implied by the route. */
+export interface RawProposalAction {
   target: string;
   value: string;
   calldata: string;
+}
+
+export interface ProposalAction extends RawProposalAction {
+  chain: ActionChain;
 }
 
 export interface ProposalActionError {
@@ -32,10 +61,10 @@ export interface ProposalActionError {
 }
 
 export function emptyAction(): ProposalAction {
-  return { target: "", value: "0", calldata: "0x" };
+  return { chain: "arb1", target: "", value: "0", calldata: "0x" };
 }
 
-export function validateAction(action: ProposalAction): ProposalActionError {
+export function validateAction(action: RawProposalAction): ProposalActionError {
   const errors: ProposalActionError = {};
 
   if (!action.target || !ETH_ADDRESS_REGEX.test(action.target)) {
@@ -82,7 +111,9 @@ export interface NormalizedActions {
  * Convert free-form rows into the types expected by `propose()`.
  * Throws if any row is invalid — call {@link validateAction} first.
  */
-export function normalizeActions(actions: ProposalAction[]): NormalizedActions {
+export function normalizeActions(
+  actions: RawProposalAction[]
+): NormalizedActions {
   const targets: `0x${string}`[] = [];
   const values: bigint[] = [];
   const calldatas: `0x${string}`[] = [];

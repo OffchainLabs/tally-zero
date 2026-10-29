@@ -49,7 +49,13 @@ export const stored = {
   description: "# Stored\n\nbody",
   governorType: "core" as const,
   actions: [
-    { id: "restored-0", target: STORED_TARGET, value: "5", calldata: "0x" },
+    {
+      id: "restored-0",
+      chain: "arb1" as const,
+      target: STORED_TARGET,
+      value: "5",
+      calldata: "0x",
+    },
   ],
   updatedAt: SERVER_UPDATED_AT,
 };

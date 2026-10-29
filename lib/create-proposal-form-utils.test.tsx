@@ -84,6 +84,7 @@ describe("create-proposal-form-utils", () => {
         description: "# Title",
         actions: [
           {
+            chain: "arb1",
             target: "0x1111111111111111111111111111111111111111",
             value: "42",
             calldata: "0x1234",
@@ -99,6 +100,7 @@ describe("create-proposal-form-utils", () => {
         description: "# Title",
         actions: [
           {
+            chain: "arb1",
             target: "0x1111111111111111111111111111111111111111",
             value: "42",
             calldata: "0x1234",
@@ -131,6 +133,7 @@ describe("create-proposal-form-utils", () => {
         description: "hello",
         actions: [
           {
+            chain: "arb1",
             target: "0x2222222222222222222222222222222222222222",
             value: "0",
             calldata: "0x",
@@ -147,7 +150,7 @@ describe("create-proposal-form-utils", () => {
           savedAt: 789,
           governorType: "core",
           description: "draft",
-          actions: [{ target: 1, value: 2, calldata: 3 }],
+          actions: [{ chain: "arb1", target: 1, value: 2, calldata: 3 }],
         })
       );
 
@@ -156,6 +159,7 @@ describe("create-proposal-form-utils", () => {
         description: "draft",
         actions: [
           {
+            chain: "arb1",
             target: "",
             value: "0",
             calldata: "0x",
@@ -204,7 +208,9 @@ describe("create-proposal-form-utils", () => {
       const seeded = {
         governorType: "core" as const,
         description: "seeded",
-        actions: [{ target: "", value: "0", calldata: "0x" }],
+        actions: [
+          { chain: "arb1" as const, target: "", value: "0", calldata: "0x" },
+        ],
       };
       const seededSerialized = serializeProposalSnapshot(seeded);
       const localAt = Date.UTC(2026, 8, 4, 12, 0, 0);
@@ -299,6 +305,7 @@ describe("create-proposal-form-utils", () => {
     // so row ids and any extra fields must not make equal contents differ.
     it("serializes equal contents identically regardless of row ids", () => {
       const action = {
+        chain: "arb1" as const,
         target: "0x1111111111111111111111111111111111111111",
         value: "1",
         calldata: "0x",
