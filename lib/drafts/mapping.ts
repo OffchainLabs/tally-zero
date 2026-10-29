@@ -26,6 +26,7 @@ import type { GovernorType } from "@/config/governors";
 import {
   coreGovernorRowsFromStoredActions,
   encodeCoreGovernorPayload,
+  type CoreGovernorStoredRows,
 } from "@/lib/core-governor-payload";
 import {
   createFormProposalAction,
@@ -33,8 +34,8 @@ import {
 } from "@/lib/create-proposal-form-utils";
 import {
   hasActionErrors,
-  type ProposalAction,
   validateAction,
+  type ProposalAction,
 } from "@/lib/propose-utils";
 import type {
   Draft,
@@ -206,13 +207,25 @@ export type RestoredDraftFormState = {
  * its per-chain rows; Treasury actions are Arbitrum One rows as stored. Rows
  * get fresh form ids, and an actionless draft is restored as one blank row so
  * the form still has something to render.
+ *
+ * A Core draft whose stored actions are not the one encoded action this app
+ * writes (raw rows from an older save, or a hand-written action) cannot be
+ * shown as rows without guessing. It is restored as a blank row with
+ * `unrecognisedActions` set, so the caller can say why, and the stored bytes
+ * are left to the receipt check, which reads the draft itself.
  */
-export function draftToFormState(draft: Draft): RestoredDraftFormState {
+export function draftToFormState(
+  draft: Draft
+): RestoredDraftFormState & { unrecognisedActions: boolean } {
   const governorType = fromDraftGovernorType(draft.governorType);
-  const rows: ProposalAction[] =
+  const stored: CoreGovernorStoredRows =
     governorType === "core"
       ? coreGovernorRowsFromStoredActions(draft.actions)
-      : draft.actions.map((action) => ({ chain: "arb1", ...action }));
+      : {
+          kind: "rows",
+          rows: draft.actions.map((action) => ({ chain: "arb1", ...action })),
+        };
+  const rows = stored.kind === "rows" ? stored.rows : [];
   const actions = rows.map((row) => ({
     ...createFormProposalAction(),
     ...row,
@@ -224,5 +237,6 @@ export function draftToFormState(draft: Draft): RestoredDraftFormState {
     governorType,
     actions: actions.length > 0 ? actions : [createFormProposalAction()],
     updatedAt: draft.updatedAt,
+    unrecognisedActions: stored.kind === "unrecognised",
   };
 }

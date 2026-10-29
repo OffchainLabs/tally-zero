@@ -240,6 +240,16 @@ export function ProposalDraftLoader() {
         </p>
       ) : null}
 
+      {restored?.unrecognisedActions ? (
+        // Only a Core draft can get here: its stored actions were not the one
+        // encoded ArbSys call this form writes, so they are not shown as rows.
+        <p className="text-sm text-amber-400">
+          This draft&apos;s stored actions were not written by this form, so
+          they cannot be edited here. Re-enter them below; what you save
+          replaces them.
+        </p>
+      ) : null}
+
       {recordingDraft && effectiveAddress ? (
         <DraftSubmissionForm
           key={`${recordingDraft.id}:${effectiveAddress.toLowerCase()}`}
