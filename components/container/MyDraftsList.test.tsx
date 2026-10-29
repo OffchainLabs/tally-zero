@@ -11,6 +11,7 @@ import { ProposalsTabs } from "./ProposalsTabs";
 const mocks = vi.hoisted(() => ({
   useSiwe: vi.fn(),
   useDraftsList: vi.fn(),
+  useProposalEligibility: vi.fn(),
   publishDraft: vi.fn(),
   deleteDraft: vi.fn(),
   signIn: vi.fn(),
@@ -31,6 +32,9 @@ vi.mock("@/hooks/use-drafts", () => ({
     isPublishing: false,
     isDeleting: false,
   }),
+}));
+vi.mock("@/hooks/use-proposal-eligibility", () => ({
+  useProposalEligibility: mocks.useProposalEligibility,
 }));
 vi.mock("@/hooks/use-copy-to-clipboard", () => ({
   useCopyToClipboard: () => ({ copy: mocks.copy, copied: false }),
@@ -83,6 +87,7 @@ describe("MyDraftsList", () => {
     vi.clearAllMocks();
     session();
     list();
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "meets" });
     mocks.publishDraft.mockResolvedValue(summary({ status: "published" }));
     mocks.deleteDraft.mockResolvedValue(undefined);
     mocks.signIn.mockResolvedValue(undefined);
@@ -238,6 +243,42 @@ describe("MyDraftsList", () => {
     expect(view.getByTestId("publish-draft")).toBeDefined();
     expect(view.getByTestId("delete-draft")).toBeDefined();
     expect(view.queryByTestId("copy-share-link")).toBeNull();
+  });
+
+  // Publishing mints the share link, which the server only grants to wallets at
+  // or above the draft's governor threshold. Editing stays open: the form's
+  // browser autosave does not need the threshold.
+  it("disables publish, with the reason, for a wallet below the threshold", () => {
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "below" });
+    list([summary({ governorType: "CONSTITUTIONAL" })]);
+
+    const view = render(<MyDraftsList />);
+    const publish = view.getByTestId("publish-draft") as HTMLButtonElement;
+
+    expect(publish.disabled).toBe(true);
+    expect(publish.title).toBe(
+      "Publishing a draft requires voting power at or above the Core Governor proposal threshold."
+    );
+    expect(mocks.useProposalEligibility).toHaveBeenCalledWith("core");
+    expect(view.getByTestId("publish-threshold-notice").textContent).toBe(
+      publish.title
+    );
+    expect(view.getByTestId("open-draft")).toBeDefined();
+    expect(
+      (view.getByTestId("delete-draft") as HTMLButtonElement).disabled
+    ).toBe(false);
+  });
+
+  it("disables publish while eligibility is still being read", () => {
+    mocks.useProposalEligibility.mockReturnValue({ eligibility: "unknown" });
+    list([summary()]);
+
+    const view = render(<MyDraftsList />);
+    const publish = view.getByTestId("publish-draft") as HTMLButtonElement;
+
+    expect(publish.disabled).toBe(true);
+    expect(publish.title).toContain("Checking your voting power");
+    expect(view.queryByTestId("publish-threshold-notice")).toBeNull();
   });
 
   it.each([

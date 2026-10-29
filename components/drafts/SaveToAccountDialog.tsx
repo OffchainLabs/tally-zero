@@ -14,8 +14,11 @@ import {
 } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { GOVERNORS } from "@/config/governors";
 import { useDraftMutations } from "@/hooks/use-drafts";
+import { useProposalEligibility } from "@/hooks/use-proposal-eligibility";
 import { useSiwe } from "@/hooks/use-siwe";
+import { getProposalEligibilityBlocker } from "@/lib/create-proposal-form-utils";
 import {
   deriveDraftTitle,
   getDraftBlocker,
@@ -28,6 +31,9 @@ import type { Draft } from "@/lib/siwe/types";
  * Saves the proposal form to the signed-in subject's drafts. The form autosaves
  * to this browser on its own; this is the named copy that other devices and
  * the drafts list can see, and the only save path that needs a SIWE session.
+ *
+ * Only a wallet at or above the governor's proposal threshold may save: the
+ * indexer refuses the rest, so the button is disabled with the reason first.
  *
  * The title lives here rather than as a field on the form because it is draft
  * metadata — a proposal's real title is the first heading of its markdown — and
@@ -65,8 +71,20 @@ export function SaveToAccountDialog({
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const { eligibility } = useProposalEligibility(snapshot.governorType);
+
   const isSaving = isCreating || isPatching;
-  const blocker = getDraftBlocker(snapshot);
+  // Contents the API would reject first; then the proposal threshold, which
+  // the server also enforces: a wallet below it cannot store a draft at all.
+  // The status bar's detail line spells the threshold out; the tooltip only
+  // has to say it once more on the button itself.
+  const blocker =
+    getDraftBlocker(snapshot) ??
+    getProposalEligibilityBlocker(
+      eligibility,
+      GOVERNORS[snapshot.governorType].name,
+      "Saving a draft"
+    );
 
   function openWith(next: boolean) {
     if (next) {

@@ -41,11 +41,7 @@ import {
 import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
-import {
-  ARB_TOKEN,
-  ARBITRUM_CHAIN_ID,
-  L1_TIMELOCK,
-} from "@/config/arbitrum-governance";
+import { ARBITRUM_CHAIN_ID, L1_TIMELOCK } from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
   PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
@@ -56,8 +52,6 @@ import {
   buildSubmittedProposalPath,
   createFormProposalAction,
   createProposalDraft,
-  getProposalEligibility,
-  getProposalSnapshotBlock,
   getProposalSubmissionPhase,
   parseProposalDraft,
   parseServerTimestamp,
@@ -91,11 +85,10 @@ import {
 } from "@/lib/propose-utils";
 import { cn } from "@/lib/utils";
 
-import { useGovernanceClock } from "@/hooks/use-governance-clock";
+import { useProposalEligibility } from "@/hooks/use-proposal-eligibility";
 import OzGovernorABI from "@data/OzGovernor_ABI.json";
-import { readVotingPower } from "@gzeoneth/gov-tracker";
 import { keepPreviousData } from "@tanstack/react-query";
-import { zeroAddress, type Abi } from "viem";
+import { type Abi } from "viem";
 
 const OZ_GOVERNOR_ABI = OzGovernorABI as Abi;
 
@@ -218,43 +211,13 @@ export default function CreateProposalForm({
 
   const governor = GOVERNORS[governorType];
 
-  const { clockBlock } = useGovernanceClock();
-
-  const snapshotBlock = useMemo(
-    () => getProposalSnapshotBlock(clockBlock),
-    [clockBlock]
-  );
-
-  const { data: rawVotingPower, isLoading: isLoadingVotingPower } =
-    useReadContract({
-      ...readVotingPower(
-        address ?? zeroAddress,
-        snapshotBlock ?? BigInt(0),
-        ARB_TOKEN.address
-      ),
-      query: {
-        enabled: isConnected && !!address && snapshotBlock !== undefined,
-        // The snapshot block is part of this read's cache key, so each new
-        // governance clock value starts a fresh query. Without a placeholder
-        // the figure would blank out to "Loading…" on every refresh; voting
-        // power at the previous block is a fine thing to keep showing while
-        // the next read is in flight.
-        placeholderData: keepPreviousData,
-      },
-    });
-  const votingPower = rawVotingPower as bigint | undefined;
-
-  const { data: rawThreshold, isLoading: isLoadingThreshold } = useReadContract(
-    {
-      address: governor.address as `0x${string}`,
-      abi: OZ_GOVERNOR_ABI,
-      functionName: "proposalThreshold",
-      chainId: ARBITRUM_CHAIN_ID,
-    }
-  );
-  const proposalThreshold = rawThreshold as bigint | undefined;
-
-  const eligibility = getProposalEligibility(votingPower, proposalThreshold);
+  const {
+    eligibility,
+    votingPower,
+    proposalThreshold,
+    snapshotBlock,
+    isLoading: isLoadingEligibility,
+  } = useProposalEligibility(governorType);
   const meetsThreshold = eligibility === "meets";
 
   const proposalActions = useMemo(
@@ -650,7 +613,7 @@ export default function CreateProposalForm({
             votingPower={votingPower}
             proposalThreshold={proposalThreshold}
             eligibility={eligibility}
-            isLoading={isLoadingVotingPower || isLoadingThreshold}
+            isLoading={isLoadingEligibility}
             governorName={governor.name}
             snapshotBlock={snapshotBlock}
           />
@@ -678,6 +641,7 @@ export default function CreateProposalForm({
         <SubmitSection
           isConnected={isConnected}
           eligibility={eligibility}
+          proposalThreshold={proposalThreshold}
           governorName={governor.name}
           predictedProposalId={predictedProposalId}
           submissionPhase={submissionPhase}
@@ -694,6 +658,17 @@ export default function CreateProposalForm({
           status={saveStatus}
           isDirty={isDraftHydrated && isDirty}
           restoredFromLocal={restoredFromLocal}
+          saveToAccountBlocked={
+            eligibility === "below"
+              ? `Saving to your drafts needs voting power at or above the ${
+                  governor.name
+                } proposal threshold${
+                  proposalThreshold !== undefined
+                    ? ` of ${formatVotingPower(proposalThreshold)} ARB`
+                    : ""
+                }; this wallet is below it.`
+              : null
+          }
           actions={
             <>
               {renderDraftActions?.(draftSnapshot)}
@@ -923,7 +898,8 @@ function ThresholdCard({
               ) : eligibility === "below" ? (
                 <div className="text-xs text-amber-400">
                   Voting power below threshold. You need at least{" "}
-                  {formatVotingPower(proposalThreshold)} ARB to submit.
+                  {formatVotingPower(proposalThreshold)} ARB to save a draft to
+                  your account or submit.
                 </div>
               ) : null)}
             {isConnected && !isLoading && eligibility === "unknown" && (
@@ -1205,6 +1181,7 @@ function DescriptionEditor({
 interface SubmitSectionProps {
   isConnected: boolean;
   eligibility: ProposalEligibility;
+  proposalThreshold: bigint | undefined;
   governorName: string;
   predictedProposalId: string | null;
   submissionPhase: "idle" | "awaiting-wallet" | "confirming" | "confirmed";
@@ -1220,6 +1197,7 @@ interface SubmitSectionProps {
 function SubmitSection({
   isConnected,
   eligibility,
+  proposalThreshold,
   governorName,
   predictedProposalId,
   submissionPhase,
@@ -1243,9 +1221,12 @@ function SubmitSection({
         )}
 
         {isConnected && eligibility === "below" && (
-          <p className="text-sm text-amber-400">
-            Your voting power does not meet the {governorName} proposal
-            threshold. The transaction will revert if submitted.
+          <p className="text-sm text-amber-400" data-testid="below-threshold">
+            Your voting power is below the {governorName} proposal threshold
+            {proposalThreshold !== undefined
+              ? ` of ${formatVotingPower(proposalThreshold)} ARB`
+              : ""}
+            . The transaction will revert if submitted.
           </p>
         )}
 

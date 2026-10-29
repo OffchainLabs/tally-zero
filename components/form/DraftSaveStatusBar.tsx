@@ -22,6 +22,13 @@ interface DraftSaveStatusBarProps {
    */
   restoredFromLocal?: boolean;
   /**
+   * Why saving to the account is not available right now (the wallet is below
+   * the governor's proposal threshold). Takes the place of the "Save to your
+   * drafts" call to action, so the bar never asks for something the disabled
+   * button cannot do.
+   */
+  saveToAccountBlocked?: string | null;
+  /**
    * Buttons for the right end of the row: the form puts "Save to my drafts"
    * and "Submit Proposal" here so the actions sit next to the state they act
    * on and stay in view while the page scrolls.
@@ -51,6 +58,7 @@ export function DraftSaveStatusBar({
   status,
   isDirty,
   restoredFromLocal = false,
+  saveToAccountBlocked = null,
   actions,
   className,
 }: DraftSaveStatusBarProps) {
@@ -78,21 +86,28 @@ export function DraftSaveStatusBar({
             ? `Saved to your drafts as ${shortenAddress(status.address)}`
             : "Saved to your drafts";
 
+  const saveToAccount =
+    saveToAccountBlocked ?? "Save to your drafts to keep it across devices.";
+
   const detail =
     state === "unsaved"
       ? status.kind === "never"
-        ? "Autosaves to this browser a moment after you stop typing."
+        ? `Autosaves to this browser a moment after you stop typing.${
+            saveToAccountBlocked ? ` ${saveToAccountBlocked}` : ""
+          }`
         : status.kind === "local"
-          ? "Last saved on this browser."
+          ? `Last saved on this browser.${
+              saveToAccountBlocked ? ` ${saveToAccountBlocked}` : ""
+            }`
           : "Last saved to your drafts."
       : status.kind === "never"
-        ? "Autosaves to this browser as you type. Save to your drafts to keep it across devices."
+        ? `Autosaves to this browser as you type. ${saveToAccount}`
         : status.kind === "local"
           ? `${
               restoredFromLocal
                 ? "Restored unsaved edits from this browser, newer than the saved draft. "
                 : ""
-            }Save to your drafts to keep it across devices.`
+            }${saveToAccount}`
           : "Reopen it any time from My Drafts.";
 
   return (

@@ -14,9 +14,13 @@ import { toast } from "sonner";
 
 import { SiweAction } from "@/components/siwe/SiweGate";
 import { Button } from "@/components/ui/Button";
+import { GOVERNORS } from "@/config/governors";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useDraftMutations, useDraftsList } from "@/hooks/use-drafts";
+import { useProposalEligibility } from "@/hooks/use-proposal-eligibility";
 import { useSiwe } from "@/hooks/use-siwe";
+import { getProposalEligibilityBlocker } from "@/lib/create-proposal-form-utils";
+import { fromDraftGovernorType } from "@/lib/drafts/mapping";
 import { getErrorMessage } from "@/lib/error-utils";
 import type {
   DraftGovernorType,
@@ -150,6 +154,16 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   );
   const isEditable = draft.status === "draft";
 
+  // Publishing mints the share link, which only a wallet at or above the
+  // governor's proposal threshold may do (the indexer refuses the rest).
+  const governorType = fromDraftGovernorType(draft.governorType);
+  const { eligibility } = useProposalEligibility(governorType);
+  const publishBlocker = getProposalEligibilityBlocker(
+    eligibility,
+    GOVERNORS[governorType].name,
+    "Publishing a draft"
+  );
+
   async function confirm() {
     if (!confirming) return;
     const isPublish = confirming === "publish";
@@ -230,6 +244,8 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
               variant="outline"
               data-testid="publish-draft"
               onClick={() => setConfirming("publish")}
+              disabled={Boolean(publishBlocker)}
+              title={publishBlocker ?? undefined}
             >
               <Share2 className="mr-1.5 h-3.5 w-3.5" />
               Publish
@@ -267,6 +283,14 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Delete
             </Button>
+          ) : null}
+          {isEditable && eligibility === "below" ? (
+            <p
+              className="basis-full text-xs text-amber-400"
+              data-testid="publish-threshold-notice"
+            >
+              {publishBlocker}
+            </p>
           ) : null}
         </div>
       )}

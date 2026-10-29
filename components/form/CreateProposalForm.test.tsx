@@ -115,6 +115,45 @@ describe("CreateProposalForm snapshot block annotation", () => {
 
   // The server-drafts feature reaches the form through two optional props and
   // nothing else, so these pin what each one is given and does on first render.
+  // The save and submit buttons are disabled below the threshold. The status
+  // bar's detail line says why saving is off, with the amount, in place of its
+  // usual "Save to your drafts" prompt; the messages card covers submitting.
+  it("explains that saving a draft needs the threshold when below it", () => {
+    mocks.useReadContract.mockImplementation(
+      ({ functionName }: { functionName: string }) => ({
+        data:
+          functionName === "proposalThreshold"
+            ? BigInt(1_000_000) * BigInt(10) ** BigInt(18)
+            : BigInt(1),
+        isLoading: false,
+      })
+    );
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+    const notice = markup.match(
+      /<p[^>]*data-testid="below-threshold"[^>]*>(.*?)<\/p>/
+    )?.[1];
+
+    expect(notice).toContain("below the Treasury Governor proposal threshold");
+    expect(notice).toContain("threshold of 1M ARB.");
+    expect(notice).toContain("will revert if submitted");
+
+    const bar = markup.match(
+      /<div[^>]*data-testid="draft-save-status"[^>]*>(.*?)<\/div>/
+    )?.[1];
+    expect(bar).toContain(
+      "Saving to your drafts needs voting power at or above the Treasury Governor proposal threshold of 1M ARB; this wallet is below it."
+    );
+    expect(bar).not.toContain("Save to your drafts to keep it across devices.");
+  });
+
+  it("shows no threshold notice while the reads are unsettled", () => {
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+    expect(markup).not.toContain('data-testid="below-threshold"');
+    expect(markup).toContain("Save to your drafts to keep it across devices.");
+  });
+
   describe("server draft props", () => {
     const TARGET = "0x2222222222222222222222222222222222222222";
 
