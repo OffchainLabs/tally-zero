@@ -113,8 +113,11 @@ describe("CreateProposalForm snapshot block annotation", () => {
     expect(markup).toContain("Values at Ethereum block #?");
   });
 
-  // The server-drafts feature reaches the form through two optional props and
-  // nothing else, so these pin what each one is given and does on first render.
+  const statusBar = (markup: string) =>
+    markup.match(
+      /<div[^>]*data-testid="draft-save-status"[^>]*>(.*?)<\/div>/
+    )?.[1];
+
   // The save and submit buttons are disabled below the threshold. The status
   // bar's detail line says why saving is off, with the amount, in place of its
   // usual "Save to your drafts" prompt; the messages card covers submitting.
@@ -134,26 +137,71 @@ describe("CreateProposalForm snapshot block annotation", () => {
       /<p[^>]*data-testid="below-threshold"[^>]*>(.*?)<\/p>/
     )?.[1];
 
-    expect(notice).toContain("below the Treasury Governor proposal threshold");
-    expect(notice).toContain("threshold of 1M ARB.");
+    expect(notice).toContain(
+      "Submitting requires voting power at or above the Treasury Governor proposal threshold of 1M ARB."
+    );
     expect(notice).toContain("will revert if submitted");
 
-    const bar = markup.match(
-      /<div[^>]*data-testid="draft-save-status"[^>]*>(.*?)<\/div>/
-    )?.[1];
+    const bar = statusBar(markup);
     expect(bar).toContain(
-      "Saving to your drafts needs voting power at or above the Treasury Governor proposal threshold of 1M ARB; this wallet is below it."
+      "Saving to your drafts requires voting power at or above the Treasury Governor proposal threshold of 1M ARB."
     );
     expect(bar).not.toContain("Save to your drafts to keep it across devices.");
   });
 
-  it("shows no threshold notice while the reads are unsettled", () => {
+  // The save button is disabled until the reads settle, so the bar must not
+  // ask for a save it cannot do; it says what it is waiting on instead.
+  it("says the reads are still being checked, not to save, while unsettled", () => {
     const markup = renderToStaticMarkup(<CreateProposalForm />);
 
     expect(markup).not.toContain('data-testid="below-threshold"');
-    expect(markup).toContain("Save to your drafts to keep it across devices.");
+    const bar = statusBar(markup);
+    expect(bar).toContain(
+      "Checking your voting power against the proposal threshold…"
+    );
+    expect(bar).not.toContain("Save to your drafts to keep it across devices.");
   });
 
+  // A failed threshold read has no retry interval; "checking" would never end.
+  it("names the failed read, in the bar and the messages card, instead of checking", () => {
+    mocks.useReadContract.mockImplementation(
+      ({ functionName }: { functionName: string }) =>
+        functionName === "proposalThreshold"
+          ? { data: undefined, isLoading: false, isError: true }
+          : { data: BigInt(1), isLoading: false }
+    );
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+    const reason =
+      "Could not check your voting power against the Treasury Governor proposal threshold. Check your RPC in Settings and try again.";
+
+    expect(statusBar(markup)).toContain(reason);
+    expect(statusBar(markup)).not.toContain(
+      "Save to your drafts to keep it across devices."
+    );
+    expect(markup).not.toContain("Checking your voting power");
+    // Twice: the bar's detail line and the messages card above it.
+    expect(markup.split(reason).length - 1).toBe(2);
+  });
+
+  // The signed-out prompt belongs to the save button itself; the bar's prompt
+  // stands rather than claiming to check a wallet that is not there.
+  it("keeps the save prompt while no wallet is connected", () => {
+    mocks.useAccount.mockReturnValue({
+      address: undefined,
+      isConnected: false,
+    });
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+    expect(statusBar(markup)).toContain(
+      "Save to your drafts to keep it across devices."
+    );
+    expect(markup).not.toContain("Checking your voting power");
+  });
+
+  // The server-drafts feature reaches the form through two optional props and
+  // nothing else, so these pin what each one is given and does on first render.
   describe("server draft props", () => {
     const TARGET = "0x2222222222222222222222222222222222222222";
 

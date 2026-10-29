@@ -22,10 +22,10 @@ interface DraftSaveStatusBarProps {
    */
   restoredFromLocal?: boolean;
   /**
-   * Why saving to the account is not available right now (the wallet is below
-   * the governor's proposal threshold). Takes the place of the "Save to your
-   * drafts" call to action, so the bar never asks for something the disabled
-   * button cannot do.
+   * Why saving to the account is not available right now: the eligibility
+   * reads are still in flight or failed, or the wallet is below the governor's
+   * proposal threshold. Takes the place of the "Save to your drafts" call to
+   * action, so the bar never asks for something the disabled button cannot do.
    */
   saveToAccountBlocked?: string | null;
   /**

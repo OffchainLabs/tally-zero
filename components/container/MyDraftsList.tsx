@@ -154,15 +154,24 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   );
   const isEditable = draft.status === "draft";
 
-  // Publishing mints the share link, which only a wallet at or above the
-  // governor's proposal threshold may do (the indexer refuses the rest).
+  // Publishing mints the share link, which only a subject at or above the
+  // governor's proposal threshold may do: the one the drafts belong to, so the
+  // Safe when acting as one. The indexer does not enforce this yet.
+  const { effectiveAddress } = useSiwe();
   const governorType = fromDraftGovernorType(draft.governorType);
-  const { eligibility } = useProposalEligibility(governorType);
+  const { eligibility, proposalThreshold, isError } = useProposalEligibility(
+    governorType,
+    { address: effectiveAddress }
+  );
   const publishBlocker = getProposalEligibilityBlocker(
     eligibility,
     GOVERNORS[governorType].name,
-    "Publishing a draft"
+    "Publishing a draft",
+    { proposalThreshold, isError }
   );
+  // The tooltip is lost on touch; a settled block (below, or a failed read)
+  // is also written out. A read still in flight stays quiet.
+  const showPublishNotice = isEditable && (eligibility === "below" || isError);
 
   async function confirm() {
     if (!confirming) return;
@@ -287,7 +296,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
               Delete
             </Button>
           ) : null}
-          {isEditable && eligibility === "below" ? (
+          {showPublishNotice ? (
             <p
               className="basis-full text-xs text-amber-400"
               data-testid="publish-threshold-notice"

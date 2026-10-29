@@ -4,6 +4,7 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import type { GovernorType } from "@/config/governors";
+import { formatVotingPower } from "@/lib/format-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import {
   emptyAction,
@@ -248,21 +249,34 @@ export function getProposalEligibility(
 }
 
 /**
- * Why a server-draft action (saving, publishing) is blocked for this wallet, or
- * null when it may proceed. Only a wallet that clears the governor's proposal
- * threshold may store a draft or mint its share link; "unknown" blocks too,
- * since the reads have not settled yet and the server will refuse anyway.
+ * Why a threshold-gated action (saving or publishing a draft, submitting) is
+ * blocked, or null when it may proceed. The one sentence for the rule: the
+ * form's status bar and messages card, the save dialog's tooltip and the
+ * drafts list's notice all read from here. "unknown" blocks too: either the
+ * reads have not settled yet, or one failed (`isError`), which says so and
+ * points at the RPC rather than claiming to still be checking. The amount is
+ * named whenever the threshold has been read.
  */
 export function getProposalEligibilityBlocker(
   eligibility: ProposalEligibility,
   governorName: string,
-  action: string
+  action: string,
+  {
+    proposalThreshold,
+    isError = false,
+  }: { proposalThreshold?: bigint; isError?: boolean } = {}
 ): string | null {
+  if (eligibility === "meets") return null;
+  if (isError) {
+    return `Could not check your voting power against the ${governorName} proposal threshold. Check your RPC in Settings and try again.`;
+  }
   switch (eligibility) {
-    case "meets":
-      return null;
     case "below":
-      return `${action} requires voting power at or above the ${governorName} proposal threshold.`;
+      return `${action} requires voting power at or above the ${governorName} proposal threshold${
+        proposalThreshold !== undefined
+          ? ` of ${formatVotingPower(proposalThreshold)} ARB`
+          : ""
+      }.`;
     case "unknown":
       return "Checking your voting power against the proposal threshold…";
   }
