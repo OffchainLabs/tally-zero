@@ -11,12 +11,22 @@
 //   3. Validation strictness — the API rejects a draft whose action has a blank
 //      target (requireAddress), while the form starts life with exactly that as
 //      its placeholder row.
+//   4. Chains — form rows say which chain they run on; the API stores actions
+//      exactly as the governor will receive them and drops any other field.
+//      A Core Governor draft is therefore stored as its one encoded ArbSys
+//      action (lib/core-governor-payload.ts) and decoded back into rows on
+//      load. That keeps shared drafts, receipt checks and the indexer all
+//      looking at the bytes that will go on chain.
 //
 // (3) is the one that bites: posting the form's initial state verbatim is a
 // guaranteed 400. So blank rows are dropped on the way out, and anything left
 // that still would not pass is reported to the caller *before* the request.
 
 import type { GovernorType } from "@/config/governors";
+import {
+  coreGovernorRowsFromStoredActions,
+  encodeCoreGovernorPayload,
+} from "@/lib/core-governor-payload";
 import {
   createFormProposalAction,
   type FormProposalAction,
@@ -92,8 +102,9 @@ function isBlankAction(action: ProposalAction): boolean {
   return action.target.trim() === "" && (calldata === "" || calldata === "0x");
 }
 
-function toDraftAction(action: ProposalAction): DraftAction {
+function toDraftAction(action: ProposalAction): ProposalAction {
   return {
+    chain: action.chain,
     target: action.target.trim(),
     // The API wants a decimal wei string; the form's own default is already
     // "0", but an emptied input is not.
@@ -139,13 +150,41 @@ export function getDraftBlocker(state: ProposalFormSnapshot): string | null {
   return null;
 }
 
+/**
+ * The actions as the governor receives them. Core Governor rows collapse into
+ * the single ArbSys action that routes them through the L1 timelock.
+ */
+export function toStoredActions(state: ProposalFormSnapshot): DraftAction[] {
+  const filled = state.actions
+    .filter((a) => !isBlankAction(a))
+    .map(toDraftAction);
+  if (state.governorType === "core" && filled.length > 0) {
+    const encoded = encodeCoreGovernorPayload({
+      actions: filled,
+      description: state.description,
+    });
+    return [
+      {
+        target: encoded.target,
+        value: encoded.value.toString(),
+        calldata: encoded.calldata,
+      },
+    ];
+  }
+  return filled.map(({ target, value, calldata }) => ({
+    target,
+    value,
+    calldata,
+  }));
+}
+
 /** Form state → request body. Assumes `getDraftBlocker` returned null. */
 export function toDraftFields(state: DraftFormState): DraftFields {
   return {
     title: state.title.trim() || deriveDraftTitle(state.description),
     description: state.description,
     governorType: toDraftGovernorType(state.governorType),
-    actions: state.actions.filter((a) => !isBlankAction(a)).map(toDraftAction),
+    actions: toStoredActions(state),
   };
 }
 
@@ -163,21 +202,26 @@ export type RestoredDraftFormState = {
 };
 
 /**
- * A stored draft → form state. Actions get fresh form ids, and an actionless
- * draft is restored as one blank row so the form still has something to render.
+ * A stored draft → form state. A Core draft's encoded action is unpacked into
+ * its per-chain rows; Treasury actions are Arbitrum One rows as stored. Rows
+ * get fresh form ids, and an actionless draft is restored as one blank row so
+ * the form still has something to render.
  */
 export function draftToFormState(draft: Draft): RestoredDraftFormState {
-  const actions = draft.actions.map((action) => ({
+  const governorType = fromDraftGovernorType(draft.governorType);
+  const rows: ProposalAction[] =
+    governorType === "core"
+      ? coreGovernorRowsFromStoredActions(draft.actions)
+      : draft.actions.map((action) => ({ chain: "arb1", ...action }));
+  const actions = rows.map((row) => ({
     ...createFormProposalAction(),
-    target: action.target,
-    value: action.value,
-    calldata: action.calldata,
+    ...row,
   }));
 
   return {
     title: draft.title,
     description: draft.description,
-    governorType: fromDraftGovernorType(draft.governorType),
+    governorType,
     actions: actions.length > 0 ? actions : [createFormProposalAction()],
     updatedAt: draft.updatedAt,
   };

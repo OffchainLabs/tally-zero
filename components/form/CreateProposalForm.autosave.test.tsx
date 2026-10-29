@@ -7,6 +7,7 @@ import {
   proposalDraftStorageKey,
   STORAGE_KEYS,
 } from "@/config/storage-keys";
+import { decodeCoreGovernorPayload } from "@/lib/core-governor-payload";
 import {
   createProposalDraft,
   parseProposalDraft,
@@ -122,7 +123,7 @@ function seedSlot(
       createProposalDraft({
         governorType,
         description: "scratch",
-        actions: [{ target, value: "1", calldata: "0x" }],
+        actions: [{ chain: "arb1", target, value: "1", calldata: "0x" }],
         savedAt,
       })
     )
@@ -139,7 +140,10 @@ const status = (container: HTMLElement) =>
   container.querySelector<HTMLElement>('[data-testid="draft-save-status"]')!;
 
 function typeTarget(container: HTMLElement, value: string) {
-  fireEvent.change(targetInput(container), { target: { value } });
+  fireEvent.change(targetInput(container), {
+    chain: "arb1",
+    target: { value },
+  });
 }
 
 function settle() {
@@ -217,7 +221,10 @@ describe("CreateProposalForm browser autosave", () => {
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(slot(BARE_KEY)?.actions[0]).toMatchObject({ target: TYPED_TARGET });
+    expect(slot(BARE_KEY)?.actions[0]).toMatchObject({
+      chain: "arb1",
+      target: TYPED_TARGET,
+    });
     expect(status(container).dataset.state).toBe("local");
     expect(status(container).textContent).toContain(
       "Saved on this browser only"
@@ -246,7 +253,10 @@ describe("CreateProposalForm browser autosave", () => {
     typeTarget(container, TYPED_TARGET);
     settle();
 
-    expect(slot(DRAFT_KEY)?.actions[0]).toMatchObject({ target: TYPED_TARGET });
+    expect(slot(DRAFT_KEY)?.actions[0]).toMatchObject({
+      chain: "arb1",
+      target: TYPED_TARGET,
+    });
     expect(window.localStorage.getItem(BARE_KEY)).toBe(scratchBefore);
   });
 
@@ -305,7 +315,14 @@ describe("CreateProposalForm browser autosave", () => {
           snapshot: {
             governorType: "treasury",
             description: "",
-            actions: [{ target: TYPED_TARGET, value: "0", calldata: "0x" }],
+            actions: [
+              {
+                chain: "arb1",
+                target: TYPED_TARGET,
+                value: "0",
+                calldata: "0x",
+              },
+            ],
           },
         }}
       />
@@ -355,7 +372,9 @@ describe("CreateProposalForm browser autosave", () => {
       expect(window.localStorage.getItem(BARE_KEY)).toBe(scratchBefore);
       expect(slot(DRAFT_KEY)).toMatchObject({
         description: stored.description,
-        actions: [{ target: TYPED_TARGET, value: "5", calldata: "0x" }],
+        actions: [
+          { chain: "arb1", target: TYPED_TARGET, value: "5", calldata: "0x" },
+        ],
       });
     }
   );
@@ -478,12 +497,14 @@ describe("CreateProposalForm browser autosave", () => {
         fireEvent.click(view.getByTestId("confirm-save-to-drafts"))
       );
       expect(mocks.createDraft).toHaveBeenCalledTimes(1);
-      expect(mocks.patchDraft).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: created.id,
-          actions: [expect.objectContaining({ target: SCRATCH_TARGET })],
-        })
-      );
+      // A Core draft is stored as its one L1-routed ArbSys action, so the
+      // typed target is inside that action's payload rather than on the row.
+      const patched = mocks.patchDraft.mock.calls.at(-1)?.[0];
+      expect(patched).toMatchObject({ id: created.id });
+      expect(patched.actions).toHaveLength(1);
+      expect(decodeCoreGovernorPayload(patched.actions[0])).toMatchObject([
+        { chain: "arb1", target: SCRATCH_TARGET },
+      ]);
       expect(slot(proposalDraftStorageKey(created.id))).toBeNull();
     }
   );

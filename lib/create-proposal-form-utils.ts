@@ -5,7 +5,11 @@ import remarkGfm from "remark-gfm";
 
 import type { GovernorType } from "@/config/governors";
 import { buildProposalPath } from "@/lib/proposal-url";
-import { emptyAction, type ProposalAction } from "@/lib/propose-utils";
+import {
+  emptyAction,
+  isActionChain,
+  type ProposalAction,
+} from "@/lib/propose-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
 
 export type ProposalEligibility = "unknown" | "meets" | "below";
@@ -62,7 +66,7 @@ function isGovernorType(value: unknown): value is GovernorType {
 function restoreProposalAction(action: unknown): FormProposalAction | null {
   if (!isRecord(action)) return null;
 
-  const { target, value, calldata } = action;
+  const { chain, target, value, calldata } = action;
   if (
     typeof target !== "string" ||
     typeof value !== "string" ||
@@ -73,6 +77,8 @@ function restoreProposalAction(action: unknown): FormProposalAction | null {
 
   return {
     ...createFormProposalAction(),
+    // Autosaves written before rows had a chain were Arbitrum One rows.
+    chain: isActionChain(chain) ? chain : "arb1",
     target,
     value,
     calldata,
@@ -91,7 +97,8 @@ export function serializeProposalSnapshot(
   return JSON.stringify({
     governorType: snapshot.governorType,
     description: snapshot.description,
-    actions: snapshot.actions.map(({ target, value, calldata }) => ({
+    actions: snapshot.actions.map(({ chain, target, value, calldata }) => ({
+      chain,
       target,
       value,
       calldata,
@@ -146,7 +153,8 @@ export function createProposalDraft({
     savedAt,
     governorType,
     description,
-    actions: actions.map(({ target, value, calldata }) => ({
+    actions: actions.map(({ chain, target, value, calldata }) => ({
+      chain,
       target,
       value,
       calldata,

@@ -123,7 +123,13 @@ describe("CreateProposalForm snapshot block annotation", () => {
       description: "# Stored\n\nbody",
       governorType: "core" as const,
       actions: [
-        { id: "restored-0", target: TARGET, value: "5", calldata: "0x" },
+        {
+          id: "restored-0",
+          chain: "arb1" as const,
+          target: TARGET,
+          value: "5",
+          calldata: "0x",
+        },
       ],
       updatedAt: "2026-01-01T00:00:00Z",
     };
@@ -242,7 +248,9 @@ describe("CreateProposalForm snapshot block annotation", () => {
       expect(seen[0]).toMatchObject({
         governorType: "core",
         description: restored.description,
-        actions: [{ target: TARGET, value: "5", calldata: "0x" }],
+        actions: [
+          { chain: "arb1", target: TARGET, value: "5", calldata: "0x" },
+        ],
       });
     });
   });

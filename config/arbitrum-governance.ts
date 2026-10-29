@@ -95,6 +95,12 @@ export const L1_TIMELOCK = {
   address: ADDRESSES.L1_TIMELOCK,
   name: "L1 Timelock",
   delay: "3 days",
+  /**
+   * `getMinDelay()` as read on-chain. A Core Governor proposal schedules its
+   * L1 operations with this delay; `schedule` reverts below the minimum, so
+   * if governance ever raises it the form must follow.
+   */
+  minDelaySeconds: 259200,
 } as const;
 
 /**

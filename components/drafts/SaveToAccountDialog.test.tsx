@@ -29,7 +29,7 @@ const snapshot = (
 ): ProposalFormSnapshot => ({
   description: "A proposal body.",
   governorType: "treasury",
-  actions: [{ target: "", value: "0", calldata: "0x" }],
+  actions: [{ chain: "arb1", target: "", value: "0", calldata: "0x" }],
   ...overrides,
 });
 
@@ -125,7 +125,14 @@ describe("SaveToAccountDialog", () => {
     const markup = renderToStaticMarkup(
       <SaveToAccountDialog
         snapshot={snapshot({
-          actions: [{ target: "not-an-address", value: "0", calldata: "0x" }],
+          actions: [
+            {
+              chain: "arb1",
+              target: "not-an-address",
+              value: "0",
+              calldata: "0x",
+            },
+          ],
         })}
       />
     );
@@ -138,7 +145,9 @@ describe("SaveToAccountDialog", () => {
     const markup = renderToStaticMarkup(
       <SaveToAccountDialog
         snapshot={snapshot({
-          actions: [{ target: VALID_TARGET, value: "0", calldata: "0x" }],
+          actions: [
+            { chain: "arb1", target: VALID_TARGET, value: "0", calldata: "0x" },
+          ],
         })}
       />
     );

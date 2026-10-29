@@ -26,6 +26,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 
 import {
   DraftSaveStatusBar,
@@ -34,12 +41,17 @@ import {
 import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
-import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
+import {
+  ARB_TOKEN,
+  ARBITRUM_CHAIN_ID,
+  L1_TIMELOCK,
+} from "@/config/arbitrum-governance";
 import { GOVERNORS, type GovernorType } from "@/config/governors";
 import {
   PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
   proposalDraftStorageKey,
 } from "@/config/storage-keys";
+import { encodeCoreGovernorPayload } from "@/lib/core-governor-payload";
 import {
   buildSubmittedProposalPath,
   createFormProposalAction,
@@ -67,10 +79,14 @@ import {
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 import type { ProposalImportResult } from "@/lib/proposal-import";
 import {
+  ACTION_CHAIN_LABELS,
+  ACTION_CHAINS,
   computeProposalId,
   hasActionErrors,
+  isActionChain,
   normalizeActions,
   validateAction,
+  type ActionChain,
   type ProposalAction,
 } from "@/lib/propose-utils";
 import { cn } from "@/lib/utils";
@@ -282,17 +298,32 @@ export default function CreateProposalForm({
   const formInvalid =
     anyActionInvalid || descriptionInvalid || actions.length === 0;
 
+  // What `propose()` receives. The Treasury Governor runs the rows as they
+  // are. The Core Governor gets one ArbSys call that schedules every row on
+  // the L1 timelock, each on its own chain (lib/core-governor-payload.ts).
   const proposeArgs = useMemo(():
     | readonly [`0x${string}`[], bigint[], `0x${string}`[], string]
     | undefined => {
     if (formInvalid) return undefined;
     try {
+      if (governorType === "core") {
+        const routed = encodeCoreGovernorPayload({
+          actions: proposalActions,
+          description,
+        });
+        return [
+          [routed.target],
+          [routed.value],
+          [routed.calldata],
+          description,
+        ];
+      }
       const { targets, values, calldatas } = normalizeActions(proposalActions);
       return [targets, values, calldatas, description];
     } catch {
       return undefined;
     }
-  }, [description, formInvalid, proposalActions]);
+  }, [description, formInvalid, governorType, proposalActions]);
 
   const predictedProposalId = useMemo(() => {
     if (!proposeArgs) return null;
@@ -525,10 +556,29 @@ export default function CreateProposalForm({
     field: keyof ProposalAction,
     value: string
   ) {
+    if (field === "chain" && !isActionChain(value)) return;
     setActions((prev) =>
       prev.map((action) =>
         action.id === actionId ? { ...action, [field]: value } : action
       )
+    );
+  }
+
+  function handleGovernorChange(type: GovernorType) {
+    setGovernorType(type);
+    if (type !== "treasury") return;
+    // The Treasury timelock executes on Arbitrum One only, so rows aimed at
+    // another chain are moved rather than left to fail at submit. Said out
+    // loud, because the chain control disappears with the switch.
+    const moved = actions.filter((action) => action.chain !== "arb1").length;
+    if (moved === 0) return;
+    setActions((prev) =>
+      prev.map((action) =>
+        action.chain === "arb1" ? action : { ...action, chain: "arb1" }
+      )
+    );
+    toast(
+      `${moved === 1 ? "1 action" : `${moved} actions`} moved to Arbitrum One. Treasury Governor proposals execute there.`
     );
   }
 
@@ -537,7 +587,7 @@ export default function CreateProposalForm({
     const switchedGovernor =
       result.suggestedGovernor && result.suggestedGovernor !== governorType;
     if (switchedGovernor) {
-      setGovernorType(result.suggestedGovernor!);
+      handleGovernorChange(result.suggestedGovernor!);
     }
     toast(
       <div className="flex flex-col gap-1">
@@ -591,7 +641,7 @@ export default function CreateProposalForm({
         <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
           <GovernorPicker
             value={governorType}
-            onChange={setGovernorType}
+            onChange={handleGovernorChange}
             disabled={isBusy}
             snapshotBlock={snapshotBlock}
           />
@@ -615,6 +665,7 @@ export default function CreateProposalForm({
         />
 
         <ActionsBuilder
+          governorType={governorType}
           actions={actions}
           errors={actionErrors}
           showErrors={attemptedSubmit}
@@ -897,6 +948,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 interface ActionsBuilderProps {
+  governorType: GovernorType;
   actions: FormProposalAction[];
   errors: ReturnType<typeof validateAction>[];
   showErrors: boolean;
@@ -911,6 +963,7 @@ interface ActionsBuilderProps {
 }
 
 function ActionsBuilder({
+  governorType,
   actions,
   errors,
   showErrors,
@@ -919,27 +972,31 @@ function ActionsBuilder({
   onAdd,
   onRemove,
 }: ActionsBuilderProps) {
+  const isCore = governorType === "core";
   return (
     <Card variant="glass">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader>
         <CardTitle className="text-base">Actions</CardTitle>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onAdd}
-          disabled={disabled}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Add action
-        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          Each action is a low-level call executed by the timelock after the
-          proposal passes. Use <code>0x</code> calldata and value <code>0</code>{" "}
-          for a no-op placeholder (useful for signaling proposals).
-        </p>
+        {isCore ? (
+          <p className="text-xs text-muted-foreground">
+            Core Governor proposals run through the {L1_TIMELOCK.name}. Each
+            action is scheduled there and either executes on Ethereum or is sent
+            to Arbitrum One or Arbitrum Nova as a retryable ticket, so pick the
+            chain the target lives on. On Ethereum the value is ETH the timelock
+            sends with the call; on Arbitrum One or Nova it is the
+            retryable&apos;s L2 call value. Use <code>0x</code> calldata and
+            value <code>0</code> for a no-op placeholder.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Each action is a low-level call the Treasury timelock executes on
+            Arbitrum One after the proposal passes. Use <code>0x</code> calldata
+            and value <code>0</code> for a no-op placeholder (useful for
+            signaling proposals).
+          </p>
+        )}
         {actions.map((action, index) => {
           const err = errors[index];
           const showErr = showErrors;
@@ -962,6 +1019,48 @@ function ActionsBuilder({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={`chain-${action.id}`} className="text-xs">
+                  Chain
+                </Label>
+                {isCore ? (
+                  <Select
+                    value={action.chain}
+                    onValueChange={(value) =>
+                      onChange(action.id, "chain", value)
+                    }
+                    disabled={disabled}
+                  >
+                    <SelectTrigger
+                      id={`chain-${action.id}`}
+                      aria-label={`Chain for action ${index + 1}`}
+                      className="h-9 text-xs md:w-56"
+                    >
+                      {/* Radix fills the value from the open list, which a
+                          closed select has not rendered yet; naming it here
+                          keeps the label on first paint and on the server. */}
+                      <SelectValue>
+                        {ACTION_CHAIN_LABELS[action.chain]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACTION_CHAINS.map((chain: ActionChain) => (
+                        <SelectItem key={chain} value={chain}>
+                          {ACTION_CHAIN_LABELS[chain]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p
+                    id={`chain-${action.id}`}
+                    className="text-xs font-medium text-foreground/80"
+                  >
+                    {ACTION_CHAIN_LABELS.arb1}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -1028,6 +1127,29 @@ function ActionsBuilder({
             </div>
           );
         })}
+        {/* Sits under the last row so it reads as "add another", not as a
+            step needed to confirm the row above it. */}
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAdd}
+            disabled={disabled}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add action
+          </Button>
+        </div>
+        {isCore && (
+          <p className="text-xs text-muted-foreground text-center">
+            Submitted as one call to ArbSys that schedules{" "}
+            {actions.length === 1
+              ? "this operation"
+              : `these ${actions.length} operations`}{" "}
+            on the {L1_TIMELOCK.name} with its {L1_TIMELOCK.delay} delay.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

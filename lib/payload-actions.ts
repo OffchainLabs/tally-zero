@@ -1,4 +1,5 @@
 import { addressesEqual } from "@/lib/address-utils";
+import { arbSysAbi, l1TimelockAbi } from "@/lib/core-governor-payload";
 import { isCoreGovernor } from "@config/governors";
 import {
   ADDRESSES,
@@ -7,15 +8,6 @@ import {
   type KnownChain,
 } from "@gzeoneth/gov-tracker";
 import { decodeFunctionData, parseAbi } from "viem";
-
-const arbSysAbi = parseAbi([
-  "function sendTxToL1(address destination, bytes data) payable returns (uint256)",
-]);
-
-const l1TimelockAbi = parseAbi([
-  "function schedule(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt, uint256 delay)",
-  "function scheduleBatch(address[] targets, uint256[] values, bytes[] payloads, bytes32 predecessor, bytes32 salt, uint256 delay)",
-]);
 
 const upgradeExecutorAbi = parseAbi([
   "function execute(address target, bytes data) payable",

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  decodeCoreGovernorPayload,
+  encodeCoreGovernorPayload,
+} from "@/lib/core-governor-payload";
 import type { Draft } from "@/lib/siwe/types";
+import { ADDRESSES } from "@gzeoneth/gov-tracker";
 import {
   deriveDraftTitle,
   DRAFT_TITLE_MAX_LENGTH,
@@ -19,7 +24,7 @@ const formState = (
   title: "",
   description: "A proposal body.",
   governorType: "treasury" as const,
-  actions: [{ target: "", value: "0", calldata: "0x" }],
+  actions: [{ chain: "arb1" as const, target: "", value: "0", calldata: "0x" }],
   ...overrides,
 });
 
@@ -78,7 +83,14 @@ describe("getDraftBlocker", () => {
   it("rejects a half-filled action the API would 400 on", () => {
     const blocker = getDraftBlocker(
       formState({
-        actions: [{ target: "not-an-address", value: "0", calldata: "0x" }],
+        actions: [
+          {
+            chain: "arb1",
+            target: "not-an-address",
+            value: "0",
+            calldata: "0x",
+          },
+        ],
       })
     );
     expect(blocker).toMatch(/actions/);
@@ -95,13 +107,51 @@ describe("toDraftFields", () => {
   it("keeps a filled action and normalizes empty calldata to 0x", () => {
     const fields = toDraftFields(
       formState({
-        actions: [{ target: VALID_TARGET, value: "", calldata: "" }],
+        actions: [
+          { chain: "arb1", target: VALID_TARGET, value: "", calldata: "" },
+        ],
       })
     );
 
     expect(fields.actions).toEqual([
       { target: VALID_TARGET, value: "0", calldata: "0x" },
     ]);
+  });
+
+  // The API keeps target/value/calldata only, so a Core draft is stored as the
+  // one ArbSys action the governor will receive, with the chains inside it.
+  it("routes Core Governor rows through the L1 timelock as one action", () => {
+    const fields = toDraftFields(
+      formState({
+        governorType: "core",
+        actions: [
+          {
+            chain: "ethereum",
+            target: VALID_TARGET,
+            value: "1",
+            calldata: "0x",
+          },
+          { chain: "arb1", target: "", value: "0", calldata: "0x" },
+          { chain: "nova", target: VALID_TARGET, value: "0", calldata: "0xab" },
+        ],
+      })
+    );
+
+    expect(fields.actions).toHaveLength(1);
+    expect(fields.actions[0].target.toLowerCase()).toBe(
+      ADDRESSES.ARB_SYS.toLowerCase()
+    );
+    expect(fields.actions[0].value).toBe("0");
+    expect(decodeCoreGovernorPayload(fields.actions[0])).toEqual([
+      { chain: "ethereum", target: VALID_TARGET, value: "1", calldata: "0x" },
+      { chain: "nova", target: VALID_TARGET, value: "0", calldata: "0xab" },
+    ]);
+  });
+
+  it("stores a Core draft with no filled rows as actionless", () => {
+    expect(toDraftFields(formState({ governorType: "core" })).actions).toEqual(
+      []
+    );
   });
 
   it("derives the title when the user left it blank", () => {
@@ -139,7 +189,11 @@ describe("draftToFormState", () => {
   it("restores an actionless draft as one blank row", () => {
     const state = draftToFormState(draft());
     expect(state.actions).toHaveLength(1);
-    expect(state.actions[0]).toMatchObject({ target: "", calldata: "0x" });
+    expect(state.actions[0]).toMatchObject({
+      chain: "arb1",
+      target: "",
+      calldata: "0x",
+    });
   });
 
   it("carries the server's updatedAt so the autosave can compare ages", () => {
@@ -157,6 +211,63 @@ describe("draftToFormState", () => {
     );
 
     expect(new Set(state.actions.map((a) => a.id)).size).toBe(2);
+  });
+
+  it("unpacks a stored Core draft into its per-chain rows", () => {
+    const rows = [
+      {
+        chain: "ethereum" as const,
+        target: VALID_TARGET,
+        value: "1",
+        calldata: "0x",
+      },
+      {
+        chain: "nova" as const,
+        target: VALID_TARGET,
+        value: "0",
+        calldata: "0xab",
+      },
+    ];
+    const routed = encodeCoreGovernorPayload({
+      actions: rows,
+      description: "body",
+    });
+    const state = draftToFormState(
+      draft({
+        actions: [
+          {
+            target: routed.target,
+            value: routed.value.toString(),
+            calldata: routed.calldata,
+          },
+        ],
+      })
+    );
+
+    expect(state.actions.map(({ id: _id, ...row }) => row)).toEqual(rows);
+  });
+
+  it("loads a Core draft saved with raw rows as Arbitrum One rows", () => {
+    const state = draftToFormState(
+      draft({
+        actions: [{ target: VALID_TARGET, value: "1", calldata: "0x" }],
+      })
+    );
+
+    expect(state.actions).toMatchObject([
+      { chain: "arb1", target: VALID_TARGET, value: "1", calldata: "0x" },
+    ]);
+  });
+
+  it("gives Treasury rows the Arbitrum One chain", () => {
+    const state = draftToFormState(
+      draft({
+        governorType: "TREASURY",
+        actions: [{ target: VALID_TARGET, value: "1", calldata: "0x" }],
+      })
+    );
+
+    expect(state.actions).toMatchObject([{ chain: "arb1" }]);
   });
 
   it("maps the governor back to the form's naming", () => {
