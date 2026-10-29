@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   useProposalEligibility: vi.fn(),
   publishDraft: vi.fn(),
   deleteDraft: vi.fn(),
+  isPublishing: false,
   signIn: vi.fn(),
   open: vi.fn(),
   copy: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock("@/hooks/use-drafts", () => ({
   useDraftMutations: () => ({
     publishDraft: mocks.publishDraft,
     deleteDraft: mocks.deleteDraft,
-    isPublishing: false,
+    isPublishing: mocks.isPublishing,
     isDeleting: false,
   }),
 }));
@@ -85,6 +86,7 @@ function list(drafts: DraftSummary[] = [], error: Error | null = null) {
 describe("MyDraftsList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isPublishing = false;
     session();
     list();
     mocks.useProposalEligibility.mockReturnValue({ eligibility: "meets" });
@@ -317,6 +319,17 @@ describe("MyDraftsList", () => {
     fireEvent.click(view.getByTestId("confirm-publish"));
     await waitFor(() => expect(mocks.publishDraft).toHaveBeenCalledWith("d1"));
     await waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+  });
+
+  it("disables both confirm buttons while the request is in flight", () => {
+    mocks.isPublishing = true;
+    list([summary()]);
+    const view = render(<MyDraftsList />);
+    fireEvent.click(view.getByTestId("publish-draft"));
+    expect(
+      (view.getByTestId("confirm-publish") as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect((view.getByText("Cancel") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("cancels deletion and deletes only after confirmation", async () => {

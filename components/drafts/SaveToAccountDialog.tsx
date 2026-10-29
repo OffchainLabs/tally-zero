@@ -98,9 +98,13 @@ export function SaveToAccountDialog({
 
   async function save() {
     if (isSaving) return;
-    const fields = toDraftFields({ ...snapshot, title });
 
     try {
+      // Inside the try: for the Core Governor this encodes the rows, and the
+      // encoder rejects what the trigger's blocker lets through (an
+      // unchecksummed target, for one). The reason belongs in the dialog, not
+      // in an unhandled rejection.
+      const fields = toDraftFields({ ...snapshot, title });
       let saved: Draft;
       if (draftId) {
         saved = await patchDraft({ id: draftId, ...fields });
