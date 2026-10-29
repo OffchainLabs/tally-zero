@@ -1,4 +1,6 @@
 import { GOVERNORS } from "@/config/governors";
+import { encodeCoreGovernorPayload } from "@/lib/core-governor-payload";
+import { fromDraftGovernorType } from "@/lib/drafts/mapping";
 import { computeProposalId, normalizeActions } from "@/lib/propose-utils";
 import type { Draft } from "@/lib/siwe/types";
 import {
@@ -30,27 +32,56 @@ export const draft: Draft = {
   updatedAt: "2026-09-01T00:00:00Z",
 };
 
-const { targets, values, calldatas } = normalizeActions(draft.actions);
-export const proposalId = computeProposalId(
-  targets,
-  values,
-  calldatas,
-  draft.description
-);
+/**
+ * A Core Governor draft as this app stores it: the one ArbSys action that
+ * routes its rows through the L1 timelock, which is also what `propose()`
+ * receives, so the stored bytes hash to the proposal id in the receipt.
+ */
+const coreAction = encodeCoreGovernorPayload({
+  actions: [{ chain: "ethereum", target, value: "0", calldata: "0x1cff79cd" }],
+  description: "# A core draft",
+});
+export const coreDraft: Draft = {
+  ...draft,
+  id: "d2",
+  title: "A core draft",
+  description: "# A core draft",
+  governorType: "CONSTITUTIONAL",
+  actions: [
+    {
+      target: coreAction.target,
+      value: coreAction.value.toString(),
+      calldata: coreAction.calldata,
+    },
+  ],
+};
+
+/** What the governor emits for the draft as stored. */
+export function expectedProposalId(of: Draft): string {
+  const { targets, values, calldatas } = normalizeActions(of.actions);
+  return computeProposalId(targets, values, calldatas, of.description);
+}
+
+export const proposalId = expectedProposalId(draft);
 
 export function receipt(
   overrides: {
     status?: TransactionReceipt["status"];
     address?: `0x${string}`;
     eventProposalId?: string;
-  } = {}
+  } = {},
+  of: Draft = draft
 ): TransactionReceipt {
+  const { targets, values, calldatas } = normalizeActions(of.actions);
   return {
     status: overrides.status ?? "success",
     transactionHash: txHash,
     logs: [
       {
-        address: overrides.address ?? governor,
+        address:
+          overrides.address ??
+          (GOVERNORS[fromDraftGovernorType(of.governorType)]
+            .address as `0x${string}`),
         topics: encodeEventTopics({
           abi: [event],
           eventName: "ProposalCreated",
@@ -68,7 +99,7 @@ export function receipt(
             { type: "string" },
           ],
           [
-            BigInt(overrides.eventProposalId ?? proposalId),
+            BigInt(overrides.eventProposalId ?? expectedProposalId(of)),
             author as `0x${string}`,
             targets,
             values,
@@ -76,7 +107,7 @@ export function receipt(
             calldatas,
             BigInt(1),
             BigInt(2),
-            draft.description,
+            of.description,
           ]
         ),
       },

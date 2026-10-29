@@ -1,4 +1,10 @@
-import { encodeFunctionData, getAddress, zeroHash } from "viem";
+import {
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  parseAbiParameters,
+  zeroHash,
+} from "viem";
 import { describe, expect, it } from "vitest";
 
 import { ADDRESSES } from "@gzeoneth/gov-tracker";
@@ -17,6 +23,55 @@ import { computeProposalId, type ProposalAction } from "./propose-utils";
 const L1_UPGRADE_EXECUTOR = "0x3ffFbAdAF827559da092217e474760E2b2c3CeDd";
 const ARB1_UPGRADE_EXECUTOR = "0xCF57572261c7c2BCF21ffD220ea7d1a27D40A827";
 const NOVA_UPGRADE_EXECUTOR = "0x86a02dD71363c440b21F4c0E5B2Ad01Ffe1A7482";
+
+/** `sendTxToL1(L1 timelock, scheduleBatch(...))` with the given batch fields. */
+function timelockBatch(
+  overrides: Partial<{
+    targets: `0x${string}`[];
+    payloads: `0x${string}`[];
+    predecessor: `0x${string}`;
+    delay: bigint;
+  }> = {}
+) {
+  const targets = overrides.targets ?? [L1_UPGRADE_EXECUTOR];
+  const schedule = encodeFunctionData({
+    abi: l1TimelockAbi,
+    functionName: "scheduleBatch",
+    args: [
+      targets,
+      targets.map(() => BigInt(0)),
+      overrides.payloads ?? ["0x1cff79cd"],
+      overrides.predecessor ?? zeroHash,
+      coreGovernorSalt("d"),
+      overrides.delay ?? BigInt(259200),
+    ],
+  });
+  return {
+    target: ADDRESSES.ARB_SYS,
+    value: "0",
+    calldata: encodeFunctionData({
+      abi: arbSysAbi,
+      functionName: "sendTxToL1",
+      args: [ADDRESSES.L1_TIMELOCK, schedule],
+    }),
+  };
+}
+
+function retryablePayload(gasLimit: bigint, maxFeePerGas: bigint) {
+  return encodeAbiParameters(
+    parseAbiParameters(
+      "address inbox, address l2Target, uint256 l2Value, uint256 gasLimit, uint256 maxFeePerGas, bytes l2Calldata"
+    ),
+    [
+      getAddress(ADDRESSES.ARB1_DELAYED_INBOX),
+      ARB1_UPGRADE_EXECUTOR,
+      BigInt(0),
+      gasLimit,
+      maxFeePerGas,
+      "0xabcdef",
+    ]
+  );
+}
 
 const rows: ProposalAction[] = [
   {
@@ -134,6 +189,40 @@ describe("decodeCoreGovernorPayload", () => {
       decodeCoreGovernorPayload({ ...asStored, calldata: elsewhere })
     ).toBeNull();
   });
+
+  // Rows carry none of these fields, so a decoded action would re-encode to
+  // different bytes and a load-then-save would silently rewrite the draft.
+  it("returns null when the batch sets fields the encoder never writes", () => {
+    expect(decodeCoreGovernorPayload(timelockBatch())).not.toBeNull();
+    expect(
+      decodeCoreGovernorPayload(
+        timelockBatch({ predecessor: `0x${"11".repeat(32)}` })
+      )
+    ).toBeNull();
+    expect(
+      decodeCoreGovernorPayload(timelockBatch({ delay: BigInt(345600) }))
+    ).toBeNull();
+
+    const retryable = (gasLimit: bigint, maxFeePerGas: bigint) =>
+      timelockBatch({
+        targets: [getAddress(ADDRESSES.RETRYABLE_TICKET_MAGIC)],
+        payloads: [retryablePayload(gasLimit, maxFeePerGas)],
+      });
+    expect(decodeCoreGovernorPayload(retryable(BigInt(0), BigInt(0)))).toEqual([
+      {
+        chain: "arb1",
+        target: ARB1_UPGRADE_EXECUTOR,
+        value: "0",
+        calldata: "0xabcdef",
+      },
+    ]);
+    expect(
+      decodeCoreGovernorPayload(retryable(BigInt(1_000_000), BigInt(0)))
+    ).toBeNull();
+    expect(
+      decodeCoreGovernorPayload(retryable(BigInt(0), BigInt(100_000_000)))
+    ).toBeNull();
+  });
 });
 
 describe("encodeCoreGovernorPayload", () => {
@@ -212,28 +301,35 @@ describe("coreGovernorRowsFromStoredActions", () => {
           calldata: routed.calldata,
         },
       ])
-    ).toEqual(rows);
+    ).toEqual({ kind: "rows", rows });
   });
 
-  it("treats raw rows as Arbitrum One rows", () => {
+  it("restores an actionless draft as no rows", () => {
+    expect(coreGovernorRowsFromStoredActions([])).toEqual({
+      kind: "rows",
+      rows: [],
+    });
+  });
+
+  // Guessing a chain for these would route them through the L1 timelock on
+  // the next save, so the stored bytes would no longer be what gets submitted.
+  it("does not guess at rows it did not write", () => {
+    const elsewhere = encodeFunctionData({
+      abi: arbSysAbi,
+      functionName: "sendTxToL1",
+      args: [L1_UPGRADE_EXECUTOR, "0x1cff79cd"],
+    });
+    expect(
+      coreGovernorRowsFromStoredActions([
+        { target: ADDRESSES.ARB_SYS, value: "0", calldata: elsewhere },
+      ])
+    ).toEqual({ kind: "unrecognised" });
+
     expect(
       coreGovernorRowsFromStoredActions([
         { target: L1_UPGRADE_EXECUTOR, value: "1", calldata: "0x" },
         { target: ARB1_UPGRADE_EXECUTOR, value: "2", calldata: "0x" },
       ])
-    ).toEqual([
-      {
-        chain: "arb1",
-        target: L1_UPGRADE_EXECUTOR,
-        value: "1",
-        calldata: "0x",
-      },
-      {
-        chain: "arb1",
-        target: ARB1_UPGRADE_EXECUTOR,
-        value: "2",
-        calldata: "0x",
-      },
-    ]);
+    ).toEqual({ kind: "unrecognised" });
   });
 });

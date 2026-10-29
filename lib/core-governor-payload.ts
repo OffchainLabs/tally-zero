@@ -19,13 +19,13 @@
  *   Arbitrum One / Nova  -> (RETRYABLE_TICKET_MAGIC, 0,
  *                            abi.encode(inbox, target, value, 0, 0, calldata))
  *
- * `lib/payload-actions.ts` decodes the same route for display and goes one step
- * further by unwrapping UpgradeExecutor calls. The decoder here stays exact so
- * that decode -> encode reproduces the bytes a draft was saved with.
+ * `lib/payload-actions.ts` decodes the same route for display, accepting any
+ * batch and unwrapping UpgradeExecutor calls. The decoder here accepts only
+ * what the encoder writes, so that decode -> encode reproduces the bytes a
+ * draft was saved with.
  */
 
 import {
-  decodeAbiParameters,
   decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
@@ -44,7 +44,7 @@ import {
   type ActionChain,
   type ProposalAction,
 } from "@/lib/propose-utils";
-import { ADDRESSES } from "@gzeoneth/gov-tracker";
+import { ADDRESSES, decodeRetryableTicket } from "@gzeoneth/gov-tracker";
 
 export const arbSysAbi = parseAbi([
   "function sendTxToL1(address destination, bytes data) payable returns (uint256)",
@@ -69,12 +69,6 @@ const INBOX_BY_CHAIN: Record<Exclude<ActionChain, "ethereum">, string> = {
   arb1: ADDRESSES.ARB1_DELAYED_INBOX,
   nova: ADDRESSES.NOVA_DELAYED_INBOX,
 };
-
-function chainForInbox(inbox: string): Exclude<ActionChain, "ethereum"> | null {
-  if (addressesEqual(inbox, INBOX_BY_CHAIN.arb1)) return "arb1";
-  if (addressesEqual(inbox, INBOX_BY_CHAIN.nova)) return "nova";
-  return null;
-}
 
 /**
  * Ticket gas parameters in the scheduled payload. Zero means the retryable is
@@ -171,40 +165,71 @@ export function encodeCoreGovernorPayload({
     calldata: encodeFunctionData({
       abi: arbSysAbi,
       functionName: "sendTxToL1",
-      args: [getAddress(ADDRESSES.L1_TIMELOCK), scheduleCalldata],
+      args: [getAddress(L1_TIMELOCK.address), scheduleCalldata],
     }),
   };
 }
 
-interface ScheduledOperation {
+export interface ScheduledOperation {
   target: string;
   value: bigint;
   payload: `0x${string}`;
 }
 
-function decodeScheduledOperations(
-  calldata: `0x${string}`
-): ScheduledOperation[] | null {
-  const decoded = decodeFunctionData({ abi: l1TimelockAbi, data: calldata });
+/** One L1 timelock `schedule` or `scheduleBatch` call, as decoded. */
+export interface ScheduledBatch {
+  operations: ScheduledOperation[];
+  predecessor: `0x${string}`;
+  salt: `0x${string}`;
+  delay: bigint;
+}
 
-  if (decoded.functionName === "schedule") {
-    const [target, value, payload] = decoded.args;
-    return [{ target, value, payload }];
-  }
+/**
+ * The operations an L1 timelock call schedules, or null when the bytes are
+ * not a `schedule`/`scheduleBatch` call or the batch is empty or ragged.
+ * Shared with `lib/payload-actions.ts`, which displays any batch; the checks
+ * that make a batch canonical live in `decodeCoreGovernorPayload`.
+ */
+export function decodeScheduledOperations(
+  calldata: string
+): ScheduledBatch | null {
+  try {
+    const decoded = decodeFunctionData({
+      abi: l1TimelockAbi,
+      data: calldata as `0x${string}`,
+    });
 
-  const [targets, values, payloads] = decoded.args;
-  if (
-    targets.length === 0 ||
-    targets.length !== values.length ||
-    targets.length !== payloads.length
-  ) {
+    if (decoded.functionName === "schedule") {
+      const [target, value, payload, predecessor, salt, delay] = decoded.args;
+      return {
+        operations: [{ target, value, payload }],
+        predecessor,
+        salt,
+        delay,
+      };
+    }
+
+    const [targets, values, payloads, predecessor, salt, delay] = decoded.args;
+    if (
+      targets.length === 0 ||
+      targets.length !== values.length ||
+      targets.length !== payloads.length
+    ) {
+      return null;
+    }
+    return {
+      operations: targets.map((target, index) => ({
+        target,
+        value: values[index],
+        payload: payloads[index],
+      })),
+      predecessor,
+      salt,
+      delay,
+    };
+  } catch {
     return null;
   }
-  return targets.map((target, index) => ({
-    target,
-    value: values[index],
-    payload: payloads[index],
-  }));
 }
 
 function decodeScheduledOperation(
@@ -219,30 +244,34 @@ function decodeScheduledOperation(
     };
   }
 
-  const [inbox, l2Target, l2Value, , , l2Calldata] = decodeAbiParameters(
-    retryableTicketParams,
-    operation.payload
-  );
-  const chain = chainForInbox(inbox);
-  if (!chain) return null;
+  const retryable = decodeRetryableTicket(operation.payload);
+  if (!retryable || retryable.chain === "unknown") return null;
+  if (
+    BigInt(retryable.gasLimit) !== RETRYABLE_GAS_LIMIT ||
+    BigInt(retryable.maxFeePerGas) !== RETRYABLE_MAX_FEE_PER_GAS
+  ) {
+    return null;
+  }
 
   return {
-    chain,
-    target: getAddress(l2Target),
-    value: l2Value.toString(),
-    calldata: l2Calldata,
+    chain: retryable.chain,
+    target: getAddress(retryable.l2Target),
+    value: retryable.l2Value,
+    calldata: retryable.l2Calldata as `0x${string}`,
   };
 }
 
 /**
- * The inverse of `encodeCoreGovernorPayload`: the per-chain rows behind one
- * ArbSys action, or null when the action is not the canonical route (another
- * target, a non-zero outer value, a message to something other than the L1
- * timelock, an inbox we do not know, or bytes that do not decode).
+ * The per-chain rows behind one ArbSys action, or null when the action is not
+ * the route `encodeCoreGovernorPayload` writes: another target, a non-zero
+ * outer value, a message to something other than the L1 timelock, a non-zero
+ * predecessor, a delay other than the timelock minimum, non-zero retryable
+ * gas parameters, an inbox we do not know, or bytes that do not decode.
  *
- * Gas parameters inside a retryable payload are not kept. Re-encoding a decoded
- * action therefore reproduces it only when they were zero, which is what this
- * app writes.
+ * Rejecting those is what keeps the round trip exact: a decoded action
+ * re-encodes to the same bytes, because every field the rows do not carry is
+ * known to hold the value the encoder writes. The salt is the one exception,
+ * since live proposals use their own; re-encoding one needs the salt passed in.
  */
 export function decodeCoreGovernorPayload(action: {
   target: string;
@@ -259,12 +288,18 @@ export function decodeCoreGovernorPayload(action: {
       data: action.calldata as `0x${string}`,
     });
     const [destination, scheduleCalldata] = args;
-    if (!addressesEqual(destination, ADDRESSES.L1_TIMELOCK)) return null;
+    if (!addressesEqual(destination, L1_TIMELOCK.address)) return null;
 
-    const operations = decodeScheduledOperations(scheduleCalldata);
-    if (!operations) return null;
+    const scheduled = decodeScheduledOperations(scheduleCalldata);
+    if (!scheduled) return null;
+    if (
+      scheduled.predecessor !== zeroHash ||
+      scheduled.delay !== L1_TIMELOCK_MIN_DELAY_SECONDS
+    ) {
+      return null;
+    }
 
-    const rows = operations.map(decodeScheduledOperation);
+    const rows = scheduled.operations.map(decodeScheduledOperation);
     if (rows.some((row) => row === null)) return null;
     return rows as ProposalAction[];
   } catch {
@@ -274,16 +309,20 @@ export function decodeCoreGovernorPayload(action: {
 
 /**
  * Rows behind a stored Core Governor draft. A draft saved by this app holds
- * one encoded action; anything else (an older draft saved with raw rows, or
- * hand-written actions) comes back as Arbitrum One rows and is routed through
- * the L1 timelock on its next save.
+ * one encoded action, or none; anything else (an older draft saved with raw
+ * rows, or a hand-written action) is unrecognised, and the caller decides how
+ * to present it. Nothing is guessed, because a guessed row would be routed
+ * through the L1 timelock on the next save and no longer match the draft.
  */
+export type CoreGovernorStoredRows =
+  | { kind: "rows"; rows: ProposalAction[] }
+  | { kind: "unrecognised" };
+
 export function coreGovernorRowsFromStoredActions(
   actions: { target: string; value: string; calldata: string }[]
-): ProposalAction[] {
-  if (actions.length === 1) {
-    const decoded = decodeCoreGovernorPayload(actions[0]);
-    if (decoded) return decoded;
-  }
-  return actions.map((action) => ({ chain: "arb1", ...action }));
+): CoreGovernorStoredRows {
+  if (actions.length === 0) return { kind: "rows", rows: [] };
+  const rows =
+    actions.length === 1 ? decodeCoreGovernorPayload(actions[0]) : null;
+  return rows ? { kind: "rows", rows } : { kind: "unrecognised" };
 }

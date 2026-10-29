@@ -213,6 +213,44 @@ describe("ProposalDraftLoader", () => {
     });
   });
 
+  // A Core draft's rows come from decoding its one stored ArbSys action. Rows
+  // stored any other way are not shown, because guessing a chain for them
+  // would change what the next save stores; the user is told to re-enter them.
+  it("explains and seeds blank rows for a Core draft whose actions it cannot decode", () => {
+    session({ isSignedIn: true });
+    draftQuery({
+      data: {
+        ...DRAFT,
+        governorType: "CONSTITUTIONAL",
+        actions: [{ target: SUBJECT, value: "1", calldata: "0x" }],
+      },
+    });
+
+    const markup = render();
+
+    expect(markup).toContain("were not written by this form");
+    expect(mocks.form.mock.calls[0][0].initialDraft.actions).toMatchObject([
+      { target: "", calldata: "0x" },
+    ]);
+  });
+
+  it("shows Treasury rows as stored, with no notice", () => {
+    session({ isSignedIn: true });
+    draftQuery({
+      data: {
+        ...DRAFT,
+        actions: [{ target: SUBJECT, value: "1", calldata: "0x" }],
+      },
+    });
+
+    const markup = render();
+
+    expect(markup).not.toContain("were not written by this form");
+    expect(mocks.form.mock.calls[0][0].initialDraft.actions).toMatchObject([
+      { chain: "arb1", target: SUBJECT, value: "1" },
+    ]);
+  });
+
   it("points the save dialog at an editable draft so saving updates it", () => {
     session({ isSignedIn: true });
     draftQuery({ data: DRAFT });

@@ -2,7 +2,9 @@ import { GOVERNORS } from "@/config/governors";
 import { describe, expect, it } from "vitest";
 import { checkDraftReceipt } from "./submission";
 import {
+  coreDraft,
   draft,
+  expectedProposalId,
   governor,
   proposalId,
   receipt,
@@ -20,6 +22,21 @@ describe("published draft receipt check", () => {
         proposalId,
       },
     });
+  });
+  // A Core draft stores the one ArbSys action the governor receives, so the
+  // stored bytes are what the receipt check hashes.
+  it("matches a Core Governor draft against the Core Governor's event", () => {
+    expect(checkDraftReceipt(receipt({}, coreDraft), coreDraft)).toEqual({
+      kind: "match",
+      submission: {
+        transactionHash: txHash,
+        governorAddress: GOVERNORS.core.address,
+        proposalId: expectedProposalId(coreDraft),
+      },
+    });
+    expect(checkDraftReceipt(receipt({}, coreDraft), draft).kind).toBe(
+      "different"
+    );
   });
   it("rejects reverted receipts and missing or unrelated logs", () => {
     expect(checkDraftReceipt(receipt({ status: "reverted" }), draft).kind).toBe(

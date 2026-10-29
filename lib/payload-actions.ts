@@ -1,5 +1,9 @@
 import { addressesEqual } from "@/lib/address-utils";
-import { arbSysAbi, l1TimelockAbi } from "@/lib/core-governor-payload";
+import {
+  arbSysAbi,
+  decodeScheduledOperations,
+  type ScheduledOperation,
+} from "@/lib/core-governor-payload";
 import { isCoreGovernor } from "@config/governors";
 import {
   ADDRESSES,
@@ -58,45 +62,6 @@ export function canFlattenGovernancePayload(
   return governorAddress !== undefined && isCoreGovernor(governorAddress);
 }
 
-interface ScheduledOperation {
-  target: string;
-  value: string;
-  calldata: string;
-}
-
-function decodeScheduledOperations(
-  calldata: string
-): ScheduledOperation[] | null {
-  try {
-    const decoded = decodeFunctionData({
-      abi: l1TimelockAbi,
-      data: calldata as `0x${string}`,
-    });
-
-    if (decoded.functionName === "schedule") {
-      const [target, value, data] = decoded.args;
-      return [{ target, value: value.toString(), calldata: data }];
-    }
-
-    const [targets, values, payloads] = decoded.args;
-    if (
-      targets.length === 0 ||
-      targets.length !== values.length ||
-      targets.length !== payloads.length
-    ) {
-      return null;
-    }
-
-    return targets.map((target, index) => ({
-      target,
-      value: values[index].toString(),
-      calldata: payloads[index],
-    }));
-  } catch {
-    return null;
-  }
-}
-
 function unwrapUpgradeExecutor(
   target: string,
   value: string,
@@ -142,7 +107,7 @@ function resolveScheduledOperation(
   operation: ScheduledOperation
 ): EffectivePayloadAction | null {
   if (addressesEqual(operation.target, ADDRESSES.RETRYABLE_TICKET_MAGIC)) {
-    const retryable = decodeRetryableTicket(operation.calldata);
+    const retryable = decodeRetryableTicket(operation.payload);
     if (!retryable) return null;
 
     const chain =
@@ -167,18 +132,19 @@ function resolveScheduledOperation(
     );
   }
 
+  const value = operation.value.toString();
   const simulation: PayloadActionSimulation = {
     type: "call",
     target: operation.target,
-    calldata: operation.calldata,
-    value: operation.value,
+    calldata: operation.payload,
+    value,
     chain: "ethereum",
     from: ADDRESSES.L1_TIMELOCK,
   };
   return unwrapUpgradeExecutor(
     operation.target,
-    operation.value,
-    operation.calldata,
+    value,
+    operation.payload,
     "ethereum",
     simulation
   );
@@ -205,10 +171,10 @@ function tryNormalizeCanonicalRoute(
     const [destination, l1TimelockCalldata] = arbSysCall.args;
     if (!addressesEqual(destination, ADDRESSES.L1_TIMELOCK)) return null;
 
-    const scheduledOperations = decodeScheduledOperations(l1TimelockCalldata);
-    if (!scheduledOperations) return null;
+    const scheduled = decodeScheduledOperations(l1TimelockCalldata);
+    if (!scheduled) return null;
 
-    const actions = scheduledOperations.map(resolveScheduledOperation);
+    const actions = scheduled.operations.map(resolveScheduledOperation);
     if (actions.some((action) => action === null)) return null;
 
     const resolvedActions = actions as EffectivePayloadAction[];

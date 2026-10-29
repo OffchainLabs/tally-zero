@@ -12,6 +12,7 @@ import {
   createProposalDraft,
   parseProposalDraft,
 } from "@/lib/create-proposal-form-utils";
+import { toStoredActions } from "@/lib/drafts/mapping";
 
 import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
 import type { Draft } from "@/lib/siwe/types";
@@ -103,7 +104,9 @@ const serverDraft: Draft = {
   title: stored.title,
   description: stored.description,
   governorType: "CONSTITUTIONAL",
-  actions: [{ target: STORED_TARGET, value: "5", calldata: "0x" }],
+  // Stored the way this app writes a Core draft: one encoded ArbSys action.
+  // Raw rows on a Core draft restore as unrecognised, with a blank row.
+  actions: toStoredActions(stored),
   status: "draft",
   shareSlug: null,
   onchain: null,

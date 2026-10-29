@@ -203,6 +203,7 @@ describe("draftToFormState", () => {
   it("gives every restored action a distinct form id", () => {
     const state = draftToFormState(
       draft({
+        governorType: "TREASURY",
         actions: [
           { target: VALID_TARGET, value: "1", calldata: "0x" },
           { target: VALID_TARGET, value: "2", calldata: "0x" },
@@ -245,18 +246,21 @@ describe("draftToFormState", () => {
     );
 
     expect(state.actions.map(({ id: _id, ...row }) => row)).toEqual(rows);
+    expect(state.unrecognisedActions).toBe(false);
   });
 
-  it("loads a Core draft saved with raw rows as Arbitrum One rows", () => {
+  // Raw rows on a Core draft have no chain, and guessing one would change
+  // what the next save stores. The form gets a blank row and a flag instead.
+  it("flags a Core draft saved with raw rows instead of guessing a chain", () => {
     const state = draftToFormState(
       draft({
         actions: [{ target: VALID_TARGET, value: "1", calldata: "0x" }],
       })
     );
 
-    expect(state.actions).toMatchObject([
-      { chain: "arb1", target: VALID_TARGET, value: "1", calldata: "0x" },
-    ]);
+    expect(state.unrecognisedActions).toBe(true);
+    expect(state.actions).toHaveLength(1);
+    expect(state.actions[0]).toMatchObject({ target: "", calldata: "0x" });
   });
 
   it("gives Treasury rows the Arbitrum One chain", () => {
@@ -268,6 +272,7 @@ describe("draftToFormState", () => {
     );
 
     expect(state.actions).toMatchObject([{ chain: "arb1" }]);
+    expect(state.unrecognisedActions).toBe(false);
   });
 
   it("maps the governor back to the form's naming", () => {
