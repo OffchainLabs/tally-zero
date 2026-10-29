@@ -10,6 +10,9 @@ interface SharedDraftPageProps {
 export const metadata = {
   title: "Shared Draft | Arbitrum Governance",
   description: "A proposal draft shared for review before going on chain.",
+  // The slug is the capability: a share link should reach the people the
+  // author sent it to, not a search index.
+  robots: { index: false, follow: false },
 };
 
 export default async function SharedDraftPage({
