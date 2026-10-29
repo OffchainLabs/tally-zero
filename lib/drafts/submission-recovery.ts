@@ -5,6 +5,8 @@ const RECOVERY_CHANGE_EVENT = "arbitrum:draft-submission-recovery";
 export type PendingDraftSubmission = {
   transactionHash: `0x${string}`;
   governorAddress: string;
+  /** When the wallet broadcast the hash, in ms since the epoch. */
+  broadcastAt: number;
 };
 
 /** Stored metadata is only a recovery hint; callers must verify its receipt. */
@@ -25,24 +27,32 @@ export function readPendingSubmission(
     return {
       transactionHash: value.transactionHash,
       governorAddress: value.governorAddress,
+      // An entry written before broadcast times existed counts from this read,
+      // so it does not become discardable the moment the field ships.
+      broadcastAt: Number.isFinite(value.broadcastAt)
+        ? value.broadcastAt
+        : Date.now(),
     };
   } catch {
     return null;
   }
 }
 
+/** Stamps the broadcast time; returns the entry as stored. */
 export function savePendingSubmission(
   key: string,
-  submission: PendingDraftSubmission
-): void {
+  submission: Omit<PendingDraftSubmission, "broadcastAt">
+): PendingDraftSubmission {
+  const entry = { ...submission, broadcastAt: Date.now() };
   try {
-    window.localStorage.setItem(key, JSON.stringify(submission));
+    window.localStorage.setItem(key, JSON.stringify(entry));
     window.dispatchEvent(
       new CustomEvent(RECOVERY_CHANGE_EVENT, { detail: key })
     );
   } catch {
     // Recording and the in-page retry still work when browser storage is disabled.
   }
+  return entry;
 }
 
 export function clearPendingSubmission(

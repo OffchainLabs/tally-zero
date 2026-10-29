@@ -36,7 +36,7 @@ describe("submission recovery storage", () => {
       readPendingSubmission(
         draftSubmissionStorageKey("d1", subject.toUpperCase())
       )
-    ).toEqual(submission);
+    ).toMatchObject(submission);
     expect(
       readPendingSubmission(draftSubmissionStorageKey("d2", subject))
     ).toBeNull();
@@ -59,10 +59,41 @@ describe("submission recovery storage", () => {
     expect(readPendingSubmission(key)).toBeNull();
   });
 
+  it("stamps the broadcast time and reads it back", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-29T12:00:00Z"));
+      savePendingSubmission(key, submission);
+      vi.setSystemTime(new Date("2026-10-29T13:00:00Z"));
+      expect(readPendingSubmission(key)).toEqual({
+        ...submission,
+        broadcastAt: Date.parse("2026-10-29T12:00:00Z"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([undefined, "soon"])(
+    "treats an entry whose broadcast time is %s as broadcast when it is read",
+    (broadcastAt) => {
+      vi.useFakeTimers();
+      try {
+        entries.set(key, JSON.stringify({ ...submission, broadcastAt }));
+        vi.setSystemTime(new Date("2026-10-29T12:00:00Z"));
+        expect(readPendingSubmission(key)?.broadcastAt).toBe(
+          Date.parse("2026-10-29T12:00:00Z")
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it("does not let an older completed request delete a newer transaction", () => {
     savePendingSubmission(key, submission);
     clearPendingSubmission(key, `0x${"cd".repeat(32)}`);
-    expect(readPendingSubmission(key)).toEqual(submission);
+    expect(readPendingSubmission(key)).toMatchObject(submission);
     clearPendingSubmission(key, submission.transactionHash.toUpperCase());
     expect(readPendingSubmission(key)).toBeNull();
   });

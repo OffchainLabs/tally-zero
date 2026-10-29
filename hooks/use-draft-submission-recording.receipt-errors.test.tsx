@@ -150,7 +150,7 @@ it("does not clear a newer submission when an older raw receipt arrives late", a
     );
     await waitFor(() => expect(harness.wait).toHaveBeenCalledTimes(2));
     await act(async () => finishReceipt(receipt({ status: "reverted" })));
-    expect(readPendingSubmission(key)).toEqual({
+    expect(readPendingSubmission(key)).toMatchObject({
       ...pending,
       transactionHash: newerHash,
     });
@@ -173,7 +173,7 @@ it("preserves recovery through an RPC outage and records after verification succ
   try {
     await waitFor(() => expect(view.result.current.canRetry).toBe(true));
     await waitFor(() => expect(harness.getReceipt).toHaveBeenCalledOnce());
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     expect(mocks.markSubmitted).not.toHaveBeenCalled();
     harness.getReceipt.mockResolvedValue(receipt());
     await act(async () => view.result.current.retry());
@@ -199,7 +199,7 @@ it("clears recovery when a retry verifies a revert after the raw receipt was una
   try {
     await waitFor(() => expect(view.result.current.canRetry).toBe(true));
     await waitFor(() => expect(harness.getReceipt).toHaveBeenCalledOnce());
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     harness.getReceipt.mockResolvedValue(receipt({ status: "reverted" }));
     await act(async () => view.result.current.retry());
     await waitFor(() => expect(readPendingSubmission(key)).toBeNull());

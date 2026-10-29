@@ -92,7 +92,7 @@ describe("draft submission recording", () => {
   it("persists before confirmation and recovers after a reload mid-confirmation", async () => {
     const view = mount();
     await broadcast(view);
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     expect(mocks.markSubmitted).not.toHaveBeenCalled();
     view.unmount();
     const reopened = mount();
@@ -116,7 +116,7 @@ describe("draft submission recording", () => {
     await broadcast(view);
     expect(view.result.current.status).toBe("failed");
     expect(view.result.current.error).toBe("Service unavailable");
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     view.unmount();
     const reopened = mount();
     await act(async () => {});
@@ -143,7 +143,7 @@ describe("draft submission recording", () => {
       await act(async () => {});
       expect(view.result.current.status).toBeNull();
       expect(mocks.markSubmitted).not.toHaveBeenCalled();
-      expect(readPendingSubmission(key)).toEqual(pending);
+      expect(readPendingSubmission(key)).toMatchObject(pending);
     }
   );
 
@@ -174,7 +174,7 @@ describe("draft submission recording", () => {
     receiptError = new Error("RPC temporarily unavailable");
     await act(async () => view.rerender());
     expect(view.result.current.status).toBe("receipt-error");
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     expect(mocks.markSubmitted).not.toHaveBeenCalled();
     view.unmount();
     receiptError = null;
@@ -214,7 +214,7 @@ describe("draft submission recording", () => {
     expect(mocks.refetch).toHaveBeenCalledOnce();
     expect(view.result.current.status).toBe("receipt-error");
     expect(view.result.current.canRetry).toBe(true);
-    expect(readPendingSubmission(key)).toEqual(pending);
+    expect(readPendingSubmission(key)).toMatchObject(pending);
     expect(mocks.markSubmitted).not.toHaveBeenCalled();
   });
 

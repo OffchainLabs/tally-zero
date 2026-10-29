@@ -148,7 +148,7 @@ it("persists for the original draft after navigation before the wallet returns i
     );
     expect(
       readPendingSubmission(draftSubmissionStorageKey(draft.id, draft.author))
-    ).toEqual({ transactionHash: txHash, governorAddress: governor });
+    ).toMatchObject({ transactionHash: txHash, governorAddress: governor });
     expect(
       readPendingSubmission(
         draftSubmissionStorageKey(otherDraft.id, otherDraft.author)
