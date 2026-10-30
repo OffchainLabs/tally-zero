@@ -54,3 +54,34 @@ describe("StageDataDisplay", () => {
     expect(html).toContain("Waiting for execution");
   });
 });
+
+describe("StageDataDisplay L2-to-L1 messages", () => {
+  it("lists each message with its outbox position and L1 block", () => {
+    const html = renderToStaticMarkup(
+      <StageDataDisplay
+        status="PENDING"
+        data={
+          {
+            messageCount: 1,
+            l2ToL1Messages: [
+              {
+                position: "7",
+                l2TxHash: null,
+                caller: "0x0000000000000000000000000000000000000002",
+                destination: "0x0000000000000000000000000000000000000001",
+                arbBlockNum: "500",
+                ethBlockNum: "400",
+                timestamp: "0",
+                callvalue: "0",
+                data: "0x",
+              },
+            ],
+          } as unknown as TrackedStage["data"]
+        }
+      />
+    );
+    expect(html).toContain('data-testid="l2-to-l1-messages"');
+    expect(html).toContain('data-position="7"');
+    expect(html).toContain("L1 block 400");
+  });
+});

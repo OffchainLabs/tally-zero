@@ -124,6 +124,26 @@ describe("proposal-url", () => {
       ).toBe(`/proposal/${proposalId}?govId=eip155:1337:${l1Governor}`);
     });
 
+    it.each([1, 1337])(
+      "round-trips a path on chain %i through parseGovernorRef",
+      (chainId) => {
+        const path = buildProposalPath({
+          proposalId,
+          governorAddress: l1Governor,
+          chainId,
+          tab: "stages",
+        });
+        const url = new URL(path, "https://example.test");
+
+        expect(url.pathname).toBe(`/proposal/${proposalId}`);
+        expect(url.searchParams.get("tab")).toBe("stages");
+        expect(parseGovernorRef(url.searchParams.get("govId"))).toEqual({
+          governorAddress: l1Governor,
+          chainId,
+        });
+      }
+    );
+
     it("defaults to a registered governor's own chain", () => {
       const registered = "0x00000000000000000000000000000000000f11f1";
       expect(buildGovernorId(registered)).toBe(`eip155:42161:${registered}`);

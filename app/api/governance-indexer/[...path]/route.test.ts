@@ -186,4 +186,20 @@ describe("governance indexer proxy", () => {
       error: "Indexer upstream error.",
     });
   });
+
+  it("keeps an upstream no-store response out of the shared cache", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "http://indexer.test");
+    const upstream = jsonResponse({ steps: [] }, { status: 200 });
+    upstream.headers.set("cache-control", "no-store");
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(upstream);
+
+    const response = await GET(
+      new Request(
+        "https://example.test/api/governance-indexer/api/l1-voting/vote-plan/1?delegate=0x1"
+      ),
+      context(["api", "l1-voting", "vote-plan", "1"])
+    );
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
 });

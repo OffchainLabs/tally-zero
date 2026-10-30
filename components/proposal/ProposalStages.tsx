@@ -13,6 +13,9 @@ import {
 } from "@/hooks/use-proposal-stages";
 import { useVotingPeriod } from "@/hooks/use-voting-period";
 import { buildLookupMap } from "@/lib/collection-utils";
+import { usesIndexerStages } from "@/lib/indexer-stages";
+import { isL1VotingProposal } from "@/lib/l1-voting";
+import type { IndexerGovernorType } from "@/lib/tally-data/types";
 import {
   getStageData,
   type ProposalStage,
@@ -20,6 +23,7 @@ import {
 } from "@/types/proposal-stage";
 import { ReloadIcon } from "@radix-ui/react-icons";
 
+import IndexerProposalStages from "./IndexerProposalStages";
 import {
   calculateEstimatedCompletionTimes,
   getStageEstimatedDays,
@@ -38,9 +42,42 @@ interface ProposalStagesProps {
   startBlock?: string;
   /** Scheduled vote end block from the ProposalCreated event */
   endBlock?: string;
+  /** The indexer's governor kind, which marks an L1 voting proposal */
+  indexerGovernorType?: IndexerGovernorType;
+  /** The governor's chain id */
+  networkId?: string;
 }
 
-export default function ProposalStages({
+/**
+ * The Lifecycle tab. gov-tracker traces it from the chain by default; the
+ * indexer serves it under `NEXT_PUBLIC_STAGES_SOURCE=indexer`, and always for
+ * L1 voting proposals, which gov-tracker cannot trace.
+ */
+export default function ProposalStages(props: ProposalStagesProps) {
+  const proposal = {
+    governorType: props.indexerGovernorType,
+    networkId: props.networkId,
+    contractAddress: props.governorAddress,
+  };
+  if (usesIndexerStages(proposal)) {
+    return (
+      <IndexerProposalStages
+        proposalId={props.proposalId}
+        governorAddress={props.governorAddress}
+        governorType={
+          isL1VotingProposal(proposal)
+            ? "l1"
+            : (getGovernorType(props.governorAddress) ?? "core")
+        }
+        startBlock={props.startBlock}
+        endBlock={props.endBlock}
+      />
+    );
+  }
+  return <GovTrackerProposalStages {...props} />;
+}
+
+function GovTrackerProposalStages({
   proposalId,
   creationTxHash,
   governorAddress,
@@ -70,7 +107,7 @@ export default function ProposalStages({
   });
 
   // Unknown addresses keep the Core timings, as before. An L1 voting proposal
-  // never gets here (it has no gov-tracker stages), but keeps its own type
+  // never gets here (its stages come from the indexer), but keeps its own type
   // rather than borrowing Core's if it does.
   const governorType = getGovernorType(governorAddress) ?? "core";
 

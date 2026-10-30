@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
 import { type CalldataOverrides } from "@/components/payload";
+import { L1ProposalPage } from "@/components/proposal/L1ProposalPage";
 import { ProposalCancelCard } from "@/components/proposal/ProposalCancelCard";
 import { ProposalPageError } from "@/components/proposal/ProposalPageError";
 import { ProposalPageSkeleton } from "@/components/proposal/ProposalPageSkeleton";
@@ -13,6 +14,7 @@ import { ProposalVoteCard } from "@/components/proposal/ProposalVoteCard";
 import { ProposalVoteSummaryCard } from "@/components/proposal/ProposalVoteSummaryCard";
 import { Button } from "@/components/ui/Button";
 import { GovernorBadge } from "@/components/ui/GovernorBadge";
+import { isL1VotingChainId } from "@/config/chains";
 import { proposalSchema } from "@/config/schema";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
 import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
@@ -21,6 +23,7 @@ import {
   buildProposalPath,
   normalizeProposalTab,
   parseGovernorId,
+  parseGovernorRef,
   type ProposalTab,
 } from "@/lib/proposal-url";
 import {
@@ -42,6 +45,54 @@ export function ProposalPage({
 }: {
   proposalId: string;
   initialProposal?: ParsedProposal | null;
+}) {
+  const searchParams = useSearchParams();
+  const governorRef = parseGovernorRef(searchParams.get("govId"));
+
+  // A governor id on an L1 chain is the L1 voting governor, which the Arbitrum
+  // One reads below know nothing about.
+  if (governorRef && isL1VotingChainId(governorRef.chainId)) {
+    return (
+      <ProposalPageFrame>
+        <L1ProposalPage
+          proposalId={proposalId}
+          governorAddress={governorRef.governorAddress}
+          chainId={governorRef.chainId}
+        />
+      </ProposalPageFrame>
+    );
+  }
+
+  return (
+    <ArbitrumProposalPage
+      proposalId={proposalId}
+      initialProposal={initialProposal}
+    />
+  );
+}
+
+function ProposalPageFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
+      <div className="container px-0 md:px-8 max-w-screen-xl space-y-6">
+        <Button asChild variant="ghost" size="sm" className="w-fit">
+          <Link href="/proposals">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Proposals
+          </Link>
+        </Button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ArbitrumProposalPage({
+  proposalId,
+  initialProposal,
+}: {
+  proposalId: string;
+  initialProposal: ParsedProposal | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -138,41 +189,32 @@ export function ProposalPage({
   );
 
   return (
-    <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
-      <div className="container px-0 md:px-8 max-w-screen-xl space-y-6">
-        <Button asChild variant="ghost" size="sm" className="w-fit">
-          <Link href="/proposals">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Proposals
-          </Link>
-        </Button>
+    <ProposalPageFrame>
+      {isLoading && <ProposalPageSkeleton />}
 
-        {isLoading && <ProposalPageSkeleton />}
+      {!isLoading && error && (
+        <ProposalPageError
+          title="Failed to load proposal"
+          message={error.message}
+        />
+      )}
 
-        {!isLoading && error && (
-          <ProposalPageError
-            title="Failed to load proposal"
-            message={error.message}
-          />
-        )}
+      {!isLoading && !error && !proposal && (
+        <ProposalPageError
+          title="Proposal not found"
+          message={`Could not find proposal ${proposalId}.`}
+        />
+      )}
 
-        {!isLoading && !error && !proposal && (
-          <ProposalPageError
-            title="Proposal not found"
-            message={`Could not find proposal ${proposalId}.`}
-          />
-        )}
-
-        {!isLoading && proposal && (
-          <ProposalPageContent
-            proposal={proposal}
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            onProposalCanceled={refetchLiveProposal}
-          />
-        )}
-      </div>
-    </div>
+      {!isLoading && proposal && (
+        <ProposalPageContent
+          proposal={proposal}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onProposalCanceled={refetchLiveProposal}
+        />
+      )}
+    </ProposalPageFrame>
   );
 }
 

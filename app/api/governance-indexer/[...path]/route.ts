@@ -42,9 +42,13 @@ async function proxy(
       headers.append("set-cookie", value);
     }
     // Only shared-cache anonymous GETs; anything with credentials is per-user.
+    // An upstream `no-store` (a vote plan, read live from the chain) wins.
+    const upstreamNoStore = /no-store/.test(
+      upstream.headers.get("cache-control") ?? ""
+    );
     headers.set(
       "cache-control",
-      method === "GET" && !cookie
+      method === "GET" && !cookie && !upstreamNoStore
         ? "public, s-maxage=30, stale-while-revalidate=300"
         : "no-store"
     );

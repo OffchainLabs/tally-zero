@@ -26,6 +26,8 @@ export const StatusIcon = memo(function StatusIcon({
       );
     case "FAILED":
       return <CrossCircledIcon className="h-5 w-5 text-red-500" />;
+    case "CANCELED":
+      return <CrossCircledIcon className="h-5 w-5 text-muted-foreground" />;
     case "NOT_STARTED":
     default:
       return <CircleIcon className="h-5 w-5 text-muted-foreground" />;

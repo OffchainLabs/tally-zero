@@ -16,6 +16,12 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: z.enum(["0", "1"]).optional(),
     NEXT_PUBLIC_LOCAL_L1_RPC: z.string().url().optional(),
     NEXT_PUBLIC_LOCAL_L2_RPC: z.string().url().optional(),
+    // Where the Lifecycle stages come from: gov-tracker's on-chain trace, or
+    // the indexer's /stages endpoint. L1 voting proposals always use the
+    // indexer, since gov-tracker cannot trace them.
+    NEXT_PUBLIC_STAGES_SOURCE: z
+      .enum(["indexer", "gov-tracker"])
+      .default("gov-tracker"),
   },
   runtimeEnv: {
     NEXT_PUBLIC_REOWN_PROJECT_ID: process.env.NEXT_PUBLIC_REOWN_PROJECT_ID,
@@ -26,6 +32,7 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: process.env.NEXT_PUBLIC_LOCAL_CHAINS,
     NEXT_PUBLIC_LOCAL_L1_RPC: process.env.NEXT_PUBLIC_LOCAL_L1_RPC,
     NEXT_PUBLIC_LOCAL_L2_RPC: process.env.NEXT_PUBLIC_LOCAL_L2_RPC,
+    NEXT_PUBLIC_STAGES_SOURCE: process.env.NEXT_PUBLIC_STAGES_SOURCE,
   },
   skipValidation: !!process.env.VITEST,
 });

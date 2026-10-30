@@ -35,6 +35,7 @@ import {
   prefetchProposalDelegateVotesCache,
   PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
 } from "@/hooks/use-proposal-delegate-votes";
+import { usesIndexerStages } from "@/lib/indexer-stages";
 import { type ProposalTab } from "@/lib/proposal-url";
 import { isArbitrumGovernor } from "@config/governors";
 import { proposalSchema } from "@config/schema";
@@ -92,6 +93,8 @@ function ProposalTabsContent({
   DescriptionWrapper,
   currentL1Block,
 }: ProposalTabsContentProps) {
+  // The indexer serves stages without the creation hash gov-tracker needs.
+  const stagesFromIndexer = usesIndexerStages(proposal);
   return (
     <>
       <TabsContent
@@ -157,7 +160,7 @@ function ProposalTabsContent({
         </div>
       </TabsContent>
 
-      {showStagesTab && proposal.creationTxHash && (
+      {showStagesTab && (proposal.creationTxHash || stagesFromIndexer) && (
         <TabsContent
           forceMount={mountedTabs.has("stages") ? true : undefined}
           value="stages"
@@ -176,7 +179,8 @@ function ProposalTabsContent({
             >
               <ProposalStages
                 proposalId={proposal.id}
-                creationTxHash={proposal.creationTxHash}
+                creationTxHash={proposal.creationTxHash ?? ""}
+                networkId={proposal.networkId}
                 governorAddress={proposal.contractAddress}
                 currentL1Block={currentL1Block ?? undefined}
                 startBlock={proposal.startBlock}
@@ -187,7 +191,7 @@ function ProposalTabsContent({
         </TabsContent>
       )}
 
-      {showStagesTab && !proposal.creationTxHash && (
+      {showStagesTab && !proposal.creationTxHash && !stagesFromIndexer && (
         <TabsContent
           forceMount={mountedTabs.has("stages") ? true : undefined}
           value="stages"

@@ -11,6 +11,20 @@ const EXPLORER_BASE_URLS: Record<ChainId, string> = {
   nova: "https://arbitrum-nova.blockscout.com",
 };
 
+const EXPLORER_CHAINS_BY_ID: Record<number, ChainId> = {
+  1: "ethereum",
+  42161: "arb1",
+  42170: "nova",
+};
+
+/**
+ * The explorer for a numeric chain id, or null for a chain without one (the
+ * local testnode chains), whose hashes are shown without a link
+ */
+export function explorerChainForChainId(chainId: number): ChainId | null {
+  return EXPLORER_CHAINS_BY_ID[chainId] ?? null;
+}
+
 /**
  * Get block explorer URL for an address
  * @param address - The Ethereum address

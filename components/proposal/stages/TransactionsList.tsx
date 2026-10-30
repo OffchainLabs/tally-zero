@@ -27,15 +27,22 @@ export const TransactionsList = memo(function TransactionsList({
           key={`${tx.hash}-${idx}`}
           className="flex items-center gap-2 text-xs"
         >
-          <a
-            href={getStageTxExplorerUrl(tx.hash, tx.chain, tx.targetChain)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-          >
-            {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
-            <ExternalLinkIcon className="h-3 w-3" />
-          </a>
+          {/* A chain with no explorer (the local testnode) gets the bare hash */}
+          {(tx.targetChain ?? tx.chain) === "unknown" ? (
+            <span className="font-mono text-muted-foreground" title={tx.hash}>
+              {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+            </span>
+          ) : (
+            <a
+              href={getStageTxExplorerUrl(tx.hash, tx.chain, tx.targetChain)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+              <ExternalLinkIcon className="h-3 w-3" />
+            </a>
+          )}
           {tx.timestamp && (
             <span className="text-muted-foreground">
               {formatRelativeTimestamp(tx.timestamp)}

@@ -100,3 +100,39 @@ describe("LifecycleCell", () => {
     expect(html).toContain("tab=stages");
   });
 });
+
+describe("LifecycleCell for an L1 voting proposal", () => {
+  const l1Proposal = {
+    id: "77",
+    state: "Executed",
+    contractAddress: "0x00000000000000000000000000000000004d4d4d",
+    networkId: "1",
+    governorType: "L1_VOTING",
+    executionPhase: "L2_RETRYABLE_PENDING",
+    executionCancelled: false,
+  } as Parameters<typeof LifecycleCell>[0]["proposal"];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows the indexer's execution status without a gov-tracker trace", () => {
+    const html = renderToStaticMarkup(<LifecycleCell proposal={l1Proposal} />);
+
+    expect(html).toContain(">Executing<");
+    expect(html).toContain(
+      "govId=eip155:1:0x00000000000000000000000000000000004d4d4d"
+    );
+    expect(mocks.useProposalLifecycleStatus).not.toHaveBeenCalled();
+  });
+
+  it("shows Executed once fully executed", () => {
+    const html = renderToStaticMarkup(
+      <LifecycleCell
+        proposal={{ ...l1Proposal, executionPhase: "FULLY_EXECUTED" }}
+      />
+    );
+
+    expect(html).toContain(">Executed<");
+  });
+});
