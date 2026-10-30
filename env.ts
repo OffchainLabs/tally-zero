@@ -16,6 +16,10 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: z.enum(["0", "1"]).optional(),
     NEXT_PUBLIC_LOCAL_L1_RPC: z.string().url().optional(),
     NEXT_PUBLIC_LOCAL_L2_RPC: z.string().url().optional(),
+    // Safe Transaction Service for a Safe delegate's registration. Defaults to
+    // Safe's hosted service on Arbitrum One; the local chains get one only
+    // when this is set.
+    NEXT_PUBLIC_SAFE_TX_SERVICE_URL: z.string().url().optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_REOWN_PROJECT_ID: process.env.NEXT_PUBLIC_REOWN_PROJECT_ID,
@@ -26,6 +30,8 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: process.env.NEXT_PUBLIC_LOCAL_CHAINS,
     NEXT_PUBLIC_LOCAL_L1_RPC: process.env.NEXT_PUBLIC_LOCAL_L1_RPC,
     NEXT_PUBLIC_LOCAL_L2_RPC: process.env.NEXT_PUBLIC_LOCAL_L2_RPC,
+    NEXT_PUBLIC_SAFE_TX_SERVICE_URL:
+      process.env.NEXT_PUBLIC_SAFE_TX_SERVICE_URL,
   },
   skipValidation: !!process.env.VITEST,
 });
