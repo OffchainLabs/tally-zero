@@ -1,6 +1,6 @@
 "use client";
 
-import { getGovernorByAddress } from "@/config/governors";
+import { getGovernorByAddress, isL1VotingGovernor } from "@/config/governors";
 import { initializeBundledCache } from "@/lib/bundled-cache-loader";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getCacheAdapter, trimCachedStages } from "@/lib/gov-tracker-cache";
@@ -293,6 +293,9 @@ export function useProposalStages({
   useEffect(() => {
     if (
       !enabled ||
+      // No gov-tracker lifecycle exists for the L1 voting governor; its
+      // progress is the indexer's execution phase.
+      isL1VotingGovernor(governorAddress) ||
       !proposalId ||
       !creationTxHash ||
       !governorAddress ||

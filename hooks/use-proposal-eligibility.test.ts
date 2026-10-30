@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
-import { GOVERNORS, type GovernorType } from "@/config/governors";
+import { GOVERNORS, type L2GovernorType } from "@/config/governors";
 
 import { useProposalEligibility } from "./use-proposal-eligibility";
 
@@ -38,7 +38,7 @@ function Probe({
   governorType,
   address,
 }: {
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   address?: string | null;
 }) {
   const {
@@ -91,7 +91,7 @@ function reads({
 }
 
 function render(
-  governorType: GovernorType = "treasury",
+  governorType: L2GovernorType = "treasury",
   address?: string | null
 ) {
   const markup = renderToStaticMarkup(

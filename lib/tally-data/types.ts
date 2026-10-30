@@ -90,6 +90,12 @@ export type TallyDelegateVote = {
 
 export type TallyProposalDelegateVote = TallyDelegateVote & {
   voter: string;
+  /**
+   * Whose voting power was cast. The voter itself on Arbitrum One; on the L1
+   * voting governor, the L2 delegate the L1 voting address is registered to.
+   * Optional because an older indexer deployment does not serve it.
+   */
+  delegate?: string;
 };
 
 export type TallyProposalVoter = TallyProposalDelegateVote & {
@@ -117,9 +123,47 @@ export type TallyProposalVoteSummaryEntry = {
   voteSummary: TallyProposalVoteSummary;
 };
 
+/** The indexer's governor kinds */
+export type IndexerGovernorType =
+  | "CONSTITUTIONAL"
+  | "NON_CONSTITUTIONAL"
+  | "L1_VOTING";
+
+/**
+ * How far an executed proposal's timelock operations have got, as the indexer
+ * derives it. The L1 voting governor only reaches the `L1_*`, `L2_RETRYABLE_*`
+ * and `FULLY_EXECUTED` values.
+ */
+export type IndexerExecutionPhase =
+  | "L2_TIMELOCK_PENDING"
+  | "L2_TIMELOCK_EXECUTED"
+  | "L1_CHALLENGE_PERIOD"
+  | "L1_TIMELOCK_PENDING"
+  | "L1_TIMELOCK_EXECUTED"
+  | "L2_RETRYABLE_PENDING"
+  | "FULLY_EXECUTED";
+
 export type TallyProposalIndexEntry = {
   proposalId: string;
   governorAddress: string;
+  /**
+   * The remaining fields up to `executionCancelled` are optional because an
+   * older indexer deployment does not serve them; an entry without them is an
+   * Arbitrum One proposal.
+   */
+  governorType?: IndexerGovernorType | null;
+  /** 42161 for the Arbitrum One governors; 1 (or local 1337) for L1 voting */
+  chainId?: number | null;
+  /**
+   * L1 voting only (null elsewhere): votes wait for the snapshot lock, and
+   * `snapshotBlock` is the locked block once this is true.
+   */
+  snapshotLocked?: boolean | null;
+  executionPhase?: IndexerExecutionPhase | null;
+  /** A timelock operation was cancelled: `executionPhase` is where it stopped */
+  executionCancelled?: boolean;
+  /** The governor's quorum at the snapshot, null until the indexer reads it */
+  quorum?: string | null;
   snapshotBlock: number;
   state: string | null;
   proposer: string | null;
