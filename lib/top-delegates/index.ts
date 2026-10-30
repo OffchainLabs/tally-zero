@@ -17,11 +17,18 @@ import {
 } from "@/config/delegates";
 
 /**
- * How many candidates the server keeps. Three times the number of badges'
- * worth of top delegates (100), so a delegate who climbed from rank 150 since
- * the list was fetched still makes the cut once powers are refreshed on-chain.
+ * How many top delegates the badges check `hasVoted` against. Also the SDK's
+ * own default for `maxDelegatesToCheck`, which is what the badges were tuned
+ * for.
  */
-export const TOP_DELEGATES_CANDIDATE_LIMIT = 300;
+export const TOP_DELEGATES_TO_CHECK = 100;
+
+/**
+ * How many candidates the server keeps. Three times the badge cap, so a
+ * delegate who climbed from rank 150 since the list was fetched still makes
+ * the cut once powers are refreshed on-chain.
+ */
+export const TOP_DELEGATES_CANDIDATE_LIMIT = 3 * TOP_DELEGATES_TO_CHECK;
 
 /**
  * How long the server-side candidate list stays fresh, in seconds.
@@ -63,12 +70,13 @@ export function chunkAddresses<T>(items: readonly T[], size: number): T[][] {
  * Re-rank candidates on live voting power.
  *
  * `livePowers` is keyed by lowercase address (the shape
- * `queryDelegateVotingPowers` returns). A candidate without a live reading
- * keeps its listed power rather than being dropped: the multicall returns one
- * result per call, so a gap means a single reverted read, not a missing
- * delegate. The app threshold and the governance exclude address are applied
- * after the overlay because a delegate can cross either since the list was
- * fetched.
+ * `queryDelegateVotingPowers` returns). A candidate without a live reading is
+ * dropped rather than kept at its listed power: `getVotes` on the ARB token
+ * does not revert for any address, so a gap means that read failed, and the
+ * listed value may be months old on the bundled-snapshot path. Dropping it
+ * keeps the rule that a power on a badge is never older than the page load.
+ * The app threshold and the governance exclude address are applied after the
+ * overlay because a delegate can cross either since the list was fetched.
  */
 export function rankDelegateCandidates(
   candidates: readonly DelegateInfo[],
@@ -78,11 +86,9 @@ export function rankDelegateCandidates(
   const threshold = BigInt(DELEGATE_MIN_VOTING_POWER_WEI);
 
   return candidates
-    .map((candidate) => {
+    .flatMap((candidate) => {
       const live = livePowers.get(candidate.address.toLowerCase());
-      return live === undefined
-        ? candidate
-        : { ...candidate, votingPower: live };
+      return live === undefined ? [] : [{ ...candidate, votingPower: live }];
     })
     .filter(
       (candidate) =>

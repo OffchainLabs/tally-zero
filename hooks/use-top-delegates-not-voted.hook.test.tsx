@@ -10,6 +10,7 @@ import {
 } from "@gzeoneth/gov-tracker";
 
 import { loadDelegateCache } from "@/lib/delegate-cache";
+import { createRpcProvider } from "@/lib/rpc-utils";
 import { getTallyDataClient } from "@/lib/tally-data/client";
 import type { TallyDelegateListItem } from "@/lib/tally-data/types";
 import { fetchTopDelegatesSnapshot } from "@/lib/top-delegates";
@@ -283,6 +284,42 @@ describe("useTopDelegatesNotVoted data source", () => {
       expect(result.current.error?.message).toBe("rpc down");
       expect(result.current.delegatesNotVoted).toEqual([]);
     });
+
+    it("reports an error when no candidate got a live reading, instead of rendering listed powers", async () => {
+      vi.mocked(fetchTopDelegatesSnapshot).mockResolvedValue({
+        delegates: [
+          info(DELEGATE_A, ARB(10_000)),
+          info(DELEGATE_B, ARB(9_000)),
+        ],
+        fetchedAt: "2026-10-30T12:00:00.000Z",
+      });
+      vi.mocked(queryDelegateVotingPowers).mockResolvedValue(new Map());
+
+      const result = await renderUntilSettled();
+
+      expect(queryDelegatesNotVoted).not.toHaveBeenCalled();
+      expect(result.current.error?.message).toMatch(
+        /refresh returned no results for 2 candidates/
+      );
+      expect(result.current.delegatesNotVoted).toEqual([]);
+      expect(result.current.allTopDelegatesVoted).toBe(false);
+    });
+  });
+
+  it("surfaces a provider error even when the indexer page is healthy", async () => {
+    getDelegatesPage.mockResolvedValue({
+      delegates: [row(DELEGATE_A, "1000")],
+      totalVotingPower: "1000",
+      totalSupply: "10000",
+    });
+    vi.mocked(createRpcProvider).mockRejectedValueOnce(new Error("bad rpc"));
+
+    const result = await renderUntilSettled();
+
+    expect(getDelegatesPage).toHaveBeenCalledTimes(1);
+    expect(queryDelegatesNotVoted).not.toHaveBeenCalled();
+    expect(result.current.error?.message).toBe("bad rpc");
+    expect(result.current.delegatesNotVoted).toEqual([]);
   });
 
   it("surfaces an error from the hasVoted query", async () => {

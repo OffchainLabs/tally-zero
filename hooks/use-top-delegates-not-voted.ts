@@ -33,10 +33,9 @@ import {
   fetchTopDelegatesSnapshot,
   rankDelegateCandidates,
   TOP_DELEGATES_CANDIDATE_LIMIT,
+  TOP_DELEGATES_TO_CHECK,
   VOTING_POWER_REFRESH_CHUNK,
 } from "@/lib/top-delegates";
-
-const TOP_DELEGATES_TO_CHECK = 100;
 
 export interface DelegateNotVoted {
   address: string;
@@ -117,7 +116,10 @@ async function loadFallbackCandidates(): Promise<DelegateInfo[] | null> {
 
 /**
  * Refresh candidate powers on-chain and re-rank. Powers shown on the badges
- * are never older than this read; only list membership can be stale.
+ * are never older than this read; only list membership can be stale. A
+ * candidate whose read failed is dropped by the ranker, and a batch where every
+ * read failed is treated as an RPC failure: rendering the listed powers in that
+ * case would show snapshot-era numbers with no signal that they are stale.
  */
 async function refreshCandidatesOnChain(
   provider: ethers.providers.Provider,
@@ -132,6 +134,12 @@ async function refreshCandidatesOnChain(
     for (const [address, power] of powers) livePowers.set(address, power);
   }
 
+  if (candidates.length > 0 && livePowers.size === 0) {
+    throw new Error(
+      `On-chain voting power refresh returned no results for ${candidates.length} candidates`
+    );
+  }
+
   return wrapDelegateCache(
     rankDelegateCandidates(candidates, livePowers, TOP_DELEGATES_TO_CHECK)
   );
@@ -142,9 +150,12 @@ async function refreshCandidatesOnChain(
  * answer is authoritative even when empty. On a failed fetch, fall back to a
  * candidate list refreshed on-chain rather than to stale numbers. An RPC
  * failure during that refresh propagates: no fallback shows old powers.
+ *
+ * Takes the provider as a promise so its handshake overlaps the indexer
+ * request; it is only awaited on the fallback path.
  */
 async function resolveTopDelegateCache(
-  provider: ethers.providers.Provider
+  providerPromise: Promise<ethers.providers.Provider>
 ): Promise<DelegateCache | null> {
   try {
     const page = await getTallyDataClient().getDelegatesPage({
@@ -162,7 +173,7 @@ async function resolveTopDelegateCache(
 
   const candidates = await loadFallbackCandidates();
   if (!candidates) return null;
-  return refreshCandidatesOnChain(provider, candidates);
+  return refreshCandidatesOnChain(await providerPromise, candidates);
 }
 
 export function useTopDelegatesNotVoted({
@@ -197,13 +208,20 @@ export function useTopDelegatesNotVoted({
     setError(null);
 
     try {
-      const provider = await createRpcProvider(l2Rpc);
+      // Start the provider handshake and the indexer request together; the
+      // provider is first awaited where it is first needed. The no-op handler
+      // only stops a rejection from being reported as unhandled if the early
+      // return below runs before anything awaits it; the awaits still throw.
+      const providerPromise = createRpcProvider(l2Rpc);
+      providerPromise.catch(() => {});
 
-      const cache = await resolveTopDelegateCache(provider);
+      const cache = await resolveTopDelegateCache(providerPromise);
       if (!cache) {
         setIsLoading(false);
         return;
       }
+
+      const provider = await providerPromise;
 
       const sdkResults = await queryDelegatesNotVoted(
         provider,
