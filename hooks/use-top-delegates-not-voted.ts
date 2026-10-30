@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { ethers } from "ethers";
+
 import {
   DELEGATE_CACHE_VERSION,
   queryDelegatesNotVoted,
+  queryDelegateVotingPowers,
   type DelegateCache,
+  type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
@@ -24,8 +28,14 @@ import { toError } from "@/lib/error-utils";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { getTallyDataClient } from "@/lib/tally-data/client";
 import type { TallyDelegateListResult } from "@/lib/tally-data/types";
-
-const TOP_DELEGATES_TO_CHECK = 100;
+import {
+  chunkAddresses,
+  fetchTopDelegatesSnapshot,
+  rankDelegateCandidates,
+  TOP_DELEGATES_CANDIDATE_LIMIT,
+  TOP_DELEGATES_TO_CHECK,
+  VOTING_POWER_REFRESH_CHUNK,
+} from "@/lib/top-delegates";
 
 export interface DelegateNotVoted {
   address: string;
@@ -34,27 +44,36 @@ export interface DelegateNotVoted {
 }
 
 /**
- * Wraps indexer delegate rows in the SDK's DelegateCache shape so they can be
- * fed to queryDelegatesNotVoted, which consumes only the `delegates` array and
- * silently requires it sorted by voting power descending. The indexer's
- * votable-supply totals are null until it reaches chain head, despite the
- * declared string type.
+ * Wraps delegate rows in the SDK's DelegateCache shape so they can be fed to
+ * queryDelegatesNotVoted, which consumes only the `delegates` array and
+ * silently requires it sorted by voting power descending. Everything else in
+ * the shape is filler the SDK never reads.
  */
-export function toDelegateCache(
-  result: TallyDelegateListResult
+function wrapDelegateCache(
+  delegates: DelegateInfo[],
+  totals: { totalVotingPower?: string | null; totalSupply?: string | null } = {}
 ): DelegateCache {
-  const delegates = sortDelegatesByVotingPower(result.delegates);
   return {
     version: DELEGATE_CACHE_VERSION,
     generatedAt: new Date().toISOString(),
     snapshotBlock: 0,
     startBlock: 0,
     chainId: ARBITRUM_CHAIN_ID,
-    totalVotingPower: result.totalVotingPower ?? "0",
-    totalSupply: result.totalSupply ?? "0",
+    totalVotingPower: totals.totalVotingPower ?? "0",
+    totalSupply: totals.totalSupply ?? "0",
     delegates,
     stats: { totalDelegates: delegates.length },
   };
+}
+
+/** Indexer page to cache shape. Re-sorts defensively; the indexer already does. */
+export function toDelegateCache(
+  result: TallyDelegateListResult
+): DelegateCache {
+  return wrapDelegateCache(
+    sortDelegatesByVotingPower(result.delegates),
+    result
+  );
 }
 
 /**
@@ -72,7 +91,72 @@ export function buildNotVotedList(
   }));
 }
 
-async function fetchTopDelegateCacheOrBundled(): Promise<DelegateCache | null> {
+/**
+ * Candidate addresses for the outage path, best source first: the server's
+ * last successful indexer read (hourly, survives the indexer being down), then
+ * the snapshot bundled with the SDK. Null when neither is available.
+ */
+async function loadFallbackCandidates(): Promise<DelegateInfo[] | null> {
+  try {
+    const snapshot = await fetchTopDelegatesSnapshot();
+    debug.delegates(
+      "using server top-delegates list from %s",
+      snapshot.fetchedAt
+    );
+    return snapshot.delegates;
+  } catch (err) {
+    debug.delegates("server top delegates fetch failed: %O", err);
+  }
+
+  const bundled = await loadDelegateCache();
+  if (!bundled) return null;
+  debug.delegates("using bundled delegate snapshot as candidate list");
+  return bundled.delegates.slice(0, TOP_DELEGATES_CANDIDATE_LIMIT);
+}
+
+/**
+ * Refresh candidate powers on-chain and re-rank. Powers shown on the badges
+ * are never older than this read; only list membership can be stale. A
+ * candidate whose read failed is dropped by the ranker, and a batch where every
+ * read failed is treated as an RPC failure: rendering the listed powers in that
+ * case would show snapshot-era numbers with no signal that they are stale.
+ */
+async function refreshCandidatesOnChain(
+  provider: ethers.providers.Provider,
+  candidates: DelegateInfo[]
+): Promise<DelegateCache> {
+  const livePowers = new Map<string, string>();
+  for (const chunk of chunkAddresses(
+    candidates.map((c) => c.address),
+    VOTING_POWER_REFRESH_CHUNK
+  )) {
+    const powers = await queryDelegateVotingPowers(provider, chunk);
+    for (const [address, power] of powers) livePowers.set(address, power);
+  }
+
+  if (candidates.length > 0 && livePowers.size === 0) {
+    throw new Error(
+      `On-chain voting power refresh returned no results for ${candidates.length} candidates`
+    );
+  }
+
+  return wrapDelegateCache(
+    rankDelegateCandidates(candidates, livePowers, TOP_DELEGATES_TO_CHECK)
+  );
+}
+
+/**
+ * The delegate set to check hasVoted against. Live indexer first; a healthy
+ * answer is authoritative even when empty. On a failed fetch, fall back to a
+ * candidate list refreshed on-chain rather than to stale numbers. An RPC
+ * failure during that refresh propagates: no fallback shows old powers.
+ *
+ * Takes the provider as a promise so its handshake overlaps the indexer
+ * request; it is only awaited on the fallback path.
+ */
+async function resolveTopDelegateCache(
+  providerPromise: Promise<ethers.providers.Provider>
+): Promise<DelegateCache | null> {
   try {
     const page = await getTallyDataClient().getDelegatesPage({
       minVotingPower: DELEGATE_MIN_VOTING_POWER_WEI,
@@ -82,13 +166,14 @@ async function fetchTopDelegateCacheOrBundled(): Promise<DelegateCache | null> {
       sort: "votingPower",
       dir: "desc",
     });
-    // A healthy indexer answer is authoritative even when empty; the bundled
-    // snapshot is only for a failed fetch.
     return toDelegateCache(page);
   } catch (err) {
     debug.delegates("indexer top delegates fetch failed: %O", err);
   }
-  return loadDelegateCache();
+
+  const candidates = await loadFallbackCandidates();
+  if (!candidates) return null;
+  return refreshCandidatesOnChain(await providerPromise, candidates);
 }
 
 export function useTopDelegatesNotVoted({
@@ -123,20 +208,27 @@ export function useTopDelegatesNotVoted({
     setError(null);
 
     try {
-      const cache = await fetchTopDelegateCacheOrBundled();
+      // Start the provider handshake and the indexer request together; the
+      // provider is first awaited where it is first needed. The no-op handler
+      // only stops a rejection from being reported as unhandled if the early
+      // return below runs before anything awaits it; the awaits still throw.
+      const providerPromise = createRpcProvider(l2Rpc);
+      providerPromise.catch(() => {});
+
+      const cache = await resolveTopDelegateCache(providerPromise);
       if (!cache) {
         setIsLoading(false);
         return;
       }
 
-      const provider = await createRpcProvider(l2Rpc);
+      const provider = await providerPromise;
 
       const sdkResults = await queryDelegatesNotVoted(
         provider,
         proposalId,
         governorAddress,
-        // Cap explicitly: the indexer cache holds at most this many rows, but the
-        // bundled fallback holds ~23,600 and must not be scanned past the top.
+        // Cap explicitly: every source above is already at most this long, but
+        // the SDK default is what the badges were tuned for.
         { cache, limit, maxDelegatesToCheck: TOP_DELEGATES_TO_CHECK }
       );
 
