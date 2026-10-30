@@ -2,6 +2,7 @@
 
 import { Fragment, memo } from "react";
 
+import type { GovernorType } from "@/config/governors";
 import {
   formatEstimatedCompletion,
   type EstimatedTimeRange,
@@ -39,7 +40,7 @@ export interface StageItemProps {
   votingTimeRange?: VotingTimeRange | null;
   /** Whether the +2d late-quorum extension can still occur */
   extensionStillPossible?: boolean;
-  governorType: "core" | "treasury";
+  governorType: GovernorType;
   proposalId: string;
   governorAddress: string;
 }

@@ -5,7 +5,11 @@ import {
   VotingPeriodPanel,
 } from "@/components/proposal/stages";
 import { Card, CardContent } from "@/components/ui/Card";
-import { getGovernorByAddress } from "@/config/governors";
+import {
+  getGovernorByAddress,
+  getGovernorType,
+  getL1VotingGovernor,
+} from "@/config/governors";
 import { useVotingPeriod } from "@/hooks/use-voting-period";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { formatVotingPower } from "@/lib/format-utils";
@@ -30,7 +34,10 @@ export function ProposalVoteSummaryCard({
   startBlock?: string;
   endBlock?: string;
 }) {
-  const governorConfig = getGovernorByAddress(governorAddress);
+  const governorType = getGovernorType(governorAddress);
+  const governorName =
+    getGovernorByAddress(governorAddress)?.name ??
+    getL1VotingGovernor(governorAddress)?.name;
   // Shared with the Lifecycle tab so both surfaces display identical data
   const { votingPeriod, extensionStillPossible } = useVotingPeriod({
     proposalId,
@@ -55,11 +62,13 @@ export function ProposalVoteSummaryCard({
     ? calculatePreciseQuorumProgress(votesTowardQuorum, quorum)
     : null;
   const proposalTypeLabel =
-    governorConfig?.type === "core"
+    governorType === "core"
       ? "Constitutional Quorum"
-      : governorConfig?.type === "treasury"
+      : governorType === "treasury"
         ? "Non-Constitutional Quorum"
-        : "Proposal Quorum";
+        : governorType === "l1"
+          ? "L1 Voting Quorum"
+          : "Proposal Quorum";
 
   const voteLegendItems = [
     {
@@ -95,7 +104,7 @@ export function ProposalVoteSummaryCard({
                 {proposalTypeLabel}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {governorConfig?.name ?? "Unknown governor"}
+                {governorName ?? "Unknown governor"}
               </p>
             </div>
           </div>

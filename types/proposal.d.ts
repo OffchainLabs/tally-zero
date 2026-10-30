@@ -4,6 +4,10 @@
  * Defines types for raw and parsed proposals from Governor contracts.
  */
 
+import type {
+  IndexerExecutionPhase,
+  IndexerGovernorType,
+} from "@/lib/tally-data/types";
 import type { ProposalStage, TimelockLink } from "@/types/proposal-stage";
 import type { Address } from "@/types/search";
 
@@ -106,6 +110,14 @@ export type ParsedProposal = {
    * status that may be about to change. See `isProposalStateUnverified`.
    */
   isStateUnverified?: boolean;
+  /** The indexer's governor kind, when the proposal came from the indexer */
+  governorType?: IndexerGovernorType;
+  /** L1 voting only: whether the vote snapshot has been locked */
+  snapshotLocked?: boolean | null;
+  /** How far execution has got, from the indexer's timelock operations */
+  executionPhase?: IndexerExecutionPhase | null;
+  /** A timelock operation was cancelled, freezing `executionPhase` */
+  executionCancelled?: boolean;
 };
 
 /** Return type for useTotalProposals hook */

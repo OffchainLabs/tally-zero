@@ -70,3 +70,6 @@ playwright-report/
 .playwright/
 # saved storageState carries a live siwe_session cookie — never commit it
 e2e/.auth/
+
+# Worst-case L1 voting run logs (e2e/l1-voting/run-worst-case.sh)
+e2e/l1-voting/.artifacts/

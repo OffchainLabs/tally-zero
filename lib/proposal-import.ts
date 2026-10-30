@@ -15,7 +15,7 @@
 
 import { getAddress, isAddress } from "viem";
 
-import { getGovernorType, type GovernorType } from "@/config/governors";
+import { getGovernorByAddress, type L2GovernorType } from "@/config/governors";
 
 export type ProposalImportSource = "forum" | "snapshot";
 
@@ -29,7 +29,7 @@ export interface ProposalImportResult {
    * then keyword matches in the title and body ("non-constitutional" wins
    * over "constitutional" because it is a strict superstring).
    */
-  suggestedGovernor?: GovernorType;
+  suggestedGovernor?: L2GovernorType;
 }
 
 const FORUM_HOST = "forum.arbitrum.foundation";
@@ -39,7 +39,7 @@ const SNAPSHOT_BOX_GRAPHQL = "https://api.snapshot.box/graphql";
 
 const FORUM_PROXY_ENDPOINT = "/api/forum/topic";
 
-function detectGovernorFromText(text: string): GovernorType | undefined {
+function detectGovernorFromText(text: string): L2GovernorType | undefined {
   const lower = text.toLowerCase();
   if (
     lower.includes("non-constitutional") ||
@@ -64,7 +64,7 @@ function buildImportResult(
     : `# ${title}\n`;
 
   const fromAddress = options?.governorAddress
-    ? getGovernorType(options.governorAddress)
+    ? getGovernorByAddress(options.governorAddress)?.type
     : undefined;
   const suggestedGovernor =
     fromAddress ?? detectGovernorFromText(`${title}\n${trimmedBody}`);
