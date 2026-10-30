@@ -232,6 +232,24 @@ describe("ProposalStages from the indexer", () => {
     },
   };
 
+  it("offers execution of a timelock past its ETA with a known salt", () => {
+    withStages([RESPONSE.stages[0], RESPONSE.stages[1], readyTimelock]);
+
+    const html = render();
+
+    expect(html).toContain('data-testid="execute-timelock-mock"');
+    expect(mocks.ExecuteTimelockButton).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: expect.objectContaining({
+          operationId: OPERATION_ID,
+          timelockAddress: TIMELOCK,
+          chainId: 1,
+          salt: SALT,
+        }),
+      })
+    );
+  });
+
   it("offers no execution before the ETA or without a salt", () => {
     withStages([{ ...readyTimelock, etaAt: 4_000_000_000 }]);
     expect(render()).not.toContain("execute-timelock-mock");

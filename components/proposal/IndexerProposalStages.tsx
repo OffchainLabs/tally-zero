@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/Button";
 import type { GovernorType } from "@/config/governors";
 import { useIndexerProposalStages } from "@/hooks/use-indexer-proposal-stages";
 import { useVotingPeriod } from "@/hooks/use-voting-period";
-import { indexerStageEstimatedCompletion } from "@/lib/indexer-stages";
+import {
+  indexerStageEstimatedCompletion,
+  indexerTimelockExecution,
+} from "@/lib/indexer-stages";
 import { ReloadIcon } from "@radix-ui/react-icons";
 
 import { LoadingSkeleton, StageItem } from "./stages";
+import { ExecuteTimelockButton } from "./stages/ExecuteTimelockButton";
 
 export interface IndexerProposalStagesProps {
   proposalId: string;
@@ -91,6 +95,7 @@ export default function IndexerProposalStages({
 
       <div className="relative">
         {stages.map((stage, idx) => {
+          const execution = indexerTimelockExecution(data.stages[idx]);
           return (
             // The endpoint's own status, before READY is derived, for e2e checks
             <div
@@ -115,6 +120,16 @@ export default function IndexerProposalStages({
                 governorType={effectiveGovernorType}
                 proposalId={proposalId}
                 governorAddress={governorAddress}
+                footer={
+                  execution && (
+                    <div className="mt-2" data-testid="timelock-execute">
+                      <ExecuteTimelockButton
+                        operation={execution}
+                        onSuccess={refetch}
+                      />
+                    </div>
+                  )
+                }
               />
             </div>
           );
