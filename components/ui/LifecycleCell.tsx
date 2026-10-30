@@ -13,12 +13,19 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { proposalSchema } from "@/config/schema";
 import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
 import {
+  isL1VotingProposal,
+  L1_EXECUTION_PHASES,
+  l1ExecutionPhaseIndex,
+} from "@/lib/l1-voting";
+import {
   formatStageName,
+  getL1DisplayState,
   getStateDotColor,
   getStateStyle,
 } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { cn } from "@/lib/utils";
+import type { ParsedProposal } from "@/types/proposal";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { InfoIcon } from "lucide-react";
 
@@ -26,7 +33,12 @@ interface LifecycleCellProps {
   proposal: z.infer<typeof proposalSchema> & {
     /** See `isProposalStateUnverified` in lib/proposal-utils */
     isStateUnverified?: boolean;
-  };
+  } & Partial<
+      Pick<
+        ParsedProposal,
+        "governorType" | "executionPhase" | "executionCancelled"
+      >
+    >;
 }
 
 /**
@@ -34,6 +46,53 @@ interface LifecycleCellProps {
  * the stages tab when clicked.
  */
 export function LifecycleCell({ proposal }: LifecycleCellProps) {
+  if (isL1VotingProposal(proposal)) {
+    return <L1LifecycleCell proposal={proposal} />;
+  }
+  return <GovernorLifecycleCell proposal={proposal} />;
+}
+
+/**
+ * An L1 voting proposal's status: the governor's state, with `Executing` until
+ * the indexer reports the Arbitrum retryable done. No gov-tracker trace exists
+ * for this governor, so there is nothing to resolve or queue.
+ */
+function L1LifecycleCell({ proposal }: LifecycleCellProps) {
+  const { display, state, isInProgress, phaseLabel } = getL1DisplayState(
+    proposal.state,
+    proposal.executionPhase,
+    proposal.executionCancelled
+  );
+  const phaseIndex = l1ExecutionPhaseIndex(proposal.executionPhase);
+
+  return (
+    <Link
+      href={buildProposalPath({
+        proposalId: proposal.id,
+        governorAddress: proposal.contractAddress,
+        chainId: proposal.networkId,
+      })}
+      className="text-left hover:opacity-80 transition-opacity"
+    >
+      <LifecycleContent
+        display={display}
+        state={state}
+        isInProgress={isInProgress}
+        phaseLabel={phaseLabel}
+        currentStage={phaseIndex === -1 ? null : phaseIndex + 1}
+        totalStages={L1_EXECUTION_PHASES.length}
+        isTracked={false}
+        isLoading={false}
+        stageCount={0}
+        currentStageName={null}
+        isBackgroundRefreshing={false}
+        source="indexer"
+      />
+    </Link>
+  );
+}
+
+function GovernorLifecycleCell({ proposal }: LifecycleCellProps) {
   const {
     display,
     state,
@@ -54,6 +113,7 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   const stagesHref = buildProposalPath({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress,
+    chainId: proposal.networkId,
     tab: "stages",
   });
 
@@ -139,6 +199,8 @@ interface LifecycleContentProps {
   stageCount: number;
   currentStageName: string | null;
   isBackgroundRefreshing: boolean;
+  /** Where an untracked status came from; the indexer for L1 voting rows */
+  source?: "governor" | "indexer";
 }
 
 const LifecycleContent = memo(function LifecycleContent({
@@ -153,6 +215,7 @@ const LifecycleContent = memo(function LifecycleContent({
   stageCount,
   currentStageName,
   isBackgroundRefreshing,
+  source = "governor",
 }: LifecycleContentProps) {
   const { color } = getStateStyle(state);
   const dotColor = getStateDotColor(state);
@@ -177,6 +240,8 @@ const LifecycleContent = memo(function LifecycleContent({
           <p className="text-sm">
             Executed on the governor, still moving through the timelocks
           </p>
+        ) : source === "indexer" ? (
+          <p className="text-sm">Status and execution phase from the indexer</p>
         ) : isTracked ? (
           <p className="text-sm">Lifecycle tracked: {stageCount} stages</p>
         ) : (

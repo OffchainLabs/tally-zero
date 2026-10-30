@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useInView } from "@/hooks/use-in-view";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { fetchProposalQuorum } from "@/lib/governor-search";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import { sumVoteCounts } from "@/lib/vote-utils";
 import type { ParsedProposal } from "@/types/proposal";
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
@@ -31,7 +32,13 @@ export function QuorumCell({ proposal }: { proposal: ParsedProposal }) {
   const [ref, inView] = useInView<HTMLDivElement>({ rootMargin: "100px" });
 
   // Only reach for RPC when there is something to fetch and the row is visible.
-  const needsFetch = !isExecuted && !existingQuorum && hasSnapshot;
+  // The read goes to the Arbitrum One governor, which an L1 voting proposal is
+  // not on.
+  const needsFetch =
+    !isExecuted &&
+    !existingQuorum &&
+    hasSnapshot &&
+    !isL1VotingProposal(proposal);
 
   const { data: fetchedQuorum, isLoading } = useQuery({
     queryKey: [

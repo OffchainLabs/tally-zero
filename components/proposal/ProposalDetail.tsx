@@ -18,6 +18,7 @@ import { isArbitrumGovernor } from "@config/governors";
 import { proposalSchema } from "@config/schema";
 import { useNerdMode } from "@context/NerdModeContext";
 import { useL1Block } from "@hooks/use-l1-block";
+import { usesIndexerStages } from "@lib/indexer-stages";
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
 import { cn } from "@lib/utils";
 
@@ -49,6 +50,8 @@ export function ProposalDetail({
   DescriptionWrapper,
 }: ProposalDetailProps) {
   const showStagesTab = isArbitrumGovernor(proposal.contractAddress);
+  // The indexer serves stages without the creation hash gov-tracker needs.
+  const stagesFromIndexer = usesIndexerStages(proposal);
   const { nerdMode } = useNerdMode();
   const { currentL1Block } = useL1Block();
   const [calldataOverrides, setCalldataOverrides] = useState<CalldataOverrides>(
@@ -142,7 +145,7 @@ export function ProposalDetail({
         </div>
       </TabsContent>
 
-      {showStagesTab && proposal.creationTxHash && (
+      {showStagesTab && (proposal.creationTxHash || stagesFromIndexer) && (
         <TabsContent
           value="stages"
           className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
@@ -160,7 +163,8 @@ export function ProposalDetail({
             >
               <ProposalStages
                 proposalId={proposal.id}
-                creationTxHash={proposal.creationTxHash}
+                creationTxHash={proposal.creationTxHash ?? ""}
+                networkId={proposal.networkId}
                 governorAddress={proposal.contractAddress}
                 currentL1Block={currentL1Block ?? undefined}
                 startBlock={proposal.startBlock}
@@ -171,7 +175,7 @@ export function ProposalDetail({
         </TabsContent>
       )}
 
-      {showStagesTab && !proposal.creationTxHash && (
+      {showStagesTab && !proposal.creationTxHash && !stagesFromIndexer && (
         <TabsContent
           value="stages"
           className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 
 import type { GovernorType } from "@/config/governors";
 import {
@@ -43,6 +43,8 @@ export interface StageItemProps {
   governorType: GovernorType;
   proposalId: string;
   governorAddress: string;
+  /** An action under the stage, such as executing a ready timelock */
+  footer?: ReactNode;
 }
 
 export const StageItem = memo(function StageItem({
@@ -60,6 +62,7 @@ export const StageItem = memo(function StageItem({
   governorType,
   proposalId,
   governorAddress,
+  footer,
 }: StageItemProps) {
   // gov-tracker's getStageMetadata always reports the 8-day Constitutional L2
   // timelock, so override estimatedDays here for treasury (non-Constitutional)
@@ -76,7 +79,10 @@ export const StageItem = memo(function StageItem({
   const status = stage?.status || "NOT_STARTED";
   const isActive = isTracking && !stage;
   const canRefresh = Boolean(stage && !isLoading);
-  const extraInfo = getStageExtraInfo(stageType, governorAddress);
+  // The extra info and voting details describe the Arbitrum One governors;
+  // an L1 voting proposal shows its own on the proposal page.
+  const isL1 = governorType === "l1";
+  const extraInfo = isL1 ? null : getStageExtraInfo(stageType, governorAddress);
 
   return (
     <div className="relative flex gap-4">
@@ -153,8 +159,9 @@ export const StageItem = memo(function StageItem({
           )}
         </p>
 
-        {/* Voting stage specific content */}
-        {stageType === "VOTING_ACTIVE" && (
+        {/* Voting stage specific content; an L1 voting proposal gets only the
+            tallies, since the rest reads the Arbitrum One governors */}
+        {stageType === "VOTING_ACTIVE" && (!isL1 || stage) && (
           <VotingStageContent
             stage={stage}
             votingTimeRange={votingTimeRange}
@@ -164,6 +171,7 @@ export const StageItem = memo(function StageItem({
             stageType={stageType}
             proposalId={proposalId}
             governorAddress={governorAddress}
+            showTopDelegates={!isL1}
           />
         )}
 
@@ -185,7 +193,15 @@ export const StageItem = memo(function StageItem({
         )}
 
         {/* Stage data */}
-        {stage?.data && <StageDataDisplay data={stage.data} status={status} />}
+        {stage?.data && (
+          <StageDataDisplay
+            data={stage.data}
+            status={status}
+            onRefresh={() => onRefresh(stageIndex)}
+          />
+        )}
+
+        {footer}
       </div>
     </div>
   );

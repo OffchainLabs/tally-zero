@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 
-import { getGovernorTypeFromName } from "@/config/governors";
+import { getGovernorTypeFromName, type GovernorType } from "@/config/governors";
 import { cn } from "@/lib/utils";
 
 interface GovernorBadgeProps {
@@ -12,8 +12,31 @@ interface GovernorBadgeProps {
   className?: string;
 }
 
+const GOVERNOR_BADGES: Record<GovernorType, { label: string; color: string }> =
+  {
+    // Core = brand blue
+    core: {
+      label: "Core",
+      color:
+        "bg-arb-brand/15 text-arb-brand ring-arb-brand/30 hover:bg-arb-brand/25",
+    },
+    // Treasury = accent teal-green
+    treasury: {
+      label: "Treasury",
+      color:
+        "bg-arb-accent2/15 text-arb-accent2 ring-arb-accent2/30 hover:bg-arb-accent2/25",
+    },
+    // L1 voting = violet, apart from both Arbitrum One governors
+    l1: {
+      label: "L1 Voting",
+      color:
+        "bg-violet-500/15 text-violet-600 ring-violet-500/30 hover:bg-violet-500/25 dark:text-violet-300",
+    },
+  };
+
 /**
- * Displays a styled badge indicating whether a proposal is from Core or Treasury governor
+ * Displays a styled badge indicating which governor a proposal is from: Core,
+ * Treasury, or the L1 voting governor.
  * Uses glassmorphism design with governor-specific accent colors
  */
 export const GovernorBadge = memo(function GovernorBadge({
@@ -21,8 +44,7 @@ export const GovernorBadge = memo(function GovernorBadge({
   size = "default",
   className,
 }: GovernorBadgeProps) {
-  const governorType = getGovernorTypeFromName(governorName);
-  const isCore = governorType === "core";
+  const badge = GOVERNOR_BADGES[getGovernorTypeFromName(governorName)];
 
   const sizeClasses =
     size === "sm"
@@ -36,14 +58,11 @@ export const GovernorBadge = memo(function GovernorBadge({
         "inline-flex items-center rounded-md font-semibold uppercase",
         "backdrop-blur-md ring-1 ring-inset transition-all duration-200",
         sizeClasses,
-        // Governor-specific colors: Core = brand blue, Treasury = accent teal-green
-        isCore
-          ? "bg-arb-brand/15 text-arb-brand ring-arb-brand/30 hover:bg-arb-brand/25"
-          : "bg-arb-accent2/15 text-arb-accent2 ring-arb-accent2/30 hover:bg-arb-accent2/25",
+        badge.color,
         className
       )}
     >
-      {isCore ? "Core" : "Treasury"}
+      {badge.label}
     </span>
   );
 });

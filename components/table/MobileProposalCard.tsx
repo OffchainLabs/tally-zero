@@ -9,6 +9,8 @@ import { HasVotedBadge } from "@/components/ui/HasVotedBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadgeGlass } from "@/components/ui/StatusBadgeGlass";
 import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
+import { isL1VotingProposal } from "@/lib/l1-voting";
+import { getL1DisplayState } from "@/lib/lifecycle-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
 import { extractProposalTitle, truncateText } from "@/lib/text-utils";
 import { cn } from "@/lib/utils";
@@ -32,13 +34,28 @@ export const MobileProposalCard = memo(function MobileProposalCard({
   // Same on-chain status the desktop table's LifecycleCell resolves, so a Core
   // proposal still travelling through the timelocks reads "Executing" here too,
   // and stays a placeholder until it settles instead of cycling through labels.
-  const { state, isResolving } = useProposalLifecycleStatus(proposal);
+  // An L1 voting proposal has no trace to run; its status is the indexer's.
+  const isL1Voting = isL1VotingProposal(proposal);
+  const lifecycle = useProposalLifecycleStatus(proposal, {
+    enabled: !isL1Voting,
+  });
+  const { state, isResolving } = isL1Voting
+    ? {
+        state: getL1DisplayState(
+          proposal.state,
+          proposal.executionPhase,
+          proposal.executionCancelled
+        ).state,
+        isResolving: false,
+      }
+    : lifecycle;
 
   return (
     <Link
       href={buildProposalPath({
         proposalId: proposal.id,
         governorAddress: proposal.contractAddress,
+        chainId: proposal.networkId,
       })}
       className={cn(
         "block w-full text-left p-4 rounded-xl min-h-[88px]",
