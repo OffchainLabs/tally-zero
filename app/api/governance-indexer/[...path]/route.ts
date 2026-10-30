@@ -2,6 +2,10 @@ import { indexerErrorResponse, indexerFetch } from "@/lib/indexer/server";
 
 export const dynamic = "force-dynamic";
 
+// A vote plan the proof cache misses is built from live RPC proofs, which can take well past the
+// default timeout while other voters' transactions land.
+const VOTE_PLAN_TIMEOUT_MS = 45_000;
+
 type RouteContext = {
   params: Promise<{ path: string[] }>;
 };
@@ -30,6 +34,9 @@ async function proxy(
       redirect: "manual",
       body: hasBody ? await request.arrayBuffer() : undefined,
       headers: contentType ? { "content-type": contentType } : undefined,
+      timeoutMs: encodedPath.startsWith("api/l1-voting/vote-plan/")
+        ? VOTE_PLAN_TIMEOUT_MS
+        : undefined,
     });
 
     const headers = new Headers();

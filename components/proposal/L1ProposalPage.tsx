@@ -6,6 +6,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
+import { L1VotePanel } from "@/components/l1-voting/L1VotePanel";
 import IndexerProposalStages from "@/components/proposal/IndexerProposalStages";
 import { L1ProposalVoters } from "@/components/proposal/L1ProposalVoters";
 import { ProposalPageError } from "@/components/proposal/ProposalPageError";
@@ -130,12 +131,10 @@ export function L1ProposalPage({
             currentBlock={currentBlock}
           />
           <L1Tallies voteSummary={voteSummary} quorum={entry.quorum ?? null} />
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="l1-vote-placeholder"
-          >
-            Voting from Ethereum is coming in a follow-up.
-          </p>
+          <L1VotePanel
+            proposalId={proposalId}
+            governorAddress={governorAddress}
+          />
         </div>
 
         <div className="md:col-span-2 min-w-0 glass md:rounded-2xl border border-white/40 dark:border-white/10 p-4 sm:p-6 shadow-lg shadow-black/5">
