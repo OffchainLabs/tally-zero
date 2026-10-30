@@ -2,58 +2,75 @@
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { l2ChainId } from "@/config/chains";
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import type { TimelockOperationInfo } from "@/hooks/use-timelock-operation";
 import {
-  hashOperation,
-  prepareTimelockExecuteCalldata,
-  validateSalt,
-} from "@gzeoneth/gov-tracker";
+  computeOperationIds,
+  encodeTimelockExecution,
+  findKnownSalt,
+  hasRetryableCalls,
+  matchEntryPoint,
+  timelockExecutionValue,
+  type TimelockExecution,
+} from "@/lib/timelock-execution";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { BigNumber } from "ethers";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   useAccount,
   useEstimateGas,
+  usePublicClient,
   useSendTransaction,
   useWaitForTransactionReceipt,
 } from "wagmi";
 
-const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
-
 interface ExecuteTimelockButtonProps {
-  operation: TimelockOperationInfo;
+  /** A discovered single operation, or an operation's full call list */
+  operation: TimelockOperationInfo | TimelockExecution;
   onSuccess?: () => void;
 }
 
+function toExecution(
+  operation: TimelockOperationInfo | TimelockExecution
+): TimelockExecution {
+  if ("calls" in operation) return operation;
+  return {
+    operationId: operation.operationId,
+    timelockAddress: operation.timelockAddress,
+    calls: [
+      {
+        target: operation.target,
+        value: operation.value,
+        data: operation.data,
+      },
+    ],
+    predecessor: operation.predecessor,
+  };
+}
+
 export function ExecuteTimelockButton({
-  operation,
+  operation: input,
   onSuccess,
 }: ExecuteTimelockButtonProps) {
   const { isConnected } = useAccount();
   const [customSalt, setCustomSalt] = useState("");
 
-  const baseParams = useMemo(
-    () => ({
-      target: operation.target,
-      value: BigNumber.from(operation.value),
-      data: operation.data,
-      predecessor: operation.predecessor,
-    }),
-    [operation.target, operation.value, operation.data, operation.predecessor]
+  // Keyed on content, so a caller rebuilding the object each render does not
+  // re-run the hashing and the gas estimate.
+  const executionKey = JSON.stringify(toExecution(input));
+  const execution = useMemo(
+    () => JSON.parse(executionKey) as TimelockExecution,
+    [executionKey]
   );
+  const chainId = execution.chainId ?? l2ChainId();
+  const { ensure } = useEnsureChain(chainId);
+  const client = usePublicClient({ chainId });
 
-  const zeroSaltMatches = useMemo(
-    () =>
-      validateSalt(operation.operationId, {
-        ...baseParams,
-        salt: ZERO_BYTES32,
-      }),
-    [operation.operationId, baseParams]
-  );
+  const knownSalt = useMemo(() => findKnownSalt(execution), [execution]);
 
-  const needsCustomSalt = !zeroSaltMatches;
+  const needsCustomSalt = !knownSalt;
 
   const { validatedSalt, saltValidationError } = useMemo(() => {
     if (!needsCustomSalt || !customSalt) {
@@ -66,34 +83,46 @@ export function ExecuteTimelockButton({
           "Salt must be a valid bytes32 (0x followed by 64 hex characters)",
       };
     }
-    if (
-      validateSalt(operation.operationId, { ...baseParams, salt: customSalt })
-    ) {
-      return { validatedSalt: customSalt, saltValidationError: null };
+    const entryPoint = matchEntryPoint(execution, customSalt);
+    if (entryPoint) {
+      return {
+        validatedSalt: { salt: customSalt, entryPoint },
+        saltValidationError: null,
+      };
     }
-    const computedId = hashOperation({ ...baseParams, salt: customSalt });
+    const ids = computeOperationIds(execution, customSalt);
+    const computedId = ids.execute ?? ids.executeBatch;
     return {
       validatedSalt: null,
-      saltValidationError: `Salt produces operation ID ${computedId.slice(0, 18)}... which doesn't match expected ${operation.operationId.slice(0, 18)}...`,
+      saltValidationError: `Salt produces operation ID ${computedId.slice(0, 18)}... which doesn't match expected ${execution.operationId.slice(0, 18)}...`,
     };
-  }, [needsCustomSalt, customSalt, operation.operationId, baseParams]);
+  }, [needsCustomSalt, customSalt, execution]);
 
-  const effectiveSalt =
-    validatedSalt ?? (zeroSaltMatches ? ZERO_BYTES32 : null);
+  const effectiveSalt = validatedSalt ?? knownSalt;
 
-  const prepared = useMemo(() => {
-    if (!effectiveSalt) return undefined;
-    return prepareTimelockExecuteCalldata(
-      operation.timelockAddress,
-      { ...baseParams, salt: effectiveSalt },
-      operation.operationId
-    );
-  }, [
-    effectiveSalt,
-    operation.timelockAddress,
-    operation.operationId,
-    baseParams,
-  ]);
+  const encoded = useMemo(
+    () =>
+      effectiveSalt
+        ? encodeTimelockExecution(
+            execution,
+            effectiveSalt.salt,
+            effectiveSalt.entryPoint
+          )
+        : undefined,
+    [effectiveSalt, execution]
+  );
+
+  // Retryable tickets created by an L1 timelock are paid at execution time.
+  const needsPricing = hasRetryableCalls(execution);
+  const { data: value, error: valueError } = useQuery({
+    queryKey: ["timelock-execution-value", chainId, executionKey],
+    queryFn: () => timelockExecutionValue(execution, client!),
+    enabled: !!client,
+    staleTime: needsPricing ? 30_000 : Infinity,
+  });
+
+  const prepared =
+    encoded && value !== undefined ? { ...encoded, value } : undefined;
 
   const {
     error: estimateError,
@@ -102,7 +131,8 @@ export function ExecuteTimelockButton({
   } = useEstimateGas({
     to: prepared?.to,
     data: prepared?.data,
-    value: BigInt(prepared?.value ?? "0"),
+    value: prepared?.value,
+    chainId,
     query: { enabled: !!prepared && isConnected },
   });
 
@@ -116,6 +146,7 @@ export function ExecuteTimelockButton({
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({
       hash: txHash,
+      chainId,
     });
 
   useEffect(() => {
@@ -131,12 +162,18 @@ export function ExecuteTimelockButton({
     }
   }, [sendError]);
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
     if (!prepared || isEstimateError) return;
+    try {
+      await ensure();
+    } catch {
+      return;
+    }
     sendTransaction({
       to: prepared.to,
       data: prepared.data,
-      value: BigInt(prepared.value),
+      value: prepared.value,
+      chainId,
     });
   };
 
@@ -169,8 +206,16 @@ export function ExecuteTimelockButton({
           </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          Expected operation ID: {operation.operationId.slice(0, 18)}...
+          Expected operation ID: {execution.operationId.slice(0, 18)}...
         </div>
+      </div>
+    );
+  }
+
+  if (valueError) {
+    return (
+      <div className="text-xs text-red-500" title={valueError.message}>
+        Cannot price the retryable tickets this execution creates
       </div>
     );
   }
@@ -233,7 +278,7 @@ export function ExecuteTimelockButton({
   return (
     <Button
       size="sm"
-      onClick={handleExecute}
+      onClick={() => void handleExecute()}
       disabled={!prepared || isEstimateError}
     >
       Execute Operation

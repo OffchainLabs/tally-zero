@@ -28,6 +28,7 @@ export interface StageDataDisplayProps {
 export const StageDataDisplay = memo(function StageDataDisplay({
   data,
   status,
+  onRefresh,
 }: StageDataDisplayProps) {
   const eta =
     "eta" in data && data.eta && ETA_RELEVANT_STATUSES.has(status)
@@ -84,7 +85,10 @@ export const StageDataDisplay = memo(function StageDataDisplay({
         <RetryableCreationDetails details={creationDetails} />
       ) : null}
       {redemptionDetails ? (
-        <RetryableRedemptionDetails details={redemptionDetails} />
+        <RetryableRedemptionDetails
+          details={redemptionDetails}
+          onRedeemed={onRefresh}
+        />
       ) : null}
       {l2ToL1Messages ? (
         <L2ToL1MessageDetails messages={l2ToL1Messages} />

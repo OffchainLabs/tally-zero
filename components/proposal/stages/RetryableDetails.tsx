@@ -2,9 +2,10 @@
 
 import { memo } from "react";
 
-import type { L2Chain } from "@gzeoneth/gov-tracker";
+import type { Chain, L2Chain } from "@gzeoneth/gov-tracker";
 import { ExternalLinkIcon } from "@radix-ui/react-icons";
 
+import { RedeemRetryableButton } from "./RedeemRetryableButton";
 import { getStageTxExplorerUrl } from "./stage-utils";
 
 export interface RetryableCreationDetailsProps {
@@ -57,12 +58,21 @@ export interface RetryableRedemptionDetailsProps {
     targetChain: L2Chain;
     status: string;
     l2TxHash: string | null;
+    /** Set by the indexer; a REDEEMABLE ticket with one gets a Redeem button */
+    ticketId?: string | null;
+    /** Set by the indexer: the L1 transaction that created the ticket */
+    creationTxHash?: string | null;
+    /** The creation transaction's explorer chain; "unknown" has no explorer */
+    creationChain?: Chain;
   }>;
+  /** Called after a manual redeem is mined */
+  onRedeemed?: () => void;
 }
 
 export const RetryableRedemptionDetails = memo(
   function RetryableRedemptionDetails({
     details,
+    onRedeemed,
   }: RetryableRedemptionDetailsProps) {
     const redeemedCount = details.filter((d) => d.l2TxHash).length;
 
@@ -75,6 +85,8 @@ export const RetryableRedemptionDetails = memo(
           <div
             key={`redemption-${detail.index}`}
             className="flex items-center gap-2"
+            data-ticket-id={detail.ticketId ?? undefined}
+            data-status={detail.status}
           >
             <span className="text-xs px-1 py-0.5 rounded bg-arb-blue/15 text-arb-blue dark:bg-arb-navy/60 dark:text-arb-teal">
               {detail.targetChain === "arb1" ? "Arb1" : "Nova"}
@@ -96,9 +108,49 @@ export const RetryableRedemptionDetails = memo(
             ) : (
               <span className="text-muted-foreground">{detail.status}</span>
             )}
+            {detail.creationTxHash && (
+              <CreationTxLink
+                hash={detail.creationTxHash}
+                chain={detail.creationChain ?? "ethereum"}
+              />
+            )}
+            {detail.status === "REDEEMABLE" && detail.ticketId && (
+              <RedeemRetryableButton
+                ticketId={detail.ticketId}
+                onRedeemed={onRedeemed}
+              />
+            )}
           </div>
         ))}
       </div>
     );
   }
 );
+
+/** The L1 transaction that created a ticket; a chain without an explorer gets the bare hash */
+function CreationTxLink({ hash, chain }: { hash: string; chain: Chain }) {
+  const short = `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+  return (
+    <span
+      className="flex items-center gap-1 text-muted-foreground"
+      data-testid="retryable-creation-tx"
+    >
+      created{" "}
+      {chain === "unknown" ? (
+        <span className="font-mono" title={hash}>
+          {short}
+        </span>
+      ) : (
+        <a
+          href={getStageTxExplorerUrl(hash, chain)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+        >
+          {short}
+          <ExternalLinkIcon className="h-3 w-3" />
+        </a>
+      )}
+    </span>
+  );
+}
