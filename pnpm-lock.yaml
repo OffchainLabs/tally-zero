@@ -60,6 +60,9 @@ importers:
       "@next/bundle-analyzer":
         specifier: 16.2.12
         version: 16.2.12(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      "@offchainlabs/l1-voting-proving":
+        specifier: link:../arbitrum-governance-indexer/packages/l1-voting-tooling
+        version: link:../arbitrum-governance-indexer/packages/l1-voting-tooling
       "@radix-ui/react-dialog":
         specifier: ^1.0.5
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)

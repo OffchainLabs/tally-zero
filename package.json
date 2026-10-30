@@ -34,6 +34,7 @@
     "@headlessui/react": "^2.2.9",
     "@hookform/resolvers": "^3.3.4",
     "@next/bundle-analyzer": "16.2.12",
+    "@offchainlabs/l1-voting-proving": "link:../arbitrum-governance-indexer/packages/l1-voting-tooling",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
     "@radix-ui/react-hover-card": "^1.0.7",

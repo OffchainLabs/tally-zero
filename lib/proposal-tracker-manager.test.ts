@@ -549,9 +549,8 @@ describe("proposal-tracker-manager", () => {
 
   describe("vote update subscriptions", () => {
     it("subscribes and receives vote updates", async () => {
-      const { subscribeToVoteUpdates, emitVoteUpdate } = await import(
-        "./proposal-tracker-manager"
-      );
+      const { subscribeToVoteUpdates, emitVoteUpdate } =
+        await import("./proposal-tracker-manager");
 
       const callback = vi.fn();
       subscribeToVoteUpdates(callback);
@@ -570,9 +569,8 @@ describe("proposal-tracker-manager", () => {
     });
 
     it("unsubscribes correctly", async () => {
-      const { subscribeToVoteUpdates, emitVoteUpdate } = await import(
-        "./proposal-tracker-manager"
-      );
+      const { subscribeToVoteUpdates, emitVoteUpdate } =
+        await import("./proposal-tracker-manager");
 
       const callback = vi.fn();
       const unsubscribe = subscribeToVoteUpdates(callback);
@@ -591,9 +589,8 @@ describe("proposal-tracker-manager", () => {
     });
 
     it("handles subscriber errors gracefully", async () => {
-      const { subscribeToVoteUpdates, emitVoteUpdate } = await import(
-        "./proposal-tracker-manager"
-      );
+      const { subscribeToVoteUpdates, emitVoteUpdate } =
+        await import("./proposal-tracker-manager");
 
       const errorCallback = vi.fn(() => {
         throw new Error("Subscriber error");

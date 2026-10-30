@@ -57,17 +57,23 @@ vi.mock("@/hooks/use-ensure-chain", () => ({
     isSwitching: false,
   }),
 }));
+// Claim targets come from the pinned deployment, not the indexer.
+vi.mock("@/hooks/use-l1-voting-trust", () => ({
+  useL1VotingDeployment: () =>
+    mocks.deploymentUnavailable
+      ? { data: null, isPending: false }
+      : {
+          data: {
+            l2DelegateMapping: L2_MAPPING,
+            l1DelegateMapping: getAddress(
+              "0x00000000000000000000000000000000000d0e11"
+            ),
+          },
+          isPending: false,
+        },
+}));
 vi.mock("@/lib/l1-voting/api", () => ({
   l1VotingApi: {
-    deployment: async () => {
-      if (mocks.deploymentUnavailable) throw new Error("not configured");
-      return {
-        l2DelegateMapping: L2_MAPPING,
-        l1DelegateMapping: getAddress(
-          "0x00000000000000000000000000000000000d0e11"
-        ),
-      };
-    },
     registration: async () => ({
       l2Claim: null,
       l2ClaimProvable: false,
@@ -141,7 +147,7 @@ describe("L1Registration Safe paths", () => {
     vi.unstubAllGlobals();
   });
 
-  it("says L1 voting is not available while the indexer serves no deployment", async () => {
+  it("says L1 voting is not available while no deployment is pinned", async () => {
     mocks.deploymentUnavailable = true;
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },

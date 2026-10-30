@@ -9,7 +9,9 @@
 
 import { LOCAL_L1_CHAIN_ID } from "@/config/chains";
 import { MS_PER_SECOND } from "@/lib/date-utils";
+import { getL1DisplayState, type L1DisplayStatus } from "@/lib/lifecycle-utils";
 import { getStateName, normalizeProposalStateName } from "@/lib/state-utils";
+import type { TallyProposalIndexEntry } from "@/lib/tally-data/types";
 import type { ProposalStateName } from "@/types/proposal";
 
 /** Seconds per block: Ethereum's 12, and the local anvil's 1 */
@@ -78,4 +80,80 @@ export function resolveL1ProposalState(
     return normalizeProposalStateName(getStateName(onChainState));
   }
   return normalizeProposalStateName(indexedState);
+}
+
+/** What the detail page shows for a proposal, whichever sources answered. */
+export interface L1ProposalView {
+  display: L1DisplayStatus;
+  description: string;
+  snapshotBlock: number;
+  snapshotLocked: boolean;
+  quorum: string | null;
+  /** The indexer was unreachable: shown from Ethereum alone, without tallies or stages. */
+  fromChainOnly: boolean;
+  /** The text and actions were read from Ethereum and hash to the proposal id. */
+  verified: boolean;
+  /** The indexer's description differs from what was proposed on Ethereum. */
+  mismatch: boolean;
+  /** Why voting is disabled, or null. Voting needs the proposal confirmed on Ethereum first. */
+  voteBlocked: string | null;
+}
+
+/**
+ * One view of an L1 proposal from the indexer's entry, the governor's own state, and the proposal
+ * as verified on Ethereum. The text is always Ethereum's once verified; the indexer only adds
+ * tallies, phases and quorum. Null when neither the indexer nor Ethereum knows the proposal.
+ */
+export function l1ProposalView({
+  proposalId,
+  entry,
+  onChain,
+  verified,
+  verifyError,
+}: {
+  proposalId: string;
+  entry: Pick<
+    TallyProposalIndexEntry,
+    | "state"
+    | "executionPhase"
+    | "executionCancelled"
+    | "description"
+    | "snapshotBlock"
+    | "snapshotLocked"
+    | "quorum"
+  > | null;
+  onChain: { state?: number; snapshotBlock?: number; snapshotLocked?: boolean };
+  verified: { description: string; startBlock: bigint } | undefined;
+  verifyError: string | null;
+}): L1ProposalView | null {
+  if (!entry && !verified) return null;
+  const mismatch =
+    !!verified &&
+    entry?.description != null &&
+    entry.description !== verified.description;
+  return {
+    display: getL1DisplayState(
+      resolveL1ProposalState(onChain.state, entry?.state),
+      entry?.executionPhase,
+      entry?.executionCancelled ?? false
+    ),
+    description:
+      verified?.description ?? entry?.description ?? `Proposal ${proposalId}`,
+    snapshotBlock:
+      onChain.snapshotBlock ??
+      entry?.snapshotBlock ??
+      Number(verified?.startBlock ?? 0),
+    snapshotLocked: onChain.snapshotLocked ?? Boolean(entry?.snapshotLocked),
+    quorum: entry?.quorum ?? null,
+    fromChainOnly: !entry,
+    verified: !!verified && !mismatch,
+    mismatch,
+    voteBlocked: verifyError
+      ? `Could not confirm this proposal's content on Ethereum (${verifyError}), so voting is disabled.`
+      : mismatch
+        ? "The indexer's description differs from the proposal on Ethereum, so voting is disabled."
+        : !verified
+          ? "Checking the proposal's content on Ethereum…"
+          : null,
+  };
 }
