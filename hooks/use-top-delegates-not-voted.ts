@@ -8,6 +8,7 @@ import {
   type DelegateCache,
 } from "@gzeoneth/gov-tracker";
 
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import {
   DELEGATE_MIN_VOTING_POWER_WEI,
   EXCLUDED_DELEGATE_ADDRESSES,
@@ -48,7 +49,7 @@ export function toDelegateCache(
     generatedAt: new Date().toISOString(),
     snapshotBlock: 0,
     startBlock: 0,
-    chainId: 42161,
+    chainId: ARBITRUM_CHAIN_ID,
     totalVotingPower: result.totalVotingPower ?? "0",
     totalSupply: result.totalSupply ?? "0",
     delegates,
@@ -81,9 +82,9 @@ async function fetchTopDelegateCacheOrBundled(): Promise<DelegateCache | null> {
       sort: "votingPower",
       dir: "desc",
     });
-    if (page.delegates.length > 0) {
-      return toDelegateCache(page);
-    }
+    // A healthy indexer answer is authoritative even when empty; the bundled
+    // snapshot is only for a failed fetch.
+    return toDelegateCache(page);
   } catch (err) {
     debug.delegates("indexer top delegates fetch failed: %O", err);
   }
@@ -134,7 +135,9 @@ export function useTopDelegatesNotVoted({
         provider,
         proposalId,
         governorAddress,
-        { cache, limit, maxDelegatesToCheck: cache.delegates.length }
+        // Cap explicitly: the indexer cache holds at most this many rows, but the
+        // bundled fallback holds ~23,600 and must not be scanned past the top.
+        { cache, limit, maxDelegatesToCheck: TOP_DELEGATES_TO_CHECK }
       );
 
       const displayRecords = await getDelegateDisplayRecords(
