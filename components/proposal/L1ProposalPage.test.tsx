@@ -32,6 +32,11 @@ vi.mock("@/components/container/VoteModel", () => ({ default: () => null }));
 vi.mock("@/components/proposal/ProposalVoteCard", () => ({
   ProposalVoteCard: () => null,
 }));
+vi.mock("@/components/l1-voting/L1VotePanel", () => ({
+  L1VotePanel: ({ proposalId }: { proposalId: string }) => (
+    <div data-testid="l1-vote-panel" data-proposal-id={proposalId} />
+  ),
+}));
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQuery: mocks.useQuery,
@@ -147,11 +152,11 @@ describe("ProposalPage for an L1 voting proposal", () => {
     expect(html).toContain("https://etherscan.io/block/400");
   });
 
-  it("shows tallies and where voting will go", () => {
+  it("shows tallies and mounts the vote panel", () => {
     const html = renderPage(`eip155:1337:${L1_GOVERNOR}`);
     expect(html).toContain('data-testid="l1-tallies"');
     expect(html).toContain("2 voters");
-    expect(html).toContain('data-testid="l1-vote-placeholder"');
+    expect(html).toContain('data-testid="l1-vote-panel"');
   });
 
   it("reports a missing proposal", () => {
