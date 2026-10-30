@@ -11,6 +11,7 @@ const VOTER = "0x1111111111111111111111111111111111111111";
 const DELEGATE = "0x2222222222222222222222222222222222222222";
 
 const mocks = vi.hoisted(() => ({
+  verification: null as unknown,
   searchParams: new URLSearchParams(),
   useL1Proposal: vi.fn(),
   useProposalById: vi.fn(),
@@ -36,6 +37,11 @@ vi.mock("@/components/l1-voting/L1VotePanel", () => ({
   L1VotePanel: ({ proposalId }: { proposalId: string }) => (
     <div data-testid="l1-vote-panel" data-proposal-id={proposalId} />
   ),
+}));
+// The trust hooks read Ethereum through wagmi; here the chain agrees with the indexer.
+vi.mock("@/hooks/use-l1-voting-trust", () => ({
+  useL1VotingDeployment: () => ({ data: { governor: L1_GOVERNOR } }),
+  useVerifiedProposal: () => mocks.verification,
 }));
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
@@ -93,6 +99,15 @@ describe("ProposalPage for an L1 voting proposal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useL1Proposal.mockReturnValue(l1Proposal());
+    mocks.verification = {
+      data: {
+        proposal: { description: "# Recover the bridge\n\nMove funds back." },
+        actions: [],
+      },
+      isError: false,
+      isPending: false,
+      error: null,
+    };
   });
 
   it("loads from the indexer and the L1 chain, never the L2 path", () => {
@@ -161,6 +176,13 @@ describe("ProposalPage for an L1 voting proposal", () => {
 
   it("reports a missing proposal", () => {
     mocks.useL1Proposal.mockReturnValue(l1Proposal({ entry: null }));
+    // Ethereum has no such proposal either.
+    mocks.verification = {
+      data: undefined,
+      isError: true,
+      isPending: false,
+      error: new Error("no ProposalCreated event"),
+    };
     expect(renderPage(`eip155:1:${L1_GOVERNOR}`)).toContain(
       "Proposal not found"
     );

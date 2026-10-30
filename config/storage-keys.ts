@@ -19,6 +19,10 @@ export const STORAGE_PREFIX = "tally-zero";
 export const STORAGE_KEYS = {
   L1_RPC: "tally-zero-l1-rpc",
   L2_RPC: "tally-zero-l2-rpc",
+  /** An Arbitrum archive RPC for building L1 vote plans in the browser */
+  L2_ARCHIVE_RPC: "tally-zero-l2-archive-rpc",
+  /** Where L1 vote plans come from: "indexer" or "own" (the user's RPCs) */
+  L1_VOTE_PLAN_SOURCE: "tally-zero-l1-vote-plan-source",
   PROPOSAL_DRAFT: "tally-zero-proposal-draft",
   DRAFT_SUBMISSION: "tally-zero-draft-submission",
   BLOCK_RANGE: "tally-zero-block-range",

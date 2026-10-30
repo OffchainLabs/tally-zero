@@ -1,15 +1,5 @@
 /* eslint-disable no-process-env */
 /**
- * Voting on L1 voting proposals in the browser, recorded. Each case gets fresh delegates and
- * proposals from the indexer repo's scenario CLI, then the vote panel is driven and checked
- * against the chain and the indexer API: a pending proposal; two first voters racing to lock;
- * a wallet that rejects; nothing left to prove; already voted; no power; the indexer going down
- * with the panel open.
- *
- * Runs on the stack e2e/l1-voting/run-worst-case.sh boots:
- *   SPECS=e2e/l1-voting/permutations.spec.ts e2e/l1-voting/run-worst-case.sh
- */
-/**
  * Every L1 voting case a delegate can meet, in the browser, recorded. Each case gets fresh
  * delegates and proposals from the indexer repo's scenario CLI, then the UI is driven and checked
  * against the chain and the indexer API.
@@ -34,6 +24,12 @@ import { INDEXER_REPO, scenario } from "./scenario";
 
 const INDEXER = process.env.GOVERNANCE_INDEXER_URL ?? "http://localhost:42069";
 const L1_CHAIN = 1337;
+const SAFE = "0x8Df5b801aD8FD2F9589c284979e6795f418A5c9B";
+const SAFE_OWNER_1 = {
+  key: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+};
+const ZERO = "0x0000000000000000000000000000000000000000";
 
 test.skip(!INDEXER_REPO, "set WORST_CASE_INDEXER_REPO (run-worst-case.sh)");
 test.describe.configure({ mode: "serial" });
@@ -122,13 +118,70 @@ async function expectStage(p: Page, type: string, status: string) {
 // Accounts and proposals shared across the serial cases.
 const w: Record<string, Wallet> = {};
 const ids: Record<string, string> = {};
+const descriptions: Record<string, string> = {};
 
 test("setup: fresh delegates for every case", async () => {
   test.setTimeout(30 * 60_000);
   governor = (await api("/api/l1-voting/deployment")).governor;
-  for (const name of ["race1", "race2", "reject", "proven", "outage"])
+  for (const name of [
+    "sep",
+    "race1",
+    "race2",
+    "reject",
+    "proven",
+    "outage",
+    "small",
+  ])
     w[name] = await sc("new-delegate");
+  w.sepVoter = await sc("new-l1-account");
   w.powerless = await sc("new-l1-account");
+  w.lateVoter = await sc("new-l1-account");
+});
+
+test("registration: an EOA names a separate voting address, which accepts on Ethereum", async ({
+  browser,
+}) => {
+  test.setTimeout(30 * 60_000);
+  const owner = await recordedPage(
+    browser,
+    w.sep,
+    "/delegates/l1-registration"
+  );
+  await expect(owner.getByTestId("l1-reg-l2-claim")).toContainText(
+    "an EOA can sign",
+    {
+      timeout: 120_000,
+    }
+  );
+  await owner.getByTestId("l1-reg-l1-voter").fill(w.sepVoter.address);
+  await owner.getByTestId("l1-reg-l2-submit").click();
+  await expect(owner.getByTestId("l1-reg-l2-claim")).toContainText(
+    w.sepVoter.address,
+    {
+      ignoreCase: true,
+      timeout: 120_000,
+    }
+  );
+  await expect(owner.getByTestId("l1-reg-provable")).toContainText("not yet");
+  await sc("settle");
+  await expect(owner.getByTestId("l1-reg-provable")).toContainText("yes", {
+    timeout: 120_000,
+  });
+
+  const voter = await recordedPage(
+    browser,
+    w.sepVoter,
+    "/delegates/l1-registration"
+  );
+  await voter.getByTestId("l1-reg-delegate").fill(w.sep.address);
+  await voter.getByTestId("l1-reg-l1-submit").click();
+  await expect(voter.getByTestId("l1-reg-l1-done")).toBeVisible({
+    timeout: 120_000,
+  });
+  const reg = await api(`/api/l1-voting/registrations/${w.sep.address}`);
+  expect(reg.l1Claimers.map((c: any) => c.l1Address.toLowerCase())).toContain(
+    w.sepVoter.address.toLowerCase()
+  );
 });
 
 test("voting: a pending proposal cannot be voted on yet", async ({
@@ -186,6 +239,30 @@ test("voting: a wallet that rejects can retry and vote", async ({
   await vote(p, "for");
 });
 
+test("voting: a separate voting address votes with its delegate's power", async ({
+  browser,
+}) => {
+  test.setTimeout(20 * 60_000);
+  const p = await recordedPage(browser, w.sepVoter, page(ids.main));
+  const select = panelOf(p).getByTestId("l1-vote-delegate");
+  await expect(select).toBeVisible({ timeout: 120_000 });
+  await select.selectOption(w.sep.address);
+  await expect(panelOf(p).getByTestId("l1-vote-power")).toContainText(
+    "2,000,000",
+    {
+      timeout: 120_000,
+    }
+  );
+  await vote(p, "against");
+  await until("credited to the delegate", async () =>
+    (await votes(ids.main)).some(
+      (v) =>
+        v.voter === w.sepVoter.address.toLowerCase() &&
+        v.delegate === w.sep.address.toLowerCase()
+    )
+  );
+});
+
 test("voting: with every proof already in place, only the vote is left", async ({
   browser,
 }) => {
@@ -225,4 +302,101 @@ test("voting: the indexer goes down with the panel open, comes back, and the vot
     timeout: 10 * 60_000,
   });
   await vote(p, "for");
+});
+
+test("registration: a Safe revokes its voting address; a later claim misses a locked snapshot", async ({
+  browser,
+}) => {
+  test.setTimeout(45 * 60_000);
+  const owner = await recordedPage(
+    browser,
+    SAFE_OWNER_1,
+    "/delegates/l1-registration"
+  );
+  await owner.getByTestId("l1-reg-delegate").fill(SAFE);
+
+  async function safeClaim(l1Voter: string) {
+    await owner.getByTestId("l1-reg-l1-voter").fill(l1Voter);
+    await owner.getByTestId("l1-reg-safe-prepare").click();
+    const hash = (await owner
+      .getByTestId("safe-tx-hash")
+      .textContent())!.trim();
+    const approvals = (await owner
+      .getByTestId("safe-approvals")
+      .textContent())!;
+    if (/of 2/.test(approvals)) {
+      await sc("safe-approve", SAFE, hash);
+      await owner.getByRole("button", { name: "Refresh approvals" }).click();
+    }
+    await owner.getByTestId("safe-execute").click();
+    await expect(owner.getByTestId("safe-tx-hash")).toHaveCount(0, {
+      timeout: 120_000,
+    });
+  }
+
+  // Revoke: claiming the zero address leaves nothing provable for the Safe. Confirm it, so the
+  // next snapshot sees it.
+  await safeClaim(ZERO);
+  await expect(owner.getByTestId("l1-reg-l2-claim")).toContainText("revoked", {
+    timeout: 120_000,
+  });
+  await sc("settle");
+
+  // A proposal locks while the Safe has no voting address...
+  const late = await sc("propose-l1", "late registration case", "active");
+  ids.late = late.proposalId;
+  await sc("vote-as", w.small.key, 1, ids.late);
+  // ...then the Safe names one. It is too late for this snapshot.
+  await safeClaim(w.lateVoter.address);
+  await expect(owner.getByTestId("l1-reg-l2-claim")).toContainText(
+    w.lateVoter.address,
+    {
+      ignoreCase: true,
+      timeout: 120_000,
+    }
+  );
+  const voter = await recordedPage(browser, w.lateVoter, page(ids.late));
+  const select = panelOf(voter).getByTestId("l1-vote-delegate");
+  await expect(select).toBeVisible({ timeout: 120_000 });
+  await select.selectOption(SAFE);
+  await expectBlocker(voter, "L2_CLAIM_NOT_PROVABLE");
+});
+
+test("outcomes: defeated, short of quorum, cancelled and executed proposals", async ({
+  browser,
+}) => {
+  test.setTimeout(90 * 60_000);
+  for (const name of ["defeated", "noQuorum", "cancelled", "executed"]) {
+    const created = await sc("propose-l1", `${name} case`, "active");
+    ids[name] = created.proposalId;
+    descriptions[name] = created.description;
+  }
+  const whale =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+  await sc("vote-as", whale, 0, ids.defeated);
+  await sc("vote-as", w.small.key, 1, ids.noQuorum); // 2M ARB, far below quorum
+  await sc("vote-as", whale, 1, ids.cancelled);
+  await sc("vote-as", whale, 1, ids.executed);
+  await sc("mine-through-voting", ids.executed);
+  await sc("queue-cancel", descriptions.cancelled);
+  await sc("queue-execute", descriptions.executed);
+
+  const defeated = await recordedPage(browser, w.small, page(ids.defeated));
+  await expectState(defeated, "DEFEATED");
+  await expectBlocker(defeated, "NOT_ACTIVE");
+  await expect(defeated.locator('[data-stage-type="L1_TIMELOCK"]')).toHaveCount(
+    0
+  );
+
+  const noQuorum = await recordedPage(browser, null, page(ids.noQuorum));
+  await expectState(noQuorum, "DEFEATED");
+
+  const cancelled = await recordedPage(browser, null, page(ids.cancelled));
+  await expectState(cancelled, "CANCELED");
+  await expectStage(cancelled, "L1_TIMELOCK", "CANCELED");
+
+  const executed = await recordedPage(browser, null, page(ids.executed));
+  await expectState(executed, "EXECUTED");
+  await expectStage(executed, "L1_TIMELOCK", "COMPLETED");
+  expect((await proposal(ids.executed)).executionPhase).toBe("FULLY_EXECUTED");
 });

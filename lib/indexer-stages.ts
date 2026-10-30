@@ -187,6 +187,9 @@ function votingData(stage: IndexerProposalStage): Record<string, unknown> {
     ...(detail.startBlock && { startBlock: detail.startBlock }),
     ...(detail.endBlock && { deadline: detail.endBlock }),
     ...(detail.result && { proposalState: detail.result }),
+    ...(typeof detail.wasExtended === "boolean" && {
+      wasExtended: detail.wasExtended,
+    }),
   };
 }
 
@@ -222,6 +225,8 @@ function retryableData(stage: IndexerProposalStage): Record<string, unknown> {
     return {};
   }
   const chainId = l2ChainId();
+  // Tickets are created by the L1 timelock's execution, on the L1.
+  const creationChain = explorerChainForChainId(l1VotingChainId()) ?? "unknown";
   return {
     ticketCount: legs.length,
     redemptionDetails: legs.map((leg, index) => ({
@@ -231,6 +236,8 @@ function retryableData(stage: IndexerProposalStage): Record<string, unknown> {
       status: indexerRetryableLegStatus(leg),
       l2TxHash: leg.txHash,
       ticketId: leg.ticketId ?? null,
+      creationTxHash: leg.creationTxHash ?? null,
+      creationChain,
     })),
   };
 }

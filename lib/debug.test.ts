@@ -85,9 +85,8 @@ describe("debug", () => {
     });
 
     it("functions can be called without throwing", async () => {
-      const { enableDebugLogging, disableDebugLogging } = await import(
-        "./debug"
-      );
+      const { enableDebugLogging, disableDebugLogging } =
+        await import("./debug");
 
       // These should not throw even in test environment
       expect(() => enableDebugLogging()).not.toThrow();

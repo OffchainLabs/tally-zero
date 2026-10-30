@@ -16,12 +16,22 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: z.enum(["0", "1"]).optional(),
     NEXT_PUBLIC_LOCAL_L1_RPC: z.string().url().optional(),
     NEXT_PUBLIC_LOCAL_L2_RPC: z.string().url().optional(),
+    // The local testnode's L1 voting governor, so the L1 voting deployment can be read from the
+    // chain without the indexer (production pins its addresses in the library instead).
+    NEXT_PUBLIC_LOCAL_L1_VOTING_GOVERNOR: z
+      .string()
+      .regex(/^0x[0-9a-fA-F]{40}$/)
+      .optional(),
     // Where the Lifecycle stages come from: gov-tracker's on-chain trace, or
     // the indexer's /stages endpoint. L1 voting proposals always use the
     // indexer, since gov-tracker cannot trace them.
     NEXT_PUBLIC_STAGES_SOURCE: z
       .enum(["indexer", "gov-tracker"])
       .default("gov-tracker"),
+    // Safe Transaction Service for a Safe delegate's registration. Defaults to
+    // Safe's hosted service on Arbitrum One; the local chains get one only
+    // when this is set.
+    NEXT_PUBLIC_SAFE_TX_SERVICE_URL: z.string().url().optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_REOWN_PROJECT_ID: process.env.NEXT_PUBLIC_REOWN_PROJECT_ID,
@@ -32,7 +42,11 @@ export const env = createEnv({
     NEXT_PUBLIC_LOCAL_CHAINS: process.env.NEXT_PUBLIC_LOCAL_CHAINS,
     NEXT_PUBLIC_LOCAL_L1_RPC: process.env.NEXT_PUBLIC_LOCAL_L1_RPC,
     NEXT_PUBLIC_LOCAL_L2_RPC: process.env.NEXT_PUBLIC_LOCAL_L2_RPC,
+    NEXT_PUBLIC_LOCAL_L1_VOTING_GOVERNOR:
+      process.env.NEXT_PUBLIC_LOCAL_L1_VOTING_GOVERNOR,
     NEXT_PUBLIC_STAGES_SOURCE: process.env.NEXT_PUBLIC_STAGES_SOURCE,
+    NEXT_PUBLIC_SAFE_TX_SERVICE_URL:
+      process.env.NEXT_PUBLIC_SAFE_TX_SERVICE_URL,
   },
   skipValidation: !!process.env.VITEST,
 });
