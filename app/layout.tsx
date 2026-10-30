@@ -12,7 +12,6 @@ import { ButtonNav } from "@components/navigation/ButtonNav";
 import { MainNav } from "@components/navigation/MainNav";
 import { SiteFooter } from "@components/navigation/SiteFooter";
 
-import { Analytics } from "@components/Analytics";
 import { PostHogProvider } from "@components/PostHogProvider";
 import { ThemeProvider } from "@components/ThemeProvider";
 import { DeepLinkProvider } from "@context/DeepLinkContext";
@@ -69,7 +68,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
 
       <body
         className={cn(
-          "min-h-screen font-sans antialiased bg-[#0b0c10] transition-colors duration-200 ease-in-out",
+          "flex min-h-screen min-h-[100dvh] flex-col font-sans antialiased bg-[#0b0c10] transition-colors duration-200 ease-in-out",
           GeistSans.className
         )}
       >
@@ -88,11 +87,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
                       </div>
                     </header>
 
-                    {children}
+                    <main className="flex-1">{children}</main>
                     <SiteFooter />
 
                     <Toaster />
-                    <Analytics />
                   </SettingsSheetProvider>
                 </DeepLinkProvider>
               </NerdModeProvider>

@@ -40,7 +40,9 @@ export function createGovernanceAppKit(
     networks: APPKIT_NETWORKS,
     defaultNetwork: arbitrum,
     metadata: APPKIT_METADATA,
-    features: { analytics: true },
+    // Reown Cloud analytics would report wallet-modal activity (with device
+    // and network metadata) to a third party. Kept off for GDPR.
+    features: { analytics: false },
   });
   created = true;
 }

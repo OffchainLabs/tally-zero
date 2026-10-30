@@ -70,17 +70,15 @@ describe("governance indexer proxy", () => {
 
   it("forwards a POST body + cookie and relays the session set-cookie (no-store)", async () => {
     vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://indexer.example.test");
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        jsonResponse(
-          { address: "0xabc" },
-          {
-            status: 200,
-            setCookie: "siwe_session=tok; Path=/; HttpOnly; SameSite=Lax",
-          }
-        )
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse(
+        { address: "0xabc" },
+        {
+          status: 200,
+          setCookie: "siwe_session=tok; Path=/; HttpOnly; SameSite=Lax",
+        }
+      )
+    );
 
     const response = await POST(
       new Request(
@@ -127,6 +125,29 @@ describe("governance indexer proxy", () => {
     );
 
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("does not forward browser-supplied wallet identity headers", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://indexer.example.test");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ drafts: [] }));
+
+    await GET(
+      new Request("https://example.test/api/governance-indexer/api/me/drafts", {
+        headers: {
+          cookie: "siwe_session=tok",
+          "x-wallet-address": "0xspoofed",
+          "x-effective-address": "0xspoofed",
+        },
+      }),
+      context(["api", "me", "drafts"])
+    );
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+      accept: "application/json",
+      cookie: "siwe_session=tok",
+    });
   });
 
   it("forwards upstream status codes", async () => {

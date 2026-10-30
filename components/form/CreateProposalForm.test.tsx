@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   useSimulateContract: vi.fn(),
   useWaitForTransactionReceipt: vi.fn(),
   useWriteContract: vi.fn(),
-  writeContract: vi.fn(),
+  writeContractAsync: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }));
 
@@ -76,7 +76,7 @@ describe("CreateProposalForm snapshot block annotation", () => {
     mocks.useWriteContract.mockReturnValue({
       error: null,
       isPending: false,
-      writeContract: mocks.writeContract,
+      writeContractAsync: mocks.writeContractAsync,
     });
     mocks.useWaitForTransactionReceipt.mockReturnValue({
       isLoading: false,
@@ -111,5 +111,234 @@ describe("CreateProposalForm snapshot block annotation", () => {
 
     expect(markup).not.toContain("etherscan.io/block/");
     expect(markup).toContain("Values at Ethereum block #?");
+  });
+
+  const statusBar = (markup: string) =>
+    markup.match(
+      /<div[^>]*data-testid="draft-save-status"[^>]*>(.*?)<\/div>/
+    )?.[1];
+
+  // The save and submit buttons are disabled below the threshold. The status
+  // bar's detail line says why saving is off, with the amount, in place of its
+  // usual "Save to your drafts" prompt; the messages card covers submitting.
+  it("explains that saving a draft needs the threshold when below it", () => {
+    mocks.useReadContract.mockImplementation(
+      ({ functionName }: { functionName: string }) => ({
+        data:
+          functionName === "proposalThreshold"
+            ? BigInt(1_000_000) * BigInt(10) ** BigInt(18)
+            : BigInt(1),
+        isLoading: false,
+      })
+    );
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+    const notice = markup.match(
+      /<p[^>]*data-testid="below-threshold"[^>]*>(.*?)<\/p>/
+    )?.[1];
+
+    expect(notice).toContain(
+      "Submitting requires voting power at or above the Treasury Governor proposal threshold of 1M ARB."
+    );
+    expect(notice).toContain("will revert if submitted");
+
+    const bar = statusBar(markup);
+    expect(bar).toContain(
+      "Saving to your drafts requires voting power at or above the Treasury Governor proposal threshold of 1M ARB."
+    );
+    expect(bar).not.toContain("Save to your drafts to keep it across devices.");
+  });
+
+  // The save button is disabled until the reads settle, so the bar must not
+  // ask for a save it cannot do; it says what it is waiting on instead.
+  it("says the reads are still being checked, not to save, while unsettled", () => {
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+    expect(markup).not.toContain('data-testid="below-threshold"');
+    const bar = statusBar(markup);
+    expect(bar).toContain(
+      "Checking your voting power against the proposal threshold…"
+    );
+    expect(bar).not.toContain("Save to your drafts to keep it across devices.");
+  });
+
+  // A failed threshold read has no retry interval; "checking" would never end.
+  it("names the failed read, in the bar and the messages card, instead of checking", () => {
+    mocks.useReadContract.mockImplementation(
+      ({ functionName }: { functionName: string }) =>
+        functionName === "proposalThreshold"
+          ? { data: undefined, isLoading: false, isError: true }
+          : { data: BigInt(1), isLoading: false }
+    );
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+    const reason =
+      "Could not check your voting power against the Treasury Governor proposal threshold. Check your RPC in Settings and try again.";
+
+    expect(statusBar(markup)).toContain(reason);
+    expect(statusBar(markup)).not.toContain(
+      "Save to your drafts to keep it across devices."
+    );
+    expect(markup).not.toContain("Checking your voting power");
+    // Twice: the bar's detail line and the messages card above it.
+    expect(markup.split(reason).length - 1).toBe(2);
+  });
+
+  // The signed-out prompt belongs to the save button itself; the bar's prompt
+  // stands rather than claiming to check a wallet that is not there.
+  it("keeps the save prompt while no wallet is connected", () => {
+    mocks.useAccount.mockReturnValue({
+      address: undefined,
+      isConnected: false,
+    });
+
+    const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+    expect(statusBar(markup)).toContain(
+      "Save to your drafts to keep it across devices."
+    );
+    expect(markup).not.toContain("Checking your voting power");
+  });
+
+  // The server-drafts feature reaches the form through two optional props and
+  // nothing else, so these pin what each one is given and does on first render.
+  describe("server draft props", () => {
+    const TARGET = "0x2222222222222222222222222222222222222222";
+
+    const restored = {
+      title: "Stored draft",
+      description: "# Stored\n\nbody",
+      governorType: "core" as const,
+      actions: [
+        {
+          id: "restored-0",
+          chain: "arb1" as const,
+          target: TARGET,
+          value: "5",
+          calldata: "0x",
+        },
+      ],
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
+    // Radix renders the radio as a button; the checked one carries aria-checked.
+    const governorRadio = (markup: string, type: string) =>
+      markup.match(new RegExp(`<button[^>]*id="gov-${type}"[^>]*>`))?.[0] ?? "";
+
+    it("defaults to the treasury governor and one blank action without a draft", () => {
+      const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+      expect(governorRadio(markup, "treasury")).toContain(
+        'aria-checked="true"'
+      );
+      expect(governorRadio(markup, "core")).toContain('aria-checked="false"');
+      expect(markup).not.toContain(TARGET);
+    });
+
+    it("seeds governor and actions from initialDraft", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm initialDraft={restored} />
+      );
+
+      expect(governorRadio(markup, "core")).toContain('aria-checked="true"');
+      expect(governorRadio(markup, "treasury")).toContain(
+        'aria-checked="false"'
+      );
+      expect(markup).toContain(`value="${TARGET}"`);
+    });
+
+    // The browser autosave has no button: it runs on its own and reports in the
+    // status bar. The only save button is the server one injected through
+    // renderDraftActions.
+    it("renders no local Save draft button in either mode", () => {
+      const plain = renderToStaticMarkup(<CreateProposalForm />);
+      const onDraft = renderToStaticMarkup(
+        <CreateProposalForm initialDraft={restored} />
+      );
+
+      expect(plain).not.toContain(">Save draft</button>");
+      expect(onDraft).not.toContain(">Save draft</button>");
+    });
+
+    it("starts the status bar at Not saved on a blank form", () => {
+      const markup = renderToStaticMarkup(<CreateProposalForm />);
+
+      expect(markup).toContain('data-testid="draft-save-status"');
+      expect(markup).toContain('data-state="never"');
+      expect(markup).toContain("Not saved");
+    });
+
+    // A form opened on a server draft is, at that moment, saved there: the bar
+    // says so as of the draft's updatedAt and names the account.
+    it("starts the status bar at saved-to-account when opened on a draft", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={restored}
+          draftId="d1"
+          accountAddress="0x1234567890abcdef1234567890abcdef12345678"
+        />
+      );
+
+      expect(markup).toContain('data-state="server"');
+      expect(markup).toContain("Saved to your drafts as 0x1234...5678");
+      expect(markup).toContain(new Date(restored.updatedAt).toISOString());
+    });
+
+    it("renders when the stored draft's updatedAt does not parse", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={{ ...restored, updatedAt: "not a date" }}
+          draftId="d1"
+          accountAddress="0x1234567890abcdef1234567890abcdef12345678"
+        />
+      );
+
+      expect(markup).toContain('data-state="server"');
+      expect(markup).toContain("Saved to your drafts as 0x1234...5678");
+      expect(markup).not.toContain("<time");
+    });
+
+    // Both actions live in the sticky bar so they stay in view and sit next to
+    // the state they act on; the messages card above them has no buttons.
+    it("renders the account save and Submit Proposal buttons in the sticky bar", () => {
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          renderDraftActions={() => <span data-testid="draft-actions-probe" />}
+        />
+      );
+
+      const bar = markup.indexOf('data-testid="draft-save-status"');
+      const actions = markup.indexOf('data-testid="draft-save-actions"');
+      expect(bar).toBeGreaterThan(-1);
+      expect(actions).toBeGreaterThan(bar);
+      expect(
+        markup.indexOf('data-testid="draft-actions-probe"')
+      ).toBeGreaterThan(actions);
+      expect(markup.indexOf("Submit Proposal")).toBeGreaterThan(actions);
+      expect(markup.split("Submit Proposal")).toHaveLength(2);
+    });
+
+    it("hands renderDraftActions the live form snapshot and renders its output", () => {
+      const seen: unknown[] = [];
+      const markup = renderToStaticMarkup(
+        <CreateProposalForm
+          initialDraft={restored}
+          renderDraftActions={(snapshot) => {
+            seen.push(snapshot);
+            return <span data-testid="draft-actions-probe" />;
+          }}
+        />
+      );
+
+      expect(markup).toContain('data-testid="draft-actions-probe"');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({
+        governorType: "core",
+        description: restored.description,
+        actions: [
+          { chain: "arb1", target: TARGET, value: "5", calldata: "0x" },
+        ],
+      });
+    });
   });
 });

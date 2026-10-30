@@ -17,7 +17,8 @@ import {
   DEFAULT_TENDERLY_PROJECT,
   L1_BLOCK_CACHE_FRESHNESS_MS,
   L1_BLOCK_REFRESH_INTERVAL_MS,
-  PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS,
+  PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
+  proposalDraftStorageKey,
   STORAGE_KEYS,
   STORAGE_PREFIX,
 } from "./storage-keys";
@@ -147,8 +148,25 @@ describe("storage-keys config", () => {
       expect(L1_BLOCK_CACHE_FRESHNESS_MS).toBe(30000);
     });
 
-    it("PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS is 5 minutes", () => {
-      expect(PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS).toBe(300000);
+    it("PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS is 2 seconds", () => {
+      expect(PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS).toBe(2000);
+    });
+  });
+
+  // The anonymous form and each bound server draft get their own slot, so a
+  // draft opened from the account never overwrites the crash-recovery copy.
+  describe("proposalDraftStorageKey", () => {
+    it("uses the bare key for the anonymous form", () => {
+      expect(proposalDraftStorageKey(null)).toBe(STORAGE_KEYS.PROPOSAL_DRAFT);
+    });
+
+    it("namespaces a bound draft under the same prefix", () => {
+      expect(proposalDraftStorageKey("d1")).toBe(
+        "tally-zero-proposal-draft:d1"
+      );
+      expect(proposalDraftStorageKey("d1")).not.toBe(
+        proposalDraftStorageKey("d2")
+      );
     });
   });
 

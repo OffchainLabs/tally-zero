@@ -4,8 +4,13 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import type { GovernorType } from "@/config/governors";
+import { formatVotingPower } from "@/lib/format-utils";
 import { buildProposalPath } from "@/lib/proposal-url";
-import { emptyAction, type ProposalAction } from "@/lib/propose-utils";
+import {
+  emptyAction,
+  isActionChain,
+  type ProposalAction,
+} from "@/lib/propose-utils";
 import { proposalSanitizeSchema } from "@/lib/sanitize-schema";
 
 export type ProposalEligibility = "unknown" | "meets" | "below";
@@ -22,6 +27,7 @@ export type ProposalSubmissionPhase =
 
 export const PROPOSAL_DRAFT_VERSION = 1;
 
+/** The localStorage autosave payload. */
 export interface ProposalDraft {
   version: typeof PROPOSAL_DRAFT_VERSION;
   savedAt: number;
@@ -32,6 +38,13 @@ export interface ProposalDraft {
 
 export interface RestoredProposalDraft extends Omit<ProposalDraft, "actions"> {
   actions: FormProposalAction[];
+}
+
+/** The form's contents as they are saved anywhere: rows without their ids. */
+export interface ProposalSnapshotLike {
+  governorType: GovernorType;
+  description: string;
+  actions: ProposalAction[];
 }
 
 let nextFormProposalActionId = 0;
@@ -54,7 +67,7 @@ function isGovernorType(value: unknown): value is GovernorType {
 function restoreProposalAction(action: unknown): FormProposalAction | null {
   if (!isRecord(action)) return null;
 
-  const { target, value, calldata } = action;
+  const { chain, target, value, calldata } = action;
   if (
     typeof target !== "string" ||
     typeof value !== "string" ||
@@ -65,10 +78,69 @@ function restoreProposalAction(action: unknown): FormProposalAction | null {
 
   return {
     ...createFormProposalAction(),
+    // Autosaves written before rows had a chain were Arbitrum One rows.
+    chain: isActionChain(chain) ? chain : "arb1",
     target,
     value,
     calldata,
   };
+}
+
+/**
+ * Stable text form of the contents, for "has anything changed since the last
+ * save" checks. Row ids and any extra fields are dropped so the same contents
+ * serialize the same whether they came from the form, the autosave, or the
+ * server.
+ */
+export function serializeProposalSnapshot(
+  snapshot: ProposalSnapshotLike
+): string {
+  return JSON.stringify({
+    governorType: snapshot.governorType,
+    description: snapshot.description,
+    actions: snapshot.actions.map(({ chain, target, value, calldata }) => ({
+      chain,
+      target,
+      value,
+      calldata,
+    })),
+  });
+}
+
+/**
+ * A server timestamp as ms epoch, or null when it does not parse. Callers
+ * compare against the result, and `NaN` would make every comparison false.
+ */
+export function parseServerTimestamp(iso: string): number | null {
+  const at = Date.parse(iso);
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * Whether the browser's autosave slot should replace the contents the form was
+ * seeded with. It should when the copy is newer than the server's last save and
+ * actually differs from the seed; otherwise there is nothing to recover and the
+ * slot can go.
+ *
+ * `serverUpdatedAt` is null for the anonymous form, which has no server copy,
+ * and also when the server's timestamp did not parse: an unknown server time
+ * counts as older than any local copy, so a bad timestamp keeps the user's
+ * edits rather than deleting them.
+ */
+export function shouldRestoreLocalDraft({
+  local,
+  serverUpdatedAt,
+  seededSerialized,
+}: {
+  local: RestoredProposalDraft;
+  serverUpdatedAt: number | null;
+  seededSerialized: string;
+}): boolean {
+  const serverAt = serverUpdatedAt ?? -Infinity;
+  return (
+    local.savedAt > serverAt &&
+    serializeProposalSnapshot(local) !== seededSerialized
+  );
 }
 
 export function createProposalDraft({
@@ -76,18 +148,14 @@ export function createProposalDraft({
   description,
   actions,
   savedAt = Date.now(),
-}: {
-  governorType: GovernorType;
-  description: string;
-  actions: ProposalAction[];
-  savedAt?: number;
-}): ProposalDraft {
+}: ProposalSnapshotLike & { savedAt?: number }): ProposalDraft {
   return {
     version: PROPOSAL_DRAFT_VERSION,
     savedAt,
     governorType,
     description,
-    actions: actions.map(({ target, value, calldata }) => ({
+    actions: actions.map(({ chain, target, value, calldata }) => ({
+      chain,
       target,
       value,
       calldata,
@@ -178,6 +246,40 @@ export function getProposalEligibility(
   }
 
   return votingPower >= proposalThreshold ? "meets" : "below";
+}
+
+/**
+ * Why a threshold-gated action (saving or publishing a draft, submitting) is
+ * blocked, or null when it may proceed. The one sentence for the rule: the
+ * form's status bar and messages card, the save dialog's tooltip and the
+ * drafts list's notice all read from here. "unknown" blocks too: either the
+ * reads have not settled yet, or one failed (`isError`), which says so and
+ * points at the RPC rather than claiming to still be checking. The amount is
+ * named whenever the threshold has been read.
+ */
+export function getProposalEligibilityBlocker(
+  eligibility: ProposalEligibility,
+  governorName: string,
+  action: string,
+  {
+    proposalThreshold,
+    isError = false,
+  }: { proposalThreshold?: bigint; isError?: boolean } = {}
+): string | null {
+  if (eligibility === "meets") return null;
+  if (isError) {
+    return `Could not check your voting power against the ${governorName} proposal threshold. Check your RPC in Settings and try again.`;
+  }
+  switch (eligibility) {
+    case "below":
+      return `${action} requires voting power at or above the ${governorName} proposal threshold${
+        proposalThreshold !== undefined
+          ? ` of ${formatVotingPower(proposalThreshold)} ARB`
+          : ""
+      }.`;
+    case "unknown":
+      return "Checking your voting power against the proposal threshold…";
+  }
 }
 
 export function getProposalSubmissionPhase({

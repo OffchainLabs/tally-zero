@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useElectionContracts } from "@/hooks/use-election-contracts";
 import { useElectionStatus } from "@/hooks/use-election-status";
 import { useElectionVotingPower } from "@/hooks/use-election-voting-power";
+import { useNomineeQuorumPercentLabel } from "@/hooks/use-nominee-quorum-percent";
 import { useRpcSettings } from "@/hooks/use-rpc-settings";
 import { computeWeightInfo } from "@/lib/election-weight";
 import { formatVotingPower } from "@/lib/format-utils";
@@ -82,6 +83,8 @@ export function CandidateVoteCard({
       governorAddress,
       governorReadAbi,
     });
+
+  const quorumPercentLabel = useNomineeQuorumPercentLabel();
 
   const currentBlock =
     latestL1Block !== undefined ? BigInt(latestL1Block) : undefined;
@@ -153,8 +156,8 @@ export function CandidateVoteCard({
         </CardTitle>
         {isNomineeSelection && quorumThreshold !== "0" && (
           <CardDescription>
-            Needs {formatVotingPower(quorumThreshold)} ARB to qualify as a
-            nominee
+            Needs {formatVotingPower(quorumThreshold)} ARB ({quorumPercentLabel}{" "}
+            of votable tokens) to qualify as a nominee
           </CardDescription>
         )}
       </CardHeader>

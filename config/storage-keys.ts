@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   L1_RPC: "tally-zero-l1-rpc",
   L2_RPC: "tally-zero-l2-rpc",
   PROPOSAL_DRAFT: "tally-zero-proposal-draft",
+  DRAFT_SUBMISSION: "tally-zero-draft-submission",
   BLOCK_RANGE: "tally-zero-block-range",
   L1_BLOCK_RANGE: "tally-zero-l1-block-range",
   STAGES_CACHE_PREFIX: "tally-zero-stages-",
@@ -64,8 +65,30 @@ export const L1_BLOCK_REFRESH_INTERVAL_MS = MS_PER_MINUTE;
 /** Duration that a cached L1 block number is considered fresh in milliseconds */
 export const L1_BLOCK_CACHE_FRESHNESS_MS = 30 * MS_PER_SECOND;
 
-/** Interval for autosaving proposal drafts in milliseconds */
-export const PROPOSAL_DRAFT_AUTOSAVE_INTERVAL_MS = 5 * MS_PER_MINUTE;
+/** Delay after the last edit before the proposal form autosaves to localStorage */
+export const PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS = 2 * MS_PER_SECOND;
+
+/** How long a broadcast proposal may wait unconfirmed before its author may discard it */
+export const DRAFT_SUBMISSION_DISCARD_AFTER_MS = 30 * MS_PER_MINUTE;
+
+/**
+ * The proposal form's autosave slot. The bare key holds the anonymous form;
+ * a form bound to a server draft gets a slot per draft id, so a server
+ * draft's contents never overwrite the anonymous crash-recovery copy.
+ */
+export function proposalDraftStorageKey(draftId: string | null): string {
+  return draftId
+    ? `${STORAGE_KEYS.PROPOSAL_DRAFT}:${draftId}`
+    : STORAGE_KEYS.PROPOSAL_DRAFT;
+}
+
+/** Pending submission recording belongs to one draft and effective subject. */
+export function draftSubmissionStorageKey(
+  draftId: string,
+  subject: string
+): string {
+  return `${STORAGE_KEYS.DRAFT_SUBMISSION}:${subject.toLowerCase()}:${encodeURIComponent(draftId)}`;
+}
 
 /** Available cache TTL options for user settings (values in seconds) */
 export const CACHE_TTL_OPTIONS = [

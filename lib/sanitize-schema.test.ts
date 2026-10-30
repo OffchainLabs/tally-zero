@@ -97,7 +97,10 @@ describe("proposalSanitizeSchema", () => {
       expect(linkAttrs).toContain("href");
       expect(linkAttrs).toContain("title");
       expect(linkAttrs).toContain("rel");
-      expect(linkAttrs).toContain("target");
+    });
+
+    it("does NOT allow an author-chosen link target", () => {
+      expect(proposalSanitizeSchema.attributes?.a).not.toContain("target");
     });
 
     it("allows table cell alignment attributes", () => {
@@ -111,9 +114,15 @@ describe("proposalSanitizeSchema", () => {
       expect(tdAttrs).toContain("valign");
     });
 
-    it("allows className on code elements", () => {
-      expect(proposalSanitizeSchema.attributes?.code).toContain("className");
-      expect(proposalSanitizeSchema.attributes?.pre).toContain("className");
+    it("allows only fenced-code language classes on code and pre", () => {
+      // A bare "className" entry would let a draft author apply any utility
+      // class in the Tailwind build on the public shared-draft page.
+      expect(proposalSanitizeSchema.attributes?.code).toEqual([
+        ["className", /^language-./],
+      ]);
+      expect(proposalSanitizeSchema.attributes?.pre).toEqual([
+        ["className", /^language-./],
+      ]);
     });
 
     it("allows id attribute globally", () => {

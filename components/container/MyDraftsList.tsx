@@ -1,109 +1,334 @@
 "use client";
 
-import { ArrowRight, FileText, Plus } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-
-import { STORAGE_KEYS } from "@/config/storage-keys";
 import {
-  parseProposalDraft,
-  type RestoredProposalDraft,
-} from "@/lib/create-proposal-form-utils";
-import { Button } from "@components/ui/Button";
+  ArrowRight,
+  ExternalLink,
+  FileText,
+  Plus,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
-/** Pull a human-readable title from the first non-empty line of the markdown body. */
-function draftTitle(description: string): string {
-  const firstLine = description
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-  if (!firstLine) return "Untitled draft";
-  return firstLine.replace(/^#+\s*/, "").slice(0, 120);
-}
+import { SiweAction } from "@/components/siwe/SiweGate";
+import { Button } from "@/components/ui/Button";
+import { GOVERNORS } from "@/config/governors";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { useDraftMutations, useDraftsList } from "@/hooks/use-drafts";
+import { useProposalEligibility } from "@/hooks/use-proposal-eligibility";
+import { useSiwe } from "@/hooks/use-siwe";
+import { getProposalEligibilityBlocker } from "@/lib/create-proposal-form-utils";
+import { fromDraftGovernorType } from "@/lib/drafts/mapping";
+import { getErrorMessage } from "@/lib/error-utils";
+import type {
+  DraftGovernorType,
+  DraftStatus,
+  DraftSummary,
+} from "@/lib/siwe/types";
+
+const GOVERNOR_LABEL: Record<DraftGovernorType, string> = {
+  CONSTITUTIONAL: "Core",
+  TREASURY: "Treasury",
+};
 
 /**
- * "My Drafts" tab content. Surfaces the locally autosaved proposal draft (if any)
- * as a resume card linking back to the New Proposal form; otherwise an empty state.
+ * Draft lifecycle: draft (private and editable) → published (frozen and shared)
+ * → submitted (an on-chain submission has been recorded).
+ * Publishing and deleting are irreversible, so the second click stays on the
+ * row to make it clear which draft is about to change.
+ */
+const STATUS_LABEL: Record<DraftStatus, string> = {
+  draft: "Draft",
+  published: "Published",
+  submitted: "Submitted",
+};
+
+/**
+ * Drafts content for /drafts, within the same page shell as /proposals.
  */
 export default function MyDraftsList() {
-  const [draft, setDraft] = useState<RestoredProposalDraft | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- SSR hydration from localStorage */
-    try {
-      setDraft(
-        parseProposalDraft(
-          window.localStorage.getItem(STORAGE_KEYS.PROPOSAL_DRAFT)
-        )
-      );
-    } catch {
-      // Storage can be unavailable in privacy-restricted contexts.
-    }
-    setHydrated(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
-
-  if (!hydrated) {
-    return (
-      <div
-        className="glass rounded-2xl h-28 animate-pulse"
-        aria-hidden="true"
-      />
-    );
-  }
-
-  if (!draft) {
-    return (
-      <div className="glass rounded-2xl px-6 py-12 flex flex-col items-center gap-3 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5">
-          <FileText className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-sm font-medium text-foreground">No drafts yet</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Drafts you start on the New Proposal page are saved here
-            automatically.
-          </p>
-        </div>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/proposal/new">
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Start a proposal
-          </Link>
-        </Button>
-      </div>
-    );
-  }
-
-  const title = draftTitle(draft.description);
-  const actionCount = draft.actions.length;
-  const savedAt = new Date(draft.savedAt);
+  const { isConnected, isSignedIn, isLoadingSession } = useSiwe();
+  const content = isLoadingSession ? (
+    <LoadingState />
+  ) : !isConnected || !isSignedIn ? (
+    <EmptyState title="Sign in to see your drafts" action={<SiweAction />}>
+      Drafts are saved to your account from the New Proposal page, so they
+      follow you across devices. Anything you have typed there is kept in this
+      browser until you save it. Signing in only signs a message; no transaction
+      or gas is needed.
+    </EmptyState>
+  ) : (
+    <DraftsContent />
+  );
 
   return (
-    <div className="glass rounded-2xl overflow-clip">
-      <Link
-        href="/proposal/new"
-        className="group flex items-center gap-4 p-4 transition-colors hover:bg-white/[0.03]"
-      >
+    <div className="flex flex-col gap-4">
+      <p className="text-muted-foreground">
+        Proposal drafts saved to your account. Publish one to get a link you can
+        circulate for review before submitting on chain.
+      </p>
+      {content}
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div
+      className="glass rounded-2xl h-28 animate-pulse"
+      aria-hidden="true"
+      data-testid="drafts-loading"
+    />
+  );
+}
+
+function DraftsContent() {
+  const { actingAs, effectiveAddress } = useSiwe();
+  const { drafts, isLoading, error } = useDraftsList();
+
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-destructive" data-testid="drafts-error">
+        {error.message}
+      </p>
+    );
+  }
+
+  const sorted = [...drafts].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
+
+  return (
+    <div className="space-y-4">
+      {actingAs ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="drafts-subject"
+        >
+          Showing drafts for{" "}
+          <span className="font-mono">{effectiveAddress}</span>{" "}
+          <span className="text-amber-500">(Safe)</span>
+        </p>
+      ) : null}
+      {sorted.length === 0 ? (
+        <EmptyState
+          title="No drafts yet"
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link href="/proposal/new">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Start a proposal
+              </Link>
+            </Button>
+          }
+        >
+          Save a proposal to your drafts from the New Proposal page and it will
+          show up here.
+        </EmptyState>
+      ) : (
+        <ul
+          className="glass rounded-2xl overflow-clip divide-y divide-border/40"
+          data-testid="drafts-list"
+        >
+          {sorted.map((draft) => (
+            <DraftRow key={draft.id} draft={draft} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function DraftRow({ draft }: { draft: DraftSummary }) {
+  const { publishDraft, deleteDraft, isPublishing, isDeleting } =
+    useDraftMutations();
+  const { copy, copied } = useCopyToClipboard();
+  const [confirming, setConfirming] = useState<"publish" | "delete" | null>(
+    null
+  );
+  const isEditable = draft.status === "draft";
+
+  // Publishing mints the share link, which only a subject at or above the
+  // governor's proposal threshold may do: the one the drafts belong to, so the
+  // Safe when acting as one. The indexer does not enforce this yet.
+  const { effectiveAddress } = useSiwe();
+  const governorType = fromDraftGovernorType(draft.governorType);
+  const { eligibility, proposalThreshold, isError } = useProposalEligibility(
+    governorType,
+    { address: effectiveAddress }
+  );
+  const publishBlocker = getProposalEligibilityBlocker(
+    eligibility,
+    GOVERNORS[governorType].name,
+    "Publishing a draft",
+    { proposalThreshold, isError }
+  );
+  // The tooltip is lost on touch; a settled block (below, or a failed read)
+  // is also written out. A read still in flight stays quiet.
+  const showPublishNotice = isEditable && (eligibility === "below" || isError);
+
+  async function confirm() {
+    if (!confirming) return;
+    const isPublish = confirming === "publish";
+    try {
+      await (isPublish ? publishDraft : deleteDraft)(draft.id);
+      toast.success(
+        isPublish
+          ? "Draft published — the share link is ready."
+          : "Draft deleted."
+      );
+    } catch (cause) {
+      toast.error(
+        getErrorMessage(cause, isPublish ? "publish draft" : "delete draft")
+      );
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-3 p-4">
+      <div className="flex items-start gap-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <FileText className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">
-            {title}
+            {draft.title}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {draft.governorType === "core" ? "Core" : "Treasury"} ·{" "}
-            {actionCount} action{actionCount === 1 ? "" : "s"} · Saved{" "}
-            {savedAt.toLocaleString()}
+            {GOVERNOR_LABEL[draft.governorType]} · {STATUS_LABEL[draft.status]}{" "}
+            · Updated {new Date(draft.updatedAt).toLocaleString()}
           </p>
         </div>
-        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
-          Continue editing
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </span>
-      </Link>
+      </div>
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-amber-400">
+            {confirming === "publish"
+              ? "Publishing freezes this draft against further edits and creates a public share link. This cannot be undone."
+              : "Delete this draft permanently?"}
+          </p>
+          <Button
+            size="sm"
+            variant={confirming === "delete" ? "destructive" : "default"}
+            data-testid={`confirm-${confirming}`}
+            disabled={isPublishing || isDeleting}
+            onClick={confirm}
+          >
+            Yes, {confirming}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            // A request already sent cannot be cancelled; hiding the prompt
+            // would only make it look as though it had been.
+            disabled={isPublishing || isDeleting}
+            onClick={() => setConfirming(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link
+              href={`/proposal/new?draft=${encodeURIComponent(draft.id)}`}
+              data-testid="open-draft"
+            >
+              {isEditable
+                ? "Continue editing"
+                : draft.status === "published"
+                  ? "Open to submit"
+                  : "Open as copy"}
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          {isEditable ? (
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="publish-draft"
+              onClick={() => setConfirming("publish")}
+              disabled={Boolean(publishBlocker)}
+              title={publishBlocker ?? undefined}
+            >
+              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              Publish
+            </Button>
+          ) : null}
+          {draft.shareSlug ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="copy-share-link"
+                onClick={() =>
+                  copy(
+                    `${window.location.origin}/drafts/shared/${draft.shareSlug}`
+                  )
+                }
+              >
+                {copied ? "Copied!" : "Copy share link"}
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <Link href={`/drafts/shared/${draft.shareSlug}`}>
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+            </>
+          ) : null}
+          {isEditable ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              data-testid="delete-draft"
+              onClick={() => setConfirming("delete")}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          ) : null}
+          {showPublishNotice ? (
+            <p
+              className="basis-full text-xs text-amber-400"
+              data-testid="publish-threshold-notice"
+            >
+              {publishBlocker}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function EmptyState({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: ReactNode;
+  action: ReactNode;
+}) {
+  return (
+    <div className="glass rounded-2xl px-6 py-12 flex flex-col items-center gap-3 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5">
+        <FileText className="h-5 w-5 text-muted-foreground" />
+      </div>
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">{children}</p>
+      </div>
+      {action}
     </div>
   );
 }

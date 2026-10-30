@@ -1,6 +1,8 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
+import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
 import CreateProposalForm from "@/components/form/CreateProposalForm";
 
 export const metadata = {
@@ -15,11 +17,11 @@ export default function NewProposalPage() {
       <div className="container flex flex-col gap-6">
         <div>
           <Link
-            href="/proposals"
+            href="/drafts"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Proposals
+            Back to Proposal Drafts
           </Link>
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
             New Proposal
@@ -31,7 +33,14 @@ export default function NewProposalPage() {
           </p>
         </div>
 
-        <CreateProposalForm />
+        {/*
+          The loader reads `?draft=`, which needs a Suspense boundary under the
+          App Router. The plain form is the fallback so the page is useful during
+          prerender and for anyone without a draft to open.
+        */}
+        <Suspense fallback={<CreateProposalForm />}>
+          <ProposalDraftLoader />
+        </Suspense>
       </div>
     </div>
   );

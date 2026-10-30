@@ -127,6 +127,11 @@ describe("computeProposalId", () => {
 
 describe("emptyAction", () => {
   it("produces a default row", () => {
-    expect(emptyAction()).toEqual({ target: "", value: "0", calldata: "0x" });
+    expect(emptyAction()).toEqual({
+      chain: "arb1",
+      target: "",
+      value: "0",
+      calldata: "0x",
+    });
   });
 });
