@@ -255,6 +255,46 @@ describe("useTopDelegatesNotVoted data source", () => {
       expect(result.current.error).toBeNull();
     });
 
+    it("falls through to the bundled snapshot when the server list is empty", async () => {
+      vi.mocked(fetchTopDelegatesSnapshot).mockResolvedValue({
+        delegates: [],
+        fetchedAt: "2026-10-30T12:00:00.000Z",
+      });
+      vi.mocked(loadDelegateCache).mockResolvedValue(
+        bundledCache([info(DELEGATE_A, ARB(10_000))])
+      );
+      vi.mocked(queryDelegateVotingPowers).mockResolvedValue(
+        new Map([[DELEGATE_A, ARB(7_000)]])
+      );
+
+      const result = await renderUntilSettled();
+
+      expect(loadDelegateCache).toHaveBeenCalled();
+      expect(
+        lastNotVotedOptions().cache.delegates.map((d) => [
+          d.address,
+          d.votingPower,
+        ])
+      ).toEqual([[DELEGATE_A, ARB(7_000)]]);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("does not claim every top delegate voted when no list has any rows", async () => {
+      vi.mocked(fetchTopDelegatesSnapshot).mockResolvedValue({
+        delegates: [],
+        fetchedAt: "2026-10-30T12:00:00.000Z",
+      });
+      vi.mocked(loadDelegateCache).mockResolvedValue(bundledCache([]));
+
+      const result = await renderUntilSettled();
+
+      expect(queryDelegateVotingPowers).not.toHaveBeenCalled();
+      expect(queryDelegatesNotVoted).not.toHaveBeenCalled();
+      expect(result.current.allTopDelegatesVoted).toBe(false);
+      expect(result.current.delegatesNotVoted).toEqual([]);
+      expect(result.current.error).toBeNull();
+    });
+
     it("renders nothing when no candidate list is available", async () => {
       vi.mocked(fetchTopDelegatesSnapshot).mockRejectedValue(
         new Error("route down")

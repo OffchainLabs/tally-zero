@@ -5,6 +5,8 @@ import {
 } from "@/lib/top-delegates";
 import { getCachedTopDelegates } from "@/lib/top-delegates/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * The top delegate candidates for the "didn't vote" badges, served from the
  * last successful indexer read.

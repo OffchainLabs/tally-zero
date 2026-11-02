@@ -95,23 +95,34 @@ export function buildNotVotedList(
  * Candidate addresses for the outage path, best source first: the server's
  * last successful indexer read (hourly, survives the indexer being down), then
  * the snapshot bundled with the SDK. Null when neither is available.
+ *
+ * An empty list counts as unavailable, not as an answer. Only a live indexer
+ * page is trusted when empty; the server list is whatever that route last
+ * managed to read, so an empty one means a bad read (a reindex, say) rather
+ * than "nobody clears the threshold", and the bundled snapshot is still worth
+ * trying. Returning it would also tell the caller every top delegate voted.
  */
 async function loadFallbackCandidates(): Promise<DelegateInfo[] | null> {
   try {
     const snapshot = await fetchTopDelegatesSnapshot();
-    debug.delegates(
-      "using server top-delegates list from %s",
-      snapshot.fetchedAt
-    );
-    return snapshot.delegates;
+    if (snapshot.delegates.length > 0) {
+      debug.delegates(
+        "using server top-delegates list from %s",
+        snapshot.fetchedAt
+      );
+      return snapshot.delegates;
+    }
+    debug.delegates("server top-delegates list came back empty");
   } catch (err) {
     debug.delegates("server top delegates fetch failed: %O", err);
   }
 
   const bundled = await loadDelegateCache();
   if (!bundled) return null;
+  const candidates = bundled.delegates.slice(0, TOP_DELEGATES_CANDIDATE_LIMIT);
+  if (candidates.length === 0) return null;
   debug.delegates("using bundled delegate snapshot as candidate list");
-  return bundled.delegates.slice(0, TOP_DELEGATES_CANDIDATE_LIMIT);
+  return candidates;
 }
 
 /**
@@ -120,6 +131,12 @@ async function loadFallbackCandidates(): Promise<DelegateInfo[] | null> {
  * candidate whose read failed is dropped by the ranker, and a batch where every
  * read failed is treated as an RPC failure: rendering the listed powers in that
  * case would show snapshot-era numbers with no signal that they are stale.
+ *
+ * The chunks are read one at a time on purpose. Firing all three at once would
+ * save two round trips, but this path only runs when the indexer is already
+ * down, and the L2 RPC here is whatever the user configured, often a public
+ * endpoint. A rate-limit rejection on one chunk fails the whole refresh and
+ * costs the badges entirely, which is a worse trade than the latency.
  */
 async function refreshCandidatesOnChain(
   provider: ethers.providers.Provider,
