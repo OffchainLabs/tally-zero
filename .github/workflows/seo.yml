@@ -14,7 +14,9 @@ on:
 
 jobs:
   seo:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became Ubuntu 26.04 and Playwright 1.58 cannot
+    # install Chromium system dependencies there. Bump with Playwright.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CI: "true"
