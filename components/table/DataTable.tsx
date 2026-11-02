@@ -33,6 +33,13 @@ import { DataTablePagination } from "@components/table/Pagination";
 import { StatusFilterHeader } from "@components/table/StatusFilterHeader";
 import { DataTableToolbar } from "@components/table/Toolbar";
 
+// TanStack fills in size: 150 for every column that sets none, which would
+// hand the title column a fixed width too and leave the browser to share
+// leftover space across all columns. Clearing the default keeps columnDef.size
+// truthful: only columns that declare a size get one. Hoisted so the identity
+// is stable, since TanStack memoizes its default column def on this object.
+const NO_DEFAULT_SIZE = { size: undefined } as const;
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -76,11 +83,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    // TanStack fills in size: 150 for every column that sets none, which
-    // would hand the title column a fixed width too and leave the browser
-    // to share leftover space across all columns. Clearing the default keeps
-    // columnDef.size truthful: only columns that declare a size get one.
-    defaultColumn: { size: undefined },
+    defaultColumn: NO_DEFAULT_SIZE,
     state: {
       sorting,
       columnVisibility,
