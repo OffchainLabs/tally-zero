@@ -1,0 +1,39 @@
+name: SEO
+
+# Builds the production bundle and runs e2e/seo.spec.ts against `next start`:
+# page content with JavaScript disabled, canonicals, Open Graph tags, noindex
+# on account-bound pages, and proposal tab hydration. Lint, tsc, and vitest
+# all pass with an empty <main>, which is how PR #220's first revision shipped
+# empty pages; only this suite catches that. No chain, indexer, or database is
+# needed: the spec aborts every request that leaves localhost.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      # env.ts requires a project id at build time; the spec never reaches Reown.
+      NEXT_PUBLIC_REOWN_PROJECT_ID: test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:seo
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-seo-report
+          path: playwright-report/
+          retention-days: 7
