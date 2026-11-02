@@ -10,6 +10,19 @@ import type { ParsedProposal } from "@/types/proposal";
 import { QuorumIndicator } from "@components/proposal/stages/QuorumIndicator";
 
 /**
+ * The quorum we were handed, or undefined when it is not a real requirement.
+ *
+ * The live vote-update patch in `use-multi-governor-search` writes a `"0"`
+ * sentinel when it has no quorum to carry over, and `"0"` is a truthy string:
+ * read as a requirement it renders a 0% bar and, on an executed row, a 0% bar
+ * coloured as reached. It also suppresses the RPC fetch that would supply the
+ * real number.
+ */
+function knownQuorum(value: string | undefined): string | undefined {
+  return value && value !== "0" ? value : undefined;
+}
+
+/**
  * Quorum cell for the proposals table.
  *
  * The indexer feed carries no quorum, so we resolve it per row:
@@ -26,7 +39,7 @@ export function QuorumCell({ proposal }: { proposal: ParsedProposal }) {
   const isExecuted = proposal.state === "Executed";
   const snapshotBlock = proposal.startBlock;
   const hasSnapshot = Boolean(snapshotBlock) && snapshotBlock !== "0";
-  const existingQuorum = votes?.quorum;
+  const existingQuorum = knownQuorum(votes?.quorum);
 
   const { l2Rpc } = useRpcSettings();
   const [ref, inView] = useInView<HTMLDivElement>({ rootMargin: "100px" });
@@ -53,7 +66,7 @@ export function QuorumCell({ proposal }: { proposal: ParsedProposal }) {
   const current = votes
     ? sumVoteCounts(votes.forVotes, votes.abstainVotes)
     : "0";
-  const quorum = existingQuorum ?? fetchedQuorum;
+  const quorum = existingQuorum ?? knownQuorum(fetchedQuorum);
 
   // Executed: reached by definition, render a full bar with no fetch. The
   // counts ride along only when the quorum is already known.
