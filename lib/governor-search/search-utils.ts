@@ -181,6 +181,7 @@ export async function searchGovernor(
         description,
         state: 0,
         creationTxHash: event.transactionHash,
+        createdAtBlock: event.blockNumber,
       } as Proposal);
     }
   }
@@ -213,8 +214,27 @@ export async function searchGovernorByDays(
 }
 
 /**
- * Parse raw proposals into ParsedProposal format with state and votes.
- * Batches RPC calls to reduce rate limiting issues.
+ * Unix seconds of an L2 block, or undefined when the block is unknown or the
+ * provider cannot answer. Never throws: a missing creation date is a blank
+ * cell, not a reason to drop the row.
+ */
+async function fetchBlockTimestamp(
+  provider: ethers.providers.Provider,
+  blockNumber: number | undefined
+): Promise<number | undefined> {
+  if (blockNumber === undefined) return undefined;
+  try {
+    const block = await provider.getBlock(blockNumber);
+    return typeof block?.timestamp === "number" ? block.timestamp : undefined;
+  } catch (e) {
+    debug.search("failed to read block %d timestamp: %O", blockNumber, e);
+    return undefined;
+  }
+}
+
+/**
+ * Parse raw proposals into ParsedProposal format with state, votes, and the
+ * creation block's timestamp. Batches RPC calls to reduce rate limiting issues.
  */
 export async function parseProposals(
   provider: ethers.providers.Provider,
@@ -228,11 +248,10 @@ export async function parseProposals(
   const queries = proposals.map((proposal) => async () => {
     const contract = getContract(proposal.contractAddress);
     try {
-      const stateData = await fetchProposalStateAndVotes(
-        contract,
-        proposal.id,
-        proposal.startBlock
-      );
+      const [stateData, createdAtTimestamp] = await Promise.all([
+        fetchProposalStateAndVotes(contract, proposal.id, proposal.startBlock),
+        fetchBlockTimestamp(provider, proposal.createdAtBlock),
+      ]);
 
       const governor = findByAddress(
         ARBITRUM_GOVERNORS,
@@ -245,6 +264,8 @@ export async function parseProposals(
         state: getStateName(stateData.state),
         governorName: governor?.name || "Unknown",
         creationTxHash: proposal.creationTxHash,
+        createdAtBlock: proposal.createdAtBlock,
+        createdAtTimestamp,
         votes: {
           ...stateData.votes,
           quorum: stateData.quorum,

@@ -306,6 +306,43 @@ describe("search-utils", () => {
       expect(result).toEqual([]);
     });
 
+    it("reads the creation block's timestamp from the provider", async () => {
+      const getBlock = vi.fn().mockResolvedValue({ timestamp: 1_700_000_000 });
+      const mockProvider = { getBlock };
+
+      const result = await parseProposals(mockProvider as never, [
+        { ...mockProposals[0], createdAtBlock: 123_456 },
+      ]);
+
+      expect(getBlock).toHaveBeenCalledWith(123_456);
+      expect(result[0].createdAtBlock).toBe(123_456);
+      expect(result[0].createdAtTimestamp).toBe(1_700_000_000);
+    });
+
+    it("keeps the row when the creation block cannot be read", async () => {
+      const mockProvider = {
+        getBlock: vi.fn().mockRejectedValue(new Error("rate limited")),
+      };
+
+      const result = await parseProposals(mockProvider as never, [
+        { ...mockProposals[0], createdAtBlock: 123_456 },
+      ]);
+
+      expect(result.length).toBe(1);
+      expect(result[0].createdAtBlock).toBe(123_456);
+      expect(result[0].createdAtTimestamp).toBeUndefined();
+    });
+
+    it("does not call getBlock when the creation block is unknown", async () => {
+      const getBlock = vi.fn();
+      const mockProvider = { getBlock };
+
+      const result = await parseProposals(mockProvider as never, mockProposals);
+
+      expect(getBlock).not.toHaveBeenCalled();
+      expect(result[0].createdAtTimestamp).toBeUndefined();
+    });
+
     it("parses proposals and adds network ID", async () => {
       const mockProvider = {};
 

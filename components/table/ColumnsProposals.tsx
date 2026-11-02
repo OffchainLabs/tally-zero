@@ -17,9 +17,51 @@ import {
 import { LifecycleCell } from "@components/ui/LifecycleCell";
 import { VoteDisplay } from "@components/ui/VoteDisplay";
 
+import { formatShortDate } from "@/lib/date-utils";
 import { ParsedProposal } from "@/types/proposal";
 
 export const columns: ColumnDef<ParsedProposal>[] = [
+  {
+    accessorKey: "proposalNumber",
+    meta: {
+      label: "Proposal #",
+    },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="#" />,
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const { proposalNumber } = row.original;
+      if (proposalNumber === undefined) return null;
+      return (
+        <span className="tabular-nums text-muted-foreground whitespace-nowrap">
+          {proposalNumber}
+        </span>
+      );
+    },
+    sortUndefined: "last",
+    size: 70,
+  },
+  {
+    accessorKey: "createdAtTimestamp",
+    meta: {
+      label: "Created",
+    },
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Created" />
+    ),
+    cell: ({ row }: { row: Row<ParsedProposal> }) => {
+      const { createdAtTimestamp } = row.original;
+      if (!createdAtTimestamp) return null;
+      return (
+        <time
+          dateTime={new Date(createdAtTimestamp * 1000).toISOString()}
+          className="tabular-nums whitespace-nowrap text-muted-foreground"
+        >
+          {formatShortDate(createdAtTimestamp)}
+        </time>
+      );
+    },
+    sortUndefined: "last",
+    size: 120,
+  },
   {
     accessorKey: "description",
     meta: {

@@ -69,12 +69,23 @@ export function formatRelativeTimestamp(timestamp?: number): string {
   } else if (diffDays < 7) {
     return `${diffDays} days ago`;
   } else {
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatShortDate(timestamp);
   }
+}
+
+/**
+ * Format a timestamp as a short calendar date in the viewer's locale
+ *
+ * @param timestamp - Unix timestamp in seconds
+ * @returns e.g. "Dec 25, 2024", or "" when the timestamp is missing
+ */
+export function formatShortDate(timestamp?: number): string {
+  if (!timestamp) return "";
+  return new Date(timestamp * MS_PER_SECOND).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**

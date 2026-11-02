@@ -1,6 +1,6 @@
 import type { ParsedProposal } from "@/types/proposal";
 import { describe, expect, it } from "vitest";
-import { sortProposals } from "./proposal-cache";
+import { assignProposalNumbers, sortProposals } from "./proposal-cache";
 
 const createProposal = (
   overrides: Partial<ParsedProposal>
@@ -93,6 +93,70 @@ describe("proposal-cache", () => {
       sortProposals(proposals);
 
       expect(proposals).toEqual(originalOrder);
+    });
+  });
+
+  describe("assignProposalNumbers", () => {
+    it("numbers by creation block, oldest first, keeping input order", () => {
+      const proposals = [
+        createProposal({ id: "newest", createdAtBlock: 300 }),
+        createProposal({ id: "oldest", createdAtBlock: 100 }),
+        createProposal({ id: "middle", createdAtBlock: 200 }),
+      ];
+
+      const numbered = assignProposalNumbers(proposals);
+
+      expect(numbered.map((p) => p.id)).toEqual(["newest", "oldest", "middle"]);
+      expect(numbered.map((p) => p.proposalNumber)).toEqual([3, 1, 2]);
+    });
+
+    it("falls back to the snapshot block when the creation block is unknown", () => {
+      const proposals = [
+        createProposal({ id: "rpc", startBlock: "5000" }),
+        createProposal({
+          id: "indexed",
+          createdAtBlock: 10,
+          startBlock: "4000",
+        }),
+      ];
+
+      const numbered = assignProposalNumbers(proposals);
+
+      expect(numbered.find((p) => p.id === "indexed")?.proposalNumber).toBe(1);
+      expect(numbered.find((p) => p.id === "rpc")?.proposalNumber).toBe(2);
+    });
+
+    it("breaks ties in the same block by proposal id", () => {
+      const proposals = [
+        createProposal({ id: "b", createdAtBlock: 42 }),
+        createProposal({ id: "a", createdAtBlock: 42 }),
+      ];
+
+      const numbered = assignProposalNumbers(proposals);
+
+      expect(numbered.map((p) => p.proposalNumber)).toEqual([2, 1]);
+    });
+
+    it("returns the same object when a row's number is unchanged", () => {
+      const already = createProposal({
+        id: "1",
+        createdAtBlock: 1,
+        proposalNumber: 1,
+      });
+
+      const [numbered] = assignProposalNumbers([already]);
+
+      expect(numbered).toBe(already);
+    });
+
+    it("does not mutate original array", () => {
+      const proposals = [executedProposal, activeProposal];
+      const originalOrder = [...proposals];
+
+      assignProposalNumbers(proposals);
+
+      expect(proposals).toEqual(originalOrder);
+      expect(proposals[0].proposalNumber).toBeUndefined();
     });
   });
 });

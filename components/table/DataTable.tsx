@@ -61,6 +61,7 @@ export function DataTable<TData, TValue>({
       quorum: xl,
       governorName: md,
       lifecycle: sm,
+      createdAtTimestamp: md,
     }),
     [xl, lg, md, sm]
   );
