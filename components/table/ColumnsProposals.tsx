@@ -37,7 +37,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       );
     },
     sortUndefined: "last",
-    size: 70,
+    size: 60,
   },
   {
     accessorKey: "createdAtTimestamp",
@@ -60,9 +60,14 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       );
     },
     sortUndefined: "last",
-    size: 120,
+    size: 124,
   },
   {
+    // No fixed size: with table-fixed, the one unsized column takes every
+    // pixel the sized columns leave over, so wider screens widen the title
+    // instead of sharing the gain across all columns and truncating it.
+    // minSize is the floor DataTable turns into the table's min-width, so a
+    // narrow viewport scrolls the table rather than squeezing the title.
     accessorKey: "description",
     meta: {
       label: "Proposal",
@@ -70,14 +75,10 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Proposal" />
     ),
-    cell: ({ row }: { row: Row<ParsedProposal> }) => {
-      return (
-        <div className="min-w-[300px] lg:min-w-[400px] xl:min-w-[500px]">
-          <ClickableDescriptionCell proposal={row.original} />
-        </div>
-      );
-    },
-    size: 500,
+    cell: ({ row }: { row: Row<ParsedProposal> }) => (
+      <ClickableDescriptionCell proposal={row.original} />
+    ),
+    minSize: 400,
   },
   {
     accessorKey: "governorName",
@@ -92,7 +93,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       if (!governorName) return null;
       return <GovernorBadge governorName={governorName} />;
     },
-    size: 90,
+    size: 112,
   },
   {
     accessorKey: "lifecycle",
@@ -110,7 +111,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
       const rowState = row.original.state?.toLowerCase();
       return value.some((v) => v.toLowerCase() === rowState);
     },
-    size: 100,
+    size: 128,
   },
   {
     accessorKey: "votes",
@@ -134,7 +135,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
         </HoverCard>
       );
     },
-    size: 120,
+    size: 132,
   },
   {
     id: "quorum",
@@ -147,7 +148,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     cell: ({ row }: { row: Row<ParsedProposal> }) => (
       <QuorumCell proposal={row.original} />
     ),
-    size: 120,
+    size: 124,
   },
   {
     id: "hasVoted",
@@ -160,11 +161,11 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     cell: ({ row }: { row: Row<ParsedProposal> }) => (
       <HasVotedBadge proposal={row.original} showPlaceholder />
     ),
-    size: 100,
+    size: 104,
   },
   {
     id: "vote",
     cell: ({ row }) => <DataTableRowActions row={row} />,
-    size: 100,
+    size: 56,
   },
 ];
