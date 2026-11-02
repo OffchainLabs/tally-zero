@@ -28,7 +28,7 @@ import {
   type UseMultiGovernorSearchOptions,
   type UseMultiGovernorSearchResult,
 } from "@/lib/governor-search";
-import { assignProposalNumbers, sortProposals } from "@/lib/proposal-cache";
+import { numberCompleteList, sortProposals } from "@/lib/proposal-cache";
 import {
   subscribeToVoteUpdates,
   type VoteUpdate,
@@ -799,11 +799,10 @@ export function useMultiGovernorSearch({
   const proposals = useMemo(() => {
     if (!data?.proposals.length) return data?.proposals ?? [];
 
-    // Without the indexer the cache holds only the recent RPC window, and an
-    // ordinal over a window would mislabel every row; leave the column empty.
-    const cached = data.sourceInfo.indexerAvailable
-      ? assignProposalNumbers(data.proposals)
-      : data.proposals;
+    const cached = numberCompleteList(
+      data.proposals,
+      data.sourceInfo.indexerAvailable
+    );
     const progress: StateVerificationProgress = {
       currentGovernorBlock: currentL1Block,
       governorClockPending: isL1BlockLoading,
