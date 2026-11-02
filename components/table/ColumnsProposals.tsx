@@ -148,7 +148,7 @@ export const columns: ColumnDef<ParsedProposal>[] = [
     cell: ({ row }: { row: Row<ParsedProposal> }) => (
       <QuorumCell proposal={row.original} />
     ),
-    size: 124,
+    size: 160,
   },
   {
     id: "hasVoted",
