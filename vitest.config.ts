@@ -5,7 +5,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: ["**/node_modules/**", "**/opensrc/**", "**/e2e/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/opensrc/**",
+      "**/e2e/**",
+      // Nested git worktrees that review agents create; they test themselves.
+      "**/.claude/worktrees/**",
+    ],
   },
   resolve: {
     alias: {
