@@ -1,6 +1,6 @@
+import { extractProposals, type BundledCache } from "@gzeoneth/gov-tracker";
 import type { MetadataRoute } from "next";
 
-import proposalsIndex from "@/data/proposals-index.json";
 import { canonicalUrl } from "@/lib/seo";
 
 /** Public pages that do not depend on a wallet. */
@@ -23,32 +23,32 @@ const SECTION_PATHS: Array<{
 ];
 
 /**
- * Proposal URLs come from the committed proposals index, so the sitemap is
- * static and lists every proposal the build knows about. The page resolves
- * the governor itself when `govId` is absent, so the clean path is listed and
+ * Proposal URLs come from the gov-tracker bundled cache, the same source
+ * the proposal page uses for generateStaticParams, so the sitemap lists
+ * exactly the proposal pages the build renders. The page resolves the
+ * governor itself when `govId` is absent, so the clean path is listed and
  * is also what each proposal page declares as its canonical.
+ *
+ * No lastModified: the cache carries no generation time, and a guessed
+ * value is worse than none because Google ignores sitemaps whose dates
+ * prove unreliable.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
-  const generatedAt = new Date(proposalsIndex.generatedAt);
-  const lastModified = Number.isNaN(generatedAt.getTime())
-    ? new Date()
-    : generatedAt;
-
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sections = SECTION_PATHS.map(({ path, changeFrequency, priority }) => ({
     url: canonicalUrl(path),
-    lastModified,
     changeFrequency,
     priority,
   }));
 
+  const imported = await import("@gzeoneth/gov-tracker/bundled-cache.json");
+  const cache = imported.default as BundledCache;
   const proposalIds = new Set<string>();
-  for (const proposal of proposalsIndex.proposals) {
+  for (const proposal of extractProposals(cache)) {
     if (proposal.proposalId) proposalIds.add(proposal.proposalId);
   }
 
   const proposals = Array.from(proposalIds).map((proposalId) => ({
     url: canonicalUrl(`/proposal/${proposalId}`),
-    lastModified,
     changeFrequency: "weekly" as const,
     priority: 0.6,
   }));
