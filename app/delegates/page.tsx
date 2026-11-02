@@ -1,9 +1,13 @@
 import DelegateSearch from "@/components/container/DelegateSearch";
+import { canonicalUrl } from "@/lib/seo";
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
-export const metadata = {
-  title: "Delegates | Arbitrum Governance",
-  description: "View voting power distribution across ArbitrumDAO delegates",
+export const metadata: Metadata = {
+  title: "Delegates",
+  description:
+    "ArbitrumDAO delegates ranked by ARB voting power, with their voting history and profiles. Find a delegate or delegate your own ARB.",
+  alternates: { canonical: canonicalUrl("/delegates") },
 };
 
 export default function DelegatesPage() {

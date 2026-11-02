@@ -8,6 +8,7 @@ import { marketingConfig } from "@config/marketing";
 import { cn } from "@lib/utils";
 
 import { Toaster } from "@/components/ui/Sonner";
+import { jsonLdScript, websiteJsonLd } from "@/lib/seo";
 import { ButtonNav } from "@components/navigation/ButtonNav";
 import { MainNav } from "@components/navigation/MainNav";
 import { SiteFooter } from "@components/navigation/SiteFooter";
@@ -25,7 +26,25 @@ export const metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
-  keywords: ["Arbitrum Governance", "ArbitrumDAO", "ArbitrumDAO"],
+  keywords: [
+    "Arbitrum governance",
+    "ArbitrumDAO",
+    "Arbitrum DAO voting",
+    "Arbitrum proposals",
+    "ARB delegation",
+    "Arbitrum delegates",
+    "Security Council election",
+  ],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+    },
+  },
   authors: [
     {
       name: "Offchain Labs",
@@ -40,14 +59,22 @@ export const metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [siteConfig.ogImage],
+    images: [
+      {
+        url: siteConfig.ogImage,
+        width: 2400,
+        height: 1260,
+        alt: siteConfig.ogImageAlt,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
-    images: [siteConfig.ogImage],
-    creator: "@offchain",
+    images: [{ url: siteConfig.ogImage, alt: siteConfig.ogImageAlt }],
+    site: siteConfig.twitterSite,
+    creator: siteConfig.twitterCreator,
   },
   icons: {
     icon: "/favicon/favicon.ico",
@@ -72,6 +99,11 @@ export default function RootLayout({ children }: RootLayoutProps) {
           GeistSans.className
         )}
       >
+        {/* schema.org WebSite record; see lib/seo.ts */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(websiteJsonLd()) }}
+        />
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
           <PostHogProvider>
             <Web3ModalProvider>

@@ -1,9 +1,11 @@
 import { Metadata } from "next";
 
+import { canonicalUrl } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 const metadataInfo = {
-  title: "Privacy Policy – Arbitrum",
+  title: "Privacy Policy",
+  alternates: { canonical: canonicalUrl("/privacy") },
   description:
     "Read the official Arbitrum Privacy Policy to understand how we collect, use, and protect your personal information and data when you interact with our services.",
 };

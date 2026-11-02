@@ -2,13 +2,14 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { DelegateProfileLoader } from "@/components/delegate/DelegateProfileLoader";
+import type { Metadata } from "next";
 
 interface DelegatePageProps {
   params: Promise<{ address: string }>;
 }
 
-export const metadata = {
-  title: "Delegate Profile | Arbitrum Governance",
+export const metadata: Metadata = {
+  title: "Delegate Profile",
   description: "View delegate profile and voting power in Arbitrum DAO.",
 };
 

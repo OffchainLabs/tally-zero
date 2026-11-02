@@ -6,13 +6,14 @@ import {
   getCachedElectionCandidate,
   getCachedElectionCandidateStaticParams,
 } from "@/lib/tally-data/server";
+import type { Metadata } from "next";
 
 interface ContenderPageProps {
   params: Promise<{ address: string }>;
 }
 
-export const metadata = {
-  title: "Candidate Profile | Security Council Elections",
+export const metadata: Metadata = {
+  title: "Security Council Candidate Profile",
   description:
     "View candidate profile for the Arbitrum Security Council election.",
 };

@@ -2,13 +2,14 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { SharedDraftView } from "@/components/drafts/SharedDraftView";
+import type { Metadata } from "next";
 
 interface SharedDraftPageProps {
   params: Promise<{ slug: string }>;
 }
 
-export const metadata = {
-  title: "Shared Draft | Arbitrum Governance",
+export const metadata: Metadata = {
+  title: "Shared Draft",
   description: "A proposal draft shared for review before going on chain.",
   // The slug is the capability: a share link should reach the people the
   // author sent it to, not a search index.

@@ -1,9 +1,11 @@
 import { Metadata } from "next";
 
+import { canonicalUrl } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 const metadataInfo = {
-  title: "Terms of Service – Arbitrum",
+  title: "Terms of Service",
+  alternates: { canonical: canonicalUrl("/tos") },
   description:
     "Read the official Arbitrum Governance Platform Terms. This document governs your use of the Arbitrum governance platform and related services.",
 };
