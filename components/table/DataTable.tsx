@@ -76,6 +76,11 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    // TanStack fills in size: 150 for every column that sets none, which
+    // would hand the title column a fixed width too and leave the browser
+    // to share leftover space across all columns. Clearing the default keeps
+    // columnDef.size truthful: only columns that declare a size get one.
+    defaultColumn: { size: undefined },
     state: {
       sorting,
       columnVisibility,
@@ -102,6 +107,20 @@ export function DataTable<TData, TValue>({
   // Cache row model to avoid repeated calls in render
   const rows = table.getRowModel().rows;
 
+  // The table is table-fixed and w-full, so an unsized column (the title) is
+  // handed whatever the sized columns leave over. Below this width that
+  // remainder would drop under the title's minSize and its content would spill
+  // across the neighbouring cells. The floor goes on the clipping glass box,
+  // not the table, so the outer overflow-x-auto wrapper scrolls instead of the
+  // box clipping the table's right edge.
+  const minTableWidth = table
+    .getVisibleLeafColumns()
+    .reduce(
+      (total, column) =>
+        total + (column.columnDef.size ?? column.columnDef.minSize ?? 0),
+      0
+    );
+
   return (
     <div className="space-y-4">
       <DataTableToolbar table={table} />
@@ -110,7 +129,10 @@ export function DataTable<TData, TValue>({
         <MobileProposalList proposals={filteredData as ParsedProposal[]} />
       ) : (
         <div className="relative overflow-x-auto">
-          <div className="glass rounded-2xl overflow-clip">
+          <div
+            className="glass rounded-2xl overflow-clip"
+            style={{ minWidth: minTableWidth }}
+          >
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
