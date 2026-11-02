@@ -6,6 +6,7 @@ import { MS_PER_HOUR } from "./date-utils";
  * Format voting power from wei (18 decimals) to human-readable format with K/M/B suffixes
  *
  * @param weiValue - Voting power in wei as string or bigint
+ * @param decimals - Maximum fraction digits to keep (default 2)
  * @returns Formatted string with appropriate suffix (K, M, B)
  *
  * @example
@@ -14,8 +15,12 @@ import { MS_PER_HOUR } from "./date-utils";
  * formatVotingPower("1500000000000000000000000000") // "1.5B"
  * formatVotingPower("0") // "0"
  * formatVotingPower(1000000000000000000000n) // "1K"
+ * formatVotingPower("121410000000000000000000000", 1) // "121.4M"
  */
-export function formatVotingPower(weiValue: string | bigint): string {
+export function formatVotingPower(
+  weiValue: string | bigint,
+  decimals = 2
+): string {
   if (!weiValue || weiValue === "0" || weiValue === BigInt(0)) {
     return "0";
   }
@@ -31,13 +36,13 @@ export function formatVotingPower(weiValue: string | bigint): string {
     const thousand = 1_000;
 
     if (value >= billion) {
-      return `${parseFloat((value / billion).toFixed(2))}B`;
+      return `${parseFloat((value / billion).toFixed(decimals))}B`;
     } else if (value >= million) {
-      return `${parseFloat((value / million).toFixed(2))}M`;
+      return `${parseFloat((value / million).toFixed(decimals))}M`;
     } else if (value >= thousand) {
-      return `${parseFloat((value / thousand).toFixed(2))}K`;
+      return `${parseFloat((value / thousand).toFixed(decimals))}K`;
     } else {
-      return parseFloat(value.toFixed(2)).toString();
+      return parseFloat(value.toFixed(decimals)).toString();
     }
   } catch {
     return "0";
