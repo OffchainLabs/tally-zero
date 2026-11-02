@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Suspense, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import TestWalletProvider from "./TestWalletProvider";
 import Web3ModalProviderInner from "./Web3ModalProviderInner";
@@ -17,9 +17,7 @@ const queryClient = new QueryClient();
 function NormalProvider({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Suspense fallback={null}>
-        <Web3ModalProviderInner>{children}</Web3ModalProviderInner>
-      </Suspense>
+      <Web3ModalProviderInner>{children}</Web3ModalProviderInner>
     </QueryClientProvider>
   );
 }

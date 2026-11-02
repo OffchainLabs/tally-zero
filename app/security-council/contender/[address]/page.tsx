@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { ContenderProfileLoader } from "@/components/election/ContenderProfileLoader";
+import { canonicalUrl } from "@/lib/seo";
 import {
   getCachedElectionCandidate,
   getCachedElectionCandidateStaticParams,
@@ -12,11 +13,21 @@ interface ContenderPageProps {
   params: Promise<{ address: string }>;
 }
 
-export const metadata: Metadata = {
-  title: "Security Council Candidate Profile",
-  description:
-    "View candidate profile for the Arbitrum Security Council election.",
-};
+export async function generateMetadata({
+  params,
+}: ContenderPageProps): Promise<Metadata> {
+  const { address } = await params;
+  return {
+    title: "Security Council Candidate Profile",
+    description:
+      "View candidate profile for the Arbitrum Security Council election.",
+    alternates: {
+      canonical: canonicalUrl(
+        `/security-council/contender/${address.toLowerCase()}`
+      ),
+    },
+  };
+}
 
 export const dynamicParams = true;
 export const revalidate = false;

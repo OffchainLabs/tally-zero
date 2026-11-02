@@ -8,7 +8,7 @@ import { marketingConfig } from "@config/marketing";
 import { cn } from "@lib/utils";
 
 import { Toaster } from "@/components/ui/Sonner";
-import { jsonLdScript, websiteJsonLd } from "@/lib/seo";
+import { jsonLdScript, siteOpenGraph, websiteJsonLd } from "@/lib/seo";
 import { ButtonNav } from "@components/navigation/ButtonNav";
 import { MainNav } from "@components/navigation/MainNav";
 import { SiteFooter } from "@components/navigation/SiteFooter";
@@ -52,22 +52,7 @@ export const metadata = {
     },
   ],
   creator: "Offchain Labs",
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: siteConfig.url,
-    title: siteConfig.name,
-    description: siteConfig.description,
-    siteName: siteConfig.name,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 2400,
-        height: 1260,
-        alt: siteConfig.ogImageAlt,
-      },
-    ],
-  },
+  openGraph: siteOpenGraph,
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,

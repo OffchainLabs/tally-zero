@@ -1,5 +1,5 @@
 import { HomeView } from "@/components/container/HomeView";
-import { canonicalUrl } from "@/lib/seo";
+import { canonicalUrl, siteOpenGraph } from "@/lib/seo";
 import ProposalBanner from "@components/section/display/ProposalBanner";
 import { siteConfig } from "@config/site";
 import type { Metadata } from "next";
@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   alternates: { canonical: canonicalUrl("/") },
   openGraph: {
+    ...siteOpenGraph,
     title: siteConfig.homeTitle,
     description: siteConfig.description,
     url: canonicalUrl("/"),

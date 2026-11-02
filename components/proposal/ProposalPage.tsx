@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
 import { type CalldataOverrides } from "@/components/payload";
@@ -36,6 +36,23 @@ import {
 import type { ParsedProposal } from "@/types/proposal";
 import { ArrowLeft } from "lucide-react";
 
+/** Only this reader needs client-side query parameters during prerendering. */
+function ProposalSearchParams({
+  onChange,
+}: {
+  onChange: (governorAddress: string | null, tab: ProposalTab) => void;
+}) {
+  const searchParams = useSearchParams();
+  const governorAddress = parseGovernorId(searchParams.get("govId"));
+  const tab = normalizeProposalTab(searchParams.get("tab")) ?? "description";
+
+  useEffect(() => {
+    onChange(governorAddress, tab);
+  }, [governorAddress, tab, onChange]);
+
+  return null;
+}
+
 export function ProposalPage({
   proposalId,
   initialProposal = null,
@@ -44,28 +61,17 @@ export function ProposalPage({
   initialProposal?: ParsedProposal | null;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const requestedGovId = searchParams.get("govId");
-  const governorAddress = useMemo(
-    () => parseGovernorId(requestedGovId),
-    [requestedGovId]
+  const [governorAddress, setGovernorAddress] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ProposalTab>("description");
+  const [searchParamsReady, setSearchParamsReady] = useState(false);
+  const handleSearchParamsChange = useCallback(
+    (address: string | null, tab: ProposalTab) => {
+      setGovernorAddress(address);
+      setActiveTab(tab);
+      setSearchParamsReady(true);
+    },
+    []
   );
-  const [activeTab, setActiveTab] = useState<ProposalTab>(() => {
-    if (typeof window === "undefined") return "description";
-    const params = new URLSearchParams(window.location.search);
-    return normalizeProposalTab(params.get("tab")) ?? "description";
-  });
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const next = normalizeProposalTab(params.get("tab")) ?? "description";
-      setActiveTab(next);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
   const stableInitialProposal = useMemo(() => {
     if (!initialProposal) return null;
 
@@ -83,7 +89,9 @@ export function ProposalPage({
   } = useProposalById({
     proposalId,
     governorAddress,
-    enabled: shouldFetchLiveProposal,
+    // Wait for govId before starting a live lookup; cached content can render
+    // immediately with the same description tab on the server and client.
+    enabled: shouldFetchLiveProposal && searchParamsReady,
   });
   const proposal = useMemo(
     () => mergeProposalData(stableInitialProposal, fetchedProposal),
@@ -94,7 +102,7 @@ export function ProposalPage({
   const error = proposal ? null : liveError;
 
   useEffect(() => {
-    if (!proposal || typeof window === "undefined") return;
+    if (!proposal || !searchParamsReady) return;
 
     const liveParams = new URLSearchParams(window.location.search);
     const liveGovId = liveParams.get("govId");
@@ -118,7 +126,7 @@ export function ProposalPage({
       window.history.replaceState(null, "", canonicalUrl);
       router.replace(canonicalUrl, { scroll: false });
     }
-  }, [proposal, router]);
+  }, [proposal, router, searchParamsReady, governorAddress, activeTab]);
 
   const handleTabChange = useCallback(
     (tab: ProposalTab) => {
@@ -139,6 +147,9 @@ export function ProposalPage({
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
+      <Suspense fallback={null}>
+        <ProposalSearchParams onChange={handleSearchParamsChange} />
+      </Suspense>
       <div className="container px-0 md:px-8 max-w-screen-xl space-y-6">
         <Button asChild variant="ghost" size="sm" className="w-fit">
           <Link href="/proposals">

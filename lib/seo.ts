@@ -25,6 +25,24 @@ export function canonicalUrl(path: string): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** Shared explicitly because Next.js replaces nested metadata objects. */
+export const siteOpenGraph = {
+  type: "website",
+  locale: "en_US",
+  url: canonicalUrl("/"),
+  title: siteConfig.name,
+  description: siteConfig.description,
+  siteName: siteConfig.name,
+  images: [
+    {
+      url: siteConfig.ogImage,
+      width: 2400,
+      height: 1260,
+      alt: siteConfig.ogImageAlt,
+    },
+  ],
+} satisfies Metadata["openGraph"];
+
 /**
  * Plain text for a meta tag: markdown and HTML stripped, whitespace
  * collapsed, cut at a word boundary with an ellipsis when too long.
@@ -95,19 +113,11 @@ export function buildProposalMetadata(
     description,
     alternates: { canonical },
     openGraph: {
+      ...siteOpenGraph,
       title: `${resolvedTitle} | ${siteConfig.name}`,
       description,
       url: canonical,
-      siteName: siteConfig.name,
       type: "article",
-      images: [
-        {
-          url: siteConfig.ogImage,
-          width: 2400,
-          height: 1260,
-          alt: siteConfig.ogImageAlt,
-        },
-      ],
     },
   };
 }

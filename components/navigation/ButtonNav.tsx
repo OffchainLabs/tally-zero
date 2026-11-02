@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 import { ETHEREUM_RPC_URL } from "@/config/arbitrum-governance";
 import { shortenAddress } from "@/lib/format-utils";
@@ -86,7 +87,11 @@ export function ButtonNav() {
 
   return (
     <nav className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-      {isAppPage && <SettingsSheet />}
+      {isAppPage && (
+        <Suspense fallback={null}>
+          <SettingsSheet />
+        </Suspense>
+      )}
       {walletControls}
     </nav>
   );
