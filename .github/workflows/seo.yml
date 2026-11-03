@@ -12,6 +12,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   seo:
     # Pinned: ubuntu-latest became Ubuntu 26.04 and Playwright 1.58 cannot
