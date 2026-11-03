@@ -38,6 +38,11 @@ export async function fetchTopDelegatesFromIndexer(): Promise<TopDelegatesSnapsh
   }
 
   const result = (await upstream.json()) as TallyDelegateListResult;
+  // A reindex can temporarily return no rows. Reject that read inside the
+  // cached function so it cannot replace a usable persisted candidate list.
+  if (result.delegates.length === 0) {
+    throw new Error("Indexer returned no top delegate candidates");
+  }
   const delegates: DelegateInfo[] = result.delegates.map((row) => ({
     address: row.address,
     votingPower: row.votingPower,
@@ -49,7 +54,7 @@ export async function fetchTopDelegatesFromIndexer(): Promise<TopDelegatesSnapsh
 
 const getCachedTopDelegatesOrThrow = unstable_cache(
   fetchTopDelegatesFromIndexer,
-  ["tally-zero-top-delegates-v1"],
+  ["tally-zero-top-delegates-v2"],
   { revalidate: TOP_DELEGATES_REVALIDATE_SECONDS }
 );
 
@@ -63,11 +68,12 @@ const getCachedTopDelegatesOrThrow = unstable_cache(
 let lastKnownGood: TopDelegatesSnapshot | null = null;
 
 /**
- * The candidate list for the didn't-vote fallback, refreshed hourly.
+ * The candidate list for the didn't-vote fallback, revalidated on demand after
+ * an hour. Healthy proposal visits warm it in the background.
  *
  * Exists so that an indexer outage degrades to "the top 300 as of the last
  * successful read" rather than to the months-old snapshot bundled with the
- * SDK. Throws only when there has never been a successful read.
+ * SDK. Throws only when no usable nonempty list has been read.
  */
 export async function getCachedTopDelegates(): Promise<TopDelegatesSnapshot> {
   try {

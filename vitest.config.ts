@@ -9,6 +9,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // Cross-layer tests run the client and server without Next's compiler.
+      "server-only": path.resolve(__dirname, "./lib/empty-module.js"),
       "@": path.resolve(__dirname, "./"),
       "@components": path.resolve(__dirname, "./components"),
       "@context": path.resolve(__dirname, "./context"),

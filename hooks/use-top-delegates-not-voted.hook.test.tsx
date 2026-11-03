@@ -9,7 +9,10 @@ import {
   type DelegateInfo,
 } from "@gzeoneth/gov-tracker";
 
-import { loadDelegateCache } from "@/lib/delegate-cache";
+import {
+  getDelegateDisplayRecords,
+  loadDelegateCache,
+} from "@/lib/delegate-cache";
 import { createRpcProvider } from "@/lib/rpc-utils";
 import { getTallyDataClient } from "@/lib/tally-data/client";
 import type { TallyDelegateListItem } from "@/lib/tally-data/types";
@@ -107,6 +110,12 @@ async function renderUntilSettled() {
 
 describe("useTopDelegatesNotVoted data source", () => {
   beforeEach(() => {
+    vi.mocked(fetchTopDelegatesSnapshot)
+      .mockReset()
+      .mockResolvedValue({
+        delegates: [info(DELEGATE_A, ARB(10_000))],
+        fetchedAt: "2026-10-30T12:00:00.000Z",
+      });
     vi.mocked(getTallyDataClient).mockReturnValue({
       getDelegatesPage,
     } as unknown as ReturnType<typeof getTallyDataClient>);
@@ -120,7 +129,7 @@ describe("useTopDelegatesNotVoted data source", () => {
     vi.clearAllMocks();
   });
 
-  it("checks hasVoted against the indexer's top delegates without touching any fallback", async () => {
+  it("checks the indexer's top delegates while warming the server candidate cache", async () => {
     getDelegatesPage.mockResolvedValue({
       delegates: [row(DELEGATE_A, "1000"), row(DELEGATE_B, "500")],
       totalVotingPower: "1500",
@@ -139,7 +148,7 @@ describe("useTopDelegatesNotVoted data source", () => {
         exclude: ["0x00000000000000000000000000000000000A4B86"],
       })
     );
-    expect(fetchTopDelegatesSnapshot).not.toHaveBeenCalled();
+    expect(fetchTopDelegatesSnapshot).toHaveBeenCalledTimes(1);
     expect(loadDelegateCache).not.toHaveBeenCalled();
     expect(queryDelegateVotingPowers).not.toHaveBeenCalled();
 
@@ -166,10 +175,44 @@ describe("useTopDelegatesNotVoted data source", () => {
 
     const result = await renderUntilSettled();
 
-    expect(fetchTopDelegatesSnapshot).not.toHaveBeenCalled();
+    expect(fetchTopDelegatesSnapshot).toHaveBeenCalledTimes(1);
     expect(loadDelegateCache).not.toHaveBeenCalled();
     expect(lastNotVotedOptions().cache.delegates).toEqual([]);
     expect(result.current.delegatesNotVoted).toEqual([]);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("does not wait for cache warming before showing healthy indexer results", async () => {
+    getDelegatesPage.mockResolvedValue({
+      delegates: [row(DELEGATE_A, ARB(10_000))],
+      totalVotingPower: ARB(10_000),
+      totalSupply: ARB(100_000),
+    });
+    vi.mocked(fetchTopDelegatesSnapshot).mockReturnValueOnce(
+      new Promise(() => {})
+    );
+
+    const result = await renderUntilSettled();
+
+    expect(fetchTopDelegatesSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.current.delegatesNotVoted).toHaveLength(1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("ignores a cache-warming failure when the live indexer page succeeds", async () => {
+    getDelegatesPage.mockResolvedValue({
+      delegates: [row(DELEGATE_A, ARB(10_000))],
+      totalVotingPower: ARB(10_000),
+      totalSupply: ARB(100_000),
+    });
+    vi.mocked(fetchTopDelegatesSnapshot).mockRejectedValueOnce(
+      new Error("candidate route down")
+    );
+
+    const result = await renderUntilSettled();
+
+    expect(fetchTopDelegatesSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.current.delegatesNotVoted).toHaveLength(1);
     expect(result.current.error).toBeNull();
   });
 
@@ -197,6 +240,7 @@ describe("useTopDelegatesNotVoted data source", () => {
 
       const result = await renderUntilSettled();
 
+      expect(fetchTopDelegatesSnapshot).toHaveBeenCalledTimes(1);
       expect(loadDelegateCache).not.toHaveBeenCalled();
       expect(queryDelegateVotingPowers).toHaveBeenCalledWith(
         expect.anything(),
@@ -211,6 +255,26 @@ describe("useTopDelegatesNotVoted data source", () => {
         [DELEGATE_B, ARB(9_000)],
       ]);
       expect(result.current.error).toBeNull();
+    });
+
+    it("keeps live fallback powers when the indexer label lookup also fails", async () => {
+      vi.mocked(queryDelegateVotingPowers).mockResolvedValue(
+        new Map([[DELEGATE_A, ARB(7_000)]])
+      );
+      vi.mocked(queryDelegatesNotVoted).mockResolvedValue([
+        { address: DELEGATE_A, votingPower: ARB(7_000), rank: 1 },
+      ]);
+      vi.mocked(getDelegateDisplayRecords).mockRejectedValueOnce(
+        new Error("indexer labels down")
+      );
+
+      const result = await renderUntilSettled();
+
+      expect(result.current.delegatesNotVoted).toEqual([
+        { address: DELEGATE_A, votingPower: ARB(7_000), label: undefined },
+      ]);
+      expect(result.current.error).toBeNull();
+      expect(result.current.allTopDelegatesVoted).toBe(false);
     });
 
     it("refreshes powers in chunks of 100 and caps the ranked list at 100", async () => {

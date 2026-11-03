@@ -11,9 +11,8 @@ export const dynamic = "force-dynamic";
  * The top delegate candidates for the "didn't vote" badges, served from the
  * last successful indexer read.
  *
- * The browser asks the indexer directly first (through the proxy route) and
- * only falls back here when that fails, so what matters about this route is
- * what it does during an outage: `unstable_cache` plus the in-process copy in
+ * Healthy proposal visits warm this route in the background. During an
+ * indexer outage, `unstable_cache` plus the in-process copy in
  * `getCachedTopDelegates` keep handing out the last list that was read, and the
  * long `stale-while-revalidate` lets the CDN do the same without re-entering
  * the function.

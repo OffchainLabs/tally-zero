@@ -35,6 +35,7 @@ import {
   TOP_DELEGATES_CANDIDATE_LIMIT,
   TOP_DELEGATES_TO_CHECK,
   VOTING_POWER_REFRESH_CHUNK,
+  type TopDelegatesSnapshot,
 } from "@/lib/top-delegates";
 
 export interface DelegateNotVoted {
@@ -93,7 +94,7 @@ export function buildNotVotedList(
 
 /**
  * Candidate addresses for the outage path, best source first: the server's
- * last successful indexer read (hourly, survives the indexer being down), then
+ * last successful indexer read (warmed by normal traffic), then
  * the snapshot bundled with the SDK. Null when neither is available.
  *
  * An empty list counts as unavailable, not as an answer. Only a live indexer
@@ -102,9 +103,11 @@ export function buildNotVotedList(
  * than "nobody clears the threshold", and the bundled snapshot is still worth
  * trying. Returning it would also tell the caller every top delegate voted.
  */
-async function loadFallbackCandidates(): Promise<DelegateInfo[] | null> {
+async function loadFallbackCandidates(
+  serverSnapshotPromise: Promise<TopDelegatesSnapshot>
+): Promise<DelegateInfo[] | null> {
   try {
-    const snapshot = await fetchTopDelegatesSnapshot();
+    const snapshot = await serverSnapshotPromise;
     if (snapshot.delegates.length > 0) {
       debug.delegates(
         "using server top-delegates list from %s",
@@ -168,11 +171,12 @@ async function refreshCandidatesOnChain(
  * candidate list refreshed on-chain rather than to stale numbers. An RPC
  * failure during that refresh propagates: no fallback shows old powers.
  *
- * Takes the provider as a promise so its handshake overlaps the indexer
- * request; it is only awaited on the fallback path.
+ * The provider handshake and server snapshot read overlap the live indexer
+ * request. The snapshot is only awaited on the fallback path.
  */
 async function resolveTopDelegateCache(
-  providerPromise: Promise<ethers.providers.Provider>
+  providerPromise: Promise<ethers.providers.Provider>,
+  serverSnapshotPromise: Promise<TopDelegatesSnapshot>
 ): Promise<DelegateCache | null> {
   try {
     const page = await getTallyDataClient().getDelegatesPage({
@@ -188,7 +192,7 @@ async function resolveTopDelegateCache(
     debug.delegates("indexer top delegates fetch failed: %O", err);
   }
 
-  const candidates = await loadFallbackCandidates();
+  const candidates = await loadFallbackCandidates(serverSnapshotPromise);
   if (!candidates) return null;
   return refreshCandidatesOnChain(await providerPromise, candidates);
 }
@@ -225,14 +229,19 @@ export function useTopDelegatesNotVoted({
     setError(null);
 
     try {
-      // Start the provider handshake and the indexer request together; the
-      // provider is first awaited where it is first needed. The no-op handler
-      // only stops a rejection from being reported as unhandled if the early
-      // return below runs before anything awaits it; the awaits still throw.
+      // Healthy visits warm the shared candidate cache without waiting for it.
+      // Reuse this read if the live indexer fails. Both promises have immediate
+      // rejection handlers because some paths never await them; later awaits
+      // still throw and are handled where the data is needed.
       const providerPromise = createRpcProvider(l2Rpc);
       providerPromise.catch(() => {});
+      const serverSnapshotPromise = fetchTopDelegatesSnapshot();
+      serverSnapshotPromise.catch(() => {});
 
-      const cache = await resolveTopDelegateCache(providerPromise);
+      const cache = await resolveTopDelegateCache(
+        providerPromise,
+        serverSnapshotPromise
+      );
       if (!cache) {
         setIsLoading(false);
         return;
@@ -251,7 +260,11 @@ export function useTopDelegatesNotVoted({
 
       const displayRecords = await getDelegateDisplayRecords(
         sdkResults.map((d) => d.address)
-      );
+      ).catch((err) => {
+        // Labels use the indexer too; their outage must not hide RPC results.
+        debug.delegates("delegate label lookup failed: %O", err);
+        return new Map();
+      });
       const notVoted = buildNotVotedList(sdkResults, displayRecords);
 
       setDelegatesNotVoted(notVoted);

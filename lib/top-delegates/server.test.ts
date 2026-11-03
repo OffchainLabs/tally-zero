@@ -49,7 +49,7 @@ describe("fetchTopDelegatesFromIndexer", () => {
   });
 
   it("asks for the top 300 with the delegates tab's filter", async () => {
-    indexerFetch.mockResolvedValueOnce(okResponse([]));
+    indexerFetch.mockResolvedValueOnce(okResponse([indexerRow(A, "1000")]));
 
     await fetchTopDelegatesFromIndexer();
 
@@ -87,6 +87,14 @@ describe("fetchTopDelegatesFromIndexer", () => {
       "Indexer request failed: 500"
     );
   });
+
+  it("rejects an empty candidate list before it can replace the data cache", async () => {
+    indexerFetch.mockResolvedValueOnce(okResponse([]));
+
+    await expect(fetchTopDelegatesFromIndexer()).rejects.toThrow(
+      "Indexer returned no top delegate candidates"
+    );
+  });
 });
 
 describe("getCachedTopDelegates", () => {
@@ -119,6 +127,25 @@ describe("getCachedTopDelegates", () => {
     const served = await getCachedTopDelegates();
 
     expect(served.delegates.map((d) => d.address)).toEqual([B]);
+  });
+
+  it("retains the last usable list through an empty refresh and a later outage", async () => {
+    indexerFetch.mockResolvedValueOnce(okResponse([indexerRow(A, "1000")]));
+    const first = await getCachedTopDelegates();
+
+    indexerFetch.mockResolvedValueOnce(okResponse([]));
+    expect(await getCachedTopDelegates()).toBe(first);
+
+    indexerFetch.mockRejectedValueOnce(new Error("indexer down"));
+    expect(await getCachedTopDelegates()).toBe(first);
+  });
+
+  it("throws when the first candidate list is empty", async () => {
+    indexerFetch.mockResolvedValueOnce(okResponse([]));
+
+    await expect(getCachedTopDelegates()).rejects.toThrow(
+      "Indexer returned no top delegate candidates"
+    );
   });
 
   it("throws when the indexer has never answered", async () => {
