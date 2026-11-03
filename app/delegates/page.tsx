@@ -1,14 +1,14 @@
 import DelegateSearch from "@/components/container/DelegateSearch";
-import { canonicalUrl } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Delegates",
   description:
     "ArbitrumDAO delegates ranked by ARB voting power, with their voting history and profiles. Find a delegate or delegate your own ARB.",
-  alternates: { canonical: canonicalUrl("/delegates") },
-};
+  path: "/delegates",
+});
 
 export default function DelegatesPage() {
   return (

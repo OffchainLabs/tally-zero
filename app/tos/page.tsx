@@ -1,18 +1,18 @@
 import { Metadata } from "next";
 
-import { canonicalUrl } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 const metadataInfo = {
   title: "Terms of Service",
-  alternates: { canonical: canonicalUrl("/tos") },
   description:
     "Read the official Arbitrum Governance Platform Terms. This document governs your use of the Arbitrum governance platform and related services.",
 };
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   ...metadataInfo,
-};
+  path: "/tos",
+});
 
 export default function TermsOfServicePage() {
   return (

@@ -5,7 +5,7 @@ import { KeyRotationInfo } from "@/components/security-council/KeyRotationInfo";
 import { ELECTION_IMPROVEMENTS_PROPOSAL_ID } from "@/config/security-council";
 import { describeElectionCadence } from "@/lib/security-council/helpers";
 import { getCachedSecurityCouncilSnapshot } from "@/lib/security-council/server";
-import { canonicalUrl } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import { getCachedElectionAddressDisplayRecords } from "@/lib/tally-data/server";
 import type { Metadata } from "next";
 import ElectionPageClient from "./ElectionPageClient";
@@ -18,12 +18,12 @@ export const dynamic = "force-static";
  */
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Security Council Elections",
   description:
     "Track Arbitrum Security Council elections on ArbitrumDAO. View election status, nominees, and voting results.",
-  alternates: { canonical: canonicalUrl("/security-council") },
-};
+  path: "/security-council",
+});
 
 export default async function ElectionsPage() {
   const [initialDisplayRecords, council] = await Promise.all([

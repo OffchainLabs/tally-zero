@@ -25,11 +25,14 @@ export function canonicalUrl(path: string): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** Shared explicitly because Next.js replaces nested metadata objects. */
+/**
+ * Shared explicitly because Next.js replaces nested metadata objects. It has
+ * no `url`: a page that does not set its own og:url should emit none, since
+ * Open Graph consumers treat og:url as the page being shared.
+ */
 export const siteOpenGraph = {
   type: "website",
   locale: "en_US",
-  url: canonicalUrl("/"),
   title: siteConfig.name,
   description: siteConfig.description,
   siteName: siteConfig.name,
@@ -42,6 +45,37 @@ export const siteOpenGraph = {
     },
   ],
 } satisfies Metadata["openGraph"];
+
+/**
+ * Title, description, canonical, and matching Open Graph tags for a public
+ * page. og:url is the canonical, so a shared link names this page rather
+ * than the home page.
+ */
+export function pageMetadata({
+  title,
+  description,
+  path,
+  openGraphType = "website",
+}: {
+  title: string;
+  description: string;
+  path: string;
+  openGraphType?: "website" | "article";
+}): Metadata {
+  const canonical = canonicalUrl(path);
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      ...siteOpenGraph,
+      type: openGraphType,
+      title: `${title} | ${siteConfig.name}`,
+      description,
+      url: canonical,
+    },
+  };
+}
 
 /**
  * Plain text for a meta tag: markdown and HTML stripped, whitespace
@@ -78,8 +112,6 @@ export function buildProposalMetadata(
   proposalId: string,
   proposal: ParsedProposal | null
 ): Metadata {
-  const canonical = canonicalUrl(`/proposal/${proposalId}`);
-
   const title = proposal
     ? summarizeForMeta(
         extractProposalTitle(proposal.description),
@@ -108,18 +140,12 @@ export function buildProposalMetadata(
       : `An ArbitrumDAO ${governor}. View the payload, votes, and lifecycle.`;
   }
 
-  return {
+  return pageMetadata({
     title: resolvedTitle,
     description,
-    alternates: { canonical },
-    openGraph: {
-      ...siteOpenGraph,
-      title: `${resolvedTitle} | ${siteConfig.name}`,
-      description,
-      url: canonical,
-      type: "article",
-    },
-  };
+    path: `/proposal/${proposalId}`,
+    openGraphType: "article",
+  });
 }
 
 /** schema.org WebSite record for the root layout. */

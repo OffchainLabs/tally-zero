@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { DelegateProfileLoader } from "@/components/delegate/DelegateProfileLoader";
-import { canonicalUrl } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 
 interface DelegatePageProps {
@@ -13,13 +13,11 @@ export async function generateMetadata({
   params,
 }: DelegatePageProps): Promise<Metadata> {
   const { address } = await params;
-  return {
+  return pageMetadata({
     title: "Delegate Profile",
     description: "View delegate profile and voting power in Arbitrum DAO.",
-    alternates: {
-      canonical: canonicalUrl(`/delegates/${address.toLowerCase()}`),
-    },
-  };
+    path: `/delegates/${address.toLowerCase()}`,
+  });
 }
 
 export default async function DelegatePage({ params }: DelegatePageProps) {

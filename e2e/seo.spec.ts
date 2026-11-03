@@ -82,6 +82,29 @@ test.describe("production HTML", () => {
     );
   });
 
+  for (const path of [
+    "/proposals",
+    "/delegates",
+    "/security-council",
+    "/privacy",
+    `/delegates/${ADDRESS.toLowerCase()}`,
+  ]) {
+    test(`og:url matches the canonical on ${path}`, async ({ page }) => {
+      await page.goto(path);
+      const canonical = await page
+        .locator('link[rel="canonical"]')
+        .getAttribute("href");
+      expect(canonical).toBe(`${ORIGIN}${path}`);
+      await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+        "content",
+        canonical ?? ""
+      );
+      await expect(
+        page.locator('meta[property="og:title"]')
+      ).not.toHaveAttribute("content", "Arbitrum Governance");
+    });
+  }
+
   for (const section of ["delegates", "security-council/contender"]) {
     test(`profile canonicals for ${section}`, async ({ page }) => {
       await page.goto(`/${section}/${ADDRESS}?ref=seo`);
@@ -105,6 +128,8 @@ test.describe("production HTML", () => {
         "noindex, follow"
       );
       await expect(page.locator('meta[name="googlebot"]')).toHaveCount(0);
+      // No page-specific share card, and never the home page's og:url.
+      await expect(page.locator('meta[property="og:url"]')).toHaveCount(0);
     }
   });
 });

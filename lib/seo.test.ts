@@ -7,7 +7,9 @@ import {
   canonicalUrl,
   jsonLdScript,
   META_DESCRIPTION_MAX,
+  pageMetadata,
   PROPOSAL_FALLBACK_METADATA,
+  siteOpenGraph,
   summarizeForMeta,
   websiteJsonLd,
 } from "./seo";
@@ -46,6 +48,31 @@ describe("canonicalUrl", () => {
   it("uses a trailing slash for the home page only", () => {
     expect(canonicalUrl("/")).toBe("https://alt.gov.arbitrum.foundation/");
     expect(canonicalUrl("")).toBe("https://alt.gov.arbitrum.foundation/");
+  });
+});
+
+describe("pageMetadata", () => {
+  it("points og:url at the page's own canonical", () => {
+    const meta = pageMetadata({
+      title: "Delegates",
+      description: "ArbitrumDAO delegates.",
+      path: "/delegates",
+    });
+    const canonical = "https://alt.gov.arbitrum.foundation/delegates";
+
+    expect(meta.title).toBe("Delegates");
+    expect(meta.alternates?.canonical).toBe(canonical);
+    expect(meta.openGraph).toMatchObject({
+      url: canonical,
+      title: "Delegates | Arbitrum Governance",
+      description: "ArbitrumDAO delegates.",
+      type: "website",
+      images: siteOpenGraph.images,
+    });
+  });
+
+  it("leaves no default og:url for pages that skip the helper", () => {
+    expect(siteOpenGraph).not.toHaveProperty("url");
   });
 });
 
@@ -91,6 +118,10 @@ describe("buildProposalMetadata", () => {
     expect(meta.alternates?.canonical).toBe(
       `https://alt.gov.arbitrum.foundation/proposal/${PROPOSAL_ID}`
     );
+    expect(meta.openGraph).toMatchObject({
+      url: `https://alt.gov.arbitrum.foundation/proposal/${PROPOSAL_ID}`,
+      type: "article",
+    });
   });
 
   it("falls back to governor copy when the body is only a title", () => {

@@ -1,14 +1,14 @@
 import { ProposalsPageShell } from "@/components/container/ProposalsPageShell";
 import { ProposalsView } from "@/components/container/ProposalsView";
-import { canonicalUrl } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Proposals",
   description:
     "Every ArbitrumDAO proposal across the Core and Treasury governors, with live votes, quorum, and lifecycle status.",
-  alternates: { canonical: canonicalUrl("/proposals") },
-};
+  path: "/proposals",
+});
 
 export default function IndexPage() {
   return (
