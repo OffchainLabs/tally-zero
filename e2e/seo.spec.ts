@@ -106,6 +106,13 @@ test.describe("production HTML", () => {
   }
 
   for (const section of ["delegates", "security-council/contender"]) {
+    test(`malformed ${section} address is a 404`, async ({ page }) => {
+      const response = await page.goto(`/${section}/not-an-address`);
+      expect(response?.status()).toBe(404);
+    });
+  }
+
+  for (const section of ["delegates", "security-council/contender"]) {
     test(`profile canonicals for ${section}`, async ({ page }) => {
       await page.goto(`/${section}/${ADDRESS}?ref=seo`);
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(

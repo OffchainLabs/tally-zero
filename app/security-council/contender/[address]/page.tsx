@@ -1,5 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { isAddress } from "viem";
 
 import { ContenderProfileLoader } from "@/components/election/ContenderProfileLoader";
 import { pageMetadata } from "@/lib/seo";
@@ -17,6 +19,7 @@ export async function generateMetadata({
   params,
 }: ContenderPageProps): Promise<Metadata> {
   const { address } = await params;
+  if (!isAddress(address, { strict: false })) notFound();
   return pageMetadata({
     title: "Security Council Candidate Profile",
     description:
@@ -34,6 +37,10 @@ export async function generateStaticParams() {
 
 export default async function ContenderPage({ params }: ContenderPageProps) {
   const { address } = await params;
+  // A valid address that is not a known candidate still renders: the loader
+  // may find it in a newer cycle. Anything that is not an address cannot, and
+  // with dynamicParams and revalidate = false it would be cached for good.
+  if (!isAddress(address, { strict: false })) notFound();
   const initialCandidate = await getCachedElectionCandidate(address);
 
   return (
