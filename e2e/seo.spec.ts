@@ -109,3 +109,68 @@ test("proposal tabs hydrate and follow browser history", async ({ page }) => {
   await expect(page).not.toHaveURL(/tab=/);
   expect(errors).toEqual([]);
 });
+
+test("authorized wallets reconnect without hydration errors", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  // Announce an already authorized wallet through the normal discovery path.
+  // Do not use TestWalletProvider: this exercises the production AppKit store.
+  await page.addInitScript(
+    ({ address }) => {
+      const provider = {
+        on() {},
+        removeListener() {},
+        async request({ method }: { method: string }) {
+          switch (method) {
+            case "eth_chainId":
+              return "0xa4b1";
+            case "eth_accounts":
+            case "eth_requestAccounts":
+              return [address];
+            case "wallet_getPermissions":
+            case "wallet_requestPermissions":
+              return [{ parentCapability: "eth_accounts" }];
+            case "wallet_getCapabilities":
+              return {};
+            default:
+              throw new Error(`Unsupported mock wallet method: ${method}`);
+          }
+        },
+      };
+      const announce = () =>
+        window.dispatchEvent(
+          new CustomEvent("eip6963:announceProvider", {
+            detail: {
+              info: {
+                uuid: "e7f013e9-7cba-49d3-9249-8703312055de",
+                name: "SEO Test Wallet",
+                rdns: "test.seo.wallet",
+                icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=",
+              },
+              provider,
+            },
+          })
+        );
+
+      window.addEventListener("eip6963:requestProvider", announce);
+      announce();
+    },
+    { address: ADDRESS }
+  );
+
+  const account = page.getByRole("button", { name: /0x00ac61.*eb4c2d/i });
+  await page.goto("/proposals");
+  await expect(account).toBeVisible();
+  expect(errors).toEqual([]);
+
+  await page.reload();
+  await expect(account).toBeVisible();
+  expect(errors).toEqual([]);
+
+  await page.goto("/privacy");
+  await expect(account).toBeVisible();
+  expect(errors).toEqual([]);
+});
