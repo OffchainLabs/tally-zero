@@ -25,6 +25,14 @@ const nextConfig = {
       },
     ];
   },
+  // The wallet provider renders on the server (see Web3ModalProvider). Its
+  // Base Account connector reaches @coinbase/cdp-sdk through that package's
+  // Node entry, and the SDK lazily imports some twenty optional @x402/*
+  // modules that are not installed. Bundling it for SSR makes Turbopack
+  // resolve every one of them; leaving it external lets Node load the SDK at
+  // runtime, where those imports only run if the x402 payment path is called,
+  // which this app never does.
+  serverExternalPackages: ["@coinbase/cdp-sdk"],
   turbopack: {
     resolveAlias: {
       async_hooks: "./lib/async-hooks-mock.js",

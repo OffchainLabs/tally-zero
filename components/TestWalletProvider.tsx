@@ -195,6 +195,7 @@ function testWalletConnector(account: ReturnType<typeof privateKeyToAccount>) {
 function createTestConfig(privateKey: `0x${string}`): Config {
   const account = privateKeyToAccount(privateKey);
   return createConfig({
+    ssr: true,
     chains: [arbitrumSepolia],
     connectors: [testWalletConnector(account)],
     client({ chain }) {
@@ -282,6 +283,7 @@ function readOnlyWalletConnector(address: `0x${string}`, rpcUrl: string) {
 function createReadOnlyConfig(address: `0x${string}`): Config {
   const rpcUrl = getStoredL2Rpc();
   return createConfig({
+    ssr: true,
     chains: [arbitrum],
     connectors: [readOnlyWalletConnector(address, rpcUrl)],
     client({ chain }) {

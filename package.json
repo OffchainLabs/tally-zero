@@ -14,7 +14,8 @@
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
     "prepare": "husky",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:seo": "pnpm build && playwright test --config=playwright.seo.config.ts"
   },
   "prettier": {
     "semi": true,

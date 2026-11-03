@@ -4,11 +4,14 @@ import { Suspense } from "react";
 
 import { ProposalDraftLoader } from "@/components/drafts/ProposalDraftLoader";
 import CreateProposalForm from "@/components/form/CreateProposalForm";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "New Proposal | Arbitrum Governance",
+export const metadata: Metadata = {
+  title: "New Proposal",
   description:
     "Create a new proposal in the Arbitrum Core or Treasury Governor.",
+  // Wallet-gated authoring flow; nothing to index.
+  robots: { index: false, follow: true },
 };
 
 export default function NewProposalPage() {

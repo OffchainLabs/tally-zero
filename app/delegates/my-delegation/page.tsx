@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 
 import { MyDelegationPanel } from "@/components/container/MyDelegationPanel";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "My Delegation | Arbitrum Governance",
+export const metadata: Metadata = {
+  title: "My Delegation",
   description:
     "View and change your ARB voting power delegation on ArbitrumDAO.",
+  // Shows the connected wallet's delegation; nothing to index.
+  robots: { index: false, follow: true },
 };
 
 export default function MyDelegationPage() {

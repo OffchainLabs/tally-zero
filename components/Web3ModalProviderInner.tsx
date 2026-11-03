@@ -47,11 +47,14 @@ const customTransports = {
   }),
 };
 
-// Configure Wagmi Adapter with custom transports
+// Configure Wagmi Adapter with custom transports. ssr: true lets this
+// provider render on the server (see Web3ModalProvider); wagmi then defers
+// reading persisted connection state until the client has mounted.
 const wagmiAdapter = new WagmiAdapter({
   projectId,
   networks: APPKIT_NETWORKS,
   transports: customTransports,
+  ssr: true,
 });
 
 // Create the modal singleton (shared networks/metadata; see lib/appkit).
