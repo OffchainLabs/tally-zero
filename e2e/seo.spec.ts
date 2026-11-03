@@ -52,6 +52,36 @@ test.describe("production HTML", () => {
     );
   });
 
+  test("proposal X card uses the proposal, not the site defaults", async ({
+    page,
+  }) => {
+    await page.goto(PROPOSAL_PATH);
+    const ogTitle = await page
+      .locator('meta[property="og:title"]')
+      .getAttribute("content");
+    expect(ogTitle).toContain("[Constitutional AIP] Activate Arbitrum BoLD");
+    await expect(page.locator('meta[name="twitter:title"]')).toHaveAttribute(
+      "content",
+      ogTitle ?? ""
+    );
+    await expect(
+      page.locator('meta[name="twitter:description"]')
+    ).toHaveAttribute(
+      "content",
+      (await page
+        .locator('meta[property="og:description"]')
+        .getAttribute("content")) ?? ""
+    );
+    await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute(
+      "content",
+      `${ORIGIN}/opengraph-image.jpg`
+    );
+    await expect(page.locator('meta[name="twitter:site"]')).toHaveAttribute(
+      "content",
+      "@arbitrum"
+    );
+  });
+
   for (const section of ["delegates", "security-council/contender"]) {
     test(`profile canonicals for ${section}`, async ({ page }) => {
       await page.goto(`/${section}/${ADDRESS}?ref=seo`);

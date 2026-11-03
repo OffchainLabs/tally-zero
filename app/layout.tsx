@@ -53,10 +53,10 @@ export const metadata = {
   ],
   creator: "Offchain Labs",
   openGraph: siteOpenGraph,
+  // No title or description: Next.js fills them from each page's openGraph,
+  // so a proposal shared on X shows the proposal, not the site defaults.
   twitter: {
     card: "summary_large_image",
-    title: siteConfig.name,
-    description: siteConfig.description,
     images: [{ url: siteConfig.ogImage, alt: siteConfig.ogImageAlt }],
     site: siteConfig.twitterSite,
     creator: siteConfig.twitterCreator,
