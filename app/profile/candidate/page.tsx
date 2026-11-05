@@ -7,7 +7,7 @@ export const metadata = {
     "Sign in with your wallet to publish a Security Council candidate profile.",
 };
 
-export default function ElectionsPage() {
+export default function CandidateProfilePage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-col gap-2">

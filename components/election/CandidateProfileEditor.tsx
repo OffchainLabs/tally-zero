@@ -96,6 +96,7 @@ export function CandidateProfileEditor({
 }: {
   election: ElectionSummary;
 }) {
+  const { effectiveAddress } = useSiwe();
   const { current, versions, isLoading, error, save, isSaving, saveError } =
     useCandidateProfile(election.id);
 
@@ -111,9 +112,11 @@ export function CandidateProfileEditor({
 
   // Mount the form only once the stored profile has arrived, so its state can be
   // seeded directly. Hydrating from an effect instead would let a background
-  // refetch overwrite edits already in progress.
+  // refetch overwrite edits already in progress. Remount when the subject or
+  // election changes so cached data cannot carry edits across identities.
   return (
     <ProfileForm
+      key={`${effectiveAddress?.toLowerCase()}:${election.id}`}
       election={election}
       initial={toForm(current)}
       versions={versions}
