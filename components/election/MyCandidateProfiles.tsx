@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useElections } from "@/hooks/use-candidate-profile";
+import { useSiwe } from "@/hooks/use-siwe";
 import { latestElectionId } from "@/lib/election-profile";
 
 /**
@@ -18,6 +19,7 @@ import { latestElectionId } from "@/lib/election-profile";
  */
 export function MyCandidateProfiles() {
   const { data: elections, isLoading, error } = useElections();
+  const { effectiveAddress } = useSiwe();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
@@ -65,9 +67,17 @@ export function MyCandidateProfiles() {
         </div>
       ) : null}
 
-      {/* Keyed on the election so switching resets the form's hydration rather
-          than carrying one election's edits into another. */}
-      <CandidateProfileEditor key={active.id} election={active} />
+      {/* Keyed on both the subject and the election, so switching either resets
+          the editor whole rather than carrying one identity's edits into
+          another. It has to be the editor and not the form inside it: the save
+          mutation lives at this level, so a key any lower would leave one
+          subject's in-flight save disabling and erroring the next subject's
+          form. An unmounted save still finishes and still refreshes its caches,
+          because the mutation outlives its observer. */}
+      <CandidateProfileEditor
+        key={`${effectiveAddress?.toLowerCase()}:${active.id}`}
+        election={active}
+      />
     </div>
   );
 }

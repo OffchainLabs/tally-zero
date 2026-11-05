@@ -397,6 +397,49 @@ describe("candidate profile saves", () => {
     expect(siweApi.getMyCandidateProfile).toHaveBeenCalledWith(ELECTION.id);
   });
 
+  // The mutation lives in the editor, so the editor is what a subject change
+  // has to remount. Keying only the form inside it would leave the signer's
+  // save disabling the Safe's fields and labelling the Safe with the signer's
+  // error.
+  it("does not carry a pending save's disabled state or error onto the next subject", async () => {
+    client.setQueryData(
+      siweKeys.candidateProfile(SAFE, ELECTION.id),
+      owned(profile(SAFE, "Safe profile"))
+    );
+    let fail!: (error: Error) => void;
+    vi.spyOn(siweApi, "putCandidateProfile").mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        })
+    );
+    const view = editor();
+    fireEvent.click(view.getByTestId("candidate-save"));
+    await waitFor(() =>
+      expect(siweApi.putCandidateProfile).toHaveBeenCalledOnce()
+    );
+
+    act(() => {
+      client.setQueryData(siweKeys.me, session(SAFE));
+    });
+    await waitFor(() =>
+      expect(view.getByTestId("candidate-subject").textContent).toContain(SAFE)
+    );
+
+    expect(nameInput(view).value).toBe("Safe profile");
+    expect(nameInput(view).disabled).toBe(false);
+    expect(
+      (view.getByTestId("candidate-save") as HTMLButtonElement).disabled
+    ).toBe(false);
+
+    await act(async () => {
+      fail(new Error("Signer save rejected."));
+      await Promise.resolve();
+    });
+
+    expect(view.queryByTestId("candidate-save-error")).toBeNull();
+  });
+
   it("refreshes the saved subject's caches when the session changes during a pending save", async () => {
     const saved = { ...profile(SIGNER, "Saved for signer"), version: 2 };
     let finish!: (data: CandidateProfileVersion) => void;
