@@ -33,7 +33,7 @@ export function RegistrationIntroCard() {
         <p>
           Standing in a Security Council election?{" "}
           <Link
-            href="/profile/candidate"
+            href="/security-council/candidate"
             className="text-primary hover:underline"
           >
             Publish your candidate profile

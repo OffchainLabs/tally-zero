@@ -15,7 +15,7 @@ async function responseFor(path: string) {
 }
 
 it("allows the candidate editor route through without redirecting", async () => {
-  const response = await responseFor("/profile/candidate");
+  const response = await responseFor("/security-council/candidate");
 
   expect(response.status).toBe(200);
   expect(response.headers.get("location")).toBeNull();

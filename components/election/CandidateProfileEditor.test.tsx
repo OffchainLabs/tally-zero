@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import CandidateProfilePage from "@/app/profile/candidate/page";
+import CandidateProfilePage from "@/app/security-council/candidate/page";
 import {
   useCandidateProfile,
   usePublicCandidateProfile,
