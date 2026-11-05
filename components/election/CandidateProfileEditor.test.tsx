@@ -362,6 +362,41 @@ describe("candidate profile saves", () => {
     }
   );
 
+  // Nothing validates the indexer's response, so a version missing the fields
+  // the invalidation keys off must not silently refresh nothing.
+  it("falls back to the hook's own subject when the saved version omits one", async () => {
+    const after = { ...profile(SIGNER, "After"), version: 2 };
+    const thin = {
+      ...after,
+      address: undefined,
+      electionId: undefined,
+    } as unknown as CandidateProfileVersion;
+    client.setQueryData(
+      siweKeys.publicCandidateProfile(ELECTION.id, SIGNER),
+      profile(SIGNER, "Before")
+    );
+    vi.spyOn(siweApi, "putCandidateProfile").mockResolvedValue(thin);
+    const readPublic = vi
+      .spyOn(siweApi, "getPublicCandidateProfile")
+      .mockResolvedValue(after);
+    const { result } = renderHook(
+      () => ({
+        mine: useCandidateProfile(ELECTION.id),
+        public: usePublicCandidateProfile(ELECTION.id, SIGNER),
+      }),
+      { wrapper: Wrapper }
+    );
+    expect(result.current.public.data?.name).toBe("Before");
+
+    await act(async () => {
+      await result.current.mine.save(after);
+    });
+
+    await waitFor(() => expect(result.current.public.data?.name).toBe("After"));
+    expect(readPublic).toHaveBeenCalledWith(ELECTION.id, SIGNER);
+    expect(siweApi.getMyCandidateProfile).toHaveBeenCalledWith(ELECTION.id);
+  });
+
   it("refreshes the saved subject's caches when the session changes during a pending save", async () => {
     const saved = { ...profile(SIGNER, "Saved for signer"), version: 2 };
     let finish!: (data: CandidateProfileVersion) => void;

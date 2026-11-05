@@ -54,23 +54,24 @@ export function useCandidateProfile(electionId: string) {
   const save = useMutation({
     mutationFn: (fields: CandidateProfileFields) =>
       siweApi.putCandidateProfile(electionId, fields),
-    // The session may have switched subjects while the save was in flight.
-    // Refresh both views of the profile that was actually saved.
-    onSuccess: (version) =>
-      Promise.all([
+    // The session may have switched subjects while the save was in flight, so
+    // the saved version names the subject and election to refresh rather than
+    // whatever the hook is pointing at now. Nothing validates the response
+    // though (see parse() in lib/siwe/client.ts), and a missing field would key
+    // the invalidation on `undefined`, which matches no cached query and leaves
+    // both views stale without a sound. Fall back to what the hook does know.
+    onSuccess: (version) => {
+      const subject = version.address ?? effectiveAddress;
+      const saved = version.electionId ?? electionId;
+      return Promise.all([
         queryClient.invalidateQueries({
-          queryKey: siweKeys.candidateProfile(
-            version.address,
-            version.electionId
-          ),
+          queryKey: siweKeys.candidateProfile(subject, saved),
         }),
         queryClient.invalidateQueries({
-          queryKey: siweKeys.publicCandidateProfile(
-            version.electionId,
-            version.address
-          ),
+          queryKey: siweKeys.publicCandidateProfile(saved, subject),
         }),
-      ]),
+      ]);
+    },
   });
 
   return {
