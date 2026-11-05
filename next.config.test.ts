@@ -14,7 +14,11 @@ async function responseFor(path: string) {
   });
 }
 
-it("allows the candidate editor route through without redirecting", async () => {
+// This harness evaluates next.config.mjs alone and knows nothing about app/, so
+// a 200 here means "no rule rewrites or redirects this path", not "a page is
+// mounted at it". The page's existence is covered by
+// CandidateProfileEditor.test.tsx importing it.
+it("leaves the candidate editor path unredirected", async () => {
   const response = await responseFor("/security-council/candidate");
 
   expect(response.status).toBe(200);
