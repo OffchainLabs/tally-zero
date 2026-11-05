@@ -157,6 +157,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+it("offers a way back to the Security Council section", () => {
+  const view = editor();
+
+  const back = view.getByRole("link", { name: /Back to Elections/ });
+  expect(back.getAttribute("href")).toBe("/security-council");
+});
+
 describe("candidate editor identity and hydration", () => {
   it("shows candidate-specific connection guidance while signed out", () => {
     mocks.useAccount.mockReturnValue({
