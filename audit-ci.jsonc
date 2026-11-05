@@ -19,13 +19,5 @@
     // from: zod (3.25.76)
     // from: @reown/appkit>@reown/appkit-wallet>zod (3.22.4)
     "GHSA-mrhx-c7xc-m3w5",
-
-    // https://github.com/advisories/GHSA-g3hv-75wg-m249
-    // minimatch denial of service: firstPhasePreProcess() clones globParts entries inside a fixpoint loop when optimizationLevel >= 2, and secondPhasePreProcess() then compares the amplified list pairwise, burning CPU and memory on an attacker-supplied glob.
-    // The advisory range (<11.0.1) is broader than the defect. minimatch 3.1.5 predates the brace-expansion rewrite and contains neither firstPhasePreProcess() nor optimizationLevel, so the amplified code path does not exist in it. eslint and its plugins pin "minimatch": "^3.1.5", and minimatch 11 is ESM-only with a named export, so the 3.x copy cannot be overridden without breaking the lint toolchain.
-    // Dev-only in any case: this copy is reached only through eslint, which we run over our own source files, never over attacker-supplied globs.
-    // The genuinely affected 10.x copy under @typescript-eslint/typescript-estree is bumped to >=11.0.1 by the "minimatch@10" pnpm override, so this entry is scoped to the eslint path alone and a new vulnerable copy elsewhere will still fail the audit.
-    // from: eslint>minimatch (3.1.5)
-    "GHSA-g3hv-75wg-m249|eslint>minimatch",
   ],
 }
