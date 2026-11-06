@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import type { CandidateProfileVersion } from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
+
 import {
+  contenderPath,
+  electionIndexForRegistration,
+  electionLabel,
   electionsNewestFirst,
   latestElectionId,
   resolveCandidate,
   toTwitterHandle,
   toTwitterUrl,
 } from "./election-profile";
+import { MAINNET_ELECTIONS } from "./election-profile.fixtures";
 
 const ADDRESS = "0x358E76A0C6224dCABCe39ff395b284e7da9bf413";
 
@@ -285,5 +290,80 @@ describe("electionsNewestFirst", () => {
       "a",
     ]);
     expect(elections.map((e) => e.id)).toEqual(["a", "c", "b"]);
+  });
+});
+
+describe("electionIndexForRegistration", () => {
+  it("places a registration in the election it was made for", () => {
+    // netto.eth registered a week into the March 2026 election.
+    expect(
+      electionIndexForRegistration(
+        "2026-03-22T12:42:39.008426Z",
+        MAINNET_ELECTIONS
+      )
+    ).toBe(5);
+    expect(
+      electionIndexForRegistration(
+        "2023-09-15T13:50:03.015506Z",
+        MAINNET_ELECTIONS
+      )
+    ).toBe(0);
+  });
+
+  it("counts a registration at the very start of an election as that election", () => {
+    expect(
+      electionIndexForRegistration(
+        MAINNET_ELECTIONS[3].startedAt,
+        MAINNET_ELECTIONS
+      )
+    ).toBe(3);
+  });
+
+  it("does not order by input position", () => {
+    expect(
+      electionIndexForRegistration(
+        "2024-09-20T00:00:00Z",
+        [...MAINNET_ELECTIONS].reverse()
+      )
+    ).toBe(2);
+  });
+
+  it("returns null when it cannot place the registration", () => {
+    expect(electionIndexForRegistration(null, MAINNET_ELECTIONS)).toBeNull();
+    expect(
+      electionIndexForRegistration("2023-01-01T00:00:00Z", MAINNET_ELECTIONS)
+    ).toBeNull();
+    expect(
+      electionIndexForRegistration("2026-03-22T00:00:00Z", [
+        { electionIndex: null, startedAt: "2026-03-15T12:00:28.000Z" },
+      ])
+    ).toBeNull();
+  });
+});
+
+describe("contenderPath", () => {
+  it("links to one election's page when the election is known", () => {
+    expect(contenderPath(ADDRESS, 5)).toBe(
+      `/security-council/elections/5/contender/${ADDRESS.toLowerCase()}`
+    );
+    expect(contenderPath(ADDRESS, 0)).toBe(
+      `/security-council/elections/0/contender/${ADDRESS.toLowerCase()}`
+    );
+  });
+
+  it("falls back to the address-only page", () => {
+    expect(contenderPath(ADDRESS)).toBe(
+      `/security-council/contender/${ADDRESS.toLowerCase()}`
+    );
+    expect(contenderPath(ADDRESS, null)).toBe(
+      `/security-council/contender/${ADDRESS.toLowerCase()}`
+    );
+  });
+});
+
+describe("electionLabel", () => {
+  it("numbers elections from 1, as the election selector does", () => {
+    expect(electionLabel({ electionIndex: 5, cohort: 1 })).toBe("Election #6");
+    expect(electionLabel({ electionIndex: null, cohort: 1 })).toBe("Cohort 1");
   });
 });

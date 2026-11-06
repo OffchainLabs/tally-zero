@@ -11,11 +11,28 @@ import {
   useElections,
   useNewestPublicCandidateProfile,
 } from "@/hooks/use-candidate-profile";
-import { resolveCandidate } from "@/lib/election-profile";
+import {
+  electionIndexForRegistration,
+  resolveCandidate,
+} from "@/lib/election-profile";
 import {
   getCandidate,
   type TallyElectionCandidate,
 } from "@/lib/election-utils";
+
+/**
+ * Which election a registration was for. The indexer's copy does not say, so it
+ * is placed by date once the election list has loaded.
+ */
+function registrationElection(
+  candidate: TallyElectionCandidate,
+  elections: { electionIndex: number | null; startedAt: string }[] | undefined
+): number | null {
+  if (candidate.electionIndex != null) return candidate.electionIndex;
+  return elections
+    ? electionIndexForRegistration(candidate.registeredAt, elections)
+    : null;
+}
 
 type ContenderProfileState = {
   address: string;
@@ -24,12 +41,20 @@ type ContenderProfileState = {
   isLoading: boolean;
 };
 
+/**
+ * A contender's profile for one election (or the latest, without one): the
+ * exported Tally registration for that election, overlaid by what the candidate
+ * published for it through SIWE. Another election's registration never stands
+ * in, since the same people run again with different profiles.
+ */
 export function ContenderProfileLoader({
   address,
+  electionIndex,
   initialCandidate,
   registrationSnapshot,
 }: {
   address: string;
+  electionIndex?: number;
   initialCandidate?: TallyElectionCandidate | null;
   registrationSnapshot?: TallyElectionCandidate | null;
 }): React.ReactElement {
@@ -87,20 +112,34 @@ export function ContenderProfileLoader({
 
   // A candidate can keep their own profile current through SIWE. That overlays
   // the static Tally snapshot below — it never replaces it, so a field the
-  // candidate has not touched still shows what was exported. The newest profile
-  // from any election is used, so starting a new election does not hide one.
+  // candidate has not touched still shows what was exported. An election's page
+  // shows that election's profile; the address-only page shows the newest from
+  // any election, so starting a new election does not hide one.
   const { data: elections } = useElections();
   const { profile: selfAuthored, election: selfAuthoredElection } =
-    useNewestPublicCandidateProfile(elections, address);
+    useNewestPublicCandidateProfile(
+      electionIndex === undefined
+        ? elections
+        : elections?.filter((e) => e.electionIndex === electionIndex),
+      address
+    );
 
   const isLoading =
     !hasInitialCandidate && (state.address !== address || state.isLoading);
-  const candidate =
+  const loaded =
     state.address === address
       ? state.candidate
       : hasInitialCandidate
         ? initialCandidate
         : null;
+  // The server already placed `initialCandidate` for this page's election, so a
+  // refreshed copy from the indexer replaces it only when it is the same run.
+  const candidate =
+    electionIndex === undefined ||
+    loaded === null ||
+    registrationElection(loaded, elections) === electionIndex
+      ? loaded
+      : (initialCandidate ?? null);
   const error = hasInitialCandidate && state.isLoading ? null : state.error;
 
   if (isLoading) {

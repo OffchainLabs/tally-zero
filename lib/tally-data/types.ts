@@ -71,6 +71,12 @@ export type TallyElectionCandidate = {
   registeredAt: string | null;
   message: string | null;
   signatureHash: string | null;
+  /**
+   * The election this registration was for, when known. The static export
+   * carries it (scripts/assign-candidate-elections.ts); a record from the
+   * indexer does not, and is placed by `registeredAt` instead.
+   */
+  electionIndex?: number | null;
 };
 
 export type TallyCandidateSummary = {

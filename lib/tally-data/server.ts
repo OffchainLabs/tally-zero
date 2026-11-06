@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import electionCandidateRegistrationSnapshots from "@/data/election-candidate-registration-snapshots.json";
 import electionCandidates from "@/data/election-candidates.json";
+import { contenderPath } from "@/lib/election-profile";
 import type {
   TallyAddressDisplayRecord,
   TallyElectionCandidate,
@@ -24,6 +25,7 @@ type ElectionCandidateJson = {
   registered_at?: string | null;
   message?: string | null;
   signatureHash?: string | null;
+  electionIndex?: number | null;
 };
 
 function toElectionCandidate(
@@ -46,6 +48,7 @@ function toElectionCandidate(
     registeredAt: candidate.registered_at ?? null,
     message: candidate.message ?? null,
     signatureHash: candidate.signatureHash ?? null,
+    electionIndex: candidate.electionIndex ?? null,
   };
 }
 
@@ -57,7 +60,7 @@ const getElectionCandidates = unstable_cache(
       .map(([key, candidate]) => toElectionCandidate(key, candidate))
       .sort((a, b) => a.address.localeCompare(b.address));
   },
-  ["tally-zero-election-candidates-v4"],
+  ["tally-zero-election-candidates-v5"],
   { revalidate: false }
 );
 
@@ -70,21 +73,28 @@ export async function getCachedElectionAddressDisplayRecords(): Promise<
     label: candidate.name || null,
     title: candidate.title,
     picture: null,
-    profileUrl: `/security-council/contender/${candidate.address.toLowerCase()}`,
+    profileUrl: contenderPath(candidate.address, candidate.electionIndex),
     source: "candidate",
   }));
 }
 
+/**
+ * The exported registration for an address. With an election, only the one
+ * registered for that election: the export keeps a candidate's latest
+ * registration, which must not stand in for an earlier run.
+ */
 export async function getCachedElectionCandidate(
-  address: string
+  address: string,
+  electionIndex?: number
 ): Promise<TallyElectionCandidate | null> {
   const addressLower = address.toLowerCase();
   const candidates = await getElectionCandidates();
-  return (
+  const candidate =
     candidates.find(
       (candidate) => candidate.address.toLowerCase() === addressLower
-    ) ?? null
-  );
+    ) ?? null;
+  if (electionIndex === undefined) return candidate;
+  return candidate?.electionIndex === electionIndex ? candidate : null;
 }
 
 /** Original submissions retained when a member's current profile changes. */
@@ -98,10 +108,17 @@ export function getElectionCandidateRegistrationSnapshot(
 }
 
 export async function getCachedElectionCandidateStaticParams(): Promise<
-  Array<{ address: string }>
+  Array<{ electionIndex: string; address: string }>
 > {
   const candidates = await getElectionCandidates();
-  return candidates.map((candidate) => ({
-    address: candidate.address.toLowerCase(),
-  }));
+  return candidates.flatMap((candidate) =>
+    candidate.electionIndex == null
+      ? []
+      : [
+          {
+            electionIndex: String(candidate.electionIndex),
+            address: candidate.address.toLowerCase(),
+          },
+        ]
+  );
 }

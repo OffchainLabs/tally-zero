@@ -245,3 +245,39 @@ export const ELECTION_PHASE_LABEL: Record<ElectionPhase, string> = {
   PENDING_EXECUTION: "Awaiting execution",
   COMPLETED: "Completed",
 };
+
+/**
+ * Contender pages are per election: the same people run again, and each run
+ * has its own profile. Without an election the page shows the latest one.
+ */
+export function contenderPath(
+  address: string,
+  electionIndex?: number | null
+): string {
+  const lower = address.toLowerCase();
+  return electionIndex == null
+    ? `/security-council/contender/${lower}`
+    : `/security-council/elections/${electionIndex}/contender/${lower}`;
+}
+
+/**
+ * The election a Tally registration belongs to: the latest one started at or
+ * before it. Registration is only open in the week after an election starts,
+ * and elections are months apart, so this is unambiguous for real records.
+ */
+export function electionIndexForRegistration(
+  registeredAt: string | null,
+  elections: { electionIndex: number | null; startedAt: string }[]
+): number | null {
+  if (!registeredAt) return null;
+  const at = Date.parse(registeredAt);
+  let match: { electionIndex: number; startedAt: number } | null = null;
+  for (const election of elections) {
+    if (election.electionIndex === null) continue;
+    const startedAt = Date.parse(election.startedAt);
+    if (startedAt <= at && (!match || startedAt > match.startedAt)) {
+      match = { electionIndex: election.electionIndex, startedAt };
+    }
+  }
+  return match?.electionIndex ?? null;
+}

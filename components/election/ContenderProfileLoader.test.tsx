@@ -20,6 +20,8 @@ import type {
 } from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 
+import { MAINNET_ELECTIONS } from "@/lib/election-profile.fixtures";
+
 import { ContenderProfileLoader } from "./ContenderProfileLoader";
 
 const api = vi.hoisted(() => ({
@@ -62,15 +64,23 @@ const ADDRESS = "0x358E76A0C6224dCABCe39ff395b284e7da9bf413";
 
 const COHORT_5: ElectionSummary = {
   id: "0xgov:5",
-  cohort: 5,
+  electionIndex: 5,
+  cohort: 1,
   status: "complete",
+  phase: "COMPLETED",
+  contenderSubmissionOpen: false,
+  contenderSubmissionEndsAt: null,
   startedAt: "2026-09-15T00:00:00Z",
   closedAt: "2027-02-01T00:00:00Z",
 };
 const COHORT_6: ElectionSummary = {
   id: "0xgov:6",
-  cohort: 6,
-  status: "upcoming",
+  electionIndex: 6,
+  cohort: 0,
+  status: "nominee",
+  phase: "CONTENDER_SUBMISSION",
+  contenderSubmissionOpen: true,
+  contenderSubmissionEndsAt: null,
   startedAt: "2027-03-15T00:00:00Z",
   closedAt: null,
 };
@@ -101,7 +111,7 @@ const selfProfile = (
   version: 1,
   createdAt: "2026-10-01T00:00:00Z",
   name: "Self Name",
-  title: `Cohort ${election.cohort} title`,
+  title: `Election ${election.electionIndex} title`,
   twitter: "self_handle",
   type: null,
   representative: null,
@@ -379,7 +389,7 @@ describe("ContenderProfileLoader overlay", () => {
 
     await waitFor(() =>
       expect(profileText()).toBe(
-        "Self Name|Cohort 6 title|https://x.com/self_handle"
+        "Self Name|Election 6 title|https://x.com/self_handle"
       )
     );
     expect(screen.getByText("Updated by the candidate")).toBeTruthy();
@@ -387,7 +397,7 @@ describe("ContenderProfileLoader overlay", () => {
       "Name, Title, Twitter"
     );
     expect(screen.getByTestId("candidate-profile-election").textContent).toBe(
-      "From their cohort 6 candidate profile."
+      "From their Election #7 candidate profile."
     );
     expect(screen.queryByTestId("candidate-unverified")).toBeNull();
   });
@@ -401,11 +411,11 @@ describe("ContenderProfileLoader overlay", () => {
 
     await waitFor(() =>
       expect(profileText()).toBe(
-        "Self Name|Cohort 5 title|https://x.com/self_handle"
+        "Self Name|Election 5 title|https://x.com/self_handle"
       )
     );
     expect(screen.getByTestId("candidate-profile-election").textContent).toBe(
-      "From their cohort 5 candidate profile (election closed)."
+      "From their Election #6 candidate profile (election closed)."
     );
   });
 
@@ -420,7 +430,7 @@ describe("ContenderProfileLoader overlay", () => {
 
     await waitFor(() =>
       expect(profileText()).toBe(
-        "Self Name|Cohort 6 title|https://x.com/self_handle"
+        "Self Name|Election 6 title|https://x.com/self_handle"
       )
     );
   });
@@ -464,7 +474,7 @@ describe("ContenderProfileLoader overlay", () => {
     await waitFor(
       () =>
         expect(profileText()).toBe(
-          "Self Name|Cohort 5 title|https://x.com/self_handle"
+          "Self Name|Election 5 title|https://x.com/self_handle"
         ),
       { timeout: 3000 }
     );
@@ -480,7 +490,7 @@ describe("ContenderProfileLoader overlay", () => {
 
     await waitFor(() =>
       expect(profileText()).toBe(
-        "Self Name|Cohort 5 title|https://x.com/self_handle"
+        "Self Name|Election 5 title|https://x.com/self_handle"
       )
     );
     // Well under the 1s retry delay.
@@ -515,7 +525,7 @@ describe("ContenderProfileLoader overlay", () => {
     renderLoader();
 
     await waitFor(() =>
-      expect(profileText()).toBe("Self Name|Cohort 6 title|null")
+      expect(profileText()).toBe("Self Name|Election 6 title|null")
     );
   });
 
@@ -546,5 +556,90 @@ describe("ContenderProfileLoader overlay", () => {
       "Static Name|Static Title|https://x.com/static_handle"
     );
     expect(screen.queryByText("Updated by the candidate")).toBeNull();
+  });
+});
+
+describe("ContenderProfileLoader for one election", () => {
+  const elections: ElectionSummary[] = MAINNET_ELECTIONS.map((e) => ({
+    id: `0xgov:${e.electionIndex}`,
+    electionIndex: e.electionIndex,
+    cohort: e.electionIndex % 2,
+    status: "complete",
+    phase: "COMPLETED",
+    contenderSubmissionOpen: false,
+    contenderSubmissionEndsAt: null,
+    startedAt: e.startedAt,
+    closedAt: null,
+  }));
+  const election = (index: number) => elections[index];
+  // The export's record for this address: their March 2026 run (election 5).
+  const march2026: TallyElectionCandidate = {
+    ...registered,
+    name: "Registered March 2026",
+    registeredAt: "2026-03-22T12:42:39.008426Z",
+  };
+
+  function renderFor(
+    electionIndex: number | undefined,
+    initialCandidate: TallyElectionCandidate | null
+  ) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={client}>
+        <ContenderProfileLoader
+          address={ADDRESS}
+          electionIndex={electionIndex}
+          initialCandidate={initialCandidate}
+        />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    // The indexer's copy carries no election; the loader places it by date.
+    getCandidate.mockResolvedValue(march2026);
+  });
+
+  it("does not show a later run's registration on an earlier election's page", async () => {
+    indexer(elections, {});
+    renderFor(4, null);
+    await waitFor(() => expect(api.listElections).toHaveBeenCalled());
+    await waitFor(() => expect(profileText()).toBe("fallback"));
+  });
+
+  it("shows the registration on the page of the election it was for", async () => {
+    indexer(elections, {});
+    renderFor(5, { ...march2026, electionIndex: 5 });
+    await waitFor(() =>
+      expect(profileText()).toMatch(/^Registered March 2026\|/)
+    );
+  });
+
+  it("reads the self-published profile for that election, not the newest", async () => {
+    indexer(elections, {
+      [election(4).id]: selfProfile(election(4), { name: "Published for 4" }),
+      [election(5).id]: selfProfile(election(5), { name: "Published for 5" }),
+    });
+    renderFor(4, null);
+
+    await waitFor(() => expect(profileText()).toMatch(/^Published for 4\|/));
+    expect(api.getPublicCandidateProfile).not.toHaveBeenCalledWith(
+      election(5).id,
+      ADDRESS
+    );
+    expect(screen.getByTestId("candidate-profile-election").textContent).toBe(
+      "From their Election #5 candidate profile (election closed)."
+    );
+  });
+
+  it("without an election, shows the newest from any election", async () => {
+    indexer(elections, {
+      [election(4).id]: selfProfile(election(4), { name: "Published for 4" }),
+      [election(5).id]: selfProfile(election(5), { name: "Published for 5" }),
+    });
+    renderFor(undefined, march2026);
+    await waitFor(() => expect(profileText()).toMatch(/^Published for 5\|/));
   });
 });

@@ -1,9 +1,10 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { isAddress } from "viem";
 
 import { ContenderProfileLoader } from "@/components/election/ContenderProfileLoader";
+import { contenderPath } from "@/lib/election-profile";
 import { pageMetadata } from "@/lib/seo";
 import {
   getCachedElectionCandidate,
@@ -33,7 +34,8 @@ export const dynamicParams = true;
 export const revalidate = false;
 
 export async function generateStaticParams() {
-  return getCachedElectionCandidateStaticParams();
+  const params = await getCachedElectionCandidateStaticParams();
+  return params.map(({ address }) => ({ address }));
 }
 
 export default async function ContenderPage({ params }: ContenderPageProps) {
@@ -43,6 +45,11 @@ export default async function ContenderPage({ params }: ContenderPageProps) {
   // with dynamicParams and revalidate = false it would be cached for good.
   if (!isAddress(address, { strict: false })) notFound();
   const initialCandidate = await getCachedElectionCandidate(address);
+  // Profiles are per election. An exported registration names its election, so
+  // send the address-only link there; otherwise show the latest election.
+  if (initialCandidate?.electionIndex != null) {
+    redirect(contenderPath(address, initialCandidate.electionIndex));
+  }
   const registrationSnapshot =
     getElectionCandidateRegistrationSnapshot(address);
 

@@ -4,7 +4,7 @@ import { ShieldAlert, UserCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import type { ResolvedCandidate } from "@/lib/election-profile";
+import { electionLabel, type ResolvedCandidate } from "@/lib/election-profile";
 import type { ElectionSummary } from "@/lib/siwe/types";
 
 const FIELD_LABEL: Record<string, string> = {
@@ -90,7 +90,7 @@ export function SelfAuthoredNotice({
 
         {election ? (
           <p data-testid="candidate-profile-election">
-            From their cohort {election.cohort} candidate profile
+            From their {electionLabel(election)} candidate profile
             {election.status === "complete" ? " (election closed)" : ""}.
           </p>
         ) : null}
