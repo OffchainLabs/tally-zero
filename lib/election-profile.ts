@@ -14,7 +14,11 @@
 
 import * as z from "zod";
 
-import type { CandidateProfileVersion } from "@/lib/siwe/types";
+import type {
+  CandidateProfileVersion,
+  ElectionPhase,
+  ElectionSummary,
+} from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 
 /** Fields where the two sources genuinely describe the same thing. */
@@ -223,3 +227,21 @@ export function electionsNewestFirst<T extends { startedAt: string }>(
 ): T[] {
   return [...elections].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
+
+/** Matches the election selector: the governor numbers from 0, people from 1. */
+export function electionLabel(
+  election: Pick<ElectionSummary, "electionIndex" | "cohort">
+): string {
+  return election.electionIndex === null
+    ? `Cohort ${election.cohort}`
+    : `Election #${election.electionIndex + 1}`;
+}
+
+export const ELECTION_PHASE_LABEL: Record<ElectionPhase, string> = {
+  CONTENDER_SUBMISSION: "Contender submission",
+  NOMINEE_SELECTION: "Nominee selection",
+  COMPLIANCE_CHECK: "Compliance check",
+  MEMBER_ELECTION: "Member election",
+  PENDING_EXECUTION: "Awaiting execution",
+  COMPLETED: "Completed",
+};

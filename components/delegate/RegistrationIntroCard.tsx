@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { CandidateProfileLink } from "@/components/election/CandidateProfileLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 /**
@@ -30,16 +29,7 @@ export function RegistrationIntroCard() {
         {/* The candidate editor is deliberately not in the main nav — it is only
             relevant to the handful of addresses standing in an election, and
             this is the page they already come to for their own details. */}
-        <p>
-          Standing in a Security Council election?{" "}
-          <Link
-            href="/security-council/candidate"
-            className="text-primary hover:underline"
-          >
-            Publish your candidate profile
-          </Link>
-          .
-        </p>
+        <CandidateProfileLink />
       </CardContent>
     </Card>
   );

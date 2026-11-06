@@ -113,13 +113,38 @@ export type DraftSubmission = {
 
 export type ElectionStatus = "upcoming" | "nominee" | "member" | "complete";
 
+// On the governors' L1-block clock, computed by the indexer.
+export type ElectionPhase =
+  | "CONTENDER_SUBMISSION"
+  | "NOMINEE_SELECTION"
+  | "COMPLIANCE_CHECK"
+  | "MEMBER_ELECTION"
+  | "PENDING_EXECUTION"
+  | "COMPLETED";
+
 // `id` is `${governorAddress}:${proposalId}` — encode it before use in a path.
 export type ElectionSummary = {
   id: string;
+  /** The governor's election number, 0-based; null if the indexer could not read it. */
+  electionIndex: number | null;
   cohort: number;
   status: ElectionStatus;
+  phase: ElectionPhase;
+  /** Contenders can register, so new candidate profiles are accepted. */
+  contenderSubmissionOpen: boolean;
+  /** Estimated close of that window (ISO-8601). */
+  contenderSubmissionEndsAt: string | null;
   startedAt: string;
   closedAt: string | null;
+};
+
+// GET /api/elections/current
+export type CurrentElection = {
+  /** The latest election unless it has completed. */
+  election: ElectionSummary | null;
+  contenderSubmissionOpen: boolean;
+  /** When the next election can start (ISO-8601). */
+  nextElectionAt: string | null;
 };
 
 export type CandidateProfileFields = {
@@ -147,4 +172,12 @@ export type CandidateProfileVersion = CandidateProfileFields & {
 export type MyCandidateProfile = {
   current: CandidateProfileVersion | null;
   versions: { version: number; createdAt: string }[];
+  /** The server's verdict on a save, by the same rule the PUT enforces. */
+  canWrite: boolean;
+  writeBlockedReason: CandidateWriteBlock | null;
 };
+
+export type CandidateWriteBlock =
+  | "election_complete"
+  | "not_candidate"
+  | "contender_submission_closed";
