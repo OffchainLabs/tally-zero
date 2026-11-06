@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
+import electionCandidateHistory from "@/data/election-candidate-history.json";
 import electionCandidateRegistrationSnapshots from "@/data/election-candidate-registration-snapshots.json";
 import electionCandidates from "@/data/election-candidates.json";
 import { contenderPath } from "@/lib/election-profile";
@@ -52,6 +53,27 @@ function toElectionCandidate(
   };
 }
 
+/**
+ * Registrations from earlier runs, keyed by election then address
+ * (scripts/backfill-candidate-history.ts). The export holds only each
+ * candidate's latest registration; these are the others.
+ */
+const getEarlierRegistrations = unstable_cache(
+  async (): Promise<TallyElectionCandidate[]> =>
+    Object.values(
+      electionCandidateHistory as Record<
+        string,
+        Record<string, ElectionCandidateJson>
+      >
+    ).flatMap((byAddress) =>
+      Object.entries(byAddress).map(([key, candidate]) =>
+        toElectionCandidate(key, candidate)
+      )
+    ),
+  ["tally-zero-election-candidate-history-v1"],
+  { revalidate: false }
+);
+
 const getElectionCandidates = unstable_cache(
   async (): Promise<TallyElectionCandidate[]> => {
     return Object.entries(
@@ -94,7 +116,15 @@ export async function getCachedElectionCandidate(
       (candidate) => candidate.address.toLowerCase() === addressLower
     ) ?? null;
   if (electionIndex === undefined) return candidate;
-  return candidate?.electionIndex === electionIndex ? candidate : null;
+  if (candidate?.electionIndex === electionIndex) return candidate;
+  const earlier = await getEarlierRegistrations();
+  return (
+    earlier.find(
+      (registration) =>
+        registration.electionIndex === electionIndex &&
+        registration.address.toLowerCase() === addressLower
+    ) ?? null
+  );
 }
 
 /** Original submissions retained when a member's current profile changes. */
@@ -110,7 +140,10 @@ export function getElectionCandidateRegistrationSnapshot(
 export async function getCachedElectionCandidateStaticParams(): Promise<
   Array<{ electionIndex: string; address: string }>
 > {
-  const candidates = await getElectionCandidates();
+  const candidates = [
+    ...(await getElectionCandidates()),
+    ...(await getEarlierRegistrations()),
+  ];
   return candidates.flatMap((candidate) =>
     candidate.electionIndex == null
       ? []

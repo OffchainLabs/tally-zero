@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import electionCandidateHistory from "@/data/election-candidate-history.json";
 import electionCandidates from "@/data/election-candidates.json";
 import { electionIndexForRegistration } from "@/lib/election-profile";
 import { MAINNET_ELECTIONS } from "@/lib/election-profile.fixtures";
@@ -44,5 +45,31 @@ describe("data/election-candidates.json", () => {
       // One record has no registered_at to place it by.
       null: 1,
     });
+  });
+});
+
+describe("data/election-candidate-history.json", () => {
+  const history = electionCandidateHistory as unknown as {
+    [electionIndex: string]: { [address: string]: Record };
+  };
+
+  it("holds only runs the export does not already cover", () => {
+    const exported = new Set(
+      records.map(
+        ([address, record]) =>
+          `${record.electionIndex}:${address.toLowerCase()}`
+      )
+    );
+    let count = 0;
+    for (const [electionIndex, byAddress] of Object.entries(history)) {
+      for (const [address, record] of Object.entries(byAddress)) {
+        expect(record.electionIndex).toBe(Number(electionIndex));
+        expect(exported.has(`${electionIndex}:${address.toLowerCase()}`)).toBe(
+          false
+        );
+        count += 1;
+      }
+    }
+    expect(count).toBe(35);
   });
 });

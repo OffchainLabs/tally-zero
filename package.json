@@ -7,6 +7,7 @@
     "build": "next build",
     "vote-history:fetch": "tsx scripts/fetch-vote-history.ts",
     "candidates:assign-elections": "tsx scripts/assign-candidate-elections.ts",
+    "candidates:backfill-history": "tsx scripts/backfill-candidate-history.ts",
     "avatars:upload": "tsx scripts/upload-governance-avatars.ts",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
