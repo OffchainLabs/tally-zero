@@ -54,10 +54,23 @@ export function useCandidateProfile(electionId: string) {
   const save = useMutation({
     mutationFn: (fields: CandidateProfileFields) =>
       siweApi.putCandidateProfile(electionId, fields),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: siweKeys.candidateProfile(effectiveAddress, electionId),
-      }),
+    // The session may have switched subjects while the save was in flight.
+    // Refresh both views of the profile that was actually saved.
+    onSuccess: (version) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: siweKeys.candidateProfile(
+            version.address,
+            version.electionId
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: siweKeys.publicCandidateProfile(
+            version.electionId,
+            version.address
+          ),
+        }),
+      ]),
   });
 
   return {

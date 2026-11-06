@@ -27,12 +27,15 @@ export function RegistrationIntroCard() {
             </li>
           </ul>
         </div>
-        {/* The election route is deliberately not in the main nav — it is only
+        {/* The candidate editor is deliberately not in the main nav — it is only
             relevant to the handful of addresses standing in an election, and
             this is the page they already come to for their own details. */}
         <p>
           Standing in a Security Council election?{" "}
-          <Link href="/elections" className="text-primary hover:underline">
+          <Link
+            href="/security-council/candidate"
+            className="text-primary hover:underline"
+          >
             Publish your candidate profile
           </Link>
           .
