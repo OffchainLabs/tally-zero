@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CandidateProfilePage from "@/app/security-council/candidate/page";
 import {
   useCandidateProfile,
-  usePublicCandidateProfile,
+  useNewestPublicCandidateProfile,
 } from "@/hooks/use-candidate-profile";
 import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
@@ -345,18 +345,19 @@ describe("candidate profile saves", () => {
       const { result } = renderHook(
         () => ({
           mine: useCandidateProfile(ELECTION.id),
-          public: usePublicCandidateProfile(ELECTION.id, SIGNER),
+          // The hook the contender page reads through.
+          public: useNewestPublicCandidateProfile([ELECTION], SIGNER),
         }),
         { wrapper: Wrapper }
       );
-      expect(result.current.public.data).toEqual(before);
+      expect(result.current.public.profile).toEqual(before);
 
       await act(async () => {
         await result.current.mine.save(after);
       });
 
       await waitFor(() =>
-        expect(result.current.public.data?.name).toBe("After")
+        expect(result.current.public.profile?.name).toBe("After")
       );
       expect(readPublic).toHaveBeenCalledWith(ELECTION.id, SIGNER);
     }
