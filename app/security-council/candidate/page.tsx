@@ -5,6 +5,8 @@ export const metadata = {
   title: "My Candidate Profile | Arbitrum Governance",
   description:
     "Sign in with your wallet to publish a Security Council candidate profile.",
+  // Account-bound, like the other wallet-gated pages: keep it out of search.
+  robots: { index: false, follow: true },
 };
 
 export default function CandidateProfilePage() {

@@ -8,9 +8,9 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   useElections,
-  usePublicCandidateProfile,
+  useNewestPublicCandidateProfile,
 } from "@/hooks/use-candidate-profile";
-import { latestElectionId, resolveCandidate } from "@/lib/election-profile";
+import { resolveCandidate } from "@/lib/election-profile";
 import {
   getCandidate,
   type TallyElectionCandidate,
@@ -76,12 +76,11 @@ export function ContenderProfileLoader({
 
   // A candidate can keep their own profile current through SIWE. That overlays
   // the static Tally snapshot below — it never replaces it, so a field the
-  // candidate has not touched still shows what was exported.
+  // candidate has not touched still shows what was exported. The newest profile
+  // from any election is used, so starting a new election does not hide one.
   const { data: elections } = useElections();
-  const { data: selfAuthored } = usePublicCandidateProfile(
-    latestElectionId(elections ?? []),
-    address
-  );
+  const { profile: selfAuthored, election: selfAuthoredElection } =
+    useNewestPublicCandidateProfile(elections, address);
 
   const isLoading =
     !hasInitialCandidate && (state.address !== address || state.isLoading);
@@ -127,6 +126,7 @@ export function ContenderProfileLoader({
     <div className="space-y-6">
       <SelfAuthoredNotice
         resolved={resolved}
+        election={selfAuthoredElection}
         isInCandidateRegistry={candidate !== null}
       />
       <ContenderProfile address={address} candidate={resolved.candidate} />

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CandidateProfileVersion } from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 import {
+  electionsNewestFirst,
   latestElectionId,
   resolveCandidate,
   toTwitterUrl,
@@ -62,6 +63,17 @@ describe("toTwitterUrl", () => {
   it("expands a bare handle, with or without the @", () => {
     expect(toTwitterUrl("foo")).toBe("https://x.com/foo");
     expect(toTwitterUrl("@foo")).toBe("https://x.com/foo");
+  });
+
+  // The value can be self-authored, and it renders behind an X icon.
+  it("drops a full URL whose host is not X", () => {
+    expect(toTwitterUrl("https://evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com@evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com.evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com/foo")).toBe("https://x.com/foo");
+    expect(toTwitterUrl("https://www.twitter.com/foo")).toBe(
+      "https://www.twitter.com/foo"
+    );
   });
 
   it("treats blank as absent", () => {
@@ -128,6 +140,16 @@ describe("resolveCandidate", () => {
     expect(hasSelfAuthored).toBe(true);
   });
 
+  it("dedupes self-reported skills", () => {
+    const { selfReportedSkills } = resolveCandidate(
+      ADDRESS,
+      staticCandidate(),
+      selfProfile({ skills: ["Rust", "Solidity", "Rust"] })
+    );
+
+    expect(selfReportedSkills).toEqual(["Rust", "Solidity"]);
+  });
+
   it("is a no-op when there is no self-authored profile", () => {
     const base = staticCandidate();
     const { candidate, hasSelfAuthored } = resolveCandidate(
@@ -167,5 +189,22 @@ describe("latestElectionId", () => {
 
   it("returns null with nothing to pick from", () => {
     expect(latestElectionId([])).toBeNull();
+  });
+});
+
+describe("electionsNewestFirst", () => {
+  it("orders by start date, newest first, without mutating the input", () => {
+    const elections = [
+      { id: "a", startedAt: "2025-09-01T00:00:00Z" },
+      { id: "c", startedAt: "2027-03-01T00:00:00Z" },
+      { id: "b", startedAt: "2026-09-01T00:00:00Z" },
+    ];
+
+    expect(electionsNewestFirst(elections).map((e) => e.id)).toEqual([
+      "c",
+      "b",
+      "a",
+    ]);
+    expect(elections.map((e) => e.id)).toEqual(["a", "c", "b"]);
   });
 });
