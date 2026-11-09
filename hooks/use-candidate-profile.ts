@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 
 import { electionsNewestFirst } from "@/lib/election-profile";
-import { siweApi } from "@/lib/siwe/client";
+import { SiweApiError, siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import type {
   CandidateProfileFields,
@@ -117,6 +117,11 @@ export function usePublicCandidateProfile(
  * newer election has answered, so an older profile never flashes up before a
  * newer one arrives. A failed lookup counts as no profile there.
  *
+ * Because of that wait, a failing newer election holds back the whole result
+ * for its retries, so a server or network error gets one retry (about 1s)
+ * rather than the client default of three (about 7s). A 4xx will not fix
+ * itself, so it fails at once. A 404 never gets here: it resolves to null.
+ *
  * Each lookup shares its cache entry with `usePublicCandidateProfile`, so a
  * save in the editor refreshes this too.
  */
@@ -134,6 +139,9 @@ export function useNewestPublicCandidateProfile(
       queryKey: siweKeys.publicCandidateProfile(election.id, address),
       queryFn: () => siweApi.getPublicCandidateProfile(election.id, address),
       staleTime: 60_000,
+      retry: (failureCount: number, error: Error) =>
+        failureCount < 1 &&
+        !(error instanceof SiweApiError && error.status < 500),
     })),
     combine: (results) => {
       for (const [index, result] of results.entries()) {

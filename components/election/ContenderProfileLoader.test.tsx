@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SiweApiError } from "@/lib/siwe/client";
 import type {
   CandidateProfileVersion,
   ElectionSummary,
@@ -18,7 +19,10 @@ const api = vi.hoisted(() => ({
 const getCandidate = vi.hoisted(() => vi.fn());
 
 // The indexer is the boundary: the real hooks run against this fake client.
-vi.mock("@/lib/siwe/client", () => ({ siweApi: api }));
+vi.mock("@/lib/siwe/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/siwe/client")>()),
+  siweApi: api,
+}));
 vi.mock("@/lib/election-utils", () => ({ getCandidate }));
 
 // The renderer is out of scope here; the stub shows what the loader handed it.
@@ -101,6 +105,16 @@ function indexer(
     electionId in profiles
       ? Promise.resolve(profiles[electionId])
       : Promise.resolve(null)
+  );
+}
+
+/** Cohort 6 (newest) rejects with `error`; cohort 5 has a profile. */
+function failNewest(error: Error) {
+  api.listElections.mockResolvedValue([COHORT_5, COHORT_6]);
+  api.getPublicCandidateProfile.mockImplementation((electionId: string) =>
+    electionId === COHORT_6.id
+      ? Promise.reject(error)
+      : Promise.resolve(selfProfile(COHORT_5))
   );
 }
 
@@ -202,14 +216,37 @@ describe("ContenderProfileLoader overlay", () => {
     expect(screen.queryByText("Updated by the candidate")).toBeNull();
   });
 
-  it("falls back to an older profile when the newest lookup fails", async () => {
+  // The hook sets its own retry, which overrides the client's retry: false, so
+  // these run against the real retry rule.
+  it("retries a failed newest lookup once, then falls back to an older profile", async () => {
     getCandidate.mockResolvedValue(registered);
-    indexer([COHORT_5, COHORT_6], { [COHORT_5.id]: selfProfile(COHORT_5) });
-    api.getPublicCandidateProfile.mockImplementation((electionId: string) =>
-      electionId === COHORT_6.id
-        ? Promise.reject(new Error("indexer down"))
-        : Promise.resolve(selfProfile(COHORT_5))
+    failNewest(new Error("indexer down"));
+    const cohort6Calls = () =>
+      api.getPublicCandidateProfile.mock.calls.filter(
+        ([id]) => id === COHORT_6.id
+      ).length;
+
+    renderLoader(registered);
+
+    await waitFor(() => expect(cohort6Calls()).toBe(1));
+    // Still held back while the one retry is pending.
+    expect(profileText()).toBe(
+      "Static Name|Static Title|https://twitter.com/static_handle"
     );
+    await waitFor(
+      () =>
+        expect(profileText()).toBe(
+          "Self Name|Cohort 5 title|https://x.com/self_handle"
+        ),
+      { timeout: 3000 }
+    );
+    expect(cohort6Calls()).toBe(2);
+  });
+
+  it("falls back at once when the newest lookup fails with a client error", async () => {
+    getCandidate.mockResolvedValue(registered);
+    failNewest(new SiweApiError(403, "forbidden", "Forbidden"));
+    const start = Date.now();
 
     renderLoader(registered);
 
@@ -218,6 +255,13 @@ describe("ContenderProfileLoader overlay", () => {
         "Self Name|Cohort 5 title|https://x.com/self_handle"
       )
     );
+    // Well under the 1s retry delay.
+    expect(Date.now() - start).toBeLessThan(900);
+    expect(
+      api.getPublicCandidateProfile.mock.calls.filter(
+        ([id]) => id === COHORT_6.id
+      )
+    ).toHaveLength(1);
   });
 
   it("warns when the author is not in the candidate registry", async () => {
