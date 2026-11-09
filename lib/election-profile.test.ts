@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CandidateProfileVersion } from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 import {
+  electionsNewestFirst,
   latestElectionId,
   resolveCandidate,
   toTwitterUrl,
@@ -188,5 +189,22 @@ describe("latestElectionId", () => {
 
   it("returns null with nothing to pick from", () => {
     expect(latestElectionId([])).toBeNull();
+  });
+});
+
+describe("electionsNewestFirst", () => {
+  it("orders by start date, newest first, without mutating the input", () => {
+    const elections = [
+      { id: "a", startedAt: "2025-09-01T00:00:00Z" },
+      { id: "c", startedAt: "2027-03-01T00:00:00Z" },
+      { id: "b", startedAt: "2026-09-01T00:00:00Z" },
+    ];
+
+    expect(electionsNewestFirst(elections).map((e) => e.id)).toEqual([
+      "c",
+      "b",
+      "a",
+    ]);
+    expect(elections.map((e) => e.id)).toEqual(["a", "c", "b"]);
   });
 });

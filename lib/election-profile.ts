@@ -133,8 +133,12 @@ export function resolveCandidate(
 export function latestElectionId(
   elections: { id: string; startedAt: string }[]
 ): string | null {
-  const [latest] = [...elections].sort((a, b) =>
-    b.startedAt.localeCompare(a.startedAt)
-  );
-  return latest?.id ?? null;
+  return electionsNewestFirst(elections)[0]?.id ?? null;
+}
+
+/** Most recently started first. Does not mutate the input. */
+export function electionsNewestFirst<T extends { startedAt: string }>(
+  elections: T[]
+): T[] {
+  return [...elections].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }

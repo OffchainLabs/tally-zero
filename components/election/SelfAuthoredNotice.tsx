@@ -5,6 +5,7 @@ import { ShieldAlert, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { ResolvedCandidate } from "@/lib/election-profile";
+import type { ElectionSummary } from "@/lib/siwe/types";
 
 const FIELD_LABEL: Record<string, string> = {
   name: "Name",
@@ -37,12 +38,17 @@ const FIELD_LABEL: Record<string, string> = {
  * `skills` is listed here rather than merged into the profile because the two
  * sources are different data: the export holds numeric proficiency ratings, a
  * SIWE profile holds a flat list of words.
+ *
+ * Profiles are per election and the page shows the newest one, which may
+ * belong to an election that has already closed, so the cohort is named.
  */
 export function SelfAuthoredNotice({
   resolved,
+  election,
   isInCandidateRegistry,
 }: {
   resolved: ResolvedCandidate;
+  election: ElectionSummary | null;
   isInCandidateRegistry: boolean;
 }) {
   const { sources, selfReportedSkills, hasSelfAuthored } = resolved;
@@ -79,6 +85,13 @@ export function SelfAuthoredNotice({
             This address is not in the Security Council candidate registry.
             Everything below was published by whoever controls the address and
             has not been verified against an election.
+          </p>
+        ) : null}
+
+        {election ? (
+          <p data-testid="candidate-profile-election">
+            From their cohort {election.cohort} candidate profile
+            {election.status === "complete" ? " (election closed)" : ""}.
           </p>
         ) : null}
 
