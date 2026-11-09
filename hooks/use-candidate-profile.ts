@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 
 import { electionsNewestFirst } from "@/lib/election-profile";
-import { siweApi } from "@/lib/siwe/client";
+import { SiweApiError, siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import type {
   CandidateProfileFields,
@@ -87,28 +87,9 @@ export function useCandidateProfile(electionId: string) {
 }
 
 /**
- * Public read of any address's candidate profile. For a completed election the
- * indexer freezes this to the last version written before it closed, so it is a
- * historical view rather than the current draft.
- */
-export function usePublicCandidateProfile(
-  electionId: string | null,
-  address: string
-) {
-  return useQuery<CandidateProfileVersion | null>({
-    queryKey: siweKeys.publicCandidateProfile(electionId, address),
-    // The election is discovered asynchronously (a contender page is addressed
-    // only by address), so this waits for it rather than guessing.
-    queryFn: electionId
-      ? () => siweApi.getPublicCandidateProfile(electionId, address)
-      : skipToken,
-    staleTime: 60_000,
-  });
-}
-
-/**
  * The newest candidate profile an address has published in any election, and
- * the election it belongs to.
+ * the election it belongs to. For a completed election the indexer freezes the
+ * profile to the last version written before it closed.
  *
  * A contender page is addressed only by address, and the static snapshot has
  * no election id, so asking only the newest election would drop a candidate's
@@ -117,8 +98,13 @@ export function usePublicCandidateProfile(
  * newer election has answered, so an older profile never flashes up before a
  * newer one arrives. A failed lookup counts as no profile there.
  *
- * Each lookup shares its cache entry with `usePublicCandidateProfile`, so a
- * save in the editor refreshes this too.
+ * Because of that wait, a failing newer election holds back the whole result
+ * for its retries, so a server or network error gets one retry (about 1s)
+ * rather than the client default of three (about 7s). A 4xx will not fix
+ * itself, so it fails at once. A 404 never gets here: it resolves to null.
+ *
+ * Each lookup uses `siweKeys.publicCandidateProfile`, the key the editor's
+ * save invalidates, so saving refreshes this too.
  */
 export function useNewestPublicCandidateProfile(
   elections: ElectionSummary[] | undefined,
@@ -134,6 +120,9 @@ export function useNewestPublicCandidateProfile(
       queryKey: siweKeys.publicCandidateProfile(election.id, address),
       queryFn: () => siweApi.getPublicCandidateProfile(election.id, address),
       staleTime: 60_000,
+      retry: (failureCount: number, error: Error) =>
+        failureCount < 1 &&
+        !(error instanceof SiweApiError && error.status < 500),
     })),
     combine: (results) => {
       for (const [index, result] of results.entries()) {
