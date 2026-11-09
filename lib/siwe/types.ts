@@ -22,10 +22,12 @@ export type ResolvedProfile = ProfileFields & {
 
 // GET /api/me. `safes` is a bare address list here; the enriched form (owners,
 // threshold) only comes from GET /api/auth/safes — don't conflate the two.
+// `actingAs` and `effectiveAddress` are absent from indexers without act-as;
+// read the subject through sessionSubject().
 export type MeResponse = {
   address: string;
-  actingAs: string | null;
-  effectiveAddress: string;
+  actingAs?: string | null;
+  effectiveAddress?: string;
   profile: ResolvedProfile;
   ownedFields: string[];
   safes: string[];
