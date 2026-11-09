@@ -30,15 +30,34 @@ const MERGEABLE = [
 
 type MergeableField = (typeof MERGEABLE)[number];
 
+const TWITTER_HOSTS = new Set([
+  "x.com",
+  "www.x.com",
+  "twitter.com",
+  "www.twitter.com",
+  "mobile.twitter.com",
+]);
+
 /**
  * The static export stores a full profile URL, SIWE stores a bare handle. The
  * link in the UI needs a URL, so normalize towards that and accept either.
+ *
+ * A self-authored value is unvetted and renders behind an X icon, so a full URL
+ * survives only when its host really is X. Anything else is dropped rather
+ * than linked.
  */
 export function toTwitterUrl(value: string | null): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://x.com/${trimmed.replace(/^@/, "")}`;
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://x.com/${trimmed.replace(/^@/, "")}`;
+  }
+  try {
+    const { hostname } = new URL(trimmed);
+    return TWITTER_HOSTS.has(hostname.toLowerCase()) ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 export type CandidateFieldSource = "self" | "static";
@@ -100,7 +119,8 @@ export function resolveCandidate(
   return {
     candidate,
     sources,
-    selfReportedSkills: self?.skills ?? [],
+    // Deduped: the editor does not, and the UI keys a badge per skill.
+    selfReportedSkills: [...new Set(self?.skills ?? [])],
     hasSelfAuthored: Object.values(sources).some((s) => s === "self"),
   };
 }

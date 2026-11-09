@@ -64,6 +64,17 @@ describe("toTwitterUrl", () => {
     expect(toTwitterUrl("@foo")).toBe("https://x.com/foo");
   });
 
+  // The value can be self-authored, and it renders behind an X icon.
+  it("drops a full URL whose host is not X", () => {
+    expect(toTwitterUrl("https://evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com@evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com.evil.example/foo")).toBeNull();
+    expect(toTwitterUrl("https://x.com/foo")).toBe("https://x.com/foo");
+    expect(toTwitterUrl("https://www.twitter.com/foo")).toBe(
+      "https://www.twitter.com/foo"
+    );
+  });
+
   it("treats blank as absent", () => {
     expect(toTwitterUrl("   ")).toBeNull();
     expect(toTwitterUrl(null)).toBeNull();
@@ -126,6 +137,16 @@ describe("resolveCandidate", () => {
     expect(candidate.country).toBe("Portugal");
     expect(candidate.skills).toBeNull();
     expect(hasSelfAuthored).toBe(true);
+  });
+
+  it("dedupes self-reported skills", () => {
+    const { selfReportedSkills } = resolveCandidate(
+      ADDRESS,
+      staticCandidate(),
+      selfProfile({ skills: ["Rust", "Solidity", "Rust"] })
+    );
+
+    expect(selfReportedSkills).toEqual(["Rust", "Solidity"]);
   });
 
   it("is a no-op when there is no self-authored profile", () => {
