@@ -61,7 +61,7 @@ const registered: TallyElectionCandidate = {
   address: ADDRESS,
   name: "Static Name",
   title: "Static Title",
-  twitter: "https://twitter.com/static_handle",
+  twitter: "https://x.com/static_handle",
   type: null,
   representative: null,
   motivation: null,
@@ -211,7 +211,7 @@ describe("ContenderProfileLoader overlay", () => {
     );
     await act(async () => {});
     expect(profileText()).toBe(
-      "Static Name|Static Title|https://twitter.com/static_handle"
+      "Static Name|Static Title|https://x.com/static_handle"
     );
     expect(screen.queryByText("Updated by the candidate")).toBeNull();
   });
@@ -231,7 +231,7 @@ describe("ContenderProfileLoader overlay", () => {
     await waitFor(() => expect(cohort6Calls()).toBe(1));
     // Still held back while the one retry is pending.
     expect(profileText()).toBe(
-      "Static Name|Static Title|https://twitter.com/static_handle"
+      "Static Name|Static Title|https://x.com/static_handle"
     );
     await waitFor(
       () =>
@@ -315,7 +315,7 @@ describe("ContenderProfileLoader overlay", () => {
     );
     await act(async () => {});
     expect(profileText()).toBe(
-      "Static Name|Static Title|https://twitter.com/static_handle"
+      "Static Name|Static Title|https://x.com/static_handle"
     );
     expect(screen.queryByText("Updated by the candidate")).toBeNull();
   });

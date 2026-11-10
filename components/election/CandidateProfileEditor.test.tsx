@@ -308,6 +308,37 @@ describe("candidate profile saves", () => {
     expect(nameInput(view).disabled).toBe(false);
   });
 
+  it("saves the Twitter field as a bare handle and rejects anything else", async () => {
+    const save = vi
+      .spyOn(siweApi, "putCandidateProfile")
+      .mockResolvedValue({ ...profile(), version: 2 });
+    const view = editor();
+    const twitter = view.getByLabelText("Twitter / X handle");
+
+    for (const value of [
+      "https://linktr.ee/me",
+      "https://twitter.com/i/web/status/1128358947772145672",
+      "https://x.com/intent/user?screen_name=someone",
+    ]) {
+      fireEvent.change(twitter, { target: { value } });
+      fireEvent.click(view.getByTestId("candidate-save"));
+      expect(mocks.toastError).toHaveBeenLastCalledWith(
+        "Enter a Twitter / X handle, like @handle."
+      );
+      expect(save).not.toHaveBeenCalled();
+    }
+
+    fireEvent.change(twitter, {
+      target: { value: " https://x.com/someone/status/1 " },
+    });
+    fireEvent.click(view.getByTestId("candidate-save"));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save).toHaveBeenCalledWith(
+      ELECTION.id,
+      expect.objectContaining({ twitter: "someone" })
+    );
+  });
+
   it("keeps edits and shows the save error when the server rejects a write", async () => {
     vi.spyOn(siweApi, "putCandidateProfile").mockRejectedValue(
       new Error("This election has closed.")

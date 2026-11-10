@@ -20,10 +20,8 @@
 
     // https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
     // zod memory exhaustion: $ZodArray collects an issue object for every failing element of an array schema that has no length constraint, so an oversized array can OOM the process.
-    // No fixed release exists on the 3.x line (the fix landed in 4.6.6 only), and zod 4 is a breaking upgrade that @t3-oss/env-nextjs 0.10 and @hookform/resolvers 3 do not support yet.
-    // Not reachable here: the only zod parses are env.ts validating NEXT_PUBLIC_* scalars at boot and voteSchema (one string field) through zodResolver in the browser. No API route or server module parses with zod, and proposalSchema's arrays are used for z.infer types plus unit tests only.
-    // The transitive 4.x copies (porto, @vercel/cli-config) are pinned to >=4.6.6 by the "zod@4" pnpm override, so only the 3.x copies remain.
-    // from: zod (3.25.76)
+    // No fixed release exists on the 3.x line (the fix landed in 4.6.6 only). Our own zod is now 4.6.7, and the "zod@4" pnpm override pins every 4.x copy to >=4.6.6, so the only copy left is the 3.x one @reown/appkit-wallet depends on directly.
+    // That copy only parses messages exchanged with Reown's embedded-wallet iframe (W3mFrameSchema.js), in the browser. An oversized array would have to come from that iframe, and at worst stalls the tab. No app code or server module parses through it.
     // from: @reown/appkit>@reown/appkit-wallet>zod (3.22.4)
     "GHSA-mrhx-c7xc-m3w5",
   ],

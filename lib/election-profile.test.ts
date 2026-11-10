@@ -6,10 +6,20 @@ import {
   electionsNewestFirst,
   latestElectionId,
   resolveCandidate,
+  toTwitterHandle,
   toTwitterUrl,
 } from "./election-profile";
 
 const ADDRESS = "0x358E76A0C6224dCABCe39ff395b284e7da9bf413";
+
+const INTERNAL_TWITTER_URLS = [
+  "https://twitter.com/i/web/status/1128358947772145672",
+  "https://x.com/i/status/123",
+  "https://x.com/I/status/123",
+  "https://x.com/intent/user?screen_name=jane",
+  "https://x.com/home",
+  "https://x.com/search?q=jane",
+];
 
 const staticCandidate = (
   overrides: Partial<TallyElectionCandidate> = {}
@@ -52,32 +62,74 @@ const selfProfile = (
   ...overrides,
 });
 
-describe("toTwitterUrl", () => {
-  it("passes a full URL through", () => {
-    expect(toTwitterUrl("https://twitter.com/foo")).toBe(
-      "https://twitter.com/foo"
-    );
+describe("toTwitterHandle", () => {
+  it("accepts a bare handle, with or without the @", () => {
+    expect(toTwitterHandle("foo_Bar1")).toBe("foo_Bar1");
+    expect(toTwitterHandle("  @foo  ")).toBe("foo");
   });
 
-  // SIWE stores a bare handle; the UI renders an anchor, so it needs a URL.
-  it("expands a bare handle, with or without the @", () => {
-    expect(toTwitterUrl("foo")).toBe("https://x.com/foo");
-    expect(toTwitterUrl("@foo")).toBe("https://x.com/foo");
+  // The static export stores profile URLs, and candidates paste them too.
+  it("takes the handle from an X or Twitter profile URL", () => {
+    expect(toTwitterHandle("https://twitter.com/foo")).toBe("foo");
+    expect(toTwitterHandle("https://x.com/foo/")).toBe("foo");
+    expect(toTwitterHandle("https://www.x.com/foo/status/123")).toBe("foo");
+    expect(toTwitterHandle("https://x.com/foo/status/123/photo/1?s=20")).toBe(
+      "foo"
+    );
+    expect(toTwitterHandle("https://x.com/foo/status/123/video/1")).toBe("foo");
+    expect(toTwitterHandle("https://mobile.twitter.com/foo?s=21")).toBe("foo");
+  });
+
+  it.each(INTERNAL_TWITTER_URLS)("rejects an internal X route: %s", (value) => {
+    expect(toTwitterHandle(value)).toBeNull();
+    expect(toTwitterUrl(value)).toBeNull();
+  });
+
+  it.each(["i", "@intent", "HOME"])(
+    "rejects a reserved route saved as a bare handle: %s",
+    (value) => {
+      expect(toTwitterHandle(value)).toBeNull();
+    }
+  );
+
+  it.each([
+    "https://x.com/foo/unrecognized/path",
+    "https://x.com/foo/status/",
+    "https://x.com/foo/status/not-a-post-id",
+  ])("rejects a URL without a supported account path: %s", (value) => {
+    expect(toTwitterHandle(value)).toBeNull();
   });
 
   // The value can be self-authored, and it renders behind an X icon.
-  it("drops a full URL whose host is not X", () => {
-    expect(toTwitterUrl("https://evil.example/foo")).toBeNull();
-    expect(toTwitterUrl("https://x.com@evil.example/foo")).toBeNull();
-    expect(toTwitterUrl("https://x.com.evil.example/foo")).toBeNull();
-    expect(toTwitterUrl("https://x.com/foo")).toBe("https://x.com/foo");
-    expect(toTwitterUrl("https://www.twitter.com/foo")).toBe(
-      "https://www.twitter.com/foo"
-    );
+  it("rejects a URL whose host is not X", () => {
+    expect(toTwitterHandle("https://evil.example/foo")).toBeNull();
+    expect(toTwitterHandle("https://x.com@evil.example/foo")).toBeNull();
+    expect(toTwitterHandle("https://x.com.evil.example/foo")).toBeNull();
+  });
+
+  it("rejects anything that is not a valid handle", () => {
+    expect(toTwitterHandle("two words")).toBeNull();
+    expect(toTwitterHandle("foo/../bar")).toBeNull();
+    expect(toTwitterHandle("a".repeat(16))).toBeNull();
+    expect(toTwitterHandle("https://x.com/")).toBeNull();
+    expect(toTwitterHandle("@")).toBeNull();
   });
 
   it("treats blank as absent", () => {
-    expect(toTwitterUrl("   ")).toBeNull();
+    expect(toTwitterHandle("   ")).toBeNull();
+    expect(toTwitterHandle(null)).toBeNull();
+  });
+});
+
+describe("toTwitterUrl", () => {
+  // The link is always rebuilt from the handle, never passed through.
+  it("builds an x.com link from a handle or a profile URL", () => {
+    expect(toTwitterUrl("@foo")).toBe("https://x.com/foo");
+    expect(toTwitterUrl("https://twitter.com/foo")).toBe("https://x.com/foo");
+  });
+
+  it("returns null when there is no handle", () => {
+    expect(toTwitterUrl("https://evil.example/foo")).toBeNull();
     expect(toTwitterUrl(null)).toBeNull();
   });
 });
@@ -109,6 +161,35 @@ describe("resolveCandidate", () => {
     expect(candidate.name).toBe("Static Name");
     expect(sources.name).toBe("static");
   });
+
+  // Same floor for a Twitter value that holds no handle: it must not erase the
+  // export's link or be credited to the candidate.
+  it("ignores a self-authored Twitter value that is not a handle", () => {
+    const { candidate, sources, hasSelfAuthored } = resolveCandidate(
+      ADDRESS,
+      staticCandidate(),
+      selfProfile({ name: "   ", twitter: "https://linktr.ee/me" })
+    );
+
+    expect(candidate.twitter).toBe("https://x.com/static_handle");
+    expect(sources.twitter).toBe("static");
+    expect(hasSelfAuthored).toBe(false);
+  });
+
+  it.each(INTERNAL_TWITTER_URLS)(
+    "preserves the static link and attribution for an internal X route: %s",
+    (twitter) => {
+      const { candidate, sources, hasSelfAuthored } = resolveCandidate(
+        ADDRESS,
+        staticCandidate(),
+        selfProfile({ name: "   ", twitter })
+      );
+
+      expect(candidate.twitter).toBe("https://x.com/static_handle");
+      expect(sources.twitter).toBe("static");
+      expect(hasSelfAuthored).toBe(false);
+    }
+  );
 
   // The whole reason skills is excluded from the merge.
   it("keeps the static ratings object and exposes SIWE skills separately", () => {
@@ -171,9 +252,7 @@ describe("resolveCandidate", () => {
     expect(fromHandle.candidate.twitter).toBe("https://x.com/handle");
 
     const fromStatic = resolveCandidate(ADDRESS, staticCandidate(), null);
-    expect(fromStatic.candidate.twitter).toBe(
-      "https://twitter.com/static_handle"
-    );
+    expect(fromStatic.candidate.twitter).toBe("https://x.com/static_handle");
   });
 });
 
