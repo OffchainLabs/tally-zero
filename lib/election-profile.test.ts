@@ -364,6 +364,11 @@ describe("contenderPath", () => {
 describe("electionLabel", () => {
   it("numbers elections from 1, as the election selector does", () => {
     expect(electionLabel({ electionIndex: 5, cohort: 1 })).toBe("Election #6");
-    expect(electionLabel({ electionIndex: null, cohort: 1 })).toBe("Cohort 1");
+    expect(electionLabel({ electionIndex: null, cohort: 1 })).toBe(
+      "Second Cohort"
+    );
+    expect(electionLabel({ electionIndex: null, cohort: null })).toBe(
+      "Election"
+    );
   });
 });

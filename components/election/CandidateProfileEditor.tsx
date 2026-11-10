@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { candidateProfileFormSchema } from "@/config/schema";
+import { formatCohort } from "@/config/security-council";
 import {
   useCandidateProfile,
   useLatestCandidateProfile,
@@ -62,7 +63,9 @@ const BLOCKED: Record<CandidateWriteBlock, string> = {
   election_complete:
     "This election has closed. Its profile is frozen to the last version written before it ended.",
   contender_submission_closed:
-    "Contender Submission for this election has closed. New candidate profiles are accepted only while contenders can register.",
+    "Contender Submission for this election has closed. Candidate profiles can be created or edited only while contenders can register.",
+  not_current_election:
+    "Candidate profiles can only be written for the newest election.",
   not_candidate:
     "This address is not a contender in this election. Register on chain during Contender Submission, then publish your profile here.",
 };
@@ -185,7 +188,10 @@ function ProfileForm({
     <Card variant="glass">
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <CardTitle className="text-base">
-          {electionLabel(election)} candidate profile · Cohort {election.cohort}
+          {electionLabel(election)} candidate profile
+          {election.electionIndex != null && election.cohort != null
+            ? ` · ${formatCohort(election.cohort)}`
+            : null}
         </CardTitle>
         <Badge variant="outline">{ELECTION_PHASE_LABEL[election.phase]}</Badge>
       </CardHeader>

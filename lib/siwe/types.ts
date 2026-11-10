@@ -129,7 +129,8 @@ export type ElectionSummary = {
   id: string;
   /** The governor's election number, 0-based; null if the indexer could not read it. */
   electionIndex: number | null;
-  cohort: number;
+  /** Null when the indexer could not read the election number. */
+  cohort: 0 | 1 | null;
   status: ElectionStatus;
   phase: ElectionPhase;
   /** Contenders can register, so new candidate profiles are accepted. */
@@ -181,5 +182,6 @@ export type MyCandidateProfile = {
 
 export type CandidateWriteBlock =
   | "election_complete"
+  | "not_current_election"
   | "not_candidate"
   | "contender_submission_closed";

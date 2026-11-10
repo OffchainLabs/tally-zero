@@ -563,7 +563,7 @@ describe("ContenderProfileLoader for one election", () => {
   const elections: ElectionSummary[] = MAINNET_ELECTIONS.map((e) => ({
     id: `0xgov:${e.electionIndex}`,
     electionIndex: e.electionIndex,
-    cohort: e.electionIndex % 2,
+    cohort: e.electionIndex % 2 === 0 ? 0 : 1,
     status: "complete",
     phase: "COMPLETED",
     contenderSubmissionOpen: false,
