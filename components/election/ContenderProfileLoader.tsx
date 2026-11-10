@@ -199,7 +199,8 @@ export function ContenderProfileLoader({
     <div className="space-y-6">
       <SelfAuthoredNotice
         resolved={resolved}
-        election={selfAuthoredElection}
+        // An election's own page already says which election this is.
+        election={electionIndex === undefined ? selfAuthoredElection : null}
         isInCandidateRegistry={candidate !== null}
       />
       {originalCandidate ? (

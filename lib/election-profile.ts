@@ -14,8 +14,6 @@
 
 import * as z from "zod";
 
-import { formatCohort } from "@/config/security-council";
-
 import type {
   CandidateProfileVersion,
   ElectionPhase,
@@ -232,12 +230,11 @@ export function electionsNewestFirst<T extends { startedAt: string }>(
 
 /** Matches the election selector: the governor numbers from 0, people from 1. */
 export function electionLabel(
-  election: Pick<ElectionSummary, "electionIndex" | "cohort">
+  election: Pick<ElectionSummary, "electionIndex">
 ): string {
-  if (election.electionIndex != null) {
-    return `Election #${election.electionIndex + 1}`;
-  }
-  return election.cohort == null ? "Election" : formatCohort(election.cohort);
+  return election.electionIndex == null
+    ? "Election"
+    : `Election #${election.electionIndex + 1}`;
 }
 
 export const ELECTION_PHASE_LABEL: Record<ElectionPhase, string> = {

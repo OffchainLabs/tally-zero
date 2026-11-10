@@ -189,9 +189,9 @@ function ProfileForm({
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <CardTitle className="text-base">
           {electionLabel(election)} candidate profile
-          {election.electionIndex != null && election.cohort != null
-            ? ` · ${formatCohort(election.cohort)}`
-            : null}
+          {election.cohort == null
+            ? null
+            : ` · ${formatCohort(election.cohort)}`}
         </CardTitle>
         <Badge variant="outline">{ELECTION_PHASE_LABEL[election.phase]}</Badge>
       </CardHeader>
