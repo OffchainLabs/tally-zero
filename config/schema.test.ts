@@ -1,3 +1,4 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -133,6 +134,36 @@ describe("schema validation", () => {
     });
   });
 
+  describe("voteSchema resolver", () => {
+    const resolver = zodResolver(voteSchema);
+    const options = { fields: {}, shouldUseNativeValidation: false };
+
+    it.each(["0", "1", "2"])(
+      "returns valid vote %s to the form",
+      async (vote) => {
+        await expect(resolver({ vote }, {}, options)).resolves.toEqual({
+          values: { vote },
+          errors: {},
+        });
+      }
+    );
+
+    it.each(["3", "", "yes"])(
+      "returns a field error without throwing for invalid vote %j",
+      async (vote) => {
+        await expect(resolver({ vote }, {}, options)).resolves.toEqual({
+          values: {},
+          errors: {
+            vote: {
+              message: "Please select a valid vote option",
+              type: "custom",
+            },
+          },
+        });
+      }
+    );
+  });
+
   describe("proposalSchema", () => {
     const validProposal = {
       id: "12345",
@@ -241,6 +272,17 @@ describe("candidateProfileFormSchema", () => {
       ...form,
       twitter: "https://linktr.ee/jane",
     });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toBe(
+      "Enter a Twitter / X handle, like @handle."
+    );
+  });
+
+  it.each([
+    "https://twitter.com/i/web/status/1128358947772145672",
+    "https://x.com/intent/user?screen_name=jane",
+  ])("rejects an internal X route in the Twitter field: %s", (twitter) => {
+    const result = candidateProfileFormSchema.safeParse({ ...form, twitter });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe(
       "Enter a Twitter / X handle, like @handle."

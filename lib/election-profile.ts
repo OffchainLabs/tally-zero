@@ -40,6 +40,26 @@ const TWITTER_HOSTS = new Set([
   "mobile.twitter.com",
 ]);
 
+// These first path segments belong to X itself, not to an account. Apply this
+// to bare values too, including ones normalized by an older client.
+const TWITTER_ROUTES = new Set([
+  "i",
+  "intent",
+  "home",
+  "explore",
+  "search",
+  "notifications",
+  "messages",
+  "settings",
+  "compose",
+  "login",
+  "logout",
+  "signup",
+  "share",
+  "hashtag",
+  "account",
+]);
+
 export const TWITTER_HANDLE_MESSAGE =
   "Enter a Twitter / X handle, like @handle.";
 
@@ -50,27 +70,37 @@ export const TWITTER_HANDLE_MESSAGE =
  * failed without aborting, the union reports that branch's raw issue instead
  * of its own message. Aborting here keeps the union's message.
  */
-const handleSchema = z.string().regex(/^[A-Za-z0-9_]{1,15}$/, { abort: true });
+const handleSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_]{1,15}$/, { abort: true })
+  .refine((handle) => !TWITTER_ROUTES.has(handle.toLowerCase()), {
+    abort: true,
+  });
 
 const bareHandleSchema = z
   .string()
   .transform((value) => value.replace(/^@/, ""))
   .pipe(handleSchema);
 
-/** An http(s) URL on an X host. Its first path segment is the handle. */
+/** A profile or post URL whose first path segment identifies an account. */
 const profileUrlSchema = z
   .string()
   .url()
   .transform((value, ctx) => {
     const { protocol, hostname, pathname } = new URL(value);
+    const accountPath =
+      /^\/([^/]+)(?:\/status\/\d+(?:\/(?:photo|video)\/\d+)?)?\/?$/.exec(
+        pathname
+      );
     if (
       !/^https?:$/.test(protocol) ||
-      !TWITTER_HOSTS.has(hostname.toLowerCase())
+      !TWITTER_HOSTS.has(hostname.toLowerCase()) ||
+      !accountPath
     ) {
       ctx.addIssue({ code: "custom" });
       return z.NEVER;
     }
-    return pathname.split("/")[1] ?? "";
+    return accountPath[1];
   })
   .pipe(handleSchema);
 

@@ -315,12 +315,18 @@ describe("candidate profile saves", () => {
     const view = editor();
     const twitter = view.getByLabelText("Twitter / X handle");
 
-    fireEvent.change(twitter, { target: { value: "https://linktr.ee/me" } });
-    fireEvent.click(view.getByTestId("candidate-save"));
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      "Enter a Twitter / X handle, like @handle."
-    );
-    expect(save).not.toHaveBeenCalled();
+    for (const value of [
+      "https://linktr.ee/me",
+      "https://twitter.com/i/web/status/1128358947772145672",
+      "https://x.com/intent/user?screen_name=someone",
+    ]) {
+      fireEvent.change(twitter, { target: { value } });
+      fireEvent.click(view.getByTestId("candidate-save"));
+      expect(mocks.toastError).toHaveBeenLastCalledWith(
+        "Enter a Twitter / X handle, like @handle."
+      );
+      expect(save).not.toHaveBeenCalled();
+    }
 
     fireEvent.change(twitter, {
       target: { value: " https://x.com/someone/status/1 " },

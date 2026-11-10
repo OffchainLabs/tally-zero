@@ -12,6 +12,15 @@ import {
 
 const ADDRESS = "0x358E76A0C6224dCABCe39ff395b284e7da9bf413";
 
+const INTERNAL_TWITTER_URLS = [
+  "https://twitter.com/i/web/status/1128358947772145672",
+  "https://x.com/i/status/123",
+  "https://x.com/I/status/123",
+  "https://x.com/intent/user?screen_name=jane",
+  "https://x.com/home",
+  "https://x.com/search?q=jane",
+];
+
 const staticCandidate = (
   overrides: Partial<TallyElectionCandidate> = {}
 ): TallyElectionCandidate => ({
@@ -62,8 +71,33 @@ describe("toTwitterHandle", () => {
   // The static export stores profile URLs, and candidates paste them too.
   it("takes the handle from an X or Twitter profile URL", () => {
     expect(toTwitterHandle("https://twitter.com/foo")).toBe("foo");
+    expect(toTwitterHandle("https://x.com/foo/")).toBe("foo");
     expect(toTwitterHandle("https://www.x.com/foo/status/123")).toBe("foo");
+    expect(toTwitterHandle("https://x.com/foo/status/123/photo/1?s=20")).toBe(
+      "foo"
+    );
+    expect(toTwitterHandle("https://x.com/foo/status/123/video/1")).toBe("foo");
     expect(toTwitterHandle("https://mobile.twitter.com/foo?s=21")).toBe("foo");
+  });
+
+  it.each(INTERNAL_TWITTER_URLS)("rejects an internal X route: %s", (value) => {
+    expect(toTwitterHandle(value)).toBeNull();
+    expect(toTwitterUrl(value)).toBeNull();
+  });
+
+  it.each(["i", "@intent", "HOME"])(
+    "rejects a reserved route saved as a bare handle: %s",
+    (value) => {
+      expect(toTwitterHandle(value)).toBeNull();
+    }
+  );
+
+  it.each([
+    "https://x.com/foo/unrecognized/path",
+    "https://x.com/foo/status/",
+    "https://x.com/foo/status/not-a-post-id",
+  ])("rejects a URL without a supported account path: %s", (value) => {
+    expect(toTwitterHandle(value)).toBeNull();
   });
 
   // The value can be self-authored, and it renders behind an X icon.
@@ -141,6 +175,21 @@ describe("resolveCandidate", () => {
     expect(sources.twitter).toBe("static");
     expect(hasSelfAuthored).toBe(false);
   });
+
+  it.each(INTERNAL_TWITTER_URLS)(
+    "preserves the static link and attribution for an internal X route: %s",
+    (twitter) => {
+      const { candidate, sources, hasSelfAuthored } = resolveCandidate(
+        ADDRESS,
+        staticCandidate(),
+        selfProfile({ name: "   ", twitter })
+      );
+
+      expect(candidate.twitter).toBe("https://x.com/static_handle");
+      expect(sources.twitter).toBe("static");
+      expect(hasSelfAuthored).toBe(false);
+    }
+  );
 
   // The whole reason skills is excluded from the merge.
   it("keeps the static ratings object and exposes SIWE skills separately", () => {
