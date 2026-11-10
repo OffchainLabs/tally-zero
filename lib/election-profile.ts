@@ -12,6 +12,8 @@
 // self-reported "8/10 in Rust" and the word "Rust", so the two are surfaced
 // separately and `TallyElectionCandidate.skills` keeps the static value.
 
+import * as z from "zod";
+
 import type { CandidateProfileVersion } from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 
@@ -38,26 +40,70 @@ const TWITTER_HOSTS = new Set([
   "mobile.twitter.com",
 ]);
 
+export const TWITTER_HANDLE_MESSAGE =
+  "Enter a Twitter / X handle, like @handle.";
+
 /**
- * The static export stores a full profile URL, SIWE stores a bare handle. The
- * link in the UI needs a URL, so normalize towards that and accept either.
+ * X's own rule for handles: letters, digits and underscores, at most 15.
  *
- * A self-authored value is unvetted and renders behind an X icon, so a full URL
- * survives only when its host really is X. Anything else is dropped rather
- * than linked.
+ * `abort` matters: when every branch of a zod 4 union fails but exactly one
+ * failed without aborting, the union reports that branch's raw issue instead
+ * of its own message. Aborting here keeps the union's message.
+ */
+const handleSchema = z.string().regex(/^[A-Za-z0-9_]{1,15}$/, { abort: true });
+
+const bareHandleSchema = z
+  .string()
+  .transform((value) => value.replace(/^@/, ""))
+  .pipe(handleSchema);
+
+/** An http(s) URL on an X host. Its first path segment is the handle. */
+const profileUrlSchema = z
+  .string()
+  .url()
+  .transform((value, ctx) => {
+    const { protocol, hostname, pathname } = new URL(value);
+    if (
+      !/^https?:$/.test(protocol) ||
+      !TWITTER_HOSTS.has(hostname.toLowerCase())
+    ) {
+      ctx.addIssue({ code: "custom" });
+      return z.NEVER;
+    }
+    return pathname.split("/")[1] ?? "";
+  })
+  .pipe(handleSchema);
+
+/**
+ * Parses a Twitter field to the bare X handle.
+ *
+ * SIWE should hold a handle, but the indexer doesn't validate the field, and
+ * the static export stores a full profile URL. So this accepts a handle (with
+ * or without the `@`) or a URL on an X host. Anything else, a foreign host
+ * included, fails.
+ */
+export const twitterHandleSchema = z
+  .string()
+  .trim()
+  .pipe(
+    z.union([bareHandleSchema, profileUrlSchema], {
+      error: TWITTER_HANDLE_MESSAGE,
+    })
+  );
+
+/** The bare X handle in `value`, or null if there isn't one. */
+export function toTwitterHandle(value: string | null): string | null {
+  const result = twitterHandleSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+/**
+ * The link the X icon points at. It is always built from a validated handle,
+ * never passed through, because a self-authored value is unvetted.
  */
 export function toTwitterUrl(value: string | null): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (!/^https?:\/\//i.test(trimmed)) {
-    return `https://x.com/${trimmed.replace(/^@/, "")}`;
-  }
-  try {
-    const { hostname } = new URL(trimmed);
-    return TWITTER_HOSTS.has(hostname.toLowerCase()) ? trimmed : null;
-  } catch {
-    return null;
-  }
+  const handle = toTwitterHandle(value);
+  return handle ? `https://x.com/${handle}` : null;
 }
 
 export type CandidateFieldSource = "self" | "static";
@@ -109,7 +155,12 @@ export function resolveCandidate(
     const own = self?.[field];
     // An empty string is a cleared field, not a value — fall through to static
     // so blanking a name does not render an untitled card.
-    const useSelf = typeof own === "string" && own.trim() !== "";
+    // A Twitter value that holds no handle falls through the same way, so it
+    // neither erases the export's link nor gets credited to the candidate.
+    const useSelf =
+      typeof own === "string" &&
+      own.trim() !== "" &&
+      (field !== "twitter" || toTwitterHandle(own) !== null);
     sources[field] = useSelf ? "self" : "static";
     if (useSelf) candidate[field] = own;
   }
