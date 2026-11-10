@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { candidateProfileFormSchema } from "@/config/schema";
 import { useCandidateProfile } from "@/hooks/use-candidate-profile";
 import { useSiwe } from "@/hooks/use-siwe";
 import type {
@@ -16,19 +17,10 @@ import type {
   CandidateProfileVersion,
   ElectionSummary,
 } from "@/lib/siwe/types";
+import type * as z from "zod";
 
-type FormState = {
-  name: string;
-  title: string;
-  twitter: string;
-  type: string;
-  representative: string;
-  motivation: string;
-  experience: string;
-  skills: string;
-  projects: string;
-  country: string;
-};
+/** The form's raw strings; `candidateProfileFormSchema` turns them into fields. */
+type FormState = z.input<typeof candidateProfileFormSchema>;
 
 const EMPTY: FormState = {
   name: "",
@@ -57,29 +49,6 @@ function toForm(current: CandidateProfileFields | null): FormState {
     skills: (current.skills ?? []).join(", "),
     projects: current.projects ?? "",
     country: current.country ?? "",
-  };
-}
-
-function toFields(form: FormState): CandidateProfileFields {
-  const str = (v: string) => (v.trim() === "" ? null : v.trim());
-  const skills = form.skills
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
-
-  return {
-    // `name` is the one required field on the route; everything else is
-    // nullable, and a cleared input means null rather than "".
-    name: form.name.trim(),
-    title: str(form.title),
-    twitter: str(form.twitter),
-    type: str(form.type),
-    representative: str(form.representative),
-    motivation: str(form.motivation),
-    experience: str(form.experience),
-    skills: skills.length > 0 ? skills : null,
-    projects: str(form.projects),
-    country: str(form.country),
   };
 }
 
@@ -148,12 +117,13 @@ function ProfileForm({
   const isWritable = election.status !== "complete";
 
   async function submit() {
-    if (form.name.trim() === "") {
-      toast.error("A name is required.");
+    const parsed = candidateProfileFormSchema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0].message);
       return;
     }
     try {
-      const version = await save(toFields(form));
+      const version = await save(parsed.data);
       toast.success(`Saved as version ${version.version}.`);
     } catch {
       // saveError renders below.
@@ -205,8 +175,8 @@ function ProfileForm({
           <TextField id="candidate-title" label="Title" {...field("title")} />
           <TextField
             id="candidate-twitter"
-            label="Twitter handle"
-            placeholder="handle, not a URL"
+            label="Twitter / X handle"
+            placeholder="@handle"
             {...field("twitter")}
           />
           <TextField

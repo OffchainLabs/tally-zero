@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formSchema, proposalSchema, voteSchema } from "./schema";
+import {
+  candidateProfileFormSchema,
+  formSchema,
+  proposalSchema,
+  voteSchema,
+} from "./schema";
 
 describe("schema validation", () => {
   describe("formSchema", () => {
@@ -179,5 +184,66 @@ describe("schema validation", () => {
       });
       expect(result.success).toBe(true);
     });
+  });
+});
+
+describe("candidateProfileFormSchema", () => {
+  const form = {
+    name: "  Jane  ",
+    title: "   ",
+    twitter: "",
+    type: "individual",
+    representative: "",
+    motivation: "",
+    experience: "",
+    skills: " Solidity, , Rust ",
+    projects: "",
+    country: "",
+  };
+
+  it("trims text, maps blanks to null, and splits skills", () => {
+    expect(candidateProfileFormSchema.parse(form)).toEqual({
+      name: "Jane",
+      title: null,
+      twitter: null,
+      type: "individual",
+      representative: null,
+      motivation: null,
+      experience: null,
+      skills: ["Solidity", "Rust"],
+      projects: null,
+      country: null,
+    });
+    expect(
+      candidateProfileFormSchema.parse({ ...form, skills: " , " }).skills
+    ).toBeNull();
+  });
+
+  it("requires a name", () => {
+    const result = candidateProfileFormSchema.safeParse({
+      ...form,
+      name: "   ",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toBe("A name is required.");
+  });
+
+  it("stores a handle or profile URL as the bare handle", () => {
+    for (const twitter of ["@jane", "https://x.com/jane/status/1"]) {
+      expect(
+        candidateProfileFormSchema.parse({ ...form, twitter }).twitter
+      ).toBe("jane");
+    }
+  });
+
+  it("rejects a Twitter value that is not a handle", () => {
+    const result = candidateProfileFormSchema.safeParse({
+      ...form,
+      twitter: "https://linktr.ee/jane",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toBe(
+      "Enter a Twitter / X handle, like @handle."
+    );
   });
 });
