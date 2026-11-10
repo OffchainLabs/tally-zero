@@ -19,12 +19,20 @@ export type MainNavItem = NavItem;
 export type SiteConfig = {
   /** Site name */
   name: string;
+  /** Home page title, written in full (no template suffix) */
+  homeTitle: string;
   /** Site description for SEO */
   description: string;
   /** Base URL of the site */
   url: string;
   /** Open Graph image URL */
   ogImage: string;
+  /** Alt text for the Open Graph image */
+  ogImageAlt: string;
+  /** X handle of the site's account */
+  twitterSite: string;
+  /** X handle of the site's author */
+  twitterCreator: string;
   /** Web manifest path */
   manifest: string;
   /** Social media links */

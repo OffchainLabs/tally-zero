@@ -1,8 +1,21 @@
 import { HomeView } from "@/components/container/HomeView";
+import { canonicalUrl, siteOpenGraph } from "@/lib/seo";
 import ProposalBanner from "@components/section/display/ProposalBanner";
+import { siteConfig } from "@config/site";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "ArbitrumDAO Governance",
+export const metadata: Metadata = {
+  // Absolute: the home page is the one place the full name belongs, and the
+  // template would otherwise append the site name to itself.
+  title: { absolute: siteConfig.homeTitle },
+  description: siteConfig.description,
+  alternates: { canonical: canonicalUrl("/") },
+  openGraph: {
+    ...siteOpenGraph,
+    title: siteConfig.homeTitle,
+    description: siteConfig.description,
+    url: canonicalUrl("/"),
+  },
 };
 
 export default async function IndexPage() {

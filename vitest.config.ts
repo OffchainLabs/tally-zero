@@ -5,10 +5,18 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: ["**/node_modules/**", "**/opensrc/**", "**/e2e/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/opensrc/**",
+      "**/e2e/**",
+      // Nested git worktrees that review agents create; they test themselves.
+      "**/.claude/worktrees/**",
+    ],
   },
   resolve: {
     alias: {
+      // Cross-layer tests run the client and server without Next's compiler.
+      "server-only": path.resolve(__dirname, "./lib/empty-module.js"),
       "@": path.resolve(__dirname, "./"),
       "@components": path.resolve(__dirname, "./components"),
       "@context": path.resolve(__dirname, "./context"),

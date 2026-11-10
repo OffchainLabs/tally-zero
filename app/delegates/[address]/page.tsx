@@ -1,19 +1,33 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { isAddress } from "viem";
 
 import { DelegateProfileLoader } from "@/components/delegate/DelegateProfileLoader";
+import { pageMetadata } from "@/lib/seo";
+import type { Metadata } from "next";
 
 interface DelegatePageProps {
   params: Promise<{ address: string }>;
 }
 
-export const metadata = {
-  title: "Delegate Profile | Arbitrum Governance",
-  description: "View delegate profile and voting power in Arbitrum DAO.",
-};
+export async function generateMetadata({
+  params,
+}: DelegatePageProps): Promise<Metadata> {
+  const { address } = await params;
+  if (!isAddress(address, { strict: false })) notFound();
+  return pageMetadata({
+    title: "Delegate Profile",
+    description: "View delegate profile and voting power in Arbitrum DAO.",
+    path: `/delegates/${address.toLowerCase()}`,
+  });
+}
 
 export default async function DelegatePage({ params }: DelegatePageProps) {
   const { address } = await params;
+  // Every profile link is a hex address; anything else would render an
+  // indexable error page with a 200.
+  if (!isAddress(address, { strict: false })) notFound();
 
   return (
     <div className="flex flex-col gap-6">

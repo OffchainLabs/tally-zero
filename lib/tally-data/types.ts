@@ -131,6 +131,13 @@ export type TallyProposalIndexEntry = {
    * hash by scanning `ProposalCreated` logs over the recent window.
    */
   creationTxHash?: string | null;
+  /** L2 block of the `ProposalCreated` event. Optional for older deployments. */
+  createdAtBlock?: number | null;
+  /**
+   * Unix seconds of the `ProposalCreated` block. The indexer serializes it as
+   * a string because it is a bigint upstream. Optional for older deployments.
+   */
+  createdAtTimestamp?: string | null;
 };
 
 export type TallyAddressDisplayRecord = {

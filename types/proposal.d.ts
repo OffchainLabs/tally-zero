@@ -48,6 +48,8 @@ export type Proposal = {
   state: number;
   /** Transaction hash that created the proposal */
   creationTxHash?: string;
+  /** L2 block that emitted `ProposalCreated` */
+  createdAtBlock?: number;
 };
 
 /** Vote counts for a proposal */
@@ -94,6 +96,16 @@ export type ParsedProposal = {
   governorName?: string;
   /** Transaction hash that created the proposal */
   creationTxHash?: string;
+  /** L2 block that emitted `ProposalCreated` */
+  createdAtBlock?: number;
+  /** Unix seconds of the `ProposalCreated` block */
+  createdAtTimestamp?: number;
+  /**
+   * Position in creation order across every governor in the table, 1 being
+   * the oldest. Derived on read by `assignProposalNumbers`; absent when the
+   * table holds only a recent RPC window and the ordinal would be wrong.
+   */
+  proposalNumber?: number;
   /** Lifecycle stages if tracked */
   stages?: ProposalStage[];
   /** ISO timestamp when stages were last tracked */

@@ -14,7 +14,8 @@
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
     "prepare": "husky",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:seo": "pnpm build && playwright test --config=playwright.seo.config.ts"
   },
   "prettier": {
     "semi": true,
@@ -119,7 +120,7 @@
       "slow-redact": "0.3.1",
       "@noble/curves": "1.8.2",
       "@noble/hashes": "1.8.0",
-      "follow-redirects": ">=1.16.1",
+      "follow-redirects": ">=1.16.2",
       "brace-expansion@1": ">=1.1.21 <2",
       "picomatch": ">=4.0.4",
       "postcss": ">=8.5.18",
@@ -147,7 +148,9 @@
       "zod@4": ">=4.6.6",
       "source-map-js": ">=1.2.2",
       "@coinbase/cdp-sdk": ">=1.46.0 <2",
-      "postcss-selector-parser": ">=7.1.6 <8"
+      "postcss-selector-parser": ">=7.1.6 <8",
+      "minimatch@10": ">=11.0.1",
+      "@walletconnect/ethereum-provider": "2.23.0"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

@@ -189,4 +189,50 @@ describe("applyGapScan", () => {
     // Already known to the indexer, so not a new proposal
     expect(next.sourceInfo.rpcFreshCount).toBe(0);
   });
+
+  it("keeps the indexer's creation date when the scanned row lacks one", () => {
+    const prev = makeSearchData([
+      makeProposal({
+        id: "9950",
+        createdAtBlock: 400_000_000,
+        createdAtTimestamp: 1_760_000_000,
+      }),
+    ]);
+
+    const next = applyGapScan(prev, {
+      gapProposals: [
+        makeProposal({
+          id: "9950",
+          state: getStateName(7),
+          createdAtBlock: 400_000_000,
+          creationTxHash: "0x1f70",
+        }),
+      ],
+      scanStartBlock: 472_314_630,
+      currentBlock: 498_234_630,
+      watermarkBlock: 489_000_000,
+    });
+
+    expect(next.proposals[0].createdAtTimestamp).toBe(1_760_000_000);
+    expect(next.proposals[0].createdAtBlock).toBe(400_000_000);
+  });
+
+  it("fills the creation date from the scan when the indexer had none", () => {
+    const prev = makeSearchData([makeProposal({ id: "9950" })]);
+
+    const next = applyGapScan(prev, {
+      gapProposals: [
+        makeProposal({
+          id: "9950",
+          createdAtBlock: 400_000_000,
+          createdAtTimestamp: 1_760_000_000,
+        }),
+      ],
+      scanStartBlock: 472_314_630,
+      currentBlock: 498_234_630,
+      watermarkBlock: 489_000_000,
+    });
+
+    expect(next.proposals[0].createdAtTimestamp).toBe(1_760_000_000);
+  });
 });
