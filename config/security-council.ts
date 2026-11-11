@@ -132,6 +132,16 @@ export const TARGET_COHORT_SIZE = 6;
 
 export const TOTAL_SC_MEMBERS = 12;
 
+/**
+ * Alejandro Munoz-McDonald, who moved from representing Immunefi to individual
+ * membership in November 2026 with the same signing key. The contender page
+ * pins his static profile over the indexer's and shows Immunefi's original
+ * submission for this address only. Remove the pin once the governance indexer
+ * serves the individual profile.
+ */
+export const INDIVIDUAL_MEMBERSHIP_OVERRIDE_ADDRESS =
+  "0x0cd9e52891a0a48d45b0c61a31086be8361ef157";
+
 export const PHASE_TO_STAGE_TYPES: Record<ElectionPhase, StageType[]> = {
   NOT_STARTED: [],
   CONTENDER_SUBMISSION: ["CREATE_ELECTION"],

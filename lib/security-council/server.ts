@@ -225,6 +225,6 @@ const SNAPSHOT_REVALIDATE_SECONDS = 3600;
 
 export const getCachedSecurityCouncilSnapshot = unstable_cache(
   fetchSecurityCouncilSnapshot,
-  ["tally-zero-security-council-snapshot-v5"],
+  ["tally-zero-security-council-snapshot-v6"],
   { revalidate: SNAPSHOT_REVALIDATE_SECONDS }
 );

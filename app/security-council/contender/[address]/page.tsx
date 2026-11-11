@@ -8,6 +8,7 @@ import { pageMetadata } from "@/lib/seo";
 import {
   getCachedElectionCandidate,
   getCachedElectionCandidateStaticParams,
+  getElectionCandidateRegistrationSnapshot,
 } from "@/lib/tally-data/server";
 import type { Metadata } from "next";
 
@@ -42,6 +43,8 @@ export default async function ContenderPage({ params }: ContenderPageProps) {
   // with dynamicParams and revalidate = false it would be cached for good.
   if (!isAddress(address, { strict: false })) notFound();
   const initialCandidate = await getCachedElectionCandidate(address);
+  const registrationSnapshot =
+    getElectionCandidateRegistrationSnapshot(address);
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
@@ -65,6 +68,7 @@ export default async function ContenderPage({ params }: ContenderPageProps) {
         <ContenderProfileLoader
           address={address}
           initialCandidate={initialCandidate}
+          registrationSnapshot={registrationSnapshot}
         />
       </div>
     </div>

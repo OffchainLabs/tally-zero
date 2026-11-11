@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
+import electionCandidateRegistrationSnapshots from "@/data/election-candidate-registration-snapshots.json";
 import electionCandidates from "@/data/election-candidates.json";
 import type {
   TallyAddressDisplayRecord,
@@ -56,7 +57,7 @@ const getElectionCandidates = unstable_cache(
       .map(([key, candidate]) => toElectionCandidate(key, candidate))
       .sort((a, b) => a.address.localeCompare(b.address));
   },
-  ["tally-zero-election-candidates-v2"],
+  ["tally-zero-election-candidates-v4"],
   { revalidate: false }
 );
 
@@ -84,6 +85,16 @@ export async function getCachedElectionCandidate(
       (candidate) => candidate.address.toLowerCase() === addressLower
     ) ?? null
   );
+}
+
+/** Original submissions retained when a member's current profile changes. */
+export function getElectionCandidateRegistrationSnapshot(
+  address: string
+): TallyElectionCandidate | null {
+  const snapshot = Object.entries(electionCandidateRegistrationSnapshots).find(
+    ([key]) => key.toLowerCase() === address.toLowerCase()
+  );
+  return snapshot ? toElectionCandidate(snapshot[0], snapshot[1]) : null;
 }
 
 export async function getCachedElectionCandidateStaticParams(): Promise<
