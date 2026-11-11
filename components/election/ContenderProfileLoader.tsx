@@ -26,12 +26,18 @@ type ContenderProfileState = {
 export function ContenderProfileLoader({
   address,
   initialCandidate,
+  registrationSnapshot,
 }: {
   address: string;
   initialCandidate?: TallyElectionCandidate | null;
+  registrationSnapshot?: TallyElectionCandidate | null;
 }): React.ReactElement {
   const hasInitialCandidate =
     initialCandidate?.address.toLowerCase() === address.toLowerCase();
+  const originalCandidate =
+    registrationSnapshot?.address.toLowerCase() === address.toLowerCase()
+      ? registrationSnapshot
+      : null;
   const [state, setState] = useState<ContenderProfileState>({
     address,
     candidate: hasInitialCandidate ? initialCandidate : null,
@@ -146,7 +152,51 @@ export function ContenderProfileLoader({
         election={selfAuthoredElection}
         isInCandidateRegistry={candidate !== null}
       />
-      <ContenderProfile address={address} candidate={candidateForDisplay} />
+      {originalCandidate ? (
+        <section aria-label="Current Council membership" className="space-y-4">
+          <header className="space-y-2">
+            <h2 className="text-lg font-semibold">
+              Current Council membership
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Current membership information, reflecting Alejandro&apos;s
+              individual service. The original profile delegates voted on is
+              preserved below. See the{" "}
+              <a
+                href="https://forum.arbitrum.foundation/t/security-council-membership-rotation-november-2026/31682"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                membership announcement
+              </a>
+              .
+            </p>
+          </header>
+          <ContenderProfile address={address} candidate={candidateForDisplay} />
+        </section>
+      ) : (
+        <ContenderProfile address={address} candidate={candidateForDisplay} />
+      )}
+      {originalCandidate && (
+        <details className="rounded-xl border border-border/50 p-4">
+          <summary className="cursor-pointer text-base font-semibold">
+            Original candidate profile — {originalCandidate.name}
+          </summary>
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Immunefi&apos;s original registration for the September 2025
+              Security Council election. This is the profile delegates voted on,
+              preserved with its original wording and skill ratings.
+            </p>
+            <ContenderProfile
+              address={address}
+              candidate={originalCandidate}
+              showVoting={false}
+            />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

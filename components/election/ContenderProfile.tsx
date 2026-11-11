@@ -181,11 +181,13 @@ function SkillBar({
 interface ContenderProfileProps {
   address: string;
   candidate: TallyElectionCandidate | null;
+  showVoting?: boolean;
 }
 
 export function ContenderProfile({
   address,
   candidate,
+  showVoting = true,
 }: ContenderProfileProps): React.ReactElement {
   if (!candidate) {
     const explorerUrl = getAddressExplorerUrl(address);
@@ -212,8 +214,12 @@ export function ContenderProfile({
           </CardContent>
         </Card>
 
-        <CandidateVoteCard address={address} />
-        <NomineeVoterList address={address} />
+        {showVoting && (
+          <>
+            <CandidateVoteCard address={address} />
+            <NomineeVoterList address={address} />
+          </>
+        )}
       </div>
     );
   }
@@ -309,10 +315,12 @@ export function ContenderProfile({
       </Card>
 
       <div className="flex flex-col lg:flex-row-reverse gap-5">
-        <div className="lg:w-[450px] space-y-5">
-          <CandidateVoteCard address={address} />
-          <NomineeVoterList address={address} />
-        </div>
+        {showVoting && (
+          <div className="lg:w-[450px] space-y-5">
+            <CandidateVoteCard address={address} />
+            <NomineeVoterList address={address} />
+          </div>
+        )}
         <div className="flex space-y-6 flex-col flex-1 min-w-0">
           {(candidate.message || candidate.signatureHash) && (
             <Card variant="glass">

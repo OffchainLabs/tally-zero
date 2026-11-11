@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import registrationSnapshots from "@/data/election-candidate-registration-snapshots.json";
 import electionCandidates from "@/data/election-candidates.json";
 import { SiweApiError } from "@/lib/siwe/client";
 import type {
@@ -30,14 +39,17 @@ vi.mock("@/lib/election-utils", () => ({ getCandidate }));
 vi.mock("@/components/election/ContenderProfile", () => ({
   ContenderProfile: ({
     candidate,
+    showVoting = true,
   }: {
     candidate: TallyElectionCandidate | null;
+    showVoting?: boolean;
   }) => (
     <div
       data-testid="profile"
       data-type={candidate?.type}
       data-country={candidate?.country}
       data-candidate={JSON.stringify(candidate)}
+      data-voting={showVoting}
     >
       {candidate
         ? `${candidate.name}|${candidate.title}|${candidate.twitter}`
@@ -126,7 +138,8 @@ function failNewest(error: Error) {
 
 function renderLoader(
   initialCandidate?: TallyElectionCandidate,
-  address = ADDRESS
+  address = ADDRESS,
+  registrationSnapshot?: TallyElectionCandidate
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -136,6 +149,7 @@ function renderLoader(
       <ContenderProfileLoader
         address={address}
         initialCandidate={initialCandidate}
+        registrationSnapshot={registrationSnapshot}
       />
     </QueryClientProvider>
   );
@@ -152,6 +166,85 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ContenderProfileLoader overlay", () => {
+  it("preserves the original Immunefi submission alongside current membership after a refetch", async () => {
+    const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
+    const currentCandidate: TallyElectionCandidate = {
+      ...registered,
+      ...electionCandidates[address],
+    };
+    const originalCandidate: TallyElectionCandidate = {
+      ...registered,
+      ...registrationSnapshots[address],
+      registeredAt: registrationSnapshots[address].registered_at,
+    };
+    let respond!: (candidate: TallyElectionCandidate) => void;
+    getCandidate.mockReturnValue(
+      new Promise<TallyElectionCandidate>((resolve) => {
+        respond = resolve;
+      })
+    );
+    indexer([], {});
+
+    renderLoader(currentCandidate, address.toLowerCase(), originalCandidate);
+
+    const currentSection = screen.getByRole("region", {
+      name: "Current Council membership",
+    });
+    const originalSection = screen
+      .getByText("Original candidate profile — Immunefi")
+      .closest("details")!;
+    expect(originalSection.open).toBe(false);
+    fireEvent.click(
+      within(originalSection).getByText("Original candidate profile — Immunefi")
+    );
+    expect(originalSection.open).toBe(true);
+    const currentProfile = within(currentSection).getByTestId("profile");
+    const originalProfile = within(originalSection).getByTestId("profile");
+    expect(currentProfile.textContent).toContain("Alejandro Munoz-McDonald");
+    expect(originalProfile.textContent).toContain("Immunefi|Immunefi");
+    expect(originalProfile.getAttribute("data-voting")).toBe("false");
+    expect(JSON.parse(originalProfile.getAttribute("data-candidate")!)).toEqual(
+      originalCandidate
+    );
+
+    await act(async () => {
+      respond({
+        ...currentCandidate,
+        name: "Updated upstream profile",
+        motivation: "Later edits to the profile",
+        experience: "Later experience",
+        skills: null,
+      });
+    });
+
+    expect(currentProfile.textContent).toContain("Alejandro Munoz-McDonald");
+    const historical = JSON.parse(
+      originalProfile.getAttribute("data-candidate")!
+    );
+    expect(historical).toEqual(originalCandidate);
+    expect(historical.motivation).toContain(
+      "reapply for the September 2025 cohort"
+    );
+    expect(historical.skills.solidity).toBe(10);
+    expect(historical.country).toContain("Company: Global;");
+    expect(historical.registeredAt).toBe("2025-09-15T22:25:13.716966Z");
+  });
+
+  it("does not show another address's registration snapshot", async () => {
+    const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
+    getCandidate.mockResolvedValue(registered);
+    indexer([], {});
+    renderLoader(registered, ADDRESS, {
+      ...registered,
+      ...registrationSnapshots[address],
+    });
+
+    await act(async () => {});
+
+    expect(screen.queryByText(/Original candidate profile/)).toBeNull();
+    expect(profileText()).toContain("Static Name");
+  });
+
   it("keeps Alejandro's individual profile after a stale indexer response", async () => {
     const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
     const currentCandidate: TallyElectionCandidate = {
