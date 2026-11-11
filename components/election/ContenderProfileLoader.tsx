@@ -129,6 +129,7 @@ export function ContenderProfileLoader({
           name: "Alejandro Munoz-McDonald",
           title: null,
           type: "individual",
+          country: "Florida, USA",
         }
       : resolved.candidate;
 

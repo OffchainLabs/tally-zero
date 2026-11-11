@@ -32,7 +32,11 @@ vi.mock("@/components/election/ContenderProfile", () => ({
   }: {
     candidate: TallyElectionCandidate | null;
   }) => (
-    <div data-testid="profile" data-type={candidate?.type}>
+    <div
+      data-testid="profile"
+      data-type={candidate?.type}
+      data-country={candidate?.country}
+    >
       {candidate
         ? `${candidate.name}|${candidate.title}|${candidate.twitter}`
         : "fallback"}
@@ -154,6 +158,7 @@ describe("ContenderProfileLoader overlay", () => {
       name: "Alejandro Munoz-McDonald",
       title: null,
       type: "individual",
+      country: "Florida, USA",
     };
     let respond!: (candidate: TallyElectionCandidate) => void;
     getCandidate.mockReturnValue(
@@ -168,6 +173,9 @@ describe("ContenderProfileLoader overlay", () => {
     expect(profileText()).toBe(
       "Alejandro Munoz-McDonald|null|https://x.com/static_handle"
     );
+    expect(screen.getByTestId("profile").getAttribute("data-country")).toBe(
+      "Florida, USA"
+    );
 
     await act(async () => {
       respond({
@@ -175,6 +183,8 @@ describe("ContenderProfileLoader overlay", () => {
         name: "Immunefi",
         title: "Immunefi",
         type: "organization",
+        country:
+          "Company: Global; Alejandro (Senior Security Researcher & Smart Contract Lead Triager): Florida, USA",
       });
     });
 
@@ -184,6 +194,9 @@ describe("ContenderProfileLoader overlay", () => {
     );
     expect(screen.getByTestId("profile").getAttribute("data-type")).toBe(
       "individual"
+    );
+    expect(screen.getByTestId("profile").getAttribute("data-country")).toBe(
+      "Florida, USA"
     );
   });
 
