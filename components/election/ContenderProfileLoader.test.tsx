@@ -245,6 +245,21 @@ describe("ContenderProfileLoader overlay", () => {
     expect(profileText()).toContain("Static Name");
   });
 
+  it("ignores a registration snapshot for any member other than Alejandro", async () => {
+    getCandidate.mockResolvedValue(registered);
+    indexer([], {});
+    renderLoader(registered, ADDRESS, {
+      ...registered,
+      name: "Another member's original profile",
+    });
+
+    await act(async () => {});
+
+    expect(screen.queryByText(/Original candidate profile/)).toBeNull();
+    expect(screen.queryByText(/Alejandro/)).toBeNull();
+    expect(profileText()).toContain("Static Name");
+  });
+
   it("keeps Alejandro's individual profile after a stale indexer response", async () => {
     const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
     const currentCandidate: TallyElectionCandidate = {

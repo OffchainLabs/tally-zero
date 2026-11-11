@@ -6,6 +6,7 @@ import { ContenderProfile } from "@/components/election/ContenderProfile";
 import { SelfAuthoredNotice } from "@/components/election/SelfAuthoredNotice";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { INDIVIDUAL_MEMBERSHIP_OVERRIDE_ADDRESS } from "@/config/security-council";
 import {
   useElections,
   useNewestPublicCandidateProfile,
@@ -34,7 +35,11 @@ export function ContenderProfileLoader({
 }): React.ReactElement {
   const hasInitialCandidate =
     initialCandidate?.address.toLowerCase() === address.toLowerCase();
+  const isIndividualMembershipOverride =
+    address.toLowerCase() === INDIVIDUAL_MEMBERSHIP_OVERRIDE_ADDRESS;
+  // The copy around the archived profile below is specific to this member.
   const originalCandidate =
+    isIndividualMembershipOverride &&
     registrationSnapshot?.address.toLowerCase() === address.toLowerCase()
       ? registrationSnapshot
       : null;
@@ -130,9 +135,7 @@ export function ContenderProfileLoader({
   // This replaces the stale indexer record before the SIWE overlay, so his own
   // edits still win.
   const baseCandidate =
-    candidate &&
-    address.toLowerCase() === "0x0cd9e52891a0a48d45b0c61a31086be8361ef157" &&
-    hasInitialCandidate
+    candidate && isIndividualMembershipOverride && hasInitialCandidate
       ? {
           ...candidate,
           name: initialCandidate.name,
