@@ -315,6 +315,47 @@ describe("ContenderProfileLoader overlay", () => {
     expect(JSON.stringify(displayed)).not.toMatch(/immunefi/i);
   });
 
+  it("lets Alejandro's self-authored fields win over the stale-indexer override", async () => {
+    const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
+    const currentCandidate: TallyElectionCandidate = {
+      ...registered,
+      ...electionCandidates[address],
+    };
+    getCandidate.mockResolvedValue({
+      ...currentCandidate,
+      name: "Immunefi",
+      title: "Immunefi",
+      type: "organization",
+      country: "Company: Global",
+      motivation: "Immunefi would like to reapply for the next cohort.",
+    });
+    indexer([COHORT_6], {
+      [COHORT_6.id]: selfProfile(COHORT_6, {
+        address: address.toLowerCase(),
+        motivation: "Written by Alejandro himself.",
+      }),
+    });
+
+    renderLoader(currentCandidate, address.toLowerCase());
+
+    await waitFor(() =>
+      expect(screen.getByTestId("candidate-self-fields")).toBeTruthy()
+    );
+    const displayed = JSON.parse(
+      screen.getByTestId("profile").getAttribute("data-candidate")!
+    );
+    expect(displayed.name).toBe("Self Name");
+    expect(displayed.motivation).toBe("Written by Alejandro himself.");
+    // Fields Alejandro has not written still come from the static profile,
+    // not the stale indexer record.
+    expect(displayed.type).toBe("individual");
+    expect(displayed.country).toBe("Florida, USA");
+    expect(displayed.experience).toContain("7 September 2026");
+    expect(screen.getByTestId("candidate-self-fields").textContent).toMatch(
+      /Motivation/
+    );
+  });
+
   it("overlays a registered candidate's own profile and attributes it", async () => {
     getCandidate.mockResolvedValue(registered);
     indexer([COHORT_6], { [COHORT_6.id]: selfProfile(COHORT_6) });

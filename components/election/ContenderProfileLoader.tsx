@@ -126,13 +126,15 @@ export function ContenderProfileLoader({
     return <ContenderProfile address={address} candidate={null} />;
   }
 
-  const resolved = resolveCandidate(address, candidate, selfAuthored ?? null);
   // Temporary until the indexer reflects Alejandro's individual membership.
-  const candidateForDisplay =
+  // This replaces the stale indexer record before the SIWE overlay, so his own
+  // edits still win.
+  const baseCandidate =
+    candidate &&
     address.toLowerCase() === "0x0cd9e52891a0a48d45b0c61a31086be8361ef157" &&
     hasInitialCandidate
       ? {
-          ...resolved.candidate,
+          ...candidate,
           name: initialCandidate.name,
           title: initialCandidate.title,
           type: initialCandidate.type,
@@ -143,7 +145,13 @@ export function ContenderProfileLoader({
           skills: initialCandidate.skills,
           projects: initialCandidate.projects,
         }
-      : resolved.candidate;
+      : candidate;
+  const resolved = resolveCandidate(
+    address,
+    baseCandidate,
+    selfAuthored ?? null
+  );
+  const candidateForDisplay = resolved.candidate;
 
   return (
     <div className="space-y-6">
