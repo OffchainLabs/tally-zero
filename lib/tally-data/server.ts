@@ -56,7 +56,7 @@ const getElectionCandidates = unstable_cache(
       .map(([key, candidate]) => toElectionCandidate(key, candidate))
       .sort((a, b) => a.address.localeCompare(b.address));
   },
-  ["tally-zero-election-candidates-v3"],
+  ["tally-zero-election-candidates-v4"],
   { revalidate: false }
 );
 

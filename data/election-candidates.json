@@ -617,17 +617,13 @@
     "title": null,
     "address": "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157",
     "type": "individual",
-    "motivation": "Immunefi was elected to Arbitrum’s Security Council in September 2024 and it has been an honor to work with you all this past year. We would like to reapply for the September 2025 cohort, so that we may continue to contribute to Arbitrum’s security and potential.",
-    "experience": "In addition to having proudly served on the Arbitrum Security Council for the past year, Immunefi has extensive expertise and a proven track record on the Arbitrum ecosystem:\n\n- We provide security services to some of the largest DAOs in Web3, including Arbitrum, Scroll, Aave, Compound, Optimism, ENS, and Sky (formerly MakerDAO), among others.\n\n- Immunefi has run over 500 Bug Bounty Programs, with ~ 60 of them being Arbitrum projects or directly interacting with the Arbitrum ecosystem.\n\n- We’ve been running Arbitrum’s $2 million USD Bug Bounty Program since August 2021 and were a whitelisted Security Service Provider of Arbitrum’s Security Subsidy Fund.\n\nThis year, we started partnering with a curated set of the very best security firms to build Immunefi Magnus with us — including Runtime Verification, Dedaub, Fuzzland, Nexus Mutual, Failsafe, OtterSec, ChainPatrol, Sigma Prime and others, all with extensive experience in the Arbitrum ecosystem.",
+    "motivation": "Alejandro continues serving on the Arbitrum Security Council in his personal capacity for the remainder of the September 2025 cohort's term. On 1 November 2026, nine of the twelve Council members authorised his continued service under the ArbitrumDAO Constitution. The seat is due for re-election in March 2027.",
+    "experience": "Alejandro served in the September 2025 cohort as an appointed representative and continued in his personal capacity after notifying the Council of his departure from his former employer on 7 September 2026.\n\nHis individual security experience includes smart contract vulnerability triage, responsible disclosure handling and critical incident response.",
     "skills": {
       "canVerifySigning": true,
-      "golang": 10,
-      "solidity": 10,
-      "rust": 10,
-      "javascript": 10,
-      "cyberSecurity": "Immunefi is the end-to-end security platform for the onchain economy. Through Immunefi Magnus, our unified security operations center, we offer a comprehensive suite of security services that protects more than 300 projects, having directly prevented hacks worth more than $25 billion USD.\n\nGiven this profile represents and organization, we want to note our representative is Alejandro Muñoz-McDonald, a Senior Security Researcher and Smart Contract Lead Triager, with 8 years of experience in web3 security, and also one of Immunefi's earliest employees, having joined our 24/7 triage team in January 2022.\n\nImmunefi has seen more responsible disclosures than any other security firm, and Alejandro in particular has directly handled thousands of such reports, having participated in hundreds of critical incident response events. This experience makes Alejandro one of the very most experienced security experts in the world, and equipped him to handle any web3 security challenge."
+      "cyberSecurity": "Smart contract security research, vulnerability triage, responsible disclosure handling and critical incident response. Alejandro continues to serve with the same signing key; no key rotation or on-chain transaction was required for his change to individual membership."
     },
-    "projects": "No Conflicts of Interest. Immunefi works with Arbitrum, Ethereum, Optimism, Jito, zkSync, Sky (formerly MakerDAO), LayerZero, AAVE, ApeCoin, Chainlink, EigenLayer, Fuel Network, Wormhole, Lido, DeGate, GMX and approximately 330 more projects on an ongoing basis.",
+    "projects": null,
     "country": "Florida, USA",
     "registered_at": "2025-09-15T22:25:13.716966Z"
   },

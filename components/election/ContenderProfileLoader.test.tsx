@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import electionCandidates from "@/data/election-candidates.json";
 import { SiweApiError } from "@/lib/siwe/client";
 import type {
   CandidateProfileVersion,
@@ -36,6 +37,7 @@ vi.mock("@/components/election/ContenderProfile", () => ({
       data-testid="profile"
       data-type={candidate?.type}
       data-country={candidate?.country}
+      data-candidate={JSON.stringify(candidate)}
     >
       {candidate
         ? `${candidate.name}|${candidate.title}|${candidate.twitter}`
@@ -150,15 +152,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ContenderProfileLoader overlay", () => {
-  it("keeps Alejandro's current identity after a stale indexer response", async () => {
+  it("keeps Alejandro's individual profile after a stale indexer response", async () => {
     const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
     const currentCandidate: TallyElectionCandidate = {
       ...registered,
-      address,
-      name: "Alejandro Munoz-McDonald",
-      title: null,
-      type: "individual",
-      country: "Florida, USA",
+      ...electionCandidates[address],
     };
     let respond!: (candidate: TallyElectionCandidate) => void;
     getCandidate.mockReturnValue(
@@ -185,6 +183,17 @@ describe("ContenderProfileLoader overlay", () => {
         type: "organization",
         country:
           "Company: Global; Alejandro (Senior Security Researcher & Smart Contract Lead Triager): Florida, USA",
+        motivation: "Immunefi would like to reapply for the next cohort.",
+        experience: "Immunefi provides security services to major DAOs.",
+        skills: {
+          canVerifySigning: true,
+          solidity: 10,
+          rust: 10,
+          golang: 10,
+          javascript: 10,
+          cyberSecurity: "Immunefi protects more than 300 projects.",
+        },
+        projects: "Immunefi works with hundreds of projects.",
       });
     });
 
@@ -198,6 +207,19 @@ describe("ContenderProfileLoader overlay", () => {
     expect(screen.getByTestId("profile").getAttribute("data-country")).toBe(
       "Florida, USA"
     );
+    const displayed = JSON.parse(
+      screen.getByTestId("profile").getAttribute("data-candidate")!
+    );
+    expect(displayed.motivation).toContain(
+      "nine of the twelve Council members"
+    );
+    expect(displayed.motivation).toContain("March 2027");
+    expect(displayed.experience).toContain("7 September 2026");
+    expect(displayed.skills.cyberSecurity).toContain("same signing key");
+    expect(displayed.skills).not.toHaveProperty("solidity");
+    expect(displayed.projects).toBeNull();
+    expect(displayed.address.toLowerCase()).toBe(address.toLowerCase());
+    expect(JSON.stringify(displayed)).not.toMatch(/immunefi/i);
   });
 
   it("overlays a registered candidate's own profile and attributes it", async () => {

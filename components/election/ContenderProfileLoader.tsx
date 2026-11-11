@@ -123,13 +123,19 @@ export function ContenderProfileLoader({
   const resolved = resolveCandidate(address, candidate, selfAuthored ?? null);
   // Temporary until the indexer reflects Alejandro's individual membership.
   const candidateForDisplay =
-    address.toLowerCase() === "0x0cd9e52891a0a48d45b0c61a31086be8361ef157"
+    address.toLowerCase() === "0x0cd9e52891a0a48d45b0c61a31086be8361ef157" &&
+    hasInitialCandidate
       ? {
           ...resolved.candidate,
-          name: "Alejandro Munoz-McDonald",
-          title: null,
-          type: "individual",
-          country: "Florida, USA",
+          name: initialCandidate.name,
+          title: initialCandidate.title,
+          type: initialCandidate.type,
+          representative: initialCandidate.representative,
+          country: initialCandidate.country,
+          motivation: initialCandidate.motivation,
+          experience: initialCandidate.experience,
+          skills: initialCandidate.skills,
+          projects: initialCandidate.projects,
         }
       : resolved.candidate;
 

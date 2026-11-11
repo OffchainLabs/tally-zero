@@ -220,6 +220,14 @@ export function ContenderProfile({
 
   const explorerUrl = getAddressExplorerUrl(candidate.address);
   const skills = (candidate.skills ?? {}) as Partial<CandidateSkills>;
+  const skillRatings = Object.entries({
+    Solidity: skills.solidity,
+    Rust: skills.rust,
+    Go: skills.golang,
+    JavaScript: skills.javascript,
+  }).flatMap(([label, level]) =>
+    typeof level === "number" ? [{ label, level }] : []
+  );
 
   return (
     <div className="space-y-6">
@@ -374,15 +382,13 @@ export function ContenderProfile({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <SkillBar label="Solidity" level={skills.solidity ?? 0} />
-                    <SkillBar label="Rust" level={skills.rust ?? 0} />
-                    <SkillBar label="Go" level={skills.golang ?? 0} />
-                    <SkillBar
-                      label="JavaScript"
-                      level={skills.javascript ?? 0}
-                    />
-                  </div>
+                  {skillRatings.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {skillRatings.map(({ label, level }) => (
+                        <SkillBar key={label} label={label} level={level} />
+                      ))}
+                    </div>
+                  )}
 
                   <div className="space-y-2 pt-2">
                     <h4 className="text-sm font-medium">Cybersecurity</h4>
