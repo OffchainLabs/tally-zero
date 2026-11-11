@@ -121,6 +121,16 @@ export function ContenderProfileLoader({
   }
 
   const resolved = resolveCandidate(address, candidate, selfAuthored ?? null);
+  // Temporary until the indexer reflects Alejandro's individual membership.
+  const candidateForDisplay =
+    address.toLowerCase() === "0x0cd9e52891a0a48d45b0c61a31086be8361ef157"
+      ? {
+          ...resolved.candidate,
+          name: "Alejandro Munoz-McDonald",
+          title: null,
+          type: "individual",
+        }
+      : resolved.candidate;
 
   return (
     <div className="space-y-6">
@@ -129,7 +139,7 @@ export function ContenderProfileLoader({
         election={selfAuthoredElection}
         isInCandidateRegistry={candidate !== null}
       />
-      <ContenderProfile address={address} candidate={resolved.candidate} />
+      <ContenderProfile address={address} candidate={candidateForDisplay} />
     </div>
   );
 }

@@ -613,10 +613,10 @@
     "registered_at": "2025-09-16T08:20:58.087973Z"
   },
   "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157": {
-    "name": "Immunefi",
-    "title": "Immunefi",
+    "name": "Alejandro Munoz-McDonald",
+    "title": null,
     "address": "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157",
-    "type": "organization",
+    "type": "individual",
     "motivation": "Immunefi was elected to Arbitrum’s Security Council in September 2024 and it has been an honor to work with you all this past year. We would like to reapply for the September 2025 cohort, so that we may continue to contribute to Arbitrum’s security and potential.",
     "experience": "In addition to having proudly served on the Arbitrum Security Council for the past year, Immunefi has extensive expertise and a proven track record on the Arbitrum ecosystem:\n\n- We provide security services to some of the largest DAOs in Web3, including Arbitrum, Scroll, Aave, Compound, Optimism, ENS, and Sky (formerly MakerDAO), among others.\n\n- Immunefi has run over 500 Bug Bounty Programs, with ~ 60 of them being Arbitrum projects or directly interacting with the Arbitrum ecosystem.\n\n- We’ve been running Arbitrum’s $2 million USD Bug Bounty Program since August 2021 and were a whitelisted Security Service Provider of Arbitrum’s Security Subsidy Fund.\n\nThis year, we started partnering with a curated set of the very best security firms to build Immunefi Magnus with us — including Runtime Verification, Dedaub, Fuzzland, Nexus Mutual, Failsafe, OtterSec, ChainPatrol, Sigma Prime and others, all with extensive experience in the Arbitrum ecosystem.",
     "skills": {

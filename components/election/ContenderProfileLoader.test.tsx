@@ -32,7 +32,7 @@ vi.mock("@/components/election/ContenderProfile", () => ({
   }: {
     candidate: TallyElectionCandidate | null;
   }) => (
-    <div data-testid="profile">
+    <div data-testid="profile" data-type={candidate?.type}>
       {candidate
         ? `${candidate.name}|${candidate.title}|${candidate.twitter}`
         : "fallback"}
@@ -118,14 +118,17 @@ function failNewest(error: Error) {
   );
 }
 
-function renderLoader(initialCandidate?: TallyElectionCandidate) {
+function renderLoader(
+  initialCandidate?: TallyElectionCandidate,
+  address = ADDRESS
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <ContenderProfileLoader
-        address={ADDRESS}
+        address={address}
         initialCandidate={initialCandidate}
       />
     </QueryClientProvider>
@@ -143,6 +146,47 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ContenderProfileLoader overlay", () => {
+  it("keeps Alejandro's current identity after a stale indexer response", async () => {
+    const address = "0x0cd9e52891A0a48d45b0C61A31086be8361Ef157";
+    const currentCandidate: TallyElectionCandidate = {
+      ...registered,
+      address,
+      name: "Alejandro Munoz-McDonald",
+      title: null,
+      type: "individual",
+    };
+    let respond!: (candidate: TallyElectionCandidate) => void;
+    getCandidate.mockReturnValue(
+      new Promise<TallyElectionCandidate>((resolve) => {
+        respond = resolve;
+      })
+    );
+    indexer([], {});
+
+    renderLoader(currentCandidate, address.toLowerCase());
+
+    expect(profileText()).toBe(
+      "Alejandro Munoz-McDonald|null|https://x.com/static_handle"
+    );
+
+    await act(async () => {
+      respond({
+        ...currentCandidate,
+        name: "Immunefi",
+        title: "Immunefi",
+        type: "organization",
+      });
+    });
+
+    expect(getCandidate).toHaveBeenCalledWith(address.toLowerCase());
+    expect(profileText()).toBe(
+      "Alejandro Munoz-McDonald|null|https://x.com/static_handle"
+    );
+    expect(screen.getByTestId("profile").getAttribute("data-type")).toBe(
+      "individual"
+    );
+  });
+
   it("overlays a registered candidate's own profile and attributes it", async () => {
     getCandidate.mockResolvedValue(registered);
     indexer([COHORT_6], { [COHORT_6.id]: selfProfile(COHORT_6) });
