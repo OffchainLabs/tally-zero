@@ -36,11 +36,14 @@ export default async function ElectionContenderPage({
     address,
     electionIndex
   );
-  // The snapshot is this registration's original wording, so it belongs only on
-  // the page of the election the registration was for.
-  const registrationSnapshot = initialCandidate
-    ? getElectionCandidateRegistrationSnapshot(address)
-    : null;
+  // A snapshot keeps one registration's original wording, so it belongs only on
+  // the page of the election that registration was for.
+  const snapshot = getElectionCandidateRegistrationSnapshot(address);
+  const registrationSnapshot =
+    snapshot?.registeredAt != null &&
+    snapshot.registeredAt === initialCandidate?.registeredAt
+      ? snapshot
+      : null;
 
   return (
     <div className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-16">
