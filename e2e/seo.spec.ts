@@ -105,19 +105,32 @@ test.describe("production HTML", () => {
     });
   }
 
-  for (const section of ["delegates", "security-council/contender"]) {
+  for (const section of [
+    "delegates",
+    "security-council/contender",
+    "security-council/elections/2/contender",
+  ]) {
     test(`malformed ${section} address is a 404`, async ({ page }) => {
       const response = await page.goto(`/${section}/not-an-address`);
       expect(response?.status()).toBe(404);
     });
   }
 
-  for (const section of ["delegates", "security-council/contender"]) {
-    test(`profile canonicals for ${section}`, async ({ page }) => {
-      await page.goto(`/${section}/${ADDRESS}?ref=seo`);
+  // An address-only contender link redirects to the election it registered
+  // for (ADDRESS ran in election 2), so that page owns the canonical.
+  for (const [from, canonical] of [
+    ["delegates", "delegates"],
+    ["security-council/contender", "security-council/elections/2/contender"],
+    [
+      "security-council/elections/2/contender",
+      "security-council/elections/2/contender",
+    ],
+  ]) {
+    test(`profile canonicals for ${from}`, async ({ page }) => {
+      await page.goto(`/${from}/${ADDRESS}?ref=seo`);
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
         "href",
-        `${ORIGIN}/${section}/${ADDRESS.toLowerCase()}`
+        `${ORIGIN}/${canonical}/${ADDRESS.toLowerCase()}`
       );
     });
   }

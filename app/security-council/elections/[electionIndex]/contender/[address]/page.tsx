@@ -1,23 +1,36 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isAddress } from "viem";
 
 import { ContenderProfileLoader } from "@/components/election/ContenderProfileLoader";
+import { contenderPath } from "@/lib/election-profile";
+import { pageMetadata } from "@/lib/seo";
 import {
   getCachedElectionCandidate,
   getCachedElectionCandidateStaticParams,
   getElectionCandidateRegistrationSnapshot,
 } from "@/lib/tally-data/server";
+import type { Metadata } from "next";
 
 interface ElectionContenderPageProps {
   params: Promise<{ electionIndex: string; address: string }>;
 }
 
-export const metadata = {
-  title: "Candidate Profile | Security Council Elections",
-  description:
-    "View a candidate's profile for one Arbitrum Security Council election.",
-};
+export async function generateMetadata({
+  params,
+}: ElectionContenderPageProps): Promise<Metadata> {
+  const { electionIndex, address } = await params;
+  if (!/^\d+$/.test(electionIndex) || !isAddress(address, { strict: false })) {
+    notFound();
+  }
+  return pageMetadata({
+    title: `Security Council Election #${electionIndex} Candidate Profile`,
+    description:
+      "View a candidate's profile for one Arbitrum Security Council election.",
+    path: contenderPath(address, Number(electionIndex)),
+  });
+}
 
 export const dynamicParams = true;
 export const revalidate = false;
