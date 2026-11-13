@@ -14,6 +14,7 @@ import {
   clearAndReconcileSession,
   logoutPreviousWalletSession,
 } from "@/lib/siwe/session-cache";
+import { sessionSubject } from "@/lib/siwe/subject";
 
 const ME_KEY = siweKeys.me;
 
@@ -91,7 +92,7 @@ export function useSiwe() {
      * Subject of every owned read/write — `actingAs ?? address`. Use this, not
      * `address`, to scope any query about "my" data.
      */
-    effectiveAddress: session?.effectiveAddress ?? null,
+    effectiveAddress: sessionSubject(session),
     isSignedIn: Boolean(session),
     isLoadingSession: sessionQuery.isLoading,
     signIn: signIn.mutateAsync,

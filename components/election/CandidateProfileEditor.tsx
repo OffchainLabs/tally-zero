@@ -10,11 +10,17 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { candidateProfileFormSchema } from "@/config/schema";
-import { useCandidateProfile } from "@/hooks/use-candidate-profile";
+import { formatCohort } from "@/config/security-council";
+import {
+  useCandidateProfile,
+  useLatestCandidateProfile,
+} from "@/hooks/use-candidate-profile";
 import { useSiwe } from "@/hooks/use-siwe";
+import { ELECTION_PHASE_LABEL, electionLabel } from "@/lib/election-profile";
 import type {
   CandidateProfileFields,
   CandidateProfileVersion,
+  CandidateWriteBlock,
   ElectionSummary,
 } from "@/lib/siwe/types";
 import type * as z from "zod";
@@ -52,13 +58,24 @@ function toForm(current: CandidateProfileFields | null): FormState {
   };
 }
 
+/** Why the indexer will refuse a save, in the words a candidate needs. */
+const BLOCKED: Record<CandidateWriteBlock, string> = {
+  election_complete:
+    "This election has closed. Its profile is frozen to the last version written before it ended.",
+  contender_submission_closed:
+    "Contender Submission for this election has closed. Candidate profiles can be created or edited only while contenders can register.",
+  not_current_election:
+    "Candidate profiles can only be written for the newest election.",
+  not_candidate:
+    "This address is not a contender in this election. Register on chain during Contender Submission, then publish your profile here.",
+};
+
 /**
  * Edit the effective subject's candidate profile for one election.
  *
  * Saves are append-only — each one mints a new version rather than overwriting —
- * so the history is shown alongside the form. A completed election rejects
- * writes with 409, so the form is read-only in that state instead of letting a
- * save fail.
+ * so the history is shown alongside the form. The indexer reports whether a
+ * save would be accepted, and the form is read-only when it would not.
  */
 export function CandidateProfileEditor({
   election,
@@ -66,10 +83,22 @@ export function CandidateProfileEditor({
   election: ElectionSummary;
 }) {
   const { effectiveAddress } = useSiwe();
-  const { current, versions, isLoading, error, save, isSaving, saveError } =
-    useCandidateProfile(election.id);
+  const {
+    current,
+    versions,
+    canWrite,
+    writeBlockedReason,
+    isLoading,
+    error,
+    save,
+    isSaving,
+    saveError,
+  } = useCandidateProfile(election.id);
+  const latest = useLatestCandidateProfile();
 
-  if (isLoading) return <Skeleton className="h-96 w-full" />;
+  if (isLoading || latest.isLoading) {
+    return <Skeleton className="h-96 w-full" />;
+  }
 
   if (error) {
     return (
@@ -79,6 +108,14 @@ export function CandidateProfileEditor({
     );
   }
 
+  // Candidates run again, so a first profile for this election starts from the
+  // one they published most recently for another. It is a starting point only:
+  // nothing is written until they save it here.
+  const carried =
+    !current && canWrite && latest.data?.electionId !== election.id
+      ? (latest.data ?? null)
+      : null;
+
   // Mount the form only once the stored profile has arrived, so its state can be
   // seeded directly. Hydrating from an effect instead would let a background
   // refetch overwrite edits already in progress. Remount when the subject or
@@ -87,8 +124,11 @@ export function CandidateProfileEditor({
     <ProfileForm
       key={`${effectiveAddress?.toLowerCase()}:${election.id}`}
       election={election}
-      initial={toForm(current)}
+      initial={toForm(current ?? carried)}
+      carried={carried !== null}
       versions={versions}
+      canWrite={canWrite}
+      blocked={writeBlockedReason}
       save={save}
       isSaving={isSaving}
       saveError={saveError}
@@ -99,14 +139,20 @@ export function CandidateProfileEditor({
 function ProfileForm({
   election,
   initial,
+  carried,
   versions,
+  canWrite,
+  blocked,
   save,
   isSaving,
   saveError,
 }: {
   election: ElectionSummary;
   initial: FormState;
+  carried: boolean;
   versions: { version: number; createdAt: string }[];
+  canWrite: boolean;
+  blocked: CandidateWriteBlock | null;
   save: (fields: CandidateProfileFields) => Promise<CandidateProfileVersion>;
   isSaving: boolean;
   saveError: Error | null;
@@ -114,7 +160,7 @@ function ProfileForm({
   const { actingAs, effectiveAddress } = useSiwe();
   const [form, setForm] = useState<FormState>(initial);
 
-  const isWritable = election.status !== "complete";
+  const isWritable = canWrite;
 
   async function submit() {
     const parsed = candidateProfileFormSchema.safeParse(form);
@@ -142,9 +188,12 @@ function ProfileForm({
     <Card variant="glass">
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <CardTitle className="text-base">
-          Cohort {election.cohort} candidate profile
+          {electionLabel(election)} candidate profile
+          {election.cohort == null
+            ? null
+            : ` · ${formatCohort(election.cohort)}`}
         </CardTitle>
-        <Badge variant="outline">{election.status}</Badge>
+        <Badge variant="outline">{ELECTION_PHASE_LABEL[election.phase]}</Badge>
       </CardHeader>
       <CardContent className="space-y-4">
         <p
@@ -163,10 +212,18 @@ function ProfileForm({
           )}
         </p>
 
-        {!isWritable ? (
-          <p className="text-sm text-amber-400">
-            This election has closed. Its profile is frozen to the last version
-            written before it ended.
+        {blocked ? (
+          <p className="text-sm text-amber-400" data-testid="candidate-blocked">
+            {BLOCKED[blocked]}
+          </p>
+        ) : null}
+        {carried ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="candidate-carried"
+          >
+            Started from the profile you published for an earlier election.
+            Saving publishes it for this one.
           </p>
         ) : null}
 

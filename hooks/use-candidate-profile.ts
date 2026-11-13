@@ -14,6 +14,7 @@ import { siweKeys } from "@/lib/siwe/keys";
 import type {
   CandidateProfileFields,
   CandidateProfileVersion,
+  CurrentElection,
   ElectionSummary,
   MyCandidateProfile,
 } from "@/lib/siwe/types";
@@ -30,13 +31,40 @@ export function useElections() {
 }
 
 /**
+ * Whether any election is taking candidates right now, and when the next one
+ * starts. The one public read that decides whether to offer profile creation.
+ */
+export function useCurrentElection() {
+  return useQuery<CurrentElection>({
+    queryKey: siweKeys.currentElection,
+    queryFn: () => siweApi.getCurrentElection(),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * The effective subject's newest profile from any election. Candidates run
+ * again, so a new election's form starts from what they last published.
+ */
+export function useLatestCandidateProfile() {
+  const { effectiveAddress } = useSiwe();
+  return useQuery<CandidateProfileVersion | null>({
+    queryKey: siweKeys.latestCandidateProfile(effectiveAddress),
+    queryFn: effectiveAddress
+      ? () => siweApi.getMyLatestCandidateProfile()
+      : skipToken,
+    staleTime: 30_000,
+  });
+}
+
+/**
  * The effective subject's candidate profile for one election, plus its version
  * history.
  *
- * Writes are append-only: saving never overwrites, it adds v(N+1). Once the
- * election reports `complete` the indexer rejects writes with 409
- * election_complete, so callers should disable the form rather than let a save
- * fail — see `isWritable` below.
+ * Writes are append-only: saving never overwrites, it adds v(N+1). The indexer
+ * reports `canWrite` by the same rule its PUT enforces (election complete, not a
+ * candidate, or registration closed before a first profile), so callers
+ * disable the form on that rather than let a save fail.
  */
 export function useCandidateProfile(electionId: string) {
   const { effectiveAddress } = useSiwe();
@@ -72,12 +100,17 @@ export function useCandidateProfile(electionId: string) {
             version.address
           ),
         }),
+        queryClient.invalidateQueries({
+          queryKey: siweKeys.latestCandidateProfile(version.address),
+        }),
       ]),
   });
 
   return {
     current: query.data?.current ?? null,
     versions: query.data?.versions ?? [],
+    canWrite: query.data?.canWrite ?? false,
+    writeBlockedReason: query.data?.writeBlockedReason ?? null,
     isLoading: query.isLoading,
     error: query.error as Error | null,
     save: save.mutateAsync,
@@ -91,10 +124,10 @@ export function useCandidateProfile(electionId: string) {
  * the election it belongs to. For a completed election the indexer freezes the
  * profile to the last version written before it closed.
  *
- * A contender page is addressed only by address, and the static snapshot has
- * no election id, so asking only the newest election would drop a candidate's
- * edits the moment the next election is created. Instead this asks every
- * election and takes the newest one that has a profile. It waits until every
+ * Pass the elections a page covers: one for an election's contender page, all
+ * of them for the address-only page. Asking only the newest election there
+ * would drop a candidate's edits the moment the next election is created, so
+ * this asks each election given and takes the newest one that has a profile. It waits until every
  * newer election has answered, so an older profile never flashes up before a
  * newer one arrives. A failed lookup counts as no profile there.
  *

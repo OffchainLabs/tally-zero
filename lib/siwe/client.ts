@@ -5,6 +5,7 @@ import type {
   ActAsResponse,
   CandidateProfileFields,
   CandidateProfileVersion,
+  CurrentElection,
   Draft,
   DraftFields,
   DraftSubmission,
@@ -219,6 +220,19 @@ export const siweApi = {
     return body.elections;
   },
 
+  // Whether candidate-profile creation is open at all, and when the next election starts.
+  getCurrentElection(): Promise<CurrentElection> {
+    return send<CurrentElection>("/api/elections/current", "GET");
+  },
+
+  // The caller's newest profile from any election; null if they have none.
+  getMyLatestCandidateProfile(): Promise<CandidateProfileVersion | null> {
+    return send<CandidateProfileVersion | null>(
+      "/api/me/candidate-profile",
+      "GET"
+    );
+  },
+
   getMyCandidateProfile(electionId: string): Promise<MyCandidateProfile> {
     return send<MyCandidateProfile>(
       `/api/me/candidate-profile/${seg(electionId)}`,
@@ -226,7 +240,8 @@ export const siweApi = {
     );
   },
 
-  // Appends an immutable version. 409 election_complete once the election ends.
+  // Appends an immutable version. 409 election_complete once the election ends,
+  // and 409 contender_submission_closed for a first profile after registration closes.
   putCandidateProfile(
     electionId: string,
     fields: CandidateProfileFields

@@ -19,6 +19,7 @@ import { siweApi } from "@/lib/siwe/client";
 import { siweKeys } from "@/lib/siwe/keys";
 import type {
   CandidateProfileVersion,
+  CurrentElection,
   ElectionSummary,
   MeResponse,
   MyCandidateProfile,
@@ -44,17 +45,30 @@ const SIGNER = "0x1111111111111111111111111111111111111111";
 const SAFE = "0x2222222222222222222222222222222222222222";
 const ELECTION: ElectionSummary = {
   id: "0xgov:7",
+  electionIndex: 7,
   cohort: 1,
   status: "nominee",
+  phase: "CONTENDER_SUBMISSION",
+  contenderSubmissionOpen: true,
+  contenderSubmissionEndsAt: "2026-05-08T00:00:12Z",
   startedAt: "2026-05-01T00:00:00Z",
   closedAt: null,
 };
 const PREVIOUS: ElectionSummary = {
   id: "0xgov:6",
+  electionIndex: 6,
   cohort: 0,
   status: "complete",
+  phase: "COMPLETED",
+  contenderSubmissionOpen: false,
+  contenderSubmissionEndsAt: "2025-11-08T00:00:12Z",
   startedAt: "2025-11-01T00:00:00Z",
   closedAt: "2025-12-01T00:00:00Z",
+};
+const OPEN: CurrentElection = {
+  election: ELECTION,
+  contenderSubmissionOpen: true,
+  nextElectionAt: "2027-05-01T00:00:00Z",
 };
 
 function profile(
@@ -112,12 +126,17 @@ function session(subject = SIGNER): MeResponse {
   };
 }
 
-function owned(current: CandidateProfileVersion | null): MyCandidateProfile {
+function owned(
+  current: CandidateProfileVersion | null,
+  writeBlockedReason: MyCandidateProfile["writeBlockedReason"] = null
+): MyCandidateProfile {
   return {
     current,
     versions: current
       ? [{ version: current.version, createdAt: current.createdAt }]
       : [],
+    canWrite: writeBlockedReason === null,
+    writeBlockedReason,
   };
 }
 
@@ -139,12 +158,16 @@ beforeEach(() => {
   mocks.useAccount.mockReturnValue({ address: SIGNER, isConnected: true });
   client.setQueryData(siweKeys.me, session());
   client.setQueryData(siweKeys.elections, [PREVIOUS, ELECTION]);
+  client.setQueryData(siweKeys.currentElection, OPEN);
+  client.setQueryData(siweKeys.latestCandidateProfile(SIGNER), profile());
   client.setQueryData(
     siweKeys.candidateProfile(SIGNER, ELECTION.id),
     owned(profile())
   );
   vi.spyOn(siweApi, "me").mockResolvedValue(session());
   vi.spyOn(siweApi, "listElections").mockResolvedValue([PREVIOUS, ELECTION]);
+  vi.spyOn(siweApi, "getCurrentElection").mockResolvedValue(OPEN);
+  vi.spyOn(siweApi, "getMyLatestCandidateProfile").mockResolvedValue(profile());
   vi.spyOn(siweApi, "getMyCandidateProfile").mockResolvedValue(
     owned(profile())
   );
@@ -247,13 +270,16 @@ describe("candidate editor identity and hydration", () => {
   it("resets to the selected election's cached profile and makes closed elections read-only", () => {
     client.setQueryData(
       siweKeys.candidateProfile(SIGNER, PREVIOUS.id),
-      owned(profile(SIGNER, "Historical profile", PREVIOUS.id))
+      owned(
+        profile(SIGNER, "Historical profile", PREVIOUS.id),
+        "election_complete"
+      )
     );
     const save = vi.spyOn(siweApi, "putCandidateProfile");
     const view = editor();
     fireEvent.change(nameInput(view), { target: { value: "Current edits" } });
 
-    fireEvent.click(view.getByRole("button", { name: "Cohort 0" }));
+    fireEvent.click(view.getByRole("button", { name: "Election #7" }));
 
     expect(nameInput(view).value).toBe("Historical profile");
     expect(nameInput(view).disabled).toBe(true);
@@ -451,5 +477,94 @@ describe("candidate profile saves", () => {
       client.getQueryState(siweKeys.publicCandidateProfile(ELECTION.id, SAFE))
         ?.isInvalidated
     ).toBe(false);
+  });
+});
+
+describe("the Contender Submission window", () => {
+  it("says the window is open and until when", () => {
+    const view = editor();
+    expect(view.getByTestId("submission-status").textContent).toContain(
+      "Contender Submission for Election #8 is open until about"
+    );
+  });
+
+  it("names the next election when none is taking candidates", () => {
+    client.setQueryData(siweKeys.currentElection, {
+      election: null,
+      contenderSubmissionOpen: false,
+      nextElectionAt: "2027-05-01T00:00:00Z",
+    } satisfies CurrentElection);
+    const view = editor();
+    expect(view.getByTestId("submission-status").textContent).toContain(
+      "No election is taking candidates. The next one can start on"
+    );
+  });
+
+  it.each([
+    [
+      "contender_submission_closed",
+      "Contender Submission for this election has closed.",
+    ],
+    ["not_candidate", "This address is not a contender in this election."],
+  ] as const)(
+    "follows the server's refusal (%s) instead of offering a save",
+    (reason, message) => {
+      client.setQueryData(
+        siweKeys.candidateProfile(SIGNER, ELECTION.id),
+        owned(null, reason)
+      );
+      const save = vi.spyOn(siweApi, "putCandidateProfile");
+      const view = editor();
+
+      expect(view.getByTestId("candidate-blocked").textContent).toContain(
+        message
+      );
+      expect(nameInput(view).disabled).toBe(true);
+      fireEvent.click(view.getByTestId("candidate-save"));
+      expect(save).not.toHaveBeenCalled();
+    }
+  );
+
+  it("starts a first profile from the one published for an earlier election", async () => {
+    client.setQueryData(
+      siweKeys.candidateProfile(SIGNER, ELECTION.id),
+      owned(null)
+    );
+    client.setQueryData(
+      siweKeys.latestCandidateProfile(SIGNER),
+      profile(SIGNER, "Published last time", PREVIOUS.id)
+    );
+    const save = vi
+      .spyOn(siweApi, "putCandidateProfile")
+      .mockResolvedValue(profile(SIGNER, "Published last time"));
+    const view = editor();
+
+    expect(nameInput(view).value).toBe("Published last time");
+    expect(view.getByTestId("candidate-carried")).toBeDefined();
+    // Nothing is written for the new election until the candidate saves.
+    expect(save).not.toHaveBeenCalled();
+
+    fireEvent.click(view.getByTestId("candidate-save"));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        ELECTION.id,
+        expect.objectContaining({ name: "Published last time" })
+      )
+    );
+  });
+
+  it("does not carry a profile into an election it cannot be saved to", () => {
+    client.setQueryData(
+      siweKeys.candidateProfile(SIGNER, ELECTION.id),
+      owned(null, "contender_submission_closed")
+    );
+    client.setQueryData(
+      siweKeys.latestCandidateProfile(SIGNER),
+      profile(SIGNER, "Published last time", PREVIOUS.id)
+    );
+    const view = editor();
+
+    expect(nameInput(view).value).toBe("");
+    expect(view.queryByTestId("candidate-carried")).toBeNull();
   });
 });
