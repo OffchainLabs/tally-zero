@@ -69,6 +69,20 @@ vi.mock("@/components/delegate/DelegateVotesLoader", () => ({
   ),
 }));
 
+vi.mock("@/components/delegate/DelegatorsCard", () => ({
+  DelegatorsCard: ({
+    address,
+    votingPower,
+  }: {
+    address: string;
+    votingPower: string | null;
+  }) => (
+    <div data-testid="delegators-card">
+      Delegators for {address} of {votingPower}
+    </div>
+  ),
+}));
+
 vi.mock("@/components/ui/Tabs", () => ({
   Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsContent: ({
@@ -180,6 +194,25 @@ describe("DelegateProfile", () => {
     expect(html).toContain("<strong>governance</strong>");
     expect(html).toContain("Past Votes");
     expect(html).toContain(`Votes for ${DELEGATE_ADDRESS}`);
+
+    expect(html).toContain("Delegators (1,234)");
+    expect(html).toContain(
+      `Delegators for ${DELEGATE_ADDRESS} of 1230000000000000000000`
+    );
+  });
+
+  it("gives the delegators tab the live voting power when it is known", () => {
+    const html = renderToStaticMarkup(
+      <DelegateProfile
+        address={DELEGATE_ADDRESS}
+        delegate={createDelegate()}
+        onChainVotingPower="5000000000000000000000"
+      />
+    );
+
+    expect(html).toContain(
+      `Delegators for ${DELEGATE_ADDRESS} of 5000000000000000000000`
+    );
   });
 
   it("renders empty optional profile fields and an empty statement message", () => {

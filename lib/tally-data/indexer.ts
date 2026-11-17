@@ -17,7 +17,9 @@ import type {
   TallyDelegateSearchResult,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyDelegatorsPage,
   TallyElectionCandidate,
+  TallyFormerDelegatorsPage,
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
   TallyProposalVoteSummaryEntry,
@@ -208,6 +210,22 @@ export class IndexerTallyDataClient implements TallyDataClient {
       throw new Error(`Vote summaries request failed: ${response.status}`);
     }
     return (await response.json()) as TallyProposalVoteSummaryEntry[];
+  }
+
+  getDelegatorsPage(address: string, offset: number, limit: number) {
+    return fetchIndexer<TallyDelegatorsPage>(
+      `api/tally/delegates/${normalizeAddress(
+        address
+      )}/delegators${queryString({ offset, limit })}`
+    );
+  }
+
+  getFormerDelegatorsPage(address: string, offset: number, limit: number) {
+    return fetchIndexer<TallyFormerDelegatorsPage>(
+      `api/tally/delegates/${normalizeAddress(
+        address
+      )}/former-delegators${queryString({ offset, limit })}`
+    );
   }
 
   getProposalVotersPage(

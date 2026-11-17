@@ -14,6 +14,7 @@ import rehypeSanitize from "rehype-sanitize";
 
 import { DelegateVotesLoader } from "@/components/delegate/DelegateVotesLoader";
 import { DelegationCard } from "@/components/delegate/DelegationCard";
+import { DelegatorsCard } from "@/components/delegate/DelegatorsCard";
 import { Badge } from "@/components/ui/Badge";
 import {
   Card,
@@ -73,7 +74,12 @@ export function DelegateProfile({
           onChainVotingPower={onChainVotingPower}
         />
 
-        <DelegateDetailsTabs address={address} statement={delegate.statement} />
+        <DelegateDetailsTabs
+          address={address}
+          delegatorsCount={delegate.delegatorsCount}
+          statement={delegate.statement}
+          votingPower={onChainVotingPower ?? delegate.votesCount}
+        />
       </div>
     </div>
   );
@@ -293,10 +299,14 @@ function DelegateStatsColumn({
 
 function DelegateDetailsTabs({
   address,
+  delegatorsCount,
   statement,
+  votingPower,
 }: {
   address: string;
+  delegatorsCount: number;
   statement: DelegateStatement;
+  votingPower: string | null;
 }) {
   return (
     <div className="lg:col-span-2">
@@ -304,6 +314,9 @@ function DelegateDetailsTabs({
         <TabsList>
           <TabsTrigger value="statement">Delegate Statement</TabsTrigger>
           <TabsTrigger value="votes">Past Votes</TabsTrigger>
+          <TabsTrigger value="delegators">
+            Delegators ({delegatorsCount.toLocaleString()})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="statement">
@@ -312,6 +325,10 @@ function DelegateDetailsTabs({
 
         <TabsContent value="votes">
           <DelegateVotesCard address={address} />
+        </TabsContent>
+
+        <TabsContent value="delegators">
+          <DelegatorsCard address={address} votingPower={votingPower} />
         </TabsContent>
       </Tabs>
     </div>

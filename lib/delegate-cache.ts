@@ -36,6 +36,10 @@ import type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyDelegator,
+  TallyDelegatorsPage,
+  TallyFormerDelegator,
+  TallyFormerDelegatorsPage,
   TallyProposalDelegateVote,
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
@@ -258,6 +262,22 @@ export async function getDelegateVotes(
   return getTallyDataClient().getDelegateVotes(address);
 }
 
+export async function getDelegatorsPage(
+  address: string,
+  offset: number,
+  limit: number
+): Promise<TallyDelegatorsPage> {
+  return getTallyDataClient().getDelegatorsPage(address, offset, limit);
+}
+
+export async function getFormerDelegatorsPage(
+  address: string,
+  offset: number,
+  limit: number
+): Promise<TallyFormerDelegatorsPage> {
+  return getTallyDataClient().getFormerDelegatorsPage(address, offset, limit);
+}
+
 export async function getProposalVotes(
   proposalId: string,
   governorAddress: string
@@ -317,6 +337,10 @@ export type {
   TallyDelegateProfile,
   TallyDelegateSummary,
   TallyDelegateVote,
+  TallyDelegator,
+  TallyDelegatorsPage,
+  TallyFormerDelegator,
+  TallyFormerDelegatorsPage,
   TallyProposalDelegateVote,
   TallyProposalIndexEntry,
   TallyProposalVoteSummary,
