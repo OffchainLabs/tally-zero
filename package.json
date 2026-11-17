@@ -66,7 +66,7 @@
     "geist": "^1.2.1",
     "lodash.shuffle": "^4.2.0",
     "lucide-react": "^1.7.0",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "next-themes": "^0.2.1",
     "posthog-js": "^1.424.0",
     "react": "19.2.4",
