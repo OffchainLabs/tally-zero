@@ -230,6 +230,26 @@ function isPlaceholderProposal(proposal: ParsedProposal): boolean {
   );
 }
 
+/**
+ * The fields only the indexer supplies. A row parsed from RPC logs has none of
+ * them, so a merge that spreads it must carry them over from the indexed row.
+ */
+function indexerFields(
+  existing: ParsedProposal,
+  incoming: ParsedProposal
+): Pick<
+  ParsedProposal,
+  "governorType" | "snapshotLocked" | "executionPhase" | "executionCancelled"
+> {
+  return {
+    governorType: incoming.governorType ?? existing.governorType,
+    snapshotLocked: incoming.snapshotLocked ?? existing.snapshotLocked,
+    executionPhase: incoming.executionPhase ?? existing.executionPhase,
+    executionCancelled:
+      incoming.executionCancelled ?? existing.executionCancelled,
+  };
+}
+
 function mergeProposal(
   existing: ParsedProposal,
   incoming: ParsedProposal
@@ -241,6 +261,7 @@ function mergeProposal(
   if (incomingIsPlaceholder && !existingIsPlaceholder) {
     return {
       ...existing,
+      ...indexerFields(existing, incoming),
       state,
       votes: existing.votes ?? incoming.votes,
       governorName: existing.governorName || incoming.governorName,
@@ -254,6 +275,7 @@ function mergeProposal(
   if (!incomingIsPlaceholder && existingIsPlaceholder) {
     return {
       ...incoming,
+      ...indexerFields(existing, incoming),
       votes: incoming.votes ?? existing.votes,
       state,
     };
@@ -261,6 +283,7 @@ function mergeProposal(
 
   return {
     ...incoming,
+    ...indexerFields(existing, incoming),
     votes: incoming.votes ?? existing.votes,
     state,
     stages: incoming.stages ?? existing.stages,
