@@ -36,7 +36,8 @@ export E2E_INDEXER_URL="http://127.0.0.1:$INDEXER_PORT"
 
 PIDS=()
 cleanup() {
-  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+  # bash < 4.4 (stock macOS) treats an empty array as unbound under `set -u`.
+  for pid in ${PIDS[@]+"${PIDS[@]}"}; do kill "$pid" 2>/dev/null || true; done
   pkill -f "start --schema worst_case_" 2>/dev/null || true
   pkill -f "scenario rpc-proxy" 2>/dev/null || true
 }
