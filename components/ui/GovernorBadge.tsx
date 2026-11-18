@@ -2,8 +2,29 @@
 
 import { memo } from "react";
 
-import { getGovernorTypeFromName } from "@/config/governors";
+import { getGovernorTypeFromName, type GovernorType } from "@/config/governors";
 import { cn } from "@/lib/utils";
+
+// Keyed by GovernorType so a new governor kind fails the build here instead of
+// falling through to another governor's label.
+const BADGE_VARIANTS: Record<GovernorType, { label: string; classes: string }> =
+  {
+    core: {
+      label: "Core",
+      classes:
+        "bg-arb-brand/15 text-arb-brand ring-arb-brand/30 hover:bg-arb-brand/25",
+    },
+    treasury: {
+      label: "Treasury",
+      classes:
+        "bg-arb-accent2/15 text-arb-accent2 ring-arb-accent2/30 hover:bg-arb-accent2/25",
+    },
+    l1: {
+      label: "L1",
+      classes:
+        "bg-arb-yellow/15 text-arb-yellow ring-arb-yellow/30 hover:bg-arb-yellow/25",
+    },
+  };
 
 interface GovernorBadgeProps {
   governorName: string;
@@ -13,7 +34,7 @@ interface GovernorBadgeProps {
 }
 
 /**
- * Displays a styled badge indicating whether a proposal is from Core or Treasury governor
+ * Displays a styled badge indicating which governor a proposal is from (Core, Treasury or L1 voting)
  * Uses glassmorphism design with governor-specific accent colors
  */
 export const GovernorBadge = memo(function GovernorBadge({
@@ -21,8 +42,7 @@ export const GovernorBadge = memo(function GovernorBadge({
   size = "default",
   className,
 }: GovernorBadgeProps) {
-  const governorType = getGovernorTypeFromName(governorName);
-  const isCore = governorType === "core";
+  const variant = BADGE_VARIANTS[getGovernorTypeFromName(governorName)];
 
   const sizeClasses =
     size === "sm"
@@ -36,14 +56,12 @@ export const GovernorBadge = memo(function GovernorBadge({
         "inline-flex items-center rounded-md font-semibold uppercase",
         "backdrop-blur-md ring-1 ring-inset transition-all duration-200",
         sizeClasses,
-        // Governor-specific colors: Core = brand blue, Treasury = accent teal-green
-        isCore
-          ? "bg-arb-brand/15 text-arb-brand ring-arb-brand/30 hover:bg-arb-brand/25"
-          : "bg-arb-accent2/15 text-arb-accent2 ring-arb-accent2/30 hover:bg-arb-accent2/25",
+        // Governor-specific colors: Core = brand blue, Treasury = accent teal-green, L1 = yellow
+        variant.classes,
         className
       )}
     >
-      {isCore ? "Core" : "Treasury"}
+      {variant.label}
     </span>
   );
 });
