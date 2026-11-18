@@ -239,6 +239,47 @@ describe("applyGapScan", () => {
 
     expect(next.proposals[0].createdAtTimestamp).toBe(1_760_000_000);
   });
+
+  // The scanned row comes from RPC logs, which know nothing of these.
+  const indexerOnly = {
+    governorType: "CONSTITUTIONAL",
+    snapshotLocked: true,
+    executionPhase: "L1_CHALLENGE_PERIOD",
+    executionCancelled: true,
+  } as const;
+
+  function scanOver(existing: ParsedProposal): ParsedProposal {
+    const next = applyGapScan(makeSearchData([existing]), {
+      gapProposals: [makeProposal({ id: existing.id, state: getStateName(7) })],
+      scanStartBlock: 472_314_630,
+      currentBlock: 498_234_630,
+      watermarkBlock: 489_000_000,
+    });
+    return next.proposals[0];
+  }
+
+  it("keeps the indexer-only fields of a row the scan overwrites", () => {
+    const merged = scanOver(makeProposal({ id: "9950", ...indexerOnly }));
+
+    expect(merged).toMatchObject(indexerOnly);
+  });
+
+  it("keeps them when the indexed row had no description or proposer", () => {
+    const merged = scanOver(
+      makeProposal({
+        id: "9950",
+        description: "Proposal 9950",
+        proposer: "Unknown",
+        ...indexerOnly,
+      })
+    );
+
+    expect(merged).toMatchObject(indexerOnly);
+    // The scan's own description still replaces the placeholder
+    expect(merged.description).toBe(
+      "Constitutional AIP: ArbOS61 Elara Upgrade"
+    );
+  });
 });
 
 describe("proposalFromSqliteIndexEntry", () => {
