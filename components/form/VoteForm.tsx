@@ -27,10 +27,12 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import type { VoteSupport } from "@gzeoneth/gov-tracker";
 import { VOTE_SUPPORT, prepareCastVote } from "@gzeoneth/gov-tracker";
 
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
 import { useProposalVotingPower } from "@/hooks/use-proposal-voting-power";
 import { useUserVote, type UserVoteReceipt } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
+import { ARBITRUM_CHAIN_ID } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
 import { getSimulationErrorMessage } from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
@@ -62,6 +64,10 @@ export default function VoteForm({
 
   const selectedVote = useWatch({ control: form.control, name: "vote" });
   const governorAddress = proposal.contractAddress as `0x${string}`;
+  // The governor's own chain: Arbitrum, or Ethereum for an L1 voting proposal
+  const governorChainId = Number(proposal.networkId) || ARBITRUM_CHAIN_ID;
+  const { isWrongNetwork, isSwitching, ensure } =
+    useEnsureChain(governorChainId);
   const isPageVariant = variant === "page";
   const isActiveProposal = isActiveProposalState(proposal.state);
 
@@ -117,6 +123,8 @@ export default function VoteForm({
   }, [governorAddress, proposal.id, selectedVote]);
 
   const { error: estimateError, isError: isEstimateError } = useEstimateGas({
+    account: address,
+    chainId: governorChainId,
     to: voteTransaction?.to,
     data: voteTransaction?.data,
     query: { enabled: !!voteTransaction && isConnected },
@@ -140,10 +148,17 @@ export default function VoteForm({
     }
   }, [transactionHash]);
 
-  function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
+  async function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
     if (!voteTransaction) return;
 
+    try {
+      await ensure();
+    } catch {
+      return;
+    }
+
     sendTransaction({
+      chainId: governorChainId,
       to: voteTransaction.to,
       data: voteTransaction.data,
     });
@@ -159,6 +174,17 @@ export default function VoteForm({
   const voteActionButton = !isActiveProposal ? (
     <Button variant="destructive" disabled>
       Cannot vote
+    </Button>
+  ) : isWrongNetwork ? (
+    <Button
+      type="button"
+      onClick={() => void ensure().catch(() => {})}
+      disabled={isSwitching}
+    >
+      {isSwitching && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+      {governorChainId === ARBITRUM_CHAIN_ID
+        ? "Switch to Arbitrum"
+        : "Switch network"}
     </Button>
   ) : isSubmittingVote ? (
     <Button variant="secondary" disabled>
