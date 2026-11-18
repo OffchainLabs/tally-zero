@@ -154,6 +154,30 @@ describe("createTestWalletProvider", () => {
     expect(tx.chainId).toBe(LOCAL_L1_CHAIN_ID);
     expect(tx.nonce).toBe(7);
     expect(tx.gas).toBe(BigInt(21000));
+    // The payload itself: a connector that dropped the calldata or signed for
+    // another recipient would otherwise only show up as a slow e2e failure.
+    expect(tx.to?.toLowerCase()).toBe(
+      "0x000000000000000000000000000000000000dead"
+    );
+    expect(tx.data).toBe("0x1234");
+    expect(tx.value ?? BigInt(0)).toBe(BigInt(0));
+    expect(tx.gasPrice).toBe(BigInt("0x3b9aca00"));
+
+    const nonceCall = calls.find(
+      (call) => call.method === "eth_getTransactionCount"
+    );
+    expect(nonceCall?.params).toEqual([account.address, "pending"]);
+    const estimateCall = calls.find(
+      (call) => call.method === "eth_estimateGas"
+    );
+    expect(estimateCall?.chainId).toBe(LOCAL_L1_CHAIN_ID);
+    expect(estimateCall?.params).toEqual([
+      {
+        from: account.address,
+        to: "0x000000000000000000000000000000000000dEaD",
+        data: "0x1234",
+      },
+    ]);
     expect(
       await recoverTransactionAddress({
         serializedTransaction: raw as Parameters<
