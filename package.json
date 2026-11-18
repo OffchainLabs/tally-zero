@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "vote-history:fetch": "tsx scripts/fetch-vote-history.ts",
+    "candidates:assign-elections": "tsx scripts/assign-candidate-elections.ts",
+    "candidates:backfill-history": "tsx scripts/backfill-candidate-history.ts",
     "avatars:upload": "tsx scripts/upload-governance-avatars.ts",
     "cache:build:delegates": "npx gov-tracker delegates --output data/delegate-cache.json",
     "cache:build:delegates:force": "npx gov-tracker delegates --output data/delegate-cache.json --force",
@@ -14,7 +16,8 @@
     "lint": "eslint --fix .",
     "test": "npm run lint && tsc && vitest run",
     "prepare": "husky",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:seo": "pnpm build && playwright test --config=playwright.seo.config.ts"
   },
   "prettier": {
     "semi": true,
@@ -31,7 +34,7 @@
   "dependencies": {
     "@gzeoneth/gov-tracker": "0.5.0-alpha.fix-voting-not-started-l1-block.f80a951",
     "@headlessui/react": "^2.2.9",
-    "@hookform/resolvers": "^3.3.4",
+    "@hookform/resolvers": "^5.9.2",
     "@next/bundle-analyzer": "16.2.12",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
@@ -48,7 +51,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@reown/appkit": "1.8.14",
     "@reown/appkit-adapter-wagmi": "1.8.14",
-    "@t3-oss/env-nextjs": "^0.10.1",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-table": "^8.21.3",
@@ -63,7 +66,7 @@
     "geist": "^1.2.1",
     "lodash.shuffle": "^4.2.0",
     "lucide-react": "^1.7.0",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "next-themes": "^0.2.1",
     "posthog-js": "^1.424.0",
     "react": "19.2.4",
@@ -80,7 +83,7 @@
     "vaul": "^1.1.2",
     "viem": "^2",
     "wagmi": "2.19.4",
-    "zod": "^3.22.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -114,12 +117,12 @@
       "lodash": ">=4.18.0",
       "axios": ">=1.20.0",
       "defu": ">=6.1.5",
-      "hono": ">=4.13.11",
+      "hono": ">=4.13.16",
       "semver": ">=6.3.1",
       "slow-redact": "0.3.1",
       "@noble/curves": "1.8.2",
       "@noble/hashes": "1.8.0",
-      "follow-redirects": ">=1.16.1",
+      "follow-redirects": ">=1.16.2",
       "brace-expansion@1": ">=1.1.21 <2",
       "picomatch": ">=4.0.4",
       "postcss": ">=8.5.18",
@@ -147,7 +150,9 @@
       "zod@4": ">=4.6.6",
       "source-map-js": ">=1.2.2",
       "@coinbase/cdp-sdk": ">=1.46.0 <2",
-      "postcss-selector-parser": ">=7.1.6 <8"
+      "postcss-selector-parser": ">=7.1.6 <8",
+      "minimatch@10": ">=11.0.1",
+      "@walletconnect/ethereum-provider": "2.23.0"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

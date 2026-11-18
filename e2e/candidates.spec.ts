@@ -7,13 +7,17 @@ import { DEV_WALLETS } from "./fixtures/wallets";
 // Candidate profiles are per-election, so every write needs an election that has
 // actually been indexed. The testnode bakes no election fixture (the indexer only
 // ever writes phase CONTENDER_SUBMISSION, so a synthetic completed election would
-// misreport itself — see the plan's dropped items), which means these tests skip
-// on a bare stack rather than passing vacuously.
+// misreport itself; see the plan's dropped items), which means these tests skip
+// on a bare stack rather than passing vacuously. Writes are also refused unless
+// the address is a contender during Contender Submission, so the save test skips
+// when the editor reports a write block.
+const EDITOR_PATH = "/security-council/candidate";
+
 test.describe("candidate profiles", () => {
   test("shows the empty state when no election is indexed", async ({
     signedInPage,
   }) => {
-    const page = await signedInPage("candidates", "/profile/candidate");
+    const page = await signedInPage("candidates", EDITOR_PATH);
     const res = await page.request.get("/api/governance-indexer/api/elections");
     const { elections } = (await res.json()) as { elections: unknown[] };
 
@@ -31,7 +35,7 @@ test.describe("candidate profiles", () => {
     test("saves a version and publishes it to the contender page", async ({
       signedInPage,
     }) => {
-      const page = await signedInPage("candidates", "/profile/candidate");
+      const page = await signedInPage("candidates", EDITOR_PATH);
       const res = await page.request.get(
         "/api/governance-indexer/api/elections"
       );
@@ -42,8 +46,13 @@ test.describe("candidate profiles", () => {
         "needs an election indexed on the local stack"
       );
 
-      const name = `E2E Candidate ${Date.now()}`;
       await expect(page.getByTestId("candidate-name")).toBeVisible();
+      test.skip(
+        await page.getByTestId("candidate-blocked").isVisible(),
+        "the signed-in address cannot write a profile for the indexed election"
+      );
+
+      const name = `E2E Candidate ${Date.now()}`;
       await page.getByTestId("candidate-name").fill(name);
       await page.getByTestId("candidate-country").fill("Portugal");
       // Stored as a bare handle; the contender page turns it into a URL.

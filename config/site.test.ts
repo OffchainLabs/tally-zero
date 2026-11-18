@@ -17,8 +17,14 @@ describe("site config", () => {
       expect(siteConfig.name).toBe("Arbitrum Governance");
     });
 
-    it("has correct description", () => {
-      expect(siteConfig.description).toBe("Vote on ArbitrumDAO proposals");
+    it("has a description that fits a search snippet", () => {
+      expect(siteConfig.description).toContain("ArbitrumDAO");
+      expect(siteConfig.description.length).toBeLessThanOrEqual(160);
+    });
+
+    it("has a home title that does not repeat the site name suffix", () => {
+      expect(siteConfig.homeTitle.startsWith(siteConfig.name)).toBe(true);
+      expect(siteConfig.homeTitle).not.toContain("|");
     });
 
     it("has valid base URL", () => {

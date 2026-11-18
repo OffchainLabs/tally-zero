@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { CandidateProfileLink } from "@/components/election/CandidateProfileLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 /**
@@ -27,21 +26,10 @@ export function RegistrationIntroCard() {
             </li>
           </ul>
         </div>
-        {/* Deliberately not in the main nav — it is only relevant to the
-            handful of addresses standing in an election, and this is the page
-            they already come to for their own details. It also cannot live at
-            /elections — next.config.mjs permanently redirects that to
-            /security-council for old bookmarks. */}
-        <p>
-          Standing in a Security Council election?{" "}
-          <Link
-            href="/profile/candidate"
-            className="text-primary hover:underline"
-          >
-            Publish your candidate profile
-          </Link>
-          .
-        </p>
+        {/* The candidate editor is deliberately not in the main nav — it is only
+            relevant to the handful of addresses standing in an election, and
+            this is the page they already come to for their own details. */}
+        <CandidateProfileLink />
       </CardContent>
     </Card>
   );

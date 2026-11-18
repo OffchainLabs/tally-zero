@@ -71,6 +71,12 @@ export type TallyElectionCandidate = {
   registeredAt: string | null;
   message: string | null;
   signatureHash: string | null;
+  /**
+   * The election this registration was for, when known. The static export
+   * carries it (scripts/assign-candidate-elections.ts); a record from the
+   * indexer does not, and is placed by `registeredAt` instead.
+   */
+  electionIndex?: number | null;
 };
 
 export type TallyCandidateSummary = {
@@ -131,6 +137,13 @@ export type TallyProposalIndexEntry = {
    * hash by scanning `ProposalCreated` logs over the recent window.
    */
   creationTxHash?: string | null;
+  /** L2 block of the `ProposalCreated` event. Optional for older deployments. */
+  createdAtBlock?: number | null;
+  /**
+   * Unix seconds of the `ProposalCreated` block. The indexer serializes it as
+   * a string because it is a bigint upstream. Optional for older deployments.
+   */
+  createdAtTimestamp?: string | null;
 };
 
 export type TallyAddressDisplayRecord = {

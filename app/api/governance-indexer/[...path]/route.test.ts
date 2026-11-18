@@ -186,4 +186,49 @@ describe("governance indexer proxy", () => {
       error: "Indexer upstream error.",
     });
   });
+
+  it("forwards the caller's IP so the indexer can rate-limit per client", async () => {
+    vi.stubEnv("GOVERNANCE_INDEXER_URL", "https://indexer.example.test");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => jsonResponse({ nonce: "n" }));
+
+    await POST(
+      new Request(
+        "https://example.test/api/governance-indexer/api/auth/nonce",
+        {
+          method: "POST",
+          headers: {
+            "x-real-ip": "203.0.113.7",
+            "x-forwarded-for": "198.51.100.1",
+          },
+        }
+      ),
+      context(["api", "auth", "nonce"])
+    );
+    await POST(
+      new Request(
+        "https://example.test/api/governance-indexer/api/auth/nonce",
+        {
+          method: "POST",
+          headers: { "x-forwarded-for": "198.51.100.2, 10.0.0.1" },
+        }
+      ),
+      context(["api", "auth", "nonce"])
+    );
+    await POST(
+      new Request(
+        "https://example.test/api/governance-indexer/api/auth/nonce",
+        {
+          method: "POST",
+        }
+      ),
+      context(["api", "auth", "nonce"])
+    );
+
+    const sent = fetchMock.mock.calls.map(([, init]) =>
+      new Headers(init?.headers).get("x-forwarded-for")
+    );
+    expect(sent).toEqual(["203.0.113.7", "198.51.100.2", null]);
+  });
 });

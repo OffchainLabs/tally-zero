@@ -3,11 +3,14 @@ import Link from "next/link";
 
 import { DelegateRegistrationForm } from "@/components/delegate/DelegateRegistrationForm";
 import { RegistrationIntroCard } from "@/components/delegate/RegistrationIntroCard";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Register as a Delegate | Arbitrum Governance",
+export const metadata: Metadata = {
+  title: "Register as a Delegate",
   description:
     "Create your ArbitrumDAO delegate profile so delegators can find you in the delegate explorer.",
+  // Account-bound form; nothing here for a search result.
+  robots: { index: false, follow: true },
 };
 
 export default function DelegateRegistrationPage() {

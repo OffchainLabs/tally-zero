@@ -34,6 +34,25 @@ function normalizeProposalState(
   return match ?? "Unknown";
 }
 
+/**
+ * Every proposal id in the bundled cache, deduplicated. This is the one list
+ * of proposal pages the build prerenders: generateStaticParams renders them
+ * and the sitemap advertises them, so both must read it from here.
+ */
+export async function listStaticProposalIds(): Promise<string[]> {
+  const imported = await import("@gzeoneth/gov-tracker/bundled-cache.json");
+  const cache = imported.default as BundledCache;
+  const proposalIds = new Set<string>();
+
+  for (const proposal of extractProposals(cache)) {
+    if (proposal.proposalId) {
+      proposalIds.add(proposal.proposalId);
+    }
+  }
+
+  return Array.from(proposalIds);
+}
+
 export function getStaticProposalById(
   proposalId: string
 ): ParsedProposal | null {

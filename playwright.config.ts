@@ -10,6 +10,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "seo.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,

@@ -6,8 +6,48 @@ import { CandidateProfileEditor } from "@/components/election/CandidateProfileEd
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useElections } from "@/hooks/use-candidate-profile";
-import { latestElectionId } from "@/lib/election-profile";
+import {
+  useCurrentElection,
+  useElections,
+} from "@/hooks/use-candidate-profile";
+import { electionLabel, latestElectionId } from "@/lib/election-profile";
+import type { CurrentElection } from "@/lib/siwe/types";
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
+ * Whether candidates can publish now. New profiles are accepted only during an
+ * election's Contender Submission period, which is when they can register.
+ */
+function SubmissionStatus({ current }: { current: CurrentElection }) {
+  const { election, contenderSubmissionOpen, nextElectionAt } = current;
+  let text: string;
+  if (election && contenderSubmissionOpen) {
+    text = election.contenderSubmissionEndsAt
+      ? `Contender Submission for ${electionLabel(election)} is open until about ${formatDate(election.contenderSubmissionEndsAt)}.`
+      : `Contender Submission for ${electionLabel(election)} is open.`;
+  } else if (election) {
+    text = `Contender Submission for ${electionLabel(election)} has closed. Existing profiles stay editable until the election completes.`;
+  } else {
+    text = nextElectionAt
+      ? `No election is taking candidates. The next one can start on ${formatDate(nextElectionAt)}.`
+      : "No election is taking candidates.";
+  }
+  return (
+    <p
+      className="text-sm text-muted-foreground"
+      data-testid="submission-status"
+    >
+      {text}
+    </p>
+  );
+}
 
 /**
  * Pick an election, then edit that election's candidate profile.
@@ -18,6 +58,7 @@ import { latestElectionId } from "@/lib/election-profile";
  */
 export function MyCandidateProfiles() {
   const { data: elections, isLoading, error } = useElections();
+  const { data: current } = useCurrentElection();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
@@ -33,11 +74,12 @@ export function MyCandidateProfiles() {
   if (!elections || elections.length === 0) {
     return (
       <Card variant="glass">
-        <CardContent className="pt-6">
+        <CardContent className="space-y-2 pt-6">
           <p className="text-sm text-muted-foreground">
             No elections have been indexed yet. A candidate profile can only be
             written against an election that exists on chain.
           </p>
+          {current ? <SubmissionStatus current={current} /> : null}
         </CardContent>
       </Card>
     );
@@ -50,6 +92,7 @@ export function MyCandidateProfiles() {
 
   return (
     <div className="space-y-4">
+      {current ? <SubmissionStatus current={current} /> : null}
       {elections.length > 1 ? (
         <div className="flex flex-wrap gap-2" data-testid="election-picker">
           {elections.map((election) => (
@@ -59,7 +102,7 @@ export function MyCandidateProfiles() {
               variant={election.id === active.id ? "default" : "outline"}
               onClick={() => setSelectedId(election.id)}
             >
-              Cohort {election.cohort}
+              {electionLabel(election)}
             </Button>
           ))}
         </div>

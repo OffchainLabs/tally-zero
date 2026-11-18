@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import VoteModel from "@/components/container/VoteModel";
 import { type CalldataOverrides } from "@/components/payload";
@@ -36,36 +36,71 @@ import {
 import type { ParsedProposal } from "@/types/proposal";
 import { ArrowLeft } from "lucide-react";
 
-export function ProposalPage({
-  proposalId,
-  initialProposal = null,
-}: {
+type ProposalPageProps = {
   proposalId: string;
   initialProposal?: ParsedProposal | null;
+};
+
+/**
+ * `govId` and `tab` come from useSearchParams, which makes the nearest
+ * Suspense boundary show its fallback while a static page prerenders. The
+ * fallback is the same page with no query, so the HTML still carries the
+ * cached proposal body with the Description tab open. In the browser the
+ * query is known at render time, so the first client paint already shows the
+ * tab and governor the URL asked for.
+ */
+export function ProposalPage(props: ProposalPageProps) {
+  return (
+    <Suspense
+      fallback={
+        <ProposalPageBody
+          {...props}
+          requestedGovId={null}
+          requestedTab="description"
+        />
+      }
+    >
+      <ProposalPageWithSearchParams {...props} />
+    </Suspense>
+  );
+}
+
+function ProposalPageWithSearchParams(props: ProposalPageProps) {
+  const searchParams = useSearchParams();
+  return (
+    <ProposalPageBody
+      {...props}
+      requestedGovId={searchParams.get("govId")}
+      requestedTab={
+        normalizeProposalTab(searchParams.get("tab")) ?? "description"
+      }
+    />
+  );
+}
+
+function ProposalPageBody({
+  proposalId,
+  initialProposal = null,
+  requestedGovId,
+  requestedTab,
+}: ProposalPageProps & {
+  requestedGovId: string | null;
+  requestedTab: ProposalTab;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const requestedGovId = searchParams.get("govId");
   const governorAddress = useMemo(
     () => parseGovernorId(requestedGovId),
     [requestedGovId]
   );
-  const [activeTab, setActiveTab] = useState<ProposalTab>(() => {
-    if (typeof window === "undefined") return "description";
-    const params = new URLSearchParams(window.location.search);
-    return normalizeProposalTab(params.get("tab")) ?? "description";
-  });
+  const [activeTab, setActiveTab] = useState<ProposalTab>(requestedTab);
 
+  // handleTabChange sets the tab optimistically and then writes the URL.
+  // Back/forward and router.replace change the URL without going through it,
+  // so follow the URL whenever it changes.
   useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const next = normalizeProposalTab(params.get("tab")) ?? "description";
-      setActiveTab(next);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
+
   const stableInitialProposal = useMemo(() => {
     if (!initialProposal) return null;
 
@@ -94,7 +129,7 @@ export function ProposalPage({
   const error = proposal ? null : liveError;
 
   useEffect(() => {
-    if (!proposal || typeof window === "undefined") return;
+    if (!proposal) return;
 
     const liveParams = new URLSearchParams(window.location.search);
     const liveGovId = liveParams.get("govId");

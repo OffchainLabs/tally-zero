@@ -9,26 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useCandidateProfile } from "@/hooks/use-candidate-profile";
+import { candidateProfileFormSchema } from "@/config/schema";
+import { formatCohort } from "@/config/security-council";
+import {
+  useCandidateProfile,
+  useLatestCandidateProfile,
+} from "@/hooks/use-candidate-profile";
 import { useSiwe } from "@/hooks/use-siwe";
+import { ELECTION_PHASE_LABEL, electionLabel } from "@/lib/election-profile";
 import type {
   CandidateProfileFields,
   CandidateProfileVersion,
+  CandidateWriteBlock,
   ElectionSummary,
 } from "@/lib/siwe/types";
+import type * as z from "zod";
 
-type FormState = {
-  name: string;
-  title: string;
-  twitter: string;
-  type: string;
-  representative: string;
-  motivation: string;
-  experience: string;
-  skills: string;
-  projects: string;
-  country: string;
-};
+/** The form's raw strings; `candidateProfileFormSchema` turns them into fields. */
+type FormState = z.input<typeof candidateProfileFormSchema>;
 
 const EMPTY: FormState = {
   name: "",
@@ -60,46 +58,47 @@ function toForm(current: CandidateProfileFields | null): FormState {
   };
 }
 
-function toFields(form: FormState): CandidateProfileFields {
-  const str = (v: string) => (v.trim() === "" ? null : v.trim());
-  const skills = form.skills
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
-
-  return {
-    // `name` is the one required field on the route; everything else is
-    // nullable, and a cleared input means null rather than "".
-    name: form.name.trim(),
-    title: str(form.title),
-    twitter: str(form.twitter),
-    type: str(form.type),
-    representative: str(form.representative),
-    motivation: str(form.motivation),
-    experience: str(form.experience),
-    skills: skills.length > 0 ? skills : null,
-    projects: str(form.projects),
-    country: str(form.country),
-  };
-}
+/** Why the indexer will refuse a save, in the words a candidate needs. */
+const BLOCKED: Record<CandidateWriteBlock, string> = {
+  election_complete:
+    "This election has closed. Its profile is frozen to the last version written before it ended.",
+  contender_submission_closed:
+    "Contender Submission for this election has closed. Candidate profiles can be created or edited only while contenders can register.",
+  not_current_election:
+    "Candidate profiles can only be written for the newest election.",
+  not_candidate:
+    "This address is not a contender in this election. Register on chain during Contender Submission, then publish your profile here.",
+};
 
 /**
  * Edit the effective subject's candidate profile for one election.
  *
  * Saves are append-only — each one mints a new version rather than overwriting —
- * so the history is shown alongside the form. A completed election rejects
- * writes with 409, so the form is read-only in that state instead of letting a
- * save fail.
+ * so the history is shown alongside the form. The indexer reports whether a
+ * save would be accepted, and the form is read-only when it would not.
  */
 export function CandidateProfileEditor({
   election,
 }: {
   election: ElectionSummary;
 }) {
-  const { current, versions, isLoading, error, save, isSaving, saveError } =
-    useCandidateProfile(election.id);
+  const { effectiveAddress } = useSiwe();
+  const {
+    current,
+    versions,
+    canWrite,
+    writeBlockedReason,
+    isLoading,
+    error,
+    save,
+    isSaving,
+    saveError,
+  } = useCandidateProfile(election.id);
+  const latest = useLatestCandidateProfile();
 
-  if (isLoading) return <Skeleton className="h-96 w-full" />;
+  if (isLoading || latest.isLoading) {
+    return <Skeleton className="h-96 w-full" />;
+  }
 
   if (error) {
     return (
@@ -109,14 +108,27 @@ export function CandidateProfileEditor({
     );
   }
 
+  // Candidates run again, so a first profile for this election starts from the
+  // one they published most recently for another. It is a starting point only:
+  // nothing is written until they save it here.
+  const carried =
+    !current && canWrite && latest.data?.electionId !== election.id
+      ? (latest.data ?? null)
+      : null;
+
   // Mount the form only once the stored profile has arrived, so its state can be
   // seeded directly. Hydrating from an effect instead would let a background
-  // refetch overwrite edits already in progress.
+  // refetch overwrite edits already in progress. Remount when the subject or
+  // election changes so cached data cannot carry edits across identities.
   return (
     <ProfileForm
+      key={`${effectiveAddress?.toLowerCase()}:${election.id}`}
       election={election}
-      initial={toForm(current)}
+      initial={toForm(current ?? carried)}
+      carried={carried !== null}
       versions={versions}
+      canWrite={canWrite}
+      blocked={writeBlockedReason}
       save={save}
       isSaving={isSaving}
       saveError={saveError}
@@ -127,14 +139,20 @@ export function CandidateProfileEditor({
 function ProfileForm({
   election,
   initial,
+  carried,
   versions,
+  canWrite,
+  blocked,
   save,
   isSaving,
   saveError,
 }: {
   election: ElectionSummary;
   initial: FormState;
+  carried: boolean;
   versions: { version: number; createdAt: string }[];
+  canWrite: boolean;
+  blocked: CandidateWriteBlock | null;
   save: (fields: CandidateProfileFields) => Promise<CandidateProfileVersion>;
   isSaving: boolean;
   saveError: Error | null;
@@ -142,15 +160,16 @@ function ProfileForm({
   const { actingAs, effectiveAddress } = useSiwe();
   const [form, setForm] = useState<FormState>(initial);
 
-  const isWritable = election.status !== "complete";
+  const isWritable = canWrite;
 
   async function submit() {
-    if (form.name.trim() === "") {
-      toast.error("A name is required.");
+    const parsed = candidateProfileFormSchema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0].message);
       return;
     }
     try {
-      const version = await save(toFields(form));
+      const version = await save(parsed.data);
       toast.success(`Saved as version ${version.version}.`);
     } catch {
       // saveError renders below.
@@ -169,9 +188,12 @@ function ProfileForm({
     <Card variant="glass">
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <CardTitle className="text-base">
-          Cohort {election.cohort} candidate profile
+          {electionLabel(election)} candidate profile
+          {election.cohort == null
+            ? null
+            : ` · ${formatCohort(election.cohort)}`}
         </CardTitle>
-        <Badge variant="outline">{election.status}</Badge>
+        <Badge variant="outline">{ELECTION_PHASE_LABEL[election.phase]}</Badge>
       </CardHeader>
       <CardContent className="space-y-4">
         <p
@@ -190,10 +212,18 @@ function ProfileForm({
           )}
         </p>
 
-        {!isWritable ? (
-          <p className="text-sm text-amber-400">
-            This election has closed. Its profile is frozen to the last version
-            written before it ended.
+        {blocked ? (
+          <p className="text-sm text-amber-400" data-testid="candidate-blocked">
+            {BLOCKED[blocked]}
+          </p>
+        ) : null}
+        {carried ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="candidate-carried"
+          >
+            Started from the profile you published for an earlier election.
+            Saving publishes it for this one.
           </p>
         ) : null}
 
@@ -202,8 +232,8 @@ function ProfileForm({
           <TextField id="candidate-title" label="Title" {...field("title")} />
           <TextField
             id="candidate-twitter"
-            label="Twitter handle"
-            placeholder="handle, not a URL"
+            label="Twitter / X handle"
+            placeholder="@handle"
             {...field("twitter")}
           />
           <TextField

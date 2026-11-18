@@ -1,15 +1,18 @@
 import { CouncilActionsList } from "@/components/security-council/CouncilActionsList";
 import { getCachedCouncilActions } from "@/lib/council-actions/server";
 import type { CouncilAction } from "@/lib/council-actions/types";
+import { pageMetadata } from "@/lib/seo";
+import type { Metadata } from "next";
 
 /** Refresh hourly so newly posted actions appear without a redeploy. */
 export const revalidate = 3600;
 
-export const metadata = {
-  title: "Security Council Actions | Arbitrum Governance",
+export const metadata: Metadata = pageMetadata({
+  title: "Security Council Actions",
   description:
     "Emergency and non-emergency actions taken by the Arbitrum Security Council, as announced on the governance forum.",
-};
+  path: "/security-council/actions",
+});
 
 export default async function SecurityCouncilActionsPage() {
   let actions: CouncilAction[] = [];

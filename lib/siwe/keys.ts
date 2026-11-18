@@ -96,9 +96,12 @@ export const siweKeys = {
   draft: (subject: KeyPart, id: KeyPart) => subjectKey(subject, "drafts", id),
   candidateProfile: (subject: KeyPart, electionId: KeyPart) =>
     subjectKey(subject, "candidate-profile", electionKey(electionId)),
+  latestCandidateProfile: (subject: KeyPart) =>
+    subjectKey(subject, "candidate-profile-latest"),
 
   /** Public — unauthenticated reads, shared across all viewers. */
   elections: ["siwe", "elections"] as const,
+  currentElection: ["siwe", "current-election"] as const,
   sharedDraft: (slug: string) => ["siwe", "shared-draft", slug] as const,
   publicCandidateProfile: (electionId: KeyPart, address: string) =>
     [

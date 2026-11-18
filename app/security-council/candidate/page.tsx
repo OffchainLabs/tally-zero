@@ -1,13 +1,17 @@
 import { MyCandidateProfiles } from "@/components/election/MyCandidateProfiles";
 import { SiweGate } from "@/components/siwe/SiweGate";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "My Candidate Profile | Arbitrum Governance",
+export const metadata: Metadata = {
+  // The root layout's title template appends the site name.
+  title: "My Candidate Profile",
   description:
     "Sign in with your wallet to publish a Security Council candidate profile.",
+  // Account-bound, like the other wallet-gated pages: keep it out of search.
+  robots: { index: false, follow: true },
 };
 
-export default function ElectionsPage() {
+export default function CandidateProfilePage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-col gap-2">

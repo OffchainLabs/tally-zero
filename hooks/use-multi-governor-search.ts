@@ -28,7 +28,7 @@ import {
   type UseMultiGovernorSearchOptions,
   type UseMultiGovernorSearchResult,
 } from "@/lib/governor-search";
-import { sortProposals } from "@/lib/proposal-cache";
+import { numberCompleteList, sortProposals } from "@/lib/proposal-cache";
 import {
   subscribeToVoteUpdates,
   type VoteUpdate,
@@ -130,6 +130,18 @@ function withCanonicalState(proposal: ParsedProposal): ParsedProposal {
   return proposal.state === state ? proposal : { ...proposal, state };
 }
 
+/**
+ * The indexer serializes `createdAtTimestamp` as a decimal string because it is
+ * a bigint upstream; older deployments omit it altogether.
+ */
+function parseCreatedAtTimestamp(
+  value: string | number | null | undefined
+): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
 function voteSummaryToProposalVotes(
   summary: TallyProposalVoteSummary | null
 ): ProposalVotes | undefined {
@@ -168,6 +180,8 @@ function proposalFromSqliteIndexEntry(
     // status resolving from a cached checkpoint on load and waiting seconds
     // to rediscover a transaction hash the indexer already had.
     creationTxHash: entry.creationTxHash ?? undefined,
+    createdAtBlock: entry.createdAtBlock ?? undefined,
+    createdAtTimestamp: parseCreatedAtTimestamp(entry.createdAtTimestamp),
     votes: voteSummaryToProposalVotes(voteSummary),
   };
 }
@@ -188,11 +202,18 @@ function mergeProposal(
   const incomingIsPlaceholder = isPlaceholderProposal(incoming);
   const existingIsPlaceholder = isPlaceholderProposal(existing);
   const state = incoming.state === "Unknown" ? existing.state : incoming.state;
+  // Creation provenance is the same fact from either source; a gap-scan row
+  // whose block read failed must not wipe what the indexer already knew.
+  const createdAtBlock = incoming.createdAtBlock ?? existing.createdAtBlock;
+  const createdAtTimestamp =
+    incoming.createdAtTimestamp ?? existing.createdAtTimestamp;
 
   if (incomingIsPlaceholder && !existingIsPlaceholder) {
     return {
       ...existing,
       state,
+      createdAtBlock,
+      createdAtTimestamp,
       votes: existing.votes ?? incoming.votes,
       governorName: existing.governorName || incoming.governorName,
       startBlock:
@@ -207,6 +228,8 @@ function mergeProposal(
       ...incoming,
       votes: incoming.votes ?? existing.votes,
       state,
+      createdAtBlock,
+      createdAtTimestamp,
     };
   }
 
@@ -214,6 +237,8 @@ function mergeProposal(
     ...incoming,
     votes: incoming.votes ?? existing.votes,
     state,
+    createdAtBlock,
+    createdAtTimestamp,
     stages: incoming.stages ?? existing.stages,
     timelockLink: incoming.timelockLink ?? existing.timelockLink,
   };
@@ -768,13 +793,16 @@ export function useMultiGovernorSearch({
       : null;
 
   // Flag the rows whose indexed state the governor has not confirmed yet, so the
-  // status cells can withhold a status the chain is about to overturn. Derived
-  // on read rather than stored, so the query cache keeps holding plain proposal
-  // data.
+  // status cells can withhold a status the chain is about to overturn, and
+  // number the rows by creation order. Both derived on read rather than stored,
+  // so the query cache keeps holding plain proposal data.
   const proposals = useMemo(() => {
     if (!data?.proposals.length) return data?.proposals ?? [];
 
-    const cached = data.proposals;
+    const cached = numberCompleteList(
+      data.proposals,
+      data.sourceInfo.indexerAvailable
+    );
     const progress: StateVerificationProgress = {
       currentGovernorBlock: currentL1Block,
       governorClockPending: isL1BlockLoading,

@@ -12,7 +12,13 @@
 // self-reported "8/10 in Rust" and the word "Rust", so the two are surfaced
 // separately and `TallyElectionCandidate.skills` keeps the static value.
 
-import type { CandidateProfileVersion } from "@/lib/siwe/types";
+import * as z from "zod";
+
+import type {
+  CandidateProfileVersion,
+  ElectionPhase,
+  ElectionSummary,
+} from "@/lib/siwe/types";
 import type { TallyElectionCandidate } from "@/lib/tally-data/types";
 
 /** Fields where the two sources genuinely describe the same thing. */
@@ -30,15 +36,108 @@ const MERGEABLE = [
 
 type MergeableField = (typeof MERGEABLE)[number];
 
+const TWITTER_HOSTS = new Set([
+  "x.com",
+  "www.x.com",
+  "twitter.com",
+  "www.twitter.com",
+  "mobile.twitter.com",
+]);
+
+// These first path segments belong to X itself, not to an account. Apply this
+// to bare values too, including ones normalized by an older client.
+const TWITTER_ROUTES = new Set([
+  "i",
+  "intent",
+  "home",
+  "explore",
+  "search",
+  "notifications",
+  "messages",
+  "settings",
+  "compose",
+  "login",
+  "logout",
+  "signup",
+  "share",
+  "hashtag",
+  "account",
+]);
+
+export const TWITTER_HANDLE_MESSAGE =
+  "Enter a Twitter / X handle, like @handle.";
+
 /**
- * The static export stores a full profile URL, SIWE stores a bare handle. The
- * link in the UI needs a URL, so normalize towards that and accept either.
+ * X's own rule for handles: letters, digits and underscores, at most 15.
+ *
+ * `abort` matters: when every branch of a zod 4 union fails but exactly one
+ * failed without aborting, the union reports that branch's raw issue instead
+ * of its own message. Aborting here keeps the union's message.
+ */
+const handleSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_]{1,15}$/, { abort: true })
+  .refine((handle) => !TWITTER_ROUTES.has(handle.toLowerCase()), {
+    abort: true,
+  });
+
+const bareHandleSchema = z
+  .string()
+  .transform((value) => value.replace(/^@/, ""))
+  .pipe(handleSchema);
+
+/** A profile or post URL whose first path segment identifies an account. */
+const profileUrlSchema = z
+  .string()
+  .url()
+  .transform((value, ctx) => {
+    const { protocol, hostname, pathname } = new URL(value);
+    const accountPath =
+      /^\/([^/]+)(?:\/status\/\d+(?:\/(?:photo|video)\/\d+)?)?\/?$/.exec(
+        pathname
+      );
+    if (
+      !/^https?:$/.test(protocol) ||
+      !TWITTER_HOSTS.has(hostname.toLowerCase()) ||
+      !accountPath
+    ) {
+      ctx.addIssue({ code: "custom" });
+      return z.NEVER;
+    }
+    return accountPath[1];
+  })
+  .pipe(handleSchema);
+
+/**
+ * Parses a Twitter field to the bare X handle.
+ *
+ * SIWE should hold a handle, but the indexer doesn't validate the field, and
+ * the static export stores a full profile URL. So this accepts a handle (with
+ * or without the `@`) or a URL on an X host. Anything else, a foreign host
+ * included, fails.
+ */
+export const twitterHandleSchema = z
+  .string()
+  .trim()
+  .pipe(
+    z.union([bareHandleSchema, profileUrlSchema], {
+      error: TWITTER_HANDLE_MESSAGE,
+    })
+  );
+
+/** The bare X handle in `value`, or null if there isn't one. */
+export function toTwitterHandle(value: string | null): string | null {
+  const result = twitterHandleSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+/**
+ * The link the X icon points at. It is always built from a validated handle,
+ * never passed through, because a self-authored value is unvetted.
  */
 export function toTwitterUrl(value: string | null): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://x.com/${trimmed.replace(/^@/, "")}`;
+  const handle = toTwitterHandle(value);
+  return handle ? `https://x.com/${handle}` : null;
 }
 
 export type CandidateFieldSource = "self" | "static";
@@ -90,7 +189,12 @@ export function resolveCandidate(
     const own = self?.[field];
     // An empty string is a cleared field, not a value — fall through to static
     // so blanking a name does not render an untitled card.
-    const useSelf = typeof own === "string" && own.trim() !== "";
+    // A Twitter value that holds no handle falls through the same way, so it
+    // neither erases the export's link nor gets credited to the candidate.
+    const useSelf =
+      typeof own === "string" &&
+      own.trim() !== "" &&
+      (field !== "twitter" || toTwitterHandle(own) !== null);
     sources[field] = useSelf ? "self" : "static";
     if (useSelf) candidate[field] = own;
   }
@@ -100,7 +204,8 @@ export function resolveCandidate(
   return {
     candidate,
     sources,
-    selfReportedSkills: self?.skills ?? [],
+    // Deduped: the editor does not, and the UI keys a badge per skill.
+    selfReportedSkills: [...new Set(self?.skills ?? [])],
     hasSelfAuthored: Object.values(sources).some((s) => s === "self"),
   };
 }
@@ -113,8 +218,66 @@ export function resolveCandidate(
 export function latestElectionId(
   elections: { id: string; startedAt: string }[]
 ): string | null {
-  const [latest] = [...elections].sort((a, b) =>
-    b.startedAt.localeCompare(a.startedAt)
-  );
-  return latest?.id ?? null;
+  return electionsNewestFirst(elections)[0]?.id ?? null;
+}
+
+/** Most recently started first. Does not mutate the input. */
+export function electionsNewestFirst<T extends { startedAt: string }>(
+  elections: T[]
+): T[] {
+  return [...elections].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+/** Matches the election selector: the governor numbers from 0, people from 1. */
+export function electionLabel(
+  election: Pick<ElectionSummary, "electionIndex">
+): string {
+  return election.electionIndex == null
+    ? "Election"
+    : `Election #${election.electionIndex + 1}`;
+}
+
+export const ELECTION_PHASE_LABEL: Record<ElectionPhase, string> = {
+  CONTENDER_SUBMISSION: "Contender submission",
+  NOMINEE_SELECTION: "Nominee selection",
+  COMPLIANCE_CHECK: "Compliance check",
+  MEMBER_ELECTION: "Member election",
+  PENDING_EXECUTION: "Awaiting execution",
+  COMPLETED: "Completed",
+};
+
+/**
+ * Contender pages are per election: the same people run again, and each run
+ * has its own profile. Without an election the page shows the latest one.
+ */
+export function contenderPath(
+  address: string,
+  electionIndex?: number | null
+): string {
+  const lower = address.toLowerCase();
+  return electionIndex == null
+    ? `/security-council/contender/${lower}`
+    : `/security-council/elections/${electionIndex}/contender/${lower}`;
+}
+
+/**
+ * The election a Tally registration belongs to: the latest one started at or
+ * before it. Registration is only open in the week after an election starts,
+ * and elections are months apart, so this is unambiguous for real records.
+ */
+export function electionIndexForRegistration(
+  registeredAt: string | null,
+  elections: { electionIndex: number | null; startedAt: string }[]
+): number | null {
+  if (!registeredAt) return null;
+  const at = Date.parse(registeredAt);
+  let match: { electionIndex: number; startedAt: number } | null = null;
+  for (const election of elections) {
+    if (election.electionIndex === null) continue;
+    const startedAt = Date.parse(election.startedAt);
+    if (startedAt <= at && (!match || startedAt > match.startedAt)) {
+      match = { electionIndex: election.electionIndex, startedAt };
+    }
+  }
+  return match?.electionIndex ?? null;
 }
