@@ -31,9 +31,12 @@ export async function scenario(
       maxBuffer: 64 * 1024 * 1024,
       timeout: 3 * 60 * 60 * 1000,
     }
-  ).catch((error: { stdout?: string; stderr?: string }) => {
+  ).catch((error: { message?: string; stdout?: string; stderr?: string }) => {
+    // `message` carries the cause when the streams are empty: a spawn failure
+    // (ENOENT on a missing repo or pnpm), the timeout kill, or maxBuffer.
     throw new Error(
-      `scenario ${step} failed:\n${error.stderr ?? ""}\n${error.stdout ?? ""}`
+      `scenario ${step} failed: ${error.message ?? ""}\n${error.stderr ?? ""}\n${error.stdout ?? ""}`,
+      { cause: error }
     );
   });
   const line = stdout.trim().split("\n").at(-1) ?? "";
