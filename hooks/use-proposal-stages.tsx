@@ -31,6 +31,12 @@ interface UseProposalStagesOptions {
   proposalId: string;
   creationTxHash: string;
   governorAddress: string;
+  /**
+   * Whether the proposal is on the L1 voting governor, from
+   * `isL1VotingProposal`. Left out, the address is looked up among the
+   * governors registered from the indexer.
+   */
+  isL1Voting?: boolean;
   enabled?: boolean;
   l1RpcUrl?: string;
   l2RpcUrl?: string;
@@ -56,6 +62,7 @@ export function useProposalStages({
   proposalId,
   creationTxHash,
   governorAddress,
+  isL1Voting = isL1VotingGovernor(governorAddress),
   enabled = true,
   l1RpcUrl,
   l2RpcUrl,
@@ -295,7 +302,7 @@ export function useProposalStages({
       !enabled ||
       // No gov-tracker lifecycle exists for the L1 voting governor; its
       // progress is the indexer's execution phase.
-      isL1VotingGovernor(governorAddress) ||
+      isL1Voting ||
       !proposalId ||
       !creationTxHash ||
       !governorAddress ||
@@ -333,6 +340,7 @@ export function useProposalStages({
     proposalId,
     creationTxHash,
     governorAddress,
+    isL1Voting,
     enabled,
     rpcHydrated,
     syncFromSession,

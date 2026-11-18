@@ -55,6 +55,7 @@ function DataTableRowActionsComponent<TData>({
             href={buildProposalPath({
               proposalId: proposal.id,
               governorAddress: proposal.contractAddress,
+              chainId: proposal.networkId,
             })}
           >
             <span>

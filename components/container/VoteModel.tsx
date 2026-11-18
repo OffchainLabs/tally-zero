@@ -35,6 +35,7 @@ import {
   prefetchProposalDelegateVotesCache,
   PROPOSAL_DELEGATE_VOTES_PAGE_SIZE,
 } from "@/hooks/use-proposal-delegate-votes";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import { type ProposalTab } from "@/lib/proposal-url";
 import { isArbitrumGovernor } from "@config/governors";
 import { proposalSchema } from "@config/schema";
@@ -178,6 +179,7 @@ function ProposalTabsContent({
                 proposalId={proposal.id}
                 creationTxHash={proposal.creationTxHash}
                 governorAddress={proposal.contractAddress}
+                isL1Voting={isL1VotingProposal(proposal)}
                 currentL1Block={currentL1Block ?? undefined}
                 startBlock={proposal.startBlock}
                 endBlock={proposal.endBlock}

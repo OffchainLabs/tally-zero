@@ -9,6 +9,7 @@ import {
   getGovernorByAddress,
   getGovernorType,
   getL1VotingGovernor,
+  L1_VOTING_GOVERNOR_NAME,
 } from "@/config/governors";
 import { useVotingPeriod } from "@/hooks/use-voting-period";
 import { VOTE_COLORS } from "@/lib/badge-colors";
@@ -24,20 +25,25 @@ import type { ProposalVotes } from "@/types/proposal";
 export function ProposalVoteSummaryCard({
   proposalId,
   governorAddress,
+  isL1Voting,
   votes,
   startBlock,
   endBlock,
 }: {
   proposalId?: string;
   governorAddress: string;
+  /** From `isL1VotingProposal`; left out, the address is looked up instead */
+  isL1Voting?: boolean;
   votes?: ProposalVotes | null;
   startBlock?: string;
   endBlock?: string;
 }) {
-  const governorType = getGovernorType(governorAddress);
+  const governorType = isL1Voting ? "l1" : getGovernorType(governorAddress);
   const governorName =
     getGovernorByAddress(governorAddress)?.name ??
-    getL1VotingGovernor(governorAddress)?.name;
+    (isL1Voting
+      ? L1_VOTING_GOVERNOR_NAME
+      : getL1VotingGovernor(governorAddress)?.name);
   // Shared with the Lifecycle tab so both surfaces display identical data
   const { votingPeriod, extensionStillPossible } = useVotingPeriod({
     proposalId,
