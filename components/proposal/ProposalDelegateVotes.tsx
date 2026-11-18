@@ -1,15 +1,10 @@
 "use client";
 
-import {
-  Minus,
-  ThumbsDown,
-  ThumbsUp,
-  User,
-  type LucideIcon,
-} from "lucide-react";
+import { Minus, ThumbsDown, ThumbsUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { AddressAvatar } from "@/components/ui/AddressAvatar";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -328,7 +323,7 @@ function VoterRow({ voter }: { voter: ProposalVoter }) {
         className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-white/30 dark:hover:bg-white/5"
       >
         <div className="flex min-w-0 items-center gap-2.5">
-          <Avatar picture={picture} />
+          <AddressAvatar picture={picture} />
           <span className="truncate text-sm">{displayName}</span>
         </div>
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -336,25 +331,6 @@ function VoterRow({ voter }: { voter: ProposalVoter }) {
         </span>
       </Link>
     </li>
-  );
-}
-
-function Avatar({ picture }: { picture: string | null }) {
-  if (picture) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={picture}
-        alt=""
-        className="h-6 w-6 rounded-full object-cover ring-1 ring-border"
-        loading="lazy"
-      />
-    );
-  }
-  return (
-    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted ring-1 ring-border">
-      <User className="h-3 w-3 text-muted-foreground" />
-    </span>
   );
 }
 

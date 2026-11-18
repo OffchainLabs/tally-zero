@@ -155,6 +155,41 @@ export type TallyAddressDisplayRecord = {
   source: "candidate" | "delegate" | "address";
 };
 
+/** Someone delegating to a delegate now. `balance` is their live ARB (wei), null if unread. */
+export type TallyDelegator = {
+  address: string;
+  balance: string | null;
+  delegatedAtBlock: string;
+  delegatedAtTimestamp: string;
+  txHash: string;
+  display: TallyAddressDisplayRecord;
+};
+
+export type TallyDelegatorsPage = {
+  totalCount: number;
+  /** The block every balance was read at; null when the chain couldn't be read. */
+  balancesAsOfBlock: string | null;
+  delegators: TallyDelegator[];
+};
+
+/** Someone who delegated here and moved away. `amountRemoved` is the ARB (wei) they took. */
+export type TallyFormerDelegator = {
+  address: string;
+  amountRemoved: string;
+  leftAtBlock: string;
+  leftAtTimestamp: string;
+  leftTxHash: string;
+  /** The zero address when they undelegated. */
+  nowDelegatesTo: string;
+  display: TallyAddressDisplayRecord;
+  nowDelegatesToDisplay: TallyAddressDisplayRecord;
+};
+
+export type TallyFormerDelegatorsPage = {
+  totalCount: number;
+  delegators: TallyFormerDelegator[];
+};
+
 export type TallyDataStats = {
   delegates: number;
   delegateIndex: number;
@@ -191,6 +226,16 @@ export interface TallyDataClient {
     addresses: string[]
   ): Promise<Map<string, TallyAddressDisplayRecord>>;
   getDelegateVotes(address: string): Promise<TallyDelegateVote[]>;
+  getDelegatorsPage(
+    address: string,
+    offset: number,
+    limit: number
+  ): Promise<TallyDelegatorsPage>;
+  getFormerDelegatorsPage(
+    address: string,
+    offset: number,
+    limit: number
+  ): Promise<TallyFormerDelegatorsPage>;
   getProposalVotes(
     proposalId: string,
     governorAddress: string

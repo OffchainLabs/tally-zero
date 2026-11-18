@@ -35,6 +35,35 @@ describe("IndexerTallyDataClient", () => {
     );
   });
 
+  it("requests a delegate's current and former delegators by page", async () => {
+    const page = { totalCount: 0, balancesAsOfBlock: null, delegators: [] };
+    const fetchMock = mockJsonFetch(page);
+    const client = new IndexerTallyDataClient();
+
+    await expect(
+      client.getDelegatorsPage(
+        "0xABCDEF0000000000000000000000000000000001",
+        25,
+        25
+      )
+    ).resolves.toEqual(page);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/governance-indexer/api/tally/delegates/0xabcdef0000000000000000000000000000000001/delegators?offset=25&limit=25",
+      { headers: { accept: "application/json" } }
+    );
+
+    mockJsonFetch({ totalCount: 0, delegators: [] });
+    await client.getFormerDelegatorsPage(
+      "0xABCDEF0000000000000000000000000000000001",
+      0,
+      25
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/governance-indexer/api/tally/delegates/0xabcdef0000000000000000000000000000000001/former-delegators?offset=0&limit=25",
+      { headers: { accept: "application/json" } }
+    );
+  });
+
   it("defaults delegate list requests to the eligibility threshold and an explicit row cap", async () => {
     const fetchMock = mockJsonFetch({
       delegates: [],
