@@ -1,7 +1,12 @@
 import { areAllStagesComplete, getLifecyclePhase } from "@gzeoneth/gov-tracker";
 import { describe, expect, it } from "vitest";
 
-import { GOVERNORS, registerL1VotingGovernor } from "@/config/governors";
+import {
+  GOVERNORS,
+  isL1VotingGovernor,
+  registerL1VotingGovernor,
+} from "@/config/governors";
+import { L1_EXECUTION_PHASES } from "@/lib/l1-voting";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
 
 import {
@@ -321,8 +326,11 @@ describe("L1 voting proposals", () => {
   const L1_GOVERNOR = "0x00000000000000000000000000000000000c11c1";
   registerL1VotingGovernor(L1_GOVERNOR, 1);
 
+  // Never registered: what the caller says about the proposal has to be enough
+  const UNREGISTERED_L1_GOVERNOR = "0x00000000000000000000000000000000000c22c2";
+
   it("counts the execution phases as stages, not Core's or Treasury's", () => {
-    expect(getTotalStages(L1_GOVERNOR)).toBe(4);
+    expect(getTotalStages(L1_GOVERNOR)).toBe(L1_EXECUTION_PHASES.length);
     expect(getTotalStages(CORE_GOVERNOR)).toBe(7);
     expect(getTotalStages(TREASURY_GOVERNOR)).toBe(4);
   });
@@ -331,6 +339,43 @@ describe("L1 voting proposals", () => {
     const result = getEffectiveDisplayState("Executed", [], L1_GOVERNOR, true);
     expect(result.state).toBe("Executed");
     expect(result.isInProgress).toBe(false);
+    expect(result.totalStages).toBe(L1_EXECUTION_PHASES.length);
+  });
+
+  it("takes the caller's word for it over the registry", () => {
+    expect(isL1VotingGovernor(UNREGISTERED_L1_GOVERNOR)).toBe(false);
+    expect(getTotalStages(UNREGISTERED_L1_GOVERNOR, true)).toBe(
+      L1_EXECUTION_PHASES.length
+    );
+    expect(
+      getEffectiveDisplayState(
+        "Executed",
+        [],
+        UNREGISTERED_L1_GOVERNOR,
+        true,
+        true
+      ).totalStages
+    ).toBe(L1_EXECUTION_PHASES.length);
+
+    // The address alone would say Core: 7 stages, and Executing while tracked
+    expect(getTotalStages(CORE_GOVERNOR, true)).toBe(
+      L1_EXECUTION_PHASES.length
+    );
+    const status = getEffectiveDisplayState(
+      "Executed",
+      [],
+      CORE_GOVERNOR,
+      true,
+      true
+    );
+    expect(status).toMatchObject({
+      state: "Executed",
+      isInProgress: false,
+      totalStages: L1_EXECUTION_PHASES.length,
+    });
+
+    // And a registered address is not L1 when the caller says otherwise
+    expect(getTotalStages(L1_GOVERNOR, false)).toBe(4);
   });
 
   describe("getL1DisplayState", () => {
@@ -368,6 +413,39 @@ describe("L1 voting proposals", () => {
 
     it("keeps Executed when the indexer has no phase", () => {
       expect(getL1DisplayState("Executed", null).state).toBe("Executed");
+    });
+
+    it("keeps the phase label on a cancelled execution", () => {
+      expect(
+        getL1DisplayState("Executed", "L2_RETRYABLE_PENDING", true)
+      ).toEqual({
+        display: "Executed",
+        state: "Executed",
+        isInProgress: false,
+        phaseLabel: "Retryable ticket pending on Arbitrum",
+      });
+    });
+
+    it("treats a phase it does not know as no phase", () => {
+      expect(getL1DisplayState("Executed", "L2_TIMELOCK_PENDING")).toEqual({
+        display: "Executed",
+        state: "Executed",
+        isInProgress: false,
+        phaseLabel: null,
+      });
+    });
+
+    it("reads FULLY_EXECUTED as Executed, cancelled or not", () => {
+      for (const cancelled of [false, true]) {
+        expect(
+          getL1DisplayState("Executed", "FULLY_EXECUTED", cancelled)
+        ).toEqual({
+          display: "Executed",
+          state: "Executed",
+          isInProgress: false,
+          phaseLabel: "Fully executed",
+        });
+      }
     });
   });
 });

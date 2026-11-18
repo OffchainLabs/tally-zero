@@ -114,6 +114,7 @@ export function DelegateVotesTable({
             const path = buildProposalPath({
               proposalId: proposal.id,
               governorAddress: proposal.contractAddress,
+              chainId: proposal.networkId,
             });
 
             let choice: VoteChoice;
