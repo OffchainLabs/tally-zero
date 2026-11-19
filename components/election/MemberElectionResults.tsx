@@ -4,6 +4,7 @@ import type { SerializableMemberDetails } from "@gzeoneth/gov-tracker";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
+import { contenderPath } from "@/lib/election-profile";
 import { useAddressDisplayRecords } from "@/lib/election-utils";
 import { formatVotingPower } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ interface MemberElectionResultsProps {
 
 export function MemberElectionResults({
   details,
+  electionIndex,
 }: MemberElectionResultsProps): React.ReactElement {
   const displayRecords = useAddressDisplayRecords(
     details.nominees.map((nominee) => nominee.address)
@@ -58,7 +60,7 @@ export function MemberElectionResults({
                 </span>
                 <div className="flex items-center gap-2 min-w-0">
                   <Link
-                    href={`/security-council/contender/${nominee.address.toLowerCase()}`}
+                    href={contenderPath(nominee.address, electionIndex)}
                     className="text-sm font-medium truncate text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
                   >
                     {label ?? nominee.address}

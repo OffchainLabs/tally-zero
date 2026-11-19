@@ -10,6 +10,18 @@ type RouteContext = {
 // surface (POST /api/auth/*, GET/PATCH /api/me, ...) is cookie-based, so we
 // forward the request body + inbound `cookie`, relay upstream `set-cookie`, and
 // never shared-cache anything that carries credentials.
+// The indexer rate-limits sign-in per client. This proxy calls it
+// server-to-server, so without this every user would share the deployment's
+// egress IP. Vercel's edge sets x-real-ip and overwrites any client-supplied
+// x-forwarded-for, so the caller's address here is trustworthy; the indexer
+// counts TRUSTED_PROXY_HOPS from the right to reach it.
+function callerIp(request: Request): string | null {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
+  return forwarded?.trim() || null;
+}
+
 async function proxy(
   request: Request,
   context: RouteContext
@@ -22,6 +34,7 @@ async function proxy(
   const hasBody = method !== "GET" && method !== "HEAD";
   const cookie = request.headers.get("cookie");
   const contentType = request.headers.get("content-type");
+  const ip = callerIp(request);
 
   try {
     const upstream = await indexerFetch(`/${encodedPath}${inboundUrl.search}`, {
@@ -29,7 +42,10 @@ async function proxy(
       cookie,
       redirect: "manual",
       body: hasBody ? await request.arrayBuffer() : undefined,
-      headers: contentType ? { "content-type": contentType } : undefined,
+      headers: {
+        ...(contentType ? { "content-type": contentType } : {}),
+        ...(ip ? { "x-forwarded-for": ip } : {}),
+      },
     });
 
     const headers = new Headers();

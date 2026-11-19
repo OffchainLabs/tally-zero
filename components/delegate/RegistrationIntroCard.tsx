@@ -1,3 +1,4 @@
+import { CandidateProfileLink } from "@/components/election/CandidateProfileLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 /**
@@ -25,6 +26,10 @@ export function RegistrationIntroCard() {
             </li>
           </ul>
         </div>
+        {/* The candidate editor is deliberately not in the main nav — it is only
+            relevant to the handful of addresses standing in an election, and
+            this is the page they already come to for their own details. */}
+        <CandidateProfileLink />
       </CardContent>
     </Card>
   );

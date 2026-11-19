@@ -15,7 +15,15 @@ export default defineConfig([
     "out/**",
   ]),
   {
-    ignores: [".next/**", ".vercel/**", "out/**", "build/**", "coverage/**"],
+    ignores: [
+      ".next/**",
+      ".vercel/**",
+      "out/**",
+      "build/**",
+      "coverage/**",
+      // Nested git worktrees that review agents create; they lint themselves.
+      ".claude/worktrees/**",
+    ],
   },
   {
     extends: [...nextCoreWebVitals],

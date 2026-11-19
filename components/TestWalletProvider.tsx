@@ -69,6 +69,7 @@ function createTestConfig(privateKey: `0x${string}`): Config {
     ...TEST_WALLET_CHAINS.filter((chain) => chain.id !== defaultChain.id),
   ] as [Chain, ...Chain[]];
   return createConfig({
+    ssr: true,
     chains,
     connectors: [
       testWalletConnector(account, { initialChainId: defaultChain.id }),
@@ -158,6 +159,7 @@ function readOnlyWalletConnector(address: `0x${string}`, rpcUrl: string) {
 function createReadOnlyConfig(address: `0x${string}`): Config {
   const rpcUrl = getStoredL2Rpc();
   return createConfig({
+    ssr: true,
     chains: [arbitrum],
     connectors: [readOnlyWalletConnector(address, rpcUrl)],
     client({ chain }) {

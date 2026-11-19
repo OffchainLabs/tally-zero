@@ -59,7 +59,9 @@ const config = {
       center: true,
       padding: "2rem",
       screens: {
-        "2xl": "1400px",
+        // Matches the header's max-w-screen-2xl so content lines up with the
+        // nav and the proposals table gets the full width on wide screens.
+        "2xl": "1536px",
       },
     },
     extend: {

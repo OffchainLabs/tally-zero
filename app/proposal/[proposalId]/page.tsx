@@ -1,10 +1,12 @@
-import type { BundledCache } from "@gzeoneth/gov-tracker";
-import { extractProposals } from "@gzeoneth/gov-tracker";
 import type { Metadata } from "next";
 
 import { ProposalPage } from "@/components/proposal/ProposalPage";
 import { isIncompleteProposalState } from "@/lib/proposal-utils";
-import { getStaticProposalById } from "@/lib/static-proposal-data";
+import { buildProposalMetadata } from "@/lib/seo";
+import {
+  getStaticProposalById,
+  listStaticProposalIds,
+} from "@/lib/static-proposal-data";
 
 type ProposalRouteParams = {
   proposalId: string;
@@ -14,23 +16,21 @@ type ProposalRoutePageProps = {
   params: Promise<ProposalRouteParams>;
 };
 
-export const metadata: Metadata = {
-  title: "Proposal | Arbitrum Governance",
-  description: "View an ArbitrumDAO proposal, its payload, and lifecycle.",
-};
+/**
+ * Title and description come from the proposal body in the bundled cache, so
+ * each proposal page is indexed under its own name instead of a shared
+ * "Proposal" title. Proposals not in the cache keep the generic copy.
+ */
+export async function generateMetadata(
+  props: ProposalRoutePageProps
+): Promise<Metadata> {
+  const { proposalId } = await props.params;
+  return buildProposalMetadata(proposalId, getStaticProposalById(proposalId));
+}
 
 export async function generateStaticParams(): Promise<ProposalRouteParams[]> {
-  const imported = await import("@gzeoneth/gov-tracker/bundled-cache.json");
-  const cache = imported.default as BundledCache;
-  const proposalIds = new Set<string>();
-
-  for (const proposal of extractProposals(cache)) {
-    if (proposal.proposalId) {
-      proposalIds.add(proposal.proposalId);
-    }
-  }
-
-  return Array.from(proposalIds).map((proposalId) => ({ proposalId }));
+  const proposalIds = await listStaticProposalIds();
+  return proposalIds.map((proposalId) => ({ proposalId }));
 }
 
 export default async function ProposalRoutePage(props: ProposalRoutePageProps) {

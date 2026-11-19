@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Suspense, useSyncExternalStore } from "react";
 
 import { ETHEREUM_RPC_URL } from "@/config/arbitrum-governance";
 import { shortenAddress } from "@/lib/format-utils";
@@ -23,14 +24,23 @@ const ensConfig = createConfig({
   },
 });
 
+const emptySubscribe = () => () => {};
+
 export function ButtonNav() {
+  // AppKit can restore its account store before React hydrates the header.
+  // Keep the server snapshot for the first browser render, then use live data.
+  const hasHydrated = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
   const pathname = usePathname();
   const isAppPage = pathname !== "/";
   const { open } = useAppKit();
   const account = useAppKitAccount();
   const { caipNetwork } = useAppKitNetwork();
   const ensAddress =
-    account?.address && account.address.startsWith("0x")
+    hasHydrated && account?.address && account.address.startsWith("0x")
       ? (account.address as `0x${string}`)
       : undefined;
   const { data: ensName } = useEnsName({
@@ -41,9 +51,10 @@ export function ButtonNav() {
       enabled: !!ensAddress,
     },
   });
-  const isConnected = account?.isConnected ?? false;
+  const isConnected = hasHydrated && (account?.isConnected ?? false);
   const isConnecting =
-    account?.status === "connecting" || account?.status === "reconnecting";
+    hasHydrated &&
+    (account?.status === "connecting" || account?.status === "reconnecting");
   const networkLabel = caipNetwork?.name ?? "Network";
   const accountLabel = ensName
     ? ensName
@@ -86,7 +97,11 @@ export function ButtonNav() {
 
   return (
     <nav className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-      {isAppPage && <SettingsSheet />}
+      {isAppPage && (
+        <Suspense fallback={null}>
+          <SettingsSheet />
+        </Suspense>
+      )}
       {walletControls}
     </nav>
   );
