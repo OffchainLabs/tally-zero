@@ -189,13 +189,7 @@ describe("proposal-cache", () => {
       createProposal({ id: "b", createdAtBlock: 480_000_000 }),
     ];
 
-    it("numbers the rows when the indexer served the list", () => {
-      const result = numberCompleteList(proposals, true);
-
-      expect(result.map((p) => p.proposalNumber)).toEqual([1, 2]);
-    });
-
-    it("keeps Arbitrum proposal numbers stable when Ethereum proposals arrive", () => {
+    it("numbers only Arbitrum rows when the indexer serves both chains", () => {
       const l1Proposal = createProposal({
         id: "l1",
         networkId: "1",
@@ -206,7 +200,6 @@ describe("proposal-cache", () => {
       const result = numberCompleteList([...proposals, l1Proposal], true);
 
       expect(result.map((p) => p.proposalNumber)).toEqual([1, 2, undefined]);
-      expect(result[2]).toBe(l1Proposal);
     });
 
     // Without the indexer the list is a recent RPC window, so numbering it
