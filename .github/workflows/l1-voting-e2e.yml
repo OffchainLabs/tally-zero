@@ -1,0 +1,165 @@
+name: L1 voting e2e
+
+# The L1 voting Playwright specs (e2e/l1-voting) against the whole stack: a fresh governance
+# testnode, Postgres, the indexer in local mode and this frontend. One job per spec, each on its
+# own runner, because anvil keeps every mined block's state and one chain cannot carry them all.
+#
+# The specs drive the chain through the indexer's scenario CLI, so the indexer is checked out next
+# to this repo: the layout e2e/l1-voting/run-worst-case.sh and arbitrum-governance-monorepo use.
+#
+# Needs secrets.E2E_REPO_TOKEN with read access to OffchainLabs/arbitrum-governance-indexer
+# (private) and to its GHCR testnode image (read:packages).
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "config/**"
+      - "data/abis/**"
+      - "hooks/**"
+      - "lib/**"
+      - "e2e/l1-voting/**"
+      - "playwright.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/l1-voting-e2e.yml"
+  workflow_dispatch:
+    inputs:
+      indexer-ref:
+        description: arbitrum-governance-indexer ref (needs the scenario CLI)
+        required: false
+        type: string
+      specs:
+        description: Spec names, space-separated (default every spec on the branch)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  # The top of the indexer's L1 voting stack until it merges; then main.
+  INDEXER_REF: ${{ inputs.indexer-ref || 'dl/l1-scenario-docs' }}
+  IMAGE_REF: ghcr.io/offchainlabs/arbitrum-governance-indexer/testnode:v0.2.0
+  # The Node 26 litro revision the indexer's own workflows pin.
+  LITRO_REF: 48980020592d21bbf96ea5d5cfef6b096bea13b6
+
+jobs:
+  specs:
+    runs-on: ubuntu-latest
+    outputs:
+      specs: ${{ steps.list.outputs.specs }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        env:
+          REQUESTED: ${{ inputs.specs }}
+        run: |
+          specs="${REQUESTED:-$(ls e2e/l1-voting/*.spec.ts 2>/dev/null | xargs -n1 basename | sed 's/\.spec\.ts$//')}"
+          echo "specs=$(printf '%s\n' $specs | jq -R . | jq -sc 'map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    needs: specs
+    if: needs.specs.outputs.specs != '[]'
+    name: l1-voting (${{ matrix.spec }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        spec: ${{ fromJSON(needs.specs.outputs.specs) }}
+    steps:
+      - name: Require the cross-repo token
+        env:
+          TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::secrets.E2E_REPO_TOKEN is not set: it needs read access to arbitrum-governance-indexer and its GHCR packages."; exit 1; }
+
+      - name: Free disk space
+        run: |
+          for d in /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL; do
+            sudo find "$d" -delete 2>/dev/null || true
+          done
+          df -h /
+
+      - name: Checkout frontend (tally-zero)
+        uses: actions/checkout@v7
+        with:
+          path: tally-zero
+
+      - name: Checkout indexer
+        uses: actions/checkout@v7
+        with:
+          repository: OffchainLabs/arbitrum-governance-indexer
+          ref: ${{ env.INDEXER_REF }}
+          path: arbitrum-governance-indexer
+          token: ${{ secrets.E2E_REPO_TOKEN }}
+
+      - name: Checkout testnode engine
+        uses: actions/checkout@v7
+        with:
+          repository: OffchainLabs/arbitrum-litro
+          ref: ${{ env.LITRO_REF }}
+          path: litro
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Two pnpm majors (indexer pnpm@9, this repo pnpm@10): corepack picks each checkout's own.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install indexer deps
+        working-directory: arbitrum-governance-indexer
+        run: pnpm install --frozen-lockfile
+
+      - name: Install frontend deps
+        working-directory: tally-zero
+        run: pnpm install --frozen-lockfile
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # The runner boots its own testnode per spec but needs the image's exported config
+      # (addresses, rollup deployment). One boot through the engine exports it; then stop it.
+      - name: Export the testnode config
+        uses: ./litro
+        with:
+          version: v0.0.0
+          image-ref: ${{ env.IMAGE_REF }}
+          output-dir: ${{ github.workspace }}/arbitrum-governance-indexer/.testnode
+          startup-timeout-seconds: "300"
+          github-token: ${{ secrets.E2E_REPO_TOKEN }}
+
+      - name: Stop the export boot
+        run: |
+          docker ps -aq | xargs -r docker rm -fv >/dev/null
+          ls arbitrum-governance-indexer/.testnode/config/governance.json
+
+      - name: Install Playwright browser
+        working-directory: tally-zero
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run ${{ matrix.spec }}
+        working-directory: tally-zero
+        env:
+          DOCKER_CONTEXT: default
+          WORST_CASE_INDEXER_REPO: ${{ github.workspace }}/arbitrum-governance-indexer
+          SPECS: e2e/l1-voting/${{ matrix.spec }}.spec.ts
+          NEXT_PUBLIC_REOWN_PROJECT_ID: test
+        run: e2e/l1-voting/run-worst-case.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: l1-voting-${{ matrix.spec }}
+          path: tally-zero/e2e/l1-voting/.artifacts/
+          retention-days: 7

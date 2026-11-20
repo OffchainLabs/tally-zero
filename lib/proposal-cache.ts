@@ -4,6 +4,7 @@
  * Provides utility functions for working with proposals.
  */
 
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import type { ParsedProposal } from "@/types/proposal";
 
 /**
@@ -24,14 +25,15 @@ export function sortProposals(proposals: ParsedProposal[]): ParsedProposal[] {
 
 type CreatedProposal = ParsedProposal & { createdAtBlock: number };
 
-function hasCreationBlock(
+function hasL2CreationBlock(
   proposal: ParsedProposal
 ): proposal is CreatedProposal {
-  return proposal.createdAtBlock !== undefined;
+  return proposal.createdAtBlock !== undefined && !isL1VotingProposal(proposal);
 }
 
 /**
- * Number proposals by creation order across every governor, 1 being the oldest.
+ * Number L2 proposals by creation order, 1 being the oldest.
+ * L1 proposals stay unnumbered because their creation blocks use a different clock.
  *
  * OZ Governor keeps no counter and Tally shows none, so this is the table's
  * own ordinal: creation block first, proposal id as the tiebreak so two
@@ -52,7 +54,7 @@ export function assignProposalNumbers(
   proposals: ParsedProposal[]
 ): ParsedProposal[] {
   // filter() copies, so the sort never touches the caller's array.
-  const byCreation = proposals.filter(hasCreationBlock).sort((a, b) => {
+  const byCreation = proposals.filter(hasL2CreationBlock).sort((a, b) => {
     const blockDiff = a.createdAtBlock - b.createdAtBlock;
     if (blockDiff !== 0) return blockDiff;
     return a.id.localeCompare(b.id);

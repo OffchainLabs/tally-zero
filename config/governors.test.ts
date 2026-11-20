@@ -5,11 +5,15 @@ import {
   getGovernorByAddress,
   getGovernorType,
   getGovernorTypeFromName,
+  getL1VotingGovernor,
   GOVERNOR_LIST,
   GOVERNORS,
   isArbitrumGovernor,
   isCoreGovernor,
+  isL1VotingGovernor,
   isTreasuryGovernor,
+  L1_VOTING_GOVERNOR_NAME,
+  registerL1VotingGovernor,
 } from "./governors";
 
 describe("governors config", () => {
@@ -197,6 +201,43 @@ describe("governors config", () => {
 
     it("returns treasury for empty string", () => {
       expect(getGovernorTypeFromName("")).toBe("treasury");
+    });
+  });
+
+  describe("L1 voting governor", () => {
+    const address = "0x00000000000000000000000000000000000d11d1";
+
+    it("is unknown until an indexer entry registers it", () => {
+      expect(isL1VotingGovernor(address)).toBe(false);
+      expect(getGovernorType(address)).toBeUndefined();
+    });
+
+    it("is recognized as l1, and as neither Core nor Treasury", () => {
+      const config = registerL1VotingGovernor(address, 1337);
+
+      expect(config).toMatchObject({
+        type: "l1",
+        name: L1_VOTING_GOVERNOR_NAME,
+        chainId: 1337,
+      });
+      expect(
+        isL1VotingGovernor(address.toUpperCase().replace("0X", "0x"))
+      ).toBe(true);
+      expect(getGovernorType(address)).toBe("l1");
+      expect(getL1VotingGovernor(address)?.chainId).toBe(1337);
+      expect(isCoreGovernor(address)).toBe(false);
+      expect(isTreasuryGovernor(address)).toBe(false);
+      expect(isArbitrumGovernor(address)).toBe(false);
+      expect(getGovernorByAddress(address)).toBeUndefined();
+      expect(getFinalStageForGovernor(address)).toBeUndefined();
+    });
+
+    it("stays out of the proposable governor list", () => {
+      expect(GOVERNOR_LIST.map((g) => g.type)).not.toContain("l1");
+    });
+
+    it("maps its display name to l1, not treasury", () => {
+      expect(getGovernorTypeFromName(L1_VOTING_GOVERNOR_NAME)).toBe("l1");
     });
   });
 });

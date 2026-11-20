@@ -1,14 +1,16 @@
 import { areAllStagesComplete, getLifecyclePhase } from "@gzeoneth/gov-tracker";
 import { describe, expect, it } from "vitest";
 
-import { GOVERNORS } from "@/config/governors";
+import { GOVERNORS, registerL1VotingGovernor } from "@/config/governors";
 import type { ProposalStage, StageType } from "@/types/proposal-stage";
 
 import {
   formatCurrentState,
   formatStageName,
   getEffectiveDisplayState,
+  getL1DisplayState,
   getStateStyle,
+  getTotalStages,
   isProposalFullyExecuted,
 } from "./lifecycle-utils";
 
@@ -311,6 +313,61 @@ describe("lifecycle-utils", () => {
       expect(getEffectiveDisplayState(null, [], CORE_GOVERNOR).display).toBe(
         "Unknown"
       );
+    });
+  });
+});
+
+describe("L1 voting proposals", () => {
+  const L1_GOVERNOR = "0x00000000000000000000000000000000000c11c1";
+  registerL1VotingGovernor(L1_GOVERNOR, 1);
+
+  it("counts the execution phases as stages, not Core's or Treasury's", () => {
+    expect(getTotalStages(L1_GOVERNOR)).toBe(4);
+    expect(getTotalStages(CORE_GOVERNOR)).toBe(7);
+    expect(getTotalStages(TREASURY_GOVERNOR)).toBe(4);
+  });
+
+  it("never reads Executed as a Core round trip", () => {
+    const result = getEffectiveDisplayState("Executed", [], L1_GOVERNOR, true);
+    expect(result.state).toBe("Executed");
+    expect(result.isInProgress).toBe(false);
+  });
+
+  describe("getL1DisplayState", () => {
+    it("passes pre-execution states through", () => {
+      expect(getL1DisplayState("active", null).state).toBe("Active");
+      expect(getL1DisplayState("Succeeded", null).display).toBe("Passed");
+      expect(getL1DisplayState("Queued", "L1_TIMELOCK_PENDING")).toMatchObject({
+        state: "Queued",
+        isInProgress: false,
+        phaseLabel: "Queued in the L1 timelock",
+      });
+    });
+
+    it("reads Executed as Executing until the retryable is done", () => {
+      expect(
+        getL1DisplayState("Executed", "L2_RETRYABLE_PENDING")
+      ).toMatchObject({
+        display: "Executing",
+        state: "Executing",
+        isInProgress: true,
+        phaseLabel: "Retryable ticket pending on Arbitrum",
+      });
+      expect(getL1DisplayState("Executed", "FULLY_EXECUTED")).toMatchObject({
+        state: "Executed",
+        isInProgress: false,
+        phaseLabel: "Fully executed",
+      });
+    });
+
+    it("keeps the governor's answer when execution was cancelled", () => {
+      expect(
+        getL1DisplayState("Executed", "L2_RETRYABLE_PENDING", true).state
+      ).toBe("Executed");
+    });
+
+    it("keeps Executed when the indexer has no phase", () => {
+      expect(getL1DisplayState("Executed", null).state).toBe("Executed");
     });
   });
 });

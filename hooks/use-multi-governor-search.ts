@@ -15,6 +15,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { l1VotingChainId } from "@/config/chains";
+import { registerL1VotingGovernor } from "@/config/governors";
 import { useL1Block } from "@/hooks/use-l1-block";
 import { findByAddress } from "@/lib/address-utils";
 import { buildLookupMap } from "@/lib/collection-utils";
@@ -28,6 +30,7 @@ import {
   type UseMultiGovernorSearchOptions,
   type UseMultiGovernorSearchResult,
 } from "@/lib/governor-search";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import { numberCompleteList, sortProposals } from "@/lib/proposal-cache";
 import {
   subscribeToVoteUpdates,
@@ -155,11 +158,35 @@ function voteSummaryToProposalVotes(
   };
 }
 
-function proposalFromSqliteIndexEntry(
+/**
+ * The governor's display name and chain for an index entry. An L1 voting entry
+ * also registers its governor, since that address is not known statically and
+ * address-only lookups downstream need to recognize it.
+ */
+function governorForEntry(entry: TallyProposalIndexEntry): {
+  name: string;
+  chainId: number;
+} {
+  if (entry.governorType === "L1_VOTING") {
+    const governor = registerL1VotingGovernor(
+      entry.governorAddress,
+      entry.chainId ?? l1VotingChainId()
+    );
+    return { name: governor.name, chainId: governor.chainId };
+  }
+
+  const governor = findByAddress(ARBITRUM_GOVERNORS, entry.governorAddress);
+  return {
+    name: governor?.name ?? "Unknown",
+    chainId: entry.chainId ?? ARBITRUM_CHAIN_ID,
+  };
+}
+
+export function proposalFromSqliteIndexEntry(
   entry: TallyProposalIndexEntry,
   voteSummary: TallyProposalVoteSummary | null
 ): ParsedProposal {
-  const governor = findByAddress(ARBITRUM_GOVERNORS, entry.governorAddress);
+  const governor = governorForEntry(entry);
 
   return {
     id: entry.proposalId,
@@ -172,9 +199,9 @@ function proposalFromSqliteIndexEntry(
     startBlock: String(entry.snapshotBlock),
     endBlock: "0",
     description: entry.description ?? `Proposal ${entry.proposalId}`,
-    networkId: String(ARBITRUM_CHAIN_ID),
+    networkId: String(governor.chainId),
     state: normalizeProposalStateName(entry.state),
-    governorName: governor?.name ?? "Unknown",
+    governorName: governor.name,
     // Carries the lifecycle tracker straight past the log scan when the
     // indexer serves it, which is the difference between a Core proposal's
     // status resolving from a cached checkpoint on load and waiting seconds
@@ -183,7 +210,29 @@ function proposalFromSqliteIndexEntry(
     createdAtBlock: entry.createdAtBlock ?? undefined,
     createdAtTimestamp: parseCreatedAtTimestamp(entry.createdAtTimestamp),
     votes: voteSummaryToProposalVotes(voteSummary),
+    governorType: entry.governorType ?? undefined,
+    snapshotLocked: entry.snapshotLocked ?? null,
+    executionPhase: entry.executionPhase ?? null,
+    executionCancelled: entry.executionCancelled ?? false,
   };
+}
+
+/**
+ * The rows whose indexed state must be re-read from the Arbitrum One governors.
+ *
+ * L1 voting proposals live on Ethereum, out of reach of that read; their
+ * indexed state is already resolved against the L1 cursor, so it is taken as
+ * served.
+ */
+export function selectProposalsNeedingRefresh(
+  proposals: ParsedProposal[],
+  currentGovernorBlock: number | null
+): ParsedProposal[] {
+  return proposals.filter(
+    (proposal) =>
+      !isL1VotingProposal(proposal) &&
+      needsOnChainStateRefresh(proposal, currentGovernorBlock)
+  );
 }
 
 function isPlaceholderProposal(proposal: ParsedProposal): boolean {
@@ -614,8 +663,9 @@ export function useMultiGovernorSearch({
     if (!enabled || isFetching || !data) return;
 
     const needsGapScan = !data.sourceInfo.reconciled;
-    const proposalsNeedingRefresh = data.proposals.filter((proposal) =>
-      needsOnChainStateRefresh(proposal, currentL1Block)
+    const proposalsNeedingRefresh = selectProposalsNeedingRefresh(
+      data.proposals,
+      currentL1Block
     );
 
     if (!needsGapScan && proposalsNeedingRefresh.length === 0) {
@@ -813,6 +863,7 @@ export function useMultiGovernorSearch({
 
     let anyUnverified = false;
     const flagged = cached.map((proposal) => {
+      if (isL1VotingProposal(proposal)) return proposal;
       if (!isProposalStateUnverified(proposal, progress)) return proposal;
       anyUnverified = true;
       return { ...proposal, isStateUnverified: true };

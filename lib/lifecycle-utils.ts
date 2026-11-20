@@ -3,7 +3,16 @@
  * Handles stage tracking, state formatting, and progress calculation
  */
 
-import { getFinalStageForGovernor, isCoreGovernor } from "@/config/governors";
+import {
+  getFinalStageForGovernor,
+  isCoreGovernor,
+  isL1VotingGovernor,
+} from "@/config/governors";
+import {
+  L1_EXECUTION_PHASE_LABELS,
+  L1_EXECUTION_PHASES,
+  l1ExecutionPhaseIndex,
+} from "@/lib/l1-voting";
 import { normalizeProposalStateName } from "@/lib/state-utils";
 import type { ProposalStateName } from "@/types/proposal";
 import type { ProposalStage } from "@/types/proposal-stage";
@@ -37,8 +46,10 @@ export function formatStageName(stageName: string): string {
  * Get the total expected stages for a proposal based on governor type
  * - Core Governor: 7 stages (includes L1 round-trip)
  * - Treasury Governor: 4 stages (L2 only)
+ * - L1 Voting Governor: its execution phases (see lib/l1-voting)
  */
 export function getTotalStages(governorAddress: string): number {
+  if (isL1VotingGovernor(governorAddress)) return L1_EXECUTION_PHASES.length;
   return isCoreGovernor(governorAddress) ? 7 : 4;
 }
 
@@ -183,6 +194,12 @@ export function getEffectiveDisplayState(
     return settled(normalizeProposalStateName(governorState));
   }
 
+  // L1 voting proposals have no gov-tracker stages to go on; their progress is
+  // the indexer's execution phase, which getL1DisplayState reads.
+  if (isL1VotingGovernor(governorAddress)) {
+    return settled("Executed");
+  }
+
   // Treasury Governor proposals are L2-only: "Executed" is accurate.
   if (!isCoreGovernor(governorAddress)) {
     return settled("Executed");
@@ -205,6 +222,56 @@ export function getEffectiveDisplayState(
     phaseLabel,
     currentStage,
     totalStages,
+  };
+}
+
+export interface L1DisplayStatus {
+  /** Label to render */
+  display: string;
+  /** Key for the colour / dot / badge lookups */
+  state: ProposalStateName | "Executing";
+  /** Executed on L1, still waiting on the Arbitrum retryable */
+  isInProgress: boolean;
+  /** The current phase's label, once execution has started */
+  phaseLabel: string | null;
+}
+
+/**
+ * The status an L1 voting proposal shows. The governor's `Executed` means the
+ * L1 timelock ran; the payload still has a retryable to clear on Arbitrum, so
+ * that stretch reads `Executing` until the indexer reports `FULLY_EXECUTED`.
+ * A cancelled operation stops there, and the governor's own answer stands.
+ */
+export function getL1DisplayState(
+  governorState: string | null | undefined,
+  executionPhase: string | null | undefined,
+  executionCancelled = false
+): L1DisplayStatus {
+  const state = normalizeProposalStateName(governorState);
+  const index = l1ExecutionPhaseIndex(executionPhase);
+  const phaseLabel =
+    index === -1 ? null : L1_EXECUTION_PHASE_LABELS[L1_EXECUTION_PHASES[index]];
+
+  const isExecuting =
+    state === "Executed" &&
+    !executionCancelled &&
+    index !== -1 &&
+    executionPhase !== "FULLY_EXECUTED";
+
+  if (isExecuting) {
+    return {
+      display: "Executing",
+      state: "Executing",
+      isInProgress: true,
+      phaseLabel,
+    };
+  }
+
+  return {
+    display: formatCurrentState(state),
+    state,
+    isInProgress: false,
+    phaseLabel,
   };
 }
 

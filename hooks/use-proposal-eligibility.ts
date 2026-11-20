@@ -7,7 +7,7 @@ import { zeroAddress, type Abi } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 
 import { ARB_TOKEN, ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
-import { GOVERNORS, type GovernorType } from "@/config/governors";
+import { GOVERNORS, type L2GovernorType } from "@/config/governors";
 import { useGovernanceClock } from "@/hooks/use-governance-clock";
 import {
   getProposalEligibility,
@@ -66,7 +66,7 @@ export type ProposalEligibilityOptions = {
  * out on every governance clock refresh.
  */
 export function useProposalEligibility(
-  governorType: GovernorType,
+  governorType: L2GovernorType,
   options?: ProposalEligibilityOptions
 ): ProposalEligibilityResult {
   const { address: walletAddress, isConnected } = useAccount();

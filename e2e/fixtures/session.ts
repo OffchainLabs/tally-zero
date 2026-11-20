@@ -29,7 +29,15 @@ export async function useWallet(page: Page, wallet: DevWallet): Promise<void> {
  */
 export async function signIn(page: Page, wallet: DevWallet): Promise<void> {
   await useWallet(page, wallet);
-  await page.goto(REGISTER_PATH);
+  const response = await page.goto(REGISTER_PATH);
+  // A moved or deleted sign-in page is a 404, and waiting for a button on it
+  // only reports a timeout. Name the real cause instead.
+  if (!response?.ok()) {
+    throw new Error(
+      `${REGISTER_PATH} returned ${response?.status() ?? "no response"}; ` +
+        "the SIWE gate is not served there any more. Update REGISTER_PATH."
+    );
+  }
   await page.getByTestId("siwe-sign-in").click();
   await page
     .getByTestId("siwe-address")

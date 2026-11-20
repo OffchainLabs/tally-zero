@@ -42,7 +42,7 @@ import { MarkdownEditor } from "@/components/form/MarkdownEditor";
 import { UploadDescriptionDialog } from "@/components/form/UploadDescriptionDialog";
 
 import { ARBITRUM_CHAIN_ID, L1_TIMELOCK } from "@/config/arbitrum-governance";
-import { GOVERNORS, type GovernorType } from "@/config/governors";
+import { GOVERNORS, type L2GovernorType } from "@/config/governors";
 import {
   PROPOSAL_DRAFT_AUTOSAVE_DEBOUNCE_MS,
   proposalDraftStorageKey,
@@ -173,7 +173,7 @@ export default function CreateProposalForm({
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
 
-  const [governorType, setGovernorType] = useState<GovernorType>(
+  const [governorType, setGovernorType] = useState<L2GovernorType>(
     initialDraft?.governorType ?? "treasury"
   );
   const [actions, setActions] = useState<FormProposalAction[]>(
@@ -529,7 +529,7 @@ export default function CreateProposalForm({
     );
   }
 
-  function handleGovernorChange(type: GovernorType) {
+  function handleGovernorChange(type: L2GovernorType) {
     setGovernorType(type);
     if (type !== "treasury") return;
     // The Treasury timelock executes on Arbitrum One only, so rows aimed at
@@ -706,8 +706,8 @@ export default function CreateProposalForm({
 }
 
 interface GovernorPickerProps {
-  value: GovernorType;
-  onChange: (value: GovernorType) => void;
+  value: L2GovernorType;
+  onChange: (value: L2GovernorType) => void;
   disabled: boolean;
   snapshotBlock: bigint | undefined;
 }
@@ -726,11 +726,11 @@ function GovernorPicker({
       <CardContent>
         <RadioGroup
           value={value}
-          onValueChange={(v) => onChange(v as GovernorType)}
+          onValueChange={(v) => onChange(v as L2GovernorType)}
           className="grid gap-3 md:grid-cols-2"
           disabled={disabled}
         >
-          {(Object.keys(GOVERNORS) as GovernorType[]).map((type) => (
+          {(Object.keys(GOVERNORS) as L2GovernorType[]).map((type) => (
             <GovernorOption
               key={type}
               type={type}
@@ -745,7 +745,7 @@ function GovernorPicker({
 }
 
 interface GovernorOptionProps {
-  type: GovernorType;
+  type: L2GovernorType;
   selected: boolean;
   snapshotBlock: bigint | undefined;
 }
@@ -929,7 +929,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 interface ActionsBuilderProps {
-  governorType: GovernorType;
+  governorType: L2GovernorType;
   actions: FormProposalAction[];
   errors: ReturnType<typeof validateAction>[];
   showErrors: boolean;

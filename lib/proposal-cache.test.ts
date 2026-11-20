@@ -189,10 +189,17 @@ describe("proposal-cache", () => {
       createProposal({ id: "b", createdAtBlock: 480_000_000 }),
     ];
 
-    it("numbers the rows when the indexer served the list", () => {
-      const result = numberCompleteList(proposals, true);
+    it("numbers only Arbitrum rows when the indexer serves both chains", () => {
+      const l1Proposal = createProposal({
+        id: "l1",
+        networkId: "1",
+        governorType: "L1_VOTING",
+        createdAtBlock: 25_600_000,
+      });
 
-      expect(result.map((p) => p.proposalNumber)).toEqual([1, 2]);
+      const result = numberCompleteList([...proposals, l1Proposal], true);
+
+      expect(result.map((p) => p.proposalNumber)).toEqual([1, 2, undefined]);
     });
 
     // Without the indexer the list is a recent RPC window, so numbering it

@@ -1,21 +1,25 @@
 /**
  * Governor configuration for ArbitrumDAO governance
- * Defines Core and Treasury governors with their respective timelocks
+ * Defines Core and Treasury governors with their respective timelocks, and the
+ * L1 voting governor on Ethereum, whose address comes from the indexer.
  */
 
 import { addressesEqual, findByAddress } from "@/lib/address-utils";
 import type { StageType } from "@/types/proposal-stage";
 import { ADDRESSES } from "@gzeoneth/gov-tracker";
 
-/** Governor type identifier */
-export type GovernorType = "core" | "treasury";
+/** The Arbitrum One governors, which are the ones proposals are created on */
+export type L2GovernorType = "core" | "treasury";
 
-/** Configuration for a governor contract */
+/** Governor type identifier */
+export type GovernorType = L2GovernorType | "l1";
+
+/** Configuration for an Arbitrum One governor contract */
 export interface GovernorConfig {
   /** Governor contract address */
   address: string;
   /** Governor type identifier */
-  type: GovernorType;
+  type: L2GovernorType;
   /** Display name (e.g., "Core Governor") */
   name: string;
   /** Brief description of the governor's purpose */
@@ -60,12 +64,63 @@ const TREASURY_GOVERNOR_CONFIG: GovernorConfig = {
   finalStage: "L2_TIMELOCK",
 };
 
-export const GOVERNORS: Record<GovernorType, GovernorConfig> = {
+export const GOVERNORS: Record<L2GovernorType, GovernorConfig> = {
   core: CORE_GOVERNOR_CONFIG,
   treasury: TREASURY_GOVERNOR_CONFIG,
 };
 
 export const GOVERNOR_LIST: GovernorConfig[] = Object.values(GOVERNORS);
+
+export const L1_VOTING_GOVERNOR_NAME = "L1 Voting Governor";
+
+/**
+ * The L1 voting governor on Ethereum. It has no gov-tracker lifecycle: its
+ * execution progress is the indexer's `executionPhase`.
+ */
+export interface L1VotingGovernorConfig {
+  address: string;
+  type: "l1";
+  name: typeof L1_VOTING_GOVERNOR_NAME;
+  description: string;
+  /** Ethereum mainnet, or the local L1 */
+  chainId: number;
+}
+
+// Not known statically: filled in from indexer entries as they arrive.
+const l1VotingGovernors = new Map<string, L1VotingGovernorConfig>();
+
+/**
+ * Record an L1 voting governor address seen on an indexer entry, so address-only
+ * lookups (`getGovernorType`, `isL1VotingGovernor`) recognize it.
+ */
+export function registerL1VotingGovernor(
+  address: string,
+  chainId: number
+): L1VotingGovernorConfig {
+  const key = address.toLowerCase();
+  const existing = l1VotingGovernors.get(key);
+  if (existing && existing.chainId === chainId) return existing;
+
+  const config: L1VotingGovernorConfig = {
+    address,
+    type: "l1",
+    name: L1_VOTING_GOVERNOR_NAME,
+    description: "Proposals voted on from Ethereum with Arbitrum voting power",
+    chainId,
+  };
+  l1VotingGovernors.set(key, config);
+  return config;
+}
+
+export function getL1VotingGovernor(
+  address: string
+): L1VotingGovernorConfig | undefined {
+  return l1VotingGovernors.get(address.toLowerCase());
+}
+
+export function isL1VotingGovernor(address: string): boolean {
+  return l1VotingGovernors.has(address.toLowerCase());
+}
 
 /**
  * Get governor configuration by contract address
@@ -120,9 +175,11 @@ export function getFinalStageForGovernor(
 /**
  * Get the type of governor for a given address
  * @param address - The governor contract address
- * @returns The governor type ("core" or "treasury"), or undefined if not found
+ * @returns The governor type ("core", "treasury" or a registered "l1"), or
+ *   undefined if not found
  */
 export function getGovernorType(address: string): GovernorType | undefined {
+  if (isL1VotingGovernor(address)) return "l1";
   const config = getGovernorByAddress(address);
   return config?.type;
 }
@@ -135,5 +192,7 @@ export function getGovernorTypeFromName(
   governorName: string | undefined
 ): GovernorType {
   if (!governorName) return "treasury";
-  return governorName.toLowerCase().includes("core") ? "core" : "treasury";
+  const name = governorName.toLowerCase();
+  if (name === L1_VOTING_GOVERNOR_NAME.toLowerCase()) return "l1";
+  return name.includes("core") ? "core" : "treasury";
 }
