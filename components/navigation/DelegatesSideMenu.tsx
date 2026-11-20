@@ -1,9 +1,10 @@
 "use client";
 
-import { UserPlus, Users, Vote } from "lucide-react";
+import { Landmark, UserPlus, Users, Vote } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useL1VotingDeployment } from "@/hooks/use-l1-voting-deployment";
 import { cn } from "@lib/utils";
 
 interface SideMenuItem {
@@ -12,7 +13,9 @@ interface SideMenuItem {
   icon: typeof Users;
 }
 
-const items: SideMenuItem[] = [
+const L1_REGISTRATION_HREF = "/delegates/l1-registration";
+
+const allItems: SideMenuItem[] = [
   { href: "/delegates", title: "Delegates", icon: Users },
   { href: "/delegates/my-delegation", title: "My Delegation", icon: Vote },
   {
@@ -20,10 +23,20 @@ const items: SideMenuItem[] = [
     title: "Create Delegate Profile",
     icon: UserPlus,
   },
+  {
+    href: L1_REGISTRATION_HREF,
+    title: "L1 Voting Registration",
+    icon: Landmark,
+  },
 ];
 
 export function DelegatesSideMenu() {
   const pathname = usePathname();
+  // L1 voting registration only shows once the indexer serves an L1 voting deployment.
+  const { deployment } = useL1VotingDeployment();
+  const items = deployment
+    ? allItems
+    : allItems.filter((item) => item.href !== L1_REGISTRATION_HREF);
 
   // Longest matching href wins, so "/delegates" stays active on the explorer
   // and on individual delegate pages while its siblings claim their own routes.
