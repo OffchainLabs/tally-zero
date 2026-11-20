@@ -47,9 +47,17 @@ export function formatStageName(stageName: string): string {
  * - Core Governor: 7 stages (includes L1 round-trip)
  * - Treasury Governor: 4 stages (L2 only)
  * - L1 Voting Governor: its execution phases (see lib/l1-voting)
+ *
+ * @param isL1Voting - Whether the proposal is on the L1 voting governor, from
+ *   `isL1VotingProposal`. Left out, the address is looked up among the
+ *   governors registered from the indexer, which are only known once the
+ *   proposal list has loaded.
  */
-export function getTotalStages(governorAddress: string): number {
-  if (isL1VotingGovernor(governorAddress)) return L1_EXECUTION_PHASES.length;
+export function getTotalStages(
+  governorAddress: string,
+  isL1Voting = isL1VotingGovernor(governorAddress)
+): number {
+  if (isL1Voting) return L1_EXECUTION_PHASES.length;
   return isCoreGovernor(governorAddress) ? 7 : 4;
 }
 
@@ -153,14 +161,17 @@ export interface ProposalDisplayStatus {
  *   still being confirmed (show `Executing`; the governor has executed and it
  *   is completion that is unproven) from an untracked historic row, which keeps
  *   showing the governor's answer.
+ * @param isL1Voting - Whether the proposal is on the L1 voting governor; see
+ *   {@link getTotalStages} for what leaving it out means.
  */
 export function getEffectiveDisplayState(
   governorState: string | null,
   stages: ProposalStage[],
   governorAddress: string,
-  isTracking = false
+  isTracking = false,
+  isL1Voting = isL1VotingGovernor(governorAddress)
 ): ProposalDisplayStatus {
-  const totalStages = getTotalStages(governorAddress);
+  const totalStages = getTotalStages(governorAddress, isL1Voting);
   const hasStages = stages && stages.length > 0;
   const isFinished =
     hasStages && isProposalFullyExecuted(stages, governorAddress);
@@ -196,7 +207,7 @@ export function getEffectiveDisplayState(
 
   // L1 voting proposals have no gov-tracker stages to go on; their progress is
   // the indexer's execution phase, which getL1DisplayState reads.
-  if (isL1VotingGovernor(governorAddress)) {
+  if (isL1Voting) {
     return settled("Executed");
   }
 

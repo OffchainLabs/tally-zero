@@ -40,17 +40,21 @@ export function normalizeProposalTab(
 }
 
 /**
- * CAIP-style governor id. The chain defaults to Arbitrum One, or to the chain an
- * L1 voting governor was registered with from the indexer.
+ * CAIP-style governor id. Pass the proposal's own chain (`networkId`) whenever
+ * there is one. With only an address to go on, the chain falls back to the one
+ * an L1 voting governor was registered with from the indexer, which is only
+ * known once the proposal list has loaded, and then to Arbitrum One.
  */
 export function buildGovernorId(
   governorAddress: string,
   chainId?: number | string
 ): string {
+  // An empty or non-numeric chain counts as not given
+  const given = Number(chainId ?? NaN);
   const chain =
-    chainId ??
-    getL1VotingGovernor(governorAddress)?.chainId ??
-    ARBITRUM_CHAIN_ID;
+    Number.isInteger(given) && given > 0
+      ? given
+      : (getL1VotingGovernor(governorAddress)?.chainId ?? ARBITRUM_CHAIN_ID);
   return `eip155:${chain}:${governorAddress}`;
 }
 

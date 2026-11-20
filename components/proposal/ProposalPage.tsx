@@ -16,6 +16,7 @@ import { GovernorBadge } from "@/components/ui/GovernorBadge";
 import { proposalSchema } from "@/config/schema";
 import { useProposalById } from "@/hooks/use-proposal-by-id";
 import { useProposalLifecycleStatus } from "@/hooks/use-proposal-lifecycle-status";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import {
   buildGovernorId,
   buildProposalPath,
@@ -136,10 +137,14 @@ function ProposalPageBody({
     const liveTabRaw = liveParams.get("tab");
     const liveActiveTab = normalizeProposalTab(liveTabRaw) ?? "description";
 
-    const canonicalGovId = buildGovernorId(proposal.contractAddress);
+    const canonicalGovId = buildGovernorId(
+      proposal.contractAddress,
+      proposal.networkId
+    );
     const canonicalUrl = buildProposalPath({
       proposalId: proposal.id,
       governorAddress: proposal.contractAddress,
+      chainId: proposal.networkId,
       tab: liveActiveTab,
     });
     const isTabCanonical =
@@ -163,6 +168,7 @@ function ProposalPageBody({
       const nextUrl = buildProposalPath({
         proposalId: proposal.id,
         governorAddress: proposal.contractAddress,
+        chainId: proposal.networkId,
         tab,
       });
 
@@ -307,6 +313,7 @@ function ProposalPageContent({
           <ProposalVoteSummaryCard
             proposalId={proposal.id}
             governorAddress={proposal.contractAddress}
+            isL1Voting={isL1VotingProposal(proposal)}
             votes={proposal.votes}
             startBlock={proposal.startBlock}
             endBlock={proposal.endBlock}

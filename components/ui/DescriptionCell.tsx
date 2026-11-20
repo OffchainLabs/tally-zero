@@ -43,6 +43,7 @@ export function ClickableDescriptionCell({
       href={buildProposalPath({
         proposalId: proposal.id,
         governorAddress: proposal.contractAddress,
+        chainId: proposal.networkId,
         tab: defaultTab,
       })}
       className="block w-full text-left text-foreground hover:text-primary hover:underline transition-colors cursor-pointer"

@@ -39,6 +39,7 @@ export const MobileProposalCard = memo(function MobileProposalCard({
       href={buildProposalPath({
         proposalId: proposal.id,
         governorAddress: proposal.contractAddress,
+        chainId: proposal.networkId,
       })}
       className={cn(
         "block w-full text-left p-4 rounded-xl min-h-[88px]",

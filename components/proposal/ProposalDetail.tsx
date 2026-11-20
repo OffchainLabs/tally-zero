@@ -18,6 +18,7 @@ import { isArbitrumGovernor } from "@config/governors";
 import { proposalSchema } from "@config/schema";
 import { useNerdMode } from "@context/NerdModeContext";
 import { useL1Block } from "@hooks/use-l1-block";
+import { isL1VotingProposal } from "@lib/l1-voting";
 import { proposalSanitizeSchema } from "@lib/sanitize-schema";
 import { cn } from "@lib/utils";
 
@@ -162,6 +163,7 @@ export function ProposalDetail({
                 proposalId={proposal.id}
                 creationTxHash={proposal.creationTxHash}
                 governorAddress={proposal.contractAddress}
+                isL1Voting={isL1VotingProposal(proposal)}
                 currentL1Block={currentL1Block ?? undefined}
                 startBlock={proposal.startBlock}
                 endBlock={proposal.endBlock}

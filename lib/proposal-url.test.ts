@@ -130,5 +130,50 @@ describe("proposal-url", () => {
       registerL1VotingGovernor(registered, 1);
       expect(buildGovernorId(registered)).toBe(`eip155:1:${registered}`);
     });
+
+    it("builds an unregistered governor's id on the chain it is given", () => {
+      expect(buildGovernorId(l1Governor, 1)).toBe(`eip155:1:${l1Governor}`);
+      expect(buildGovernorId(l1Governor, "1")).toBe(`eip155:1:${l1Governor}`);
+    });
+
+    it("prefers the given chain over the registered one", () => {
+      const registered = "0x00000000000000000000000000000000000f22f2";
+      registerL1VotingGovernor(registered, 1);
+      expect(buildGovernorId(registered, 1337)).toBe(
+        `eip155:1337:${registered}`
+      );
+      expect(buildGovernorId(registered, "42161")).toBe(
+        `eip155:42161:${registered}`
+      );
+    });
+
+    it("treats an empty or non-numeric chain as not given", () => {
+      expect(buildGovernorId(governorAddress, "")).toBe(governorId);
+      expect(buildGovernorId(governorAddress, "mainnet")).toBe(governorId);
+      expect(buildGovernorId(governorAddress, NaN)).toBe(governorId);
+    });
+
+    it("round-trips a governor id through the parser", () => {
+      expect(parseGovernorRef(buildGovernorId(l1Governor, 1))).toEqual({
+        governorAddress: l1Governor,
+        chainId: 1,
+      });
+      expect(parseGovernorRef(buildGovernorId(governorAddress))).toEqual({
+        governorAddress,
+        chainId: 42161,
+      });
+
+      const path = buildProposalPath({
+        proposalId,
+        governorAddress: l1Governor,
+        chainId: "1337",
+        tab: "stages",
+      });
+      const govId = new URLSearchParams(path.split("?")[1]).get("govId");
+      expect(parseGovernorRef(govId)).toEqual({
+        governorAddress: l1Governor,
+        chainId: 1337,
+      });
+    });
   });
 });

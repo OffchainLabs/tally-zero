@@ -32,6 +32,8 @@ interface ProposalStagesProps {
   proposalId: string;
   creationTxHash: string;
   governorAddress: string;
+  /** From `isL1VotingProposal`; left out, the address is looked up instead */
+  isL1Voting?: boolean;
   l1RpcUrl?: string;
   currentL1Block?: number;
   /** Vote start block from the ProposalCreated event (proposalSnapshot) */
@@ -44,6 +46,7 @@ export default function ProposalStages({
   proposalId,
   creationTxHash,
   governorAddress,
+  isL1Voting,
   l1RpcUrl,
   currentL1Block,
   startBlock,
@@ -64,6 +67,7 @@ export default function ProposalStages({
     proposalId,
     creationTxHash,
     governorAddress,
+    isL1Voting,
     enabled: true,
     l1RpcUrl,
     currentL1Block,
@@ -72,7 +76,9 @@ export default function ProposalStages({
   // Unknown addresses keep the Core timings, as before. An L1 voting proposal
   // never gets here (it has no gov-tracker stages), but keeps its own type
   // rather than borrowing Core's if it does.
-  const governorType = getGovernorType(governorAddress) ?? "core";
+  const governorType = isL1Voting
+    ? "l1"
+    : (getGovernorType(governorAddress) ?? "core");
 
   const allStageTypes = getAllStageTypes();
   const stageMap = useMemo(
