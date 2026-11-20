@@ -25,8 +25,13 @@ export interface EnsureChainResult {
  * nothing to switch, so `isWrongNetwork` is false and `ensure` is a no-op.
  */
 export function useEnsureChain(chainId: number): EnsureChainResult {
-  const { isConnected } = useAccount();
-  const currentChainId = useChainId();
+  const { isConnected, chainId: walletChainId } = useAccount();
+  const configChainId = useChainId();
+  // The wallet's own chain decides. `useChainId` is wagmi config state, which
+  // stays on the last configured chain when the wallet moves to one the app
+  // does not configure; it is only the fallback for a connection that has not
+  // reported its chain yet.
+  const currentChainId = walletChainId ?? configChainId;
   const { switchChainAsync, isPending } = useSwitchChain();
 
   const isWrongNetwork = isConnected && currentChainId !== chainId;
