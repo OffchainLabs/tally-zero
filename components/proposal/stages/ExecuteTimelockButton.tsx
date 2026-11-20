@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import type { TimelockOperationInfo } from "@/hooks/use-timelock-operation";
 import {
   hashOperation,
@@ -31,7 +33,11 @@ export function ExecuteTimelockButton({
   operation,
   onSuccess,
 }: ExecuteTimelockButtonProps) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  // Operations come from CallScheduled logs read off the L2 provider, and the
+  // button only shows under the L2 timelock stage, so this is always Arbitrum.
+  const { isWrongNetwork, isSwitching, ensure } =
+    useEnsureChain(ARBITRUM_CHAIN_ID);
   const [customSalt, setCustomSalt] = useState("");
 
   const baseParams = useMemo(
@@ -100,6 +106,8 @@ export function ExecuteTimelockButton({
     isError: isEstimateError,
     isLoading: isEstimating,
   } = useEstimateGas({
+    account: address,
+    chainId: ARBITRUM_CHAIN_ID,
     to: prepared?.to,
     data: prepared?.data,
     value: BigInt(prepared?.value ?? "0"),
@@ -116,6 +124,7 @@ export function ExecuteTimelockButton({
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({
       hash: txHash,
+      chainId: ARBITRUM_CHAIN_ID,
     });
 
   useEffect(() => {
@@ -131,9 +140,15 @@ export function ExecuteTimelockButton({
     }
   }, [sendError]);
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
     if (!prepared || isEstimateError) return;
+    try {
+      await ensure();
+    } catch {
+      return;
+    }
     sendTransaction({
+      chainId: ARBITRUM_CHAIN_ID,
       to: prepared.to,
       data: prepared.data,
       value: BigInt(prepared.value),
@@ -226,6 +241,19 @@ export function ExecuteTimelockButton({
     return (
       <Button size="sm" variant="outline" disabled>
         Executed ✓
+      </Button>
+    );
+  }
+
+  if (isWrongNetwork) {
+    return (
+      <Button
+        size="sm"
+        onClick={() => void ensure().catch(() => {})}
+        disabled={isSwitching}
+      >
+        {isSwitching && <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />}
+        Switch to Arbitrum
       </Button>
     );
   }
