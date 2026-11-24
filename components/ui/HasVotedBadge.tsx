@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
+import { proposalChainId } from "@/lib/l1-voting";
 import { cn } from "@/lib/utils";
 import { ParsedProposal } from "@/types/proposal";
 
@@ -31,6 +32,7 @@ export function HasVotedBadge({
   const { hasVoted, isLoadingHasVoted } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress as `0x${string}`,
+    chainId: proposalChainId(proposal),
   });
 
   const textSize = size === "sm" ? "text-[10px]" : "text-xs";

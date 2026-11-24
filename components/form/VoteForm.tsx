@@ -36,6 +36,7 @@ import { ARBITRUM_CHAIN_ID } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
 import { getSimulationErrorMessage } from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
+import { proposalChainId } from "@lib/l1-voting";
 import {
   hasZeroVotingPower,
   isActiveProposalState,
@@ -64,8 +65,7 @@ export default function VoteForm({
 
   const selectedVote = useWatch({ control: form.control, name: "vote" });
   const governorAddress = proposal.contractAddress as `0x${string}`;
-  // The governor's own chain: Arbitrum, or Ethereum for an L1 voting proposal
-  const governorChainId = Number(proposal.networkId) || ARBITRUM_CHAIN_ID;
+  const governorChainId = proposalChainId(proposal);
   const { isWrongNetwork, isSwitching, ensure } =
     useEnsureChain(governorChainId);
   const isPageVariant = variant === "page";
@@ -73,11 +73,14 @@ export default function VoteForm({
 
   const { votingPower, isLoadingVotingPower } = useProposalVotingPower({
     startBlock: proposal.startBlock,
+    governorAddress,
+    chainId: governorChainId,
   });
 
   const { hasVoted, hasRecordedVote, isLoadingHasVoted } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress,
+    chainId: governorChainId,
   });
 
   const { data: userVote, isLoading: isLoadingUserVote } = useUserVote({

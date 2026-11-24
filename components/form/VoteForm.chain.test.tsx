@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   useAccount: vi.fn(),
   useChainId: vi.fn(),
   useEstimateGas: vi.fn(),
+  useProposalVotingPower: vi.fn(),
+  useProposalHasVoted: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn() }),
 }));
 
@@ -43,17 +45,10 @@ vi.mock("wagmi", () => ({
   }),
 }));
 vi.mock("@/hooks/use-proposal-voting-power", () => ({
-  useProposalVotingPower: () => ({
-    votingPower: BigInt(10),
-    isLoadingVotingPower: false,
-  }),
+  useProposalVotingPower: mocks.useProposalVotingPower,
 }));
 vi.mock("@/hooks/use-proposal-has-voted", () => ({
-  useProposalHasVoted: () => ({
-    hasVoted: false,
-    hasRecordedVote: false,
-    isLoadingHasVoted: false,
-  }),
+  useProposalHasVoted: mocks.useProposalHasVoted,
 }));
 vi.mock("@/hooks/use-user-vote", () => ({
   useUserVote: () => ({ data: null, isLoading: false }),
@@ -93,12 +88,23 @@ function connectOn(chainId: number) {
   mocks.useChainId.mockReturnValue(chainId);
 }
 
-function renderForm(overrides: Partial<typeof proposal> = {}) {
-  const view = render(
+function renderUnselected(overrides: Partial<typeof proposal> = {}) {
+  return render(
     <VoteForm proposal={{ ...proposal, ...overrides }} variant="page" />
   );
+}
+
+function renderForm(overrides: Partial<typeof proposal> = {}) {
+  const view = renderUnselected(overrides);
   fireEvent.click(view.getByRole("radio", { name: "For" }));
   return view;
+}
+
+function setVotingPower(votingPower: bigint | undefined) {
+  mocks.useProposalVotingPower.mockReturnValue({
+    votingPower,
+    isLoadingVotingPower: false,
+  });
 }
 
 describe("VoteForm chain pinning", () => {
@@ -107,6 +113,12 @@ describe("VoteForm chain pinning", () => {
     mocks.useEstimateGas.mockReturnValue({ error: null, isError: false });
     mocks.switchChainAsync.mockResolvedValue(undefined);
     connectOn(ARBITRUM_CHAIN_ID);
+    setVotingPower(BigInt(10));
+    mocks.useProposalHasVoted.mockReturnValue({
+      hasVoted: false,
+      hasRecordedVote: false,
+      isLoadingHasVoted: false,
+    });
   });
 
   afterEach(cleanup);
@@ -190,5 +202,41 @@ describe("VoteForm chain pinning", () => {
       expect(mocks.switchChainAsync).toHaveBeenCalledWith({ chainId: 1 })
     );
     expect(mocks.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("reads voting power and vote status from the L1 governor on Ethereum", () => {
+    renderForm({ contractAddress: L1_GOVERNOR, networkId: "1" });
+
+    const pinnedToL1 = expect.objectContaining({
+      governorAddress: L1_GOVERNOR,
+      chainId: 1,
+    });
+    expect(mocks.useProposalVotingPower).toHaveBeenLastCalledWith(pinnedToL1);
+    expect(mocks.useProposalHasVoted).toHaveBeenLastCalledWith(pinnedToL1);
+  });
+
+  it("offers the switch for an L1 proposal while its voting power is unproven", () => {
+    // The L1 governor reverts on unclaimed or unproven votes instead of
+    // returning 0, so the read stays undefined and the form stays up.
+    setVotingPower(undefined);
+    const view = renderUnselected({
+      contractAddress: L1_GOVERNOR,
+      networkId: "1",
+    });
+
+    expect(view.getByRole("button", { name: "Switch network" })).toBeTruthy();
+  });
+
+  it("hides the vote action when the governor reports no voting power", () => {
+    // The read is the governor's own count on its own chain, so 0 holds
+    // whatever chain the wallet is on, and a switch would not help.
+    setVotingPower(BigInt(0));
+    const view = renderUnselected({
+      contractAddress: L1_GOVERNOR,
+      networkId: "1",
+    });
+
+    expect(view.queryByRole("button", { name: "Switch network" })).toBeNull();
+    expect(view.getByText(/You need to delegate ARB tokens/)).toBeTruthy();
   });
 });

@@ -1,15 +1,25 @@
 "use client";
 
-import { readVotingPower } from "@gzeoneth/gov-tracker";
+import { readGetVotes } from "@gzeoneth/gov-tracker";
 import { zeroAddress } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 
-import { ARB_TOKEN } from "@/config/arbitrum-governance";
-
+/**
+ * The account's voting power at the proposal snapshot, as the proposal's own
+ * governor counts it. An L2 governor returns the ARB token's past votes. The
+ * L1 voting governor returns the proven votes of the L2 delegate the account
+ * claimed, and reverts (so `votingPower` stays undefined) while the claim or
+ * the votes are unproven.
+ */
 export function useProposalVotingPower({
   startBlock,
+  governorAddress,
+  chainId,
 }: {
   startBlock: string | undefined;
+  governorAddress: `0x${string}`;
+  /** The governor's chain; the read ignores the wallet's chain */
+  chainId: number;
 }) {
   const { address, isConnected } = useAccount();
   const accountAddress = address ?? zeroAddress;
@@ -17,10 +27,11 @@ export function useProposalVotingPower({
   const canReadAccountData = isConnected && !!address;
 
   const { data, isLoading } = useReadContract({
-    ...readVotingPower(
+    ...readGetVotes(
       accountAddress,
       snapshotBlock ?? BigInt(0),
-      ARB_TOKEN.address
+      governorAddress,
+      chainId
     ),
     query: {
       enabled: canReadAccountData && snapshotBlock !== undefined,

@@ -7,6 +7,7 @@
  * progress after the vote is the indexer's `executionPhase`.
  */
 
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { isL1VotingChainId } from "@/config/chains";
 import { isL1VotingGovernor } from "@/config/governors";
 import type { IndexerExecutionPhase } from "@/lib/tally-data/types";
@@ -27,6 +28,15 @@ export function isL1VotingProposal(proposal: L1VotingProposalSource): boolean {
   return Boolean(
     proposal.contractAddress && isL1VotingGovernor(proposal.contractAddress)
   );
+}
+
+/**
+ * The chain a proposal's governor lives on: Ethereum (or the local L1) for an
+ * L1 voting proposal, otherwise Arbitrum One. Reads and sends for the proposal
+ * go here, whatever chain the wallet is on.
+ */
+export function proposalChainId(proposal: { networkId?: string }): number {
+  return Number(proposal.networkId) || ARBITRUM_CHAIN_ID;
 }
 
 /** The execution phases an L1 voting proposal moves through, in order */

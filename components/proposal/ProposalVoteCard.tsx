@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { proposalSchema } from "@/config/schema";
 import { useNerdMode } from "@/context/NerdModeContext";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
+import { proposalChainId } from "@/lib/l1-voting";
 import {
   isActiveProposalState,
   shouldRenderProposalVoteCard,
@@ -24,6 +25,7 @@ export function ProposalVoteCard({
   const { hasRecordedVote } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress as `0x${string}`,
+    chainId: proposalChainId(proposal),
   });
   const isActiveProposal = isActiveProposalState(proposal.state);
 
