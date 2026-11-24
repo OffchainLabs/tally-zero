@@ -138,14 +138,11 @@ export function ElectionVoteRow({
     }
   }, [isConfirmed, label, targetAddress]);
 
-  const handleVote = useCallback(async () => {
+  // Only reachable on the right network: the switch button replaces Vote
+  // while the wallet is elsewhere.
+  const handleVote = useCallback(() => {
     if (!prepared) return;
     if (!isEstimateError || bypassSimulation) {
-      try {
-        await ensure();
-      } catch {
-        return;
-      }
       sendTransaction({
         chainId: governorChainId,
         to: prepared.to,
@@ -156,7 +153,6 @@ export function ElectionVoteRow({
     prepared,
     isEstimateError,
     bypassSimulation,
-    ensure,
     governorChainId,
     sendTransaction,
   ]);

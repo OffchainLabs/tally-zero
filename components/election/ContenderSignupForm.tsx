@@ -115,13 +115,10 @@ export function ContenderSignupForm({
     });
   }
 
-  async function handleSubmit(): Promise<void> {
+  // Only reachable on the right network: the switch button replaces Submit
+  // Registration while the wallet is elsewhere.
+  function handleSubmit(): void {
     if (!prepared || isEstimateError) return;
-    try {
-      await ensure();
-    } catch {
-      return;
-    }
     sendTransaction({
       chainId,
       to: prepared.to,
