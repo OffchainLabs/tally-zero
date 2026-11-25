@@ -1,10 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GOVERNORS } from "@/config/governors";
 import { LIFECYCLE_WINDOW_DAYS } from "@/lib/proposal-utils";
 import { BLOCKS_PER_DAY } from "@config/block-times";
 
-import { shouldTrackProposalLifecycle } from "./use-proposal-lifecycle-status";
+import {
+  shouldTrackProposalLifecycle,
+  useProposalLifecycleStatus,
+  type ProposalLifecycleInput,
+} from "./use-proposal-lifecycle-status";
+
+const mocks = vi.hoisted(() => ({
+  useL1Block: vi.fn(),
+  useProposalStages: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-l1-block", () => ({ useL1Block: mocks.useL1Block }));
+vi.mock("@/hooks/use-proposal-stages", () => ({
+  useProposalStages: mocks.useProposalStages,
+}));
 
 const CREATION_TX =
   "0x1f709032574f9c3986dbda8767f3bb9ff4f9c48cb67529f390dd9fa9b3bf853d";
@@ -81,5 +97,60 @@ describe("shouldTrackProposalLifecycle", () => {
     expect(
       shouldTrackProposalLifecycle(proposal({ creationTxHash: "" }), L1_HEAD)
     ).toBe(false);
+  });
+});
+
+describe("useProposalLifecycleStatus", () => {
+  const UNREGISTERED_L1_GOVERNOR = "0x4444444444444444444444444444444444444444";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.useL1Block.mockReturnValue({
+      currentL1Block: L1_HEAD,
+      isLoading: false,
+    });
+    mocks.useProposalStages.mockReturnValue({
+      stages: [],
+      currentStageIndex: -1,
+      isLoading: false,
+      isQueued: false,
+      queuePosition: null,
+      isComplete: false,
+      error: null,
+      result: null,
+      isBackgroundRefreshing: false,
+    });
+  });
+
+  function render(input: ProposalLifecycleInput) {
+    function Probe() {
+      useProposalLifecycleStatus(input);
+      return null;
+    }
+    renderToStaticMarkup(createElement(Probe));
+  }
+
+  // The registry only learns an L1 voting governor once the proposal list has
+  // loaded, so the row's own fields decide which stages the trace looks for.
+  it("tracks an L1 voting row as L1 before the registry knows its governor", () => {
+    render(
+      proposal({
+        contractAddress: UNREGISTERED_L1_GOVERNOR,
+        networkId: "1",
+        governorType: "L1_VOTING",
+      })
+    );
+
+    expect(mocks.useProposalStages).toHaveBeenCalledWith(
+      expect.objectContaining({ isL1Voting: true })
+    );
+  });
+
+  it("tracks an Arbitrum row as not L1", () => {
+    render(proposal({ networkId: "42161", governorType: "CONSTITUTIONAL" }));
+
+    expect(mocks.useProposalStages).toHaveBeenCalledWith(
+      expect.objectContaining({ isL1Voting: false })
+    );
   });
 });

@@ -14,6 +14,7 @@ vi.mock("@/hooks/use-proposal-lifecycle-status", () => ({
 }));
 
 const PROPOSAL_ID = "9950";
+const UNREGISTERED_L1_GOVERNOR = "0x4444444444444444444444444444444444444444";
 
 const proposal = {
   id: PROPOSAL_ID,
@@ -89,6 +90,25 @@ describe("LifecycleCell", () => {
 
     expect(html).toContain("animate-[shimmer_2s_ease-in-out_infinite]");
     expect(html).not.toContain(">Queued<");
+  });
+
+  // The registry only learns an L1 voting governor once the proposal list has
+  // loaded, so the link has to take the chain from the row itself.
+  it("links an L1 voting row to its own chain before the registry knows it", () => {
+    mocks.useProposalLifecycleStatus.mockReturnValue(status({}));
+    const l1Row = {
+      ...proposal,
+      contractAddress: UNREGISTERED_L1_GOVERNOR,
+      networkId: "1",
+      governorType: "L1_VOTING",
+    } as typeof proposal;
+
+    const html = renderToStaticMarkup(<LifecycleCell proposal={l1Row} />);
+
+    expect(html).toContain(`govId=eip155:1:${UNREGISTERED_L1_GOVERNOR}`);
+    expect(mocks.useProposalLifecycleStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ networkId: "1", governorType: "L1_VOTING" })
+    );
   });
 
   it("links to the stages tab for a resolved status", () => {
