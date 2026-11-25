@@ -23,7 +23,11 @@ import { Button } from "@/components/ui/Button";
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { useElectionContracts } from "@/hooks/use-election-contracts";
 import { useEnsureChain } from "@/hooks/use-ensure-chain";
-import { getSimulationErrorMessage } from "@/lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 
 interface ContenderSignupFormProps {
   proposalId: string;
@@ -85,10 +89,20 @@ export function ContenderSignupForm({
 
   const {
     data: txHash,
+    error: sendError,
     isPending: isWriting,
     isSuccess,
     sendTransaction,
   } = useSendTransaction();
+
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "register as contender"));
+    }
+  }, [sendError]);
 
   useEffect(() => {
     if (txHash) {

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   useEstimateGas: vi.fn(),
   useWaitForTransactionReceipt: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn() }),
+  sendError: { current: null as Error | null },
 }));
 
 vi.mock("sonner", () => ({ toast: mocks.toast }));
@@ -33,6 +34,7 @@ vi.mock("wagmi", () => ({
   useEstimateGas: mocks.useEstimateGas,
   useSendTransaction: () => ({
     data: undefined,
+    error: mocks.sendError.current,
     isPending: false,
     sendTransaction: mocks.sendTransaction,
   }),
@@ -75,6 +77,7 @@ function renderRow(chainId: number | undefined = ARBITRUM_CHAIN_ID) {
 describe("ElectionVoteRow chain pinning", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.sendError.current = null;
     mocks.useEstimateGas.mockReturnValue({ error: null, isError: false });
     mocks.useWaitForTransactionReceipt.mockReturnValue({
       isLoading: false,
@@ -132,5 +135,27 @@ describe("ElectionVoteRow chain pinning", () => {
       expect(mocks.switchChainAsync).toHaveBeenCalledWith({ chainId: 421614 })
     );
     expect(mocks.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  // The switch button covers a wallet that is already elsewhere at render
+  // time. A send that still fails, such as a chain change between the last
+  // render and the click, has to say so instead of quietly resetting.
+  it("reports a failed send", () => {
+    mocks.sendError.current = new Error("Chain mismatch");
+    renderRow();
+
+    expect(mocks.toast.error).toHaveBeenCalledWith(
+      expect.stringContaining("Chain mismatch")
+    );
+  });
+
+  it("stays quiet when the user rejects the vote", () => {
+    mocks.sendError.current = Object.assign(
+      new Error("User rejected the request."),
+      { code: 4001 }
+    );
+    renderRow();
+
+    expect(mocks.toast.error).not.toHaveBeenCalled();
   });
 });

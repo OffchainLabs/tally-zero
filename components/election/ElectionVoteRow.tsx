@@ -23,7 +23,11 @@ import { Input } from "@/components/ui/Input";
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import { useAddressDisplayRecord } from "@/lib/election-utils";
-import { getSimulationErrorMessage } from "@/lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
@@ -119,9 +123,19 @@ export function ElectionVoteRow({
 
   const {
     data: txHash,
+    error: sendError,
     isPending: isWriting,
     sendTransaction,
   } = useSendTransaction();
+
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "send vote"));
+    }
+  }, [sendError]);
 
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash, chainId: governorChainId });
