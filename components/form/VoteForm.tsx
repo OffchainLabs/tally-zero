@@ -27,13 +27,20 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import type { VoteSupport } from "@gzeoneth/gov-tracker";
 import { VOTE_SUPPORT, prepareCastVote } from "@gzeoneth/gov-tracker";
 
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import { useProposalHasVoted } from "@/hooks/use-proposal-has-voted";
 import { useProposalVotingPower } from "@/hooks/use-proposal-voting-power";
 import { useUserVote, type UserVoteReceipt } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
+import { ARBITRUM_CHAIN_ID } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
-import { getSimulationErrorMessage } from "@lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
+import { proposalChainId } from "@lib/l1-voting";
 import {
   hasZeroVotingPower,
   isActiveProposalState,
@@ -62,16 +69,22 @@ export default function VoteForm({
 
   const selectedVote = useWatch({ control: form.control, name: "vote" });
   const governorAddress = proposal.contractAddress as `0x${string}`;
+  const governorChainId = proposalChainId(proposal);
+  const { isWrongNetwork, isSwitching, ensure } =
+    useEnsureChain(governorChainId);
   const isPageVariant = variant === "page";
   const isActiveProposal = isActiveProposalState(proposal.state);
 
   const { votingPower, isLoadingVotingPower } = useProposalVotingPower({
     startBlock: proposal.startBlock,
+    governorAddress,
+    chainId: governorChainId,
   });
 
   const { hasVoted, hasRecordedVote, isLoadingHasVoted } = useProposalHasVoted({
     proposalId: proposal.id,
     governorAddress,
+    chainId: governorChainId,
   });
 
   const { data: userVote, isLoading: isLoadingUserVote } = useUserVote({
@@ -117,6 +130,8 @@ export default function VoteForm({
   }, [governorAddress, proposal.id, selectedVote]);
 
   const { error: estimateError, isError: isEstimateError } = useEstimateGas({
+    account: address,
+    chainId: governorChainId,
     to: voteTransaction?.to,
     data: voteTransaction?.data,
     query: { enabled: !!voteTransaction && isConnected },
@@ -129,6 +144,7 @@ export default function VoteForm({
 
   const {
     data: transactionHash,
+    error: sendError,
     isPending: isSubmittingVote,
     isSuccess: isVoteSubmitted,
     sendTransaction,
@@ -140,10 +156,22 @@ export default function VoteForm({
     }
   }, [transactionHash]);
 
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "send vote"));
+    }
+  }, [sendError]);
+
+  // Only reachable on the right network: the switch button replaces Vote
+  // while the wallet is elsewhere.
   function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
     if (!voteTransaction) return;
 
     sendTransaction({
+      chainId: governorChainId,
       to: voteTransaction.to,
       data: voteTransaction.data,
     });
@@ -159,6 +187,17 @@ export default function VoteForm({
   const voteActionButton = !isActiveProposal ? (
     <Button variant="destructive" disabled>
       Cannot vote
+    </Button>
+  ) : isWrongNetwork ? (
+    <Button
+      type="button"
+      onClick={() => void ensure().catch(() => {})}
+      disabled={isSwitching}
+    >
+      {isSwitching && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+      {governorChainId === ARBITRUM_CHAIN_ID
+        ? "Switch to Arbitrum"
+        : "Switch network"}
     </Button>
   ) : isSubmittingVote ? (
     <Button variant="secondary" disabled>
