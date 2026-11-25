@@ -20,8 +20,14 @@ import {
 } from "@gzeoneth/gov-tracker";
 
 import { Button } from "@/components/ui/Button";
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { useElectionContracts } from "@/hooks/use-election-contracts";
-import { getSimulationErrorMessage } from "@/lib/error-utils";
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 
 interface ContenderSignupFormProps {
   proposalId: string;
@@ -33,6 +39,7 @@ export function ContenderSignupForm({
   const { address, isConnected } = useAccount();
   const { nomineeGovernorAddress, chainId } = useElectionContracts();
   const governorAddress = nomineeGovernorAddress;
+  const { isWrongNetwork, isSwitching, ensure } = useEnsureChain(chainId);
 
   const { data: governorName } = useReadContract({
     ...readGovernorName(governorAddress, chainId),
@@ -68,6 +75,8 @@ export function ContenderSignupForm({
   }, [signature, registration]);
 
   const { error: estimateError, isError: isEstimateError } = useEstimateGas({
+    account: address,
+    chainId,
     to: prepared?.to,
     data: prepared?.data,
     query: { enabled: !!prepared },
@@ -80,10 +89,20 @@ export function ContenderSignupForm({
 
   const {
     data: txHash,
+    error: sendError,
     isPending: isWriting,
     isSuccess,
     sendTransaction,
   } = useSendTransaction();
+
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "register as contender"));
+    }
+  }, [sendError]);
 
   useEffect(() => {
     if (txHash) {
@@ -110,9 +129,12 @@ export function ContenderSignupForm({
     });
   }
 
+  // Only reachable on the right network: the switch button replaces Submit
+  // Registration while the wallet is elsewhere.
   function handleSubmit(): void {
     if (!prepared || isEstimateError) return;
     sendTransaction({
+      chainId,
       to: prepared.to,
       data: prepared.data,
     });
@@ -158,6 +180,16 @@ export function ContenderSignupForm({
         <Button disabled>
           <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
           Submitting...
+        </Button>
+      ) : isWrongNetwork ? (
+        <Button
+          onClick={() => void ensure().catch(() => {})}
+          disabled={isSwitching}
+        >
+          {isSwitching && <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />}
+          {chainId === ARBITRUM_CHAIN_ID
+            ? "Switch to Arbitrum"
+            : "Switch network"}
         </Button>
       ) : prepared ? (
         <Button onClick={handleSubmit} disabled={isEstimateError}>

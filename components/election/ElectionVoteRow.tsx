@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  useAccount,
   useEstimateGas,
   useSendTransaction,
   useWaitForTransactionReceipt,
@@ -19,8 +20,14 @@ import { utils as ethersUtils } from "ethers";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import { useAddressDisplayRecord } from "@/lib/election-utils";
-import { getSimulationErrorMessage } from "@/lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@/lib/error-utils";
 import { getAddressExplorerUrl } from "@/lib/explorer-utils";
 import { formatVotingPower, shortenAddress } from "@/lib/format-utils";
 
@@ -62,6 +69,10 @@ export function ElectionVoteRow({
 }: ElectionVoteRowProps): React.ReactElement {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const { address } = useAccount();
+  const governorChainId = chainId ?? ARBITRUM_CHAIN_ID;
+  const { isWrongNetwork, isSwitching, ensure } =
+    useEnsureChain(governorChainId);
   const display = useAddressDisplayRecord(targetAddress);
   const label = labelOverride ?? display?.label;
   const resolvedProfileUrl = profileUrl ?? display?.profileUrl ?? undefined;
@@ -98,6 +109,8 @@ export function ElectionVoteRow({
   ]);
 
   const { error: estimateError, isError: isEstimateError } = useEstimateGas({
+    account: address,
+    chainId: governorChainId,
     to: prepared?.to,
     data: prepared?.data,
     query: { enabled: !!prepared },
@@ -110,12 +123,22 @@ export function ElectionVoteRow({
 
   const {
     data: txHash,
+    error: sendError,
     isPending: isWriting,
     sendTransaction,
   } = useSendTransaction();
 
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "send vote"));
+    }
+  }, [sendError]);
+
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({ hash: txHash });
+    useWaitForTransactionReceipt({ hash: txHash, chainId: governorChainId });
 
   const onVoteSuccessRef = useRef(onVoteSuccess);
   onVoteSuccessRef.current = onVoteSuccess;
@@ -129,12 +152,24 @@ export function ElectionVoteRow({
     }
   }, [isConfirmed, label, targetAddress]);
 
+  // Only reachable on the right network: the switch button replaces Vote
+  // while the wallet is elsewhere.
   const handleVote = useCallback(() => {
     if (!prepared) return;
     if (!isEstimateError || bypassSimulation) {
-      sendTransaction({ to: prepared.to, data: prepared.data });
+      sendTransaction({
+        chainId: governorChainId,
+        to: prepared.to,
+        data: prepared.data,
+      });
     }
-  }, [prepared, isEstimateError, bypassSimulation, sendTransaction]);
+  }, [
+    prepared,
+    isEstimateError,
+    bypassSimulation,
+    governorChainId,
+    sendTransaction,
+  ]);
 
   const exceedsAvailable =
     voteAmountWei !== undefined &&
@@ -198,6 +233,20 @@ export function ElectionVoteRow({
           <Button size="sm" disabled className="shrink-0 h-8">
             <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
             {isConfirming ? "Confirming" : "Voting"}
+          </Button>
+        ) : isWrongNetwork ? (
+          <Button
+            size="sm"
+            onClick={() => void ensure().catch(() => {})}
+            disabled={isSwitching}
+            className="shrink-0 h-8"
+          >
+            {isSwitching && (
+              <ReloadIcon className="h-3 w-3 mr-1 animate-spin" />
+            )}
+            {governorChainId === ARBITRUM_CHAIN_ID
+              ? "Switch to Arbitrum"
+              : "Switch network"}
           </Button>
         ) : (
           <Button

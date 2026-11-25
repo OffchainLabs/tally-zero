@@ -26,7 +26,7 @@ export function useElectionVotingPower({
   governorReadAbi,
 }: UseElectionVotingPowerOptions): UseElectionVotingPowerResult {
   const { address, isConnected } = useAccount();
-  const { tokenAddress } = useElectionContracts();
+  const { tokenAddress, chainId } = useElectionContracts();
 
   const hasProposalId = !!proposalId;
   const proposalIdBigInt = hasProposalId ? BigInt(proposalId) : BigInt(0);
@@ -36,6 +36,7 @@ export function useElectionVotingPower({
     abi: governorReadAbi,
     functionName: "proposalSnapshot",
     args: [proposalIdBigInt],
+    chainId,
     query: { enabled: hasProposalId },
   });
 
@@ -43,7 +44,8 @@ export function useElectionVotingPower({
     ...readVotingPower(
       address ?? "0x0000000000000000000000000000000000000000",
       (snapshotBlock as bigint) ?? BigInt(0),
-      tokenAddress
+      tokenAddress,
+      chainId
     ),
     query: { enabled: isConnected && !!address && !!snapshotBlock },
   });
@@ -53,6 +55,7 @@ export function useElectionVotingPower({
     abi: governorReadAbi,
     functionName: "votesUsed",
     args: address ? [proposalIdBigInt, address] : undefined,
+    chainId,
     query: { enabled: isConnected && !!address && hasProposalId },
   });
 
