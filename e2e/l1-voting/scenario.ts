@@ -31,11 +31,30 @@ export async function scenario(
       maxBuffer: 64 * 1024 * 1024,
       timeout: 3 * 60 * 60 * 1000,
     }
-  ).catch((error: { stdout?: string; stderr?: string }) => {
-    throw new Error(
-      `scenario ${step} failed:\n${error.stderr ?? ""}\n${error.stdout ?? ""}`
-    );
-  });
+  ).catch(
+    (error: {
+      message?: string;
+      stdout?: string;
+      stderr?: string;
+      killed?: boolean;
+      signal?: string | null;
+    }) => {
+      // execFile's `message` is the cause on a spawn failure (ENOENT on a
+      // missing repo or pnpm) or maxBuffer, and already ends in stderr on a
+      // non-zero exit. A timeout kill reads like any other failure there and
+      // only shows in `killed` and `signal`.
+      const message = error.message ?? "";
+      const killed = error.killed
+        ? ` (killed by ${error.signal} at the timeout)`
+        : "";
+      const stderr =
+        error.stderr && !message.includes(error.stderr) ? error.stderr : "";
+      throw new Error(
+        `scenario ${step} failed${killed}: ${message}\n${stderr}\n${error.stdout ?? ""}`,
+        { cause: error }
+      );
+    }
+  );
   const line = stdout.trim().split("\n").at(-1) ?? "";
   const result = JSON.parse(line) as StepResult;
   if (!result.ok) throw new Error(`scenario ${step}: ${line}`);
