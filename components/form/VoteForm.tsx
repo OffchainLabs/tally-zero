@@ -34,7 +34,11 @@ import { useUserVote, type UserVoteReceipt } from "@/hooks/use-user-vote";
 import { VOTE_COLORS } from "@/lib/badge-colors";
 import { ARBITRUM_CHAIN_ID } from "@config/arbitrum-governance";
 import { proposalSchema, voteSchema } from "@config/schema";
-import { getSimulationErrorMessage } from "@lib/error-utils";
+import {
+  getErrorMessage,
+  getSimulationErrorMessage,
+  isUserRejectedError,
+} from "@lib/error-utils";
 import { formatVotingPower } from "@lib/format-utils";
 import { proposalChainId } from "@lib/l1-voting";
 import {
@@ -140,6 +144,7 @@ export default function VoteForm({
 
   const {
     data: transactionHash,
+    error: sendError,
     isPending: isSubmittingVote,
     isSuccess: isVoteSubmitted,
     sendTransaction,
@@ -151,14 +156,19 @@ export default function VoteForm({
     }
   }, [transactionHash]);
 
-  async function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
-    if (!voteTransaction) return;
-
-    try {
-      await ensure();
-    } catch {
-      return;
+  // A send can still fail after the switch button has gone, for instance when
+  // the wallet changes chain between the last render and the click (viem's
+  // ChainMismatchError). Without this the button just resets.
+  useEffect(() => {
+    if (sendError && !isUserRejectedError(sendError)) {
+      toast.error(getErrorMessage(sendError, "send vote"));
     }
+  }, [sendError]);
+
+  // Only reachable on the right network: the switch button replaces Vote
+  // while the wallet is elsewhere.
+  function handleSubmitVote(_values: z.infer<typeof voteSchema>) {
+    if (!voteTransaction) return;
 
     sendTransaction({
       chainId: governorChainId,

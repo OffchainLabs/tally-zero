@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   useProposalVotingPower: vi.fn(),
   useProposalHasVoted: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn() }),
+  sendError: { current: null as Error | null },
 }));
 
 vi.mock("sonner", () => ({ toast: mocks.toast }));
@@ -35,6 +36,7 @@ vi.mock("wagmi", () => ({
   useEstimateGas: mocks.useEstimateGas,
   useSendTransaction: () => ({
     data: undefined,
+    error: mocks.sendError.current,
     isPending: false,
     isSuccess: false,
     sendTransaction: mocks.sendTransaction,
@@ -110,6 +112,7 @@ function setVotingPower(votingPower: bigint | undefined) {
 describe("VoteForm chain pinning", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.sendError.current = null;
     mocks.useEstimateGas.mockReturnValue({ error: null, isError: false });
     mocks.switchChainAsync.mockResolvedValue(undefined);
     connectOn(ARBITRUM_CHAIN_ID);
@@ -157,37 +160,34 @@ describe("VoteForm chain pinning", () => {
     expect(mocks.sendTransaction).not.toHaveBeenCalled();
   });
 
-  it("does not send when a submit on the wrong network is refused the switch", async () => {
+  // The switch button is the only guard, so the form must offer no way to
+  // submit while the wallet is elsewhere.
+  it("renders no submit control while on the wrong network", () => {
     connectOn(1);
-    mocks.switchChainAsync.mockRejectedValue(
-      Object.assign(new Error("User rejected the request."), { code: 4001 })
-    );
     const view = renderForm();
 
-    fireEvent.submit(view.container.querySelector("form")!);
-
-    await waitFor(() =>
-      expect(mocks.switchChainAsync).toHaveBeenCalledWith({
-        chainId: ARBITRUM_CHAIN_ID,
-      })
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mocks.sendTransaction).not.toHaveBeenCalled();
+    expect(view.container.querySelector('button[type="submit"]')).toBeNull();
   });
 
-  it("switches first, then sends on the governor's chain, when a submit slips through", async () => {
-    connectOn(1);
-    const view = renderForm();
+  // A send that still fails, such as a chain change between the last render
+  // and the click, has to say so instead of quietly resetting.
+  it("reports a failed send", () => {
+    mocks.sendError.current = new Error("Chain mismatch");
+    renderForm();
 
-    fireEvent.submit(view.container.querySelector("form")!);
-
-    await waitFor(() => expect(mocks.sendTransaction).toHaveBeenCalled());
-    expect(mocks.switchChainAsync).toHaveBeenCalledWith({
-      chainId: ARBITRUM_CHAIN_ID,
-    });
-    expect(mocks.sendTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ chainId: ARBITRUM_CHAIN_ID })
+    expect(mocks.toast.error).toHaveBeenCalledWith(
+      expect.stringContaining("Chain mismatch")
     );
+  });
+
+  it("stays quiet when the user rejects the vote", () => {
+    mocks.sendError.current = Object.assign(
+      new Error("User rejected the request."),
+      { code: 4001 }
+    );
+    renderForm();
+
+    expect(mocks.toast.error).not.toHaveBeenCalled();
   });
 
   it("targets Ethereum for an L1 voting proposal", async () => {

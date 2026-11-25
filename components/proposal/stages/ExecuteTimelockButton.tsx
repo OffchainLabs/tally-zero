@@ -140,13 +140,10 @@ export function ExecuteTimelockButton({
     }
   }, [sendError]);
 
-  const handleExecute = async () => {
+  // Only reachable on the right network: the switch button replaces Execute
+  // while the wallet is elsewhere.
+  const handleExecute = () => {
     if (!prepared || isEstimateError) return;
-    try {
-      await ensure();
-    } catch {
-      return;
-    }
     sendTransaction({
       chainId: ARBITRUM_CHAIN_ID,
       to: prepared.to,
