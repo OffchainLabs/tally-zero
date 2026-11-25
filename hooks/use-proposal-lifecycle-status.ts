@@ -22,12 +22,14 @@
 import { isCoreGovernor } from "@/config/governors";
 import { useL1Block } from "@/hooks/use-l1-block";
 import { useProposalStages } from "@/hooks/use-proposal-stages";
+import { isL1VotingProposal } from "@/lib/l1-voting";
 import {
   getEffectiveDisplayState,
   type ProposalDisplayStatus,
 } from "@/lib/lifecycle-utils";
 import { couldBeMidRoundTrip } from "@/lib/proposal-utils";
 import { normalizeProposalStateName } from "@/lib/state-utils";
+import type { ParsedProposal } from "@/types/proposal";
 import type { ProposalStage } from "@/types/proposal-stage";
 
 /** The proposal fields the status depends on */
@@ -38,6 +40,9 @@ export interface ProposalLifecycleInput {
   creationTxHash?: string;
   /** Vote snapshot block, which dates the proposal against the round-trip window */
   startBlock?: string;
+  /** Chain and indexer governor kind, which identify an L1 voting proposal */
+  networkId?: string;
+  governorType?: ParsedProposal["governorType"];
 }
 
 export interface ProposalLifecycleStatus extends ProposalDisplayStatus {
@@ -129,6 +134,7 @@ export function useProposalLifecycleStatus(
   // answer the trace is about to replace with "Executing".
   const isAwaitingClock =
     enabled && isClockLoading && isRoundTripCandidate(proposal);
+  const isL1Voting = isL1VotingProposal(proposal);
 
   const {
     stages,
@@ -144,6 +150,7 @@ export function useProposalLifecycleStatus(
     proposalId: proposal.id,
     creationTxHash: proposal.creationTxHash || "",
     governorAddress: proposal.contractAddress,
+    isL1Voting,
     enabled: isTracked,
   });
 
@@ -155,7 +162,8 @@ export function useProposalLifecycleStatus(
     proposal.state,
     stages,
     proposal.contractAddress,
-    isTracked && !error
+    isTracked && !error,
+    isL1Voting
   );
 
   return {

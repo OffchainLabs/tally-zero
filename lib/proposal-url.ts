@@ -1,7 +1,7 @@
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { L1_VOTING_CHAIN_IDS } from "@/config/chains";
-import { getL1VotingGovernor } from "@/config/governors";
 import { isValidAddress } from "@/lib/address-utils";
+import { governorChainId } from "@/lib/l1-voting";
 
 export const PROPOSAL_TABS = [
   "description",
@@ -40,18 +40,14 @@ export function normalizeProposalTab(
 }
 
 /**
- * CAIP-style governor id. The chain defaults to Arbitrum One, or to the chain an
- * L1 voting governor was registered with from the indexer.
+ * CAIP-style governor id. Pass the proposal's own chain (`networkId`) whenever
+ * there is one; `governorChainId` says what happens without it.
  */
 export function buildGovernorId(
   governorAddress: string,
   chainId?: number | string
 ): string {
-  const chain =
-    chainId ??
-    getL1VotingGovernor(governorAddress)?.chainId ??
-    ARBITRUM_CHAIN_ID;
-  return `eip155:${chain}:${governorAddress}`;
+  return `eip155:${governorChainId(chainId, governorAddress)}:${governorAddress}`;
 }
 
 /** Governor address and chain from a governor id, or null when invalid */

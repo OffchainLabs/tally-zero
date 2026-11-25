@@ -54,6 +54,7 @@ export function LifecycleCell({ proposal }: LifecycleCellProps) {
   const stagesHref = buildProposalPath({
     proposalId: proposal.id,
     governorAddress: proposal.contractAddress,
+    chainId: proposal.networkId,
     tab: "stages",
   });
 

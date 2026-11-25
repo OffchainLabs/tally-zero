@@ -4,8 +4,10 @@ import { registerL1VotingGovernor } from "@/config/governors";
 
 import {
   getL1ExecutionStages,
+  governorChainId,
   isL1VotingProposal,
   L1_EXECUTION_PHASES,
+  proposalChainId,
 } from "./l1-voting";
 
 const L1_GOVERNOR = "0x00000000000000000000000000000000000a11a1";
@@ -32,6 +34,39 @@ describe("isL1VotingProposal", () => {
 
   it("is false for a bare L2 row", () => {
     expect(isL1VotingProposal({ contractAddress: L1_GOVERNOR })).toBe(false);
+  });
+});
+
+// The proposal link and the vote reads and sends share this rule, so a row with
+// an odd networkId cannot link to one chain and vote on another.
+describe("governorChainId", () => {
+  const UNREGISTERED = "0x00000000000000000000000000000000000c33c3";
+  const REGISTERED = "0x00000000000000000000000000000000000d44d4";
+  registerL1VotingGovernor(REGISTERED, 1);
+
+  it.each([
+    ["1", UNREGISTERED, 1],
+    [1, UNREGISTERED, 1],
+    ["42161", REGISTERED, 42161],
+    ["1337", REGISTERED, 1337],
+    ["", UNREGISTERED, 42161],
+    ["", REGISTERED, 1],
+    ["abc", REGISTERED, 1],
+    ["-1", UNREGISTERED, 42161],
+    ["-1", REGISTERED, 1],
+    ["1.5", UNREGISTERED, 42161],
+    [undefined, UNREGISTERED, 42161],
+    [undefined, REGISTERED, 1],
+    [undefined, undefined, 42161],
+  ])("networkId %j on %s is chain %i", (chainId, address, expected) => {
+    expect(governorChainId(chainId, address)).toBe(expected);
+  });
+
+  it("is what proposalChainId answers for a proposal", () => {
+    expect(
+      proposalChainId({ networkId: "", contractAddress: REGISTERED })
+    ).toBe(1);
+    expect(proposalChainId({ networkId: "-1" })).toBe(42161);
   });
 });
 

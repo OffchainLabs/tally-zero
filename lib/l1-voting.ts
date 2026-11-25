@@ -9,7 +9,7 @@
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { isL1VotingChainId } from "@/config/chains";
-import { isL1VotingGovernor } from "@/config/governors";
+import { getL1VotingGovernor, isL1VotingGovernor } from "@/config/governors";
 import type { IndexerExecutionPhase } from "@/lib/tally-data/types";
 import type { ParsedProposal } from "@/types/proposal";
 
@@ -31,12 +31,37 @@ export function isL1VotingProposal(proposal: L1VotingProposalSource): boolean {
 }
 
 /**
+ * The chain a governor lives on. The proposal's own chain (`networkId`) wins
+ * when it is a positive integer; an empty or non-numeric one counts as not
+ * given. With only an address to go on, the chain falls back to the one an L1
+ * voting governor was registered with from the indexer, which is only known
+ * once the proposal list has loaded, and then to Arbitrum One.
+ *
+ * The proposal link and the vote reads and sends all take their chain from
+ * here, so they cannot disagree on which chain a proposal is on.
+ */
+export function governorChainId(
+  chainId: number | string | undefined,
+  governorAddress: string | undefined
+): number {
+  const given = Number(chainId ?? NaN);
+  if (Number.isInteger(given) && given > 0) return given;
+  return (
+    (governorAddress && getL1VotingGovernor(governorAddress)?.chainId) ||
+    ARBITRUM_CHAIN_ID
+  );
+}
+
+/**
  * The chain a proposal's governor lives on: Ethereum (or the local L1) for an
  * L1 voting proposal, otherwise Arbitrum One. Reads and sends for the proposal
  * go here, whatever chain the wallet is on.
  */
-export function proposalChainId(proposal: { networkId?: string }): number {
-  return Number(proposal.networkId) || ARBITRUM_CHAIN_ID;
+export function proposalChainId(proposal: {
+  networkId?: string;
+  contractAddress?: string;
+}): number {
+  return governorChainId(proposal.networkId, proposal.contractAddress);
 }
 
 /** The execution phases an L1 voting proposal moves through, in order */
