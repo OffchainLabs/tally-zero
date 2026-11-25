@@ -30,8 +30,10 @@ permissions:
   contents: read
   packages: read
 
+# A repeat dispatch of the same specs against the same indexer replaces the
+# stale run; a dispatch with other inputs runs alongside it.
 concurrency:
-  group: l1-voting-e2e-${{ github.ref }}
+  group: l1-voting-e2e-${{ github.ref }}-${{ inputs.specs }}-${{ inputs.indexer-ref }}
   cancel-in-progress: true
 
 env:
