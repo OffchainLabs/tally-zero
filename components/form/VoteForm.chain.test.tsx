@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { decodeFunctionData, parseAbi, type Hex } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VOTE_SUPPORT } from "@gzeoneth/gov-tracker";
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
 import { GOVERNORS } from "@/config/governors";
@@ -238,5 +241,106 @@ describe("VoteForm chain pinning", () => {
 
     expect(view.queryByRole("button", { name: "Switch network" })).toBeNull();
     expect(view.getByText(/You need to delegate ARB tokens/)).toBeTruthy();
+  });
+
+  // Arbitrum One votes are the ones in use today. These pin the whole
+  // transaction, decoded independently of gov-tracker, so nothing added for L1
+  // voting can change what an Arbitrum vote sends.
+  describe("on Arbitrum One", () => {
+    const CAST_VOTE_ABI = parseAbi([
+      "function castVote(uint256 proposalId, uint8 support)",
+    ]);
+    const cases = [
+      ["Core", GOVERNORS.core.address],
+      ["Treasury", GOVERNORS.treasury.address],
+    ].flatMap(([governor, address]) =>
+      (
+        [
+          ["For", VOTE_SUPPORT.FOR],
+          ["Against", VOTE_SUPPORT.AGAINST],
+          ["Abstain", VOTE_SUPPORT.ABSTAIN],
+        ] as const
+      ).map(([label, support]) => [governor, label, address, support] as const)
+    );
+
+    it.each(cases)(
+      "%s governor: a %s vote sends castVote to that governor on Arbitrum One",
+      async (_governor, label, governorAddress, support) => {
+        const view = renderUnselected({ contractAddress: governorAddress });
+        fireEvent.click(view.getByRole("radio", { name: label }));
+        fireEvent.click(view.getByRole("button", { name: "Vote" }));
+
+        await waitFor(() =>
+          expect(mocks.sendTransaction).toHaveBeenCalledTimes(1)
+        );
+        const sent = mocks.sendTransaction.mock.calls[0][0];
+        expect(Object.keys(sent).sort()).toEqual(["chainId", "data", "to"]);
+        expect(sent.chainId).toBe(ARBITRUM_CHAIN_ID);
+        expect(sent.to.toLowerCase()).toBe(governorAddress.toLowerCase());
+        expect(
+          decodeFunctionData({ abi: CAST_VOTE_ABI, data: sent.data as Hex })
+        ).toEqual({
+          functionName: "castVote",
+          args: [BigInt(proposal.id), support],
+        });
+
+        // The estimate that enables the button simulates that same call.
+        expect(mocks.useEstimateGas).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            account: VOTER,
+            chainId: ARBITRUM_CHAIN_ID,
+            to: sent.to,
+            data: sent.data,
+          })
+        );
+      }
+    );
+
+    it("reads voting power and vote status from the governor on Arbitrum One", () => {
+      renderUnselected({ contractAddress: GOVERNORS.core.address });
+
+      expect(mocks.useProposalVotingPower).toHaveBeenLastCalledWith({
+        startBlock: proposal.startBlock,
+        governorAddress: GOVERNORS.core.address,
+        chainId: ARBITRUM_CHAIN_ID,
+      });
+      expect(mocks.useProposalHasVoted).toHaveBeenLastCalledWith({
+        proposalId: proposal.id,
+        governorAddress: GOVERNORS.core.address,
+        chainId: ARBITRUM_CHAIN_ID,
+      });
+    });
+
+    it("shows Vote and no switch to a wallet already on Arbitrum One", () => {
+      const view = renderForm();
+
+      expect(view.getByRole("button", { name: "Vote" })).toBeTruthy();
+      expect(view.queryByRole("button", { name: /Switch/ })).toBeNull();
+    });
+
+    it("stays on Arbitrum One for a proposal that carries no chain", async () => {
+      const view = renderForm({ networkId: undefined });
+
+      expect(view.queryByRole("button", { name: /Switch/ })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Vote" }));
+      await waitFor(() =>
+        expect(mocks.sendTransaction).toHaveBeenCalledWith(
+          expect.objectContaining({ chainId: ARBITRUM_CHAIN_ID })
+        )
+      );
+    });
+
+    it("offers no switch to a visitor with no wallet connected", () => {
+      mocks.useAccount.mockReturnValue({
+        address: undefined,
+        isConnected: false,
+        chainId: undefined,
+      });
+      mocks.useChainId.mockReturnValue(ARBITRUM_CHAIN_ID);
+      const view = renderForm();
+
+      expect(view.queryByRole("button", { name: /Switch/ })).toBeNull();
+      expect(mocks.sendTransaction).not.toHaveBeenCalled();
+    });
   });
 });
