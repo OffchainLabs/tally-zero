@@ -86,6 +86,7 @@ import {
 } from "@/lib/propose-utils";
 import { cn } from "@/lib/utils";
 
+import { useEnsureChain } from "@/hooks/use-ensure-chain";
 import { useProposalEligibility } from "@/hooks/use-proposal-eligibility";
 import OzGovernorABI from "@data/OzGovernor_ABI.json";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -172,6 +173,11 @@ export default function CreateProposalForm({
   onProposalReplaced,
 }: CreateProposalFormProps = {}) {
   const { address, isConnected } = useAccount();
+  // Ethereum is a supported wallet network (for L1 voting), so AppKit no
+  // longer steers a wallet there back to Arbitrum. The simulation is pinned
+  // and passes, so without this the write fails with a chain mismatch.
+  const { isWrongNetwork, isSwitching, ensure } =
+    useEnsureChain(ARBITRUM_CHAIN_ID);
 
   const [governorType, setGovernorType] = useState<L2GovernorType>(
     initialDraft?.governorType ?? "treasury"
@@ -500,6 +506,7 @@ export default function CreateProposalForm({
   const canSubmit =
     submissionPhase === "idle" &&
     isConnected &&
+    !isWrongNetwork &&
     meetsThreshold &&
     !!proposeArgs &&
     !!simulateData?.request &&
@@ -684,6 +691,16 @@ export default function CreateProposalForm({
                   {submissionPhase === "confirming"
                     ? "Confirming…"
                     : "Submitting…"}
+                </Button>
+              ) : isWrongNetwork ? (
+                <Button
+                  onClick={() => void ensure().catch(() => {})}
+                  disabled={isSwitching}
+                >
+                  {isSwitching && (
+                    <ReloadIcon className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  Switch to Arbitrum
                 </Button>
               ) : (
                 <Button onClick={handleSubmit} disabled={!canSubmit}>

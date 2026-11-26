@@ -36,6 +36,11 @@ vi.mock("next/dynamic", () => ({
 }));
 vi.mock("wagmi", () => ({
   useAccount: mocks.useAccount,
+  useChainId: () => 42161,
+  useSwitchChain: () => ({
+    switchChainAsync: async () => {},
+    isPending: false,
+  }),
   useReadContract: mocks.useReadContract,
   useSimulateContract: mocks.useSimulateContract,
   useWaitForTransactionReceipt: mocks.useWaitForTransactionReceipt,
