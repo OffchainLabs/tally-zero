@@ -14,7 +14,9 @@ import { useElectionVotingPower } from "./use-election-voting-power";
 const VOTER = "0x1111111111111111111111111111111111111111";
 const GOVERNOR = "0x2222222222222222222222222222222222222222";
 const TOKEN = "0x3333333333333333333333333333333333333333";
-const ELECTION_CHAIN_ID = 42161;
+// Not 42161, which gov-tracker's read helpers default to: the assertions only
+// prove the reads are pinned if the expected chain differs from that default.
+const ELECTION_CHAIN_ID = 421614;
 
 const mocks = vi.hoisted(() => ({
   useAccount: vi.fn(),
