@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   useProposalHasVoted: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn() }),
   sendError: { current: null as Error | null },
+  sendStatus: { isPending: false, isSuccess: false },
 }));
 
 vi.mock("sonner", () => ({ toast: mocks.toast }));
@@ -40,8 +41,7 @@ vi.mock("wagmi", () => ({
   useSendTransaction: () => ({
     data: undefined,
     error: mocks.sendError.current,
-    isPending: false,
-    isSuccess: false,
+    ...mocks.sendStatus,
     sendTransaction: mocks.sendTransaction,
   }),
   useSwitchChain: () => ({
@@ -116,6 +116,7 @@ describe("VoteForm chain pinning", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.sendError.current = null;
+    mocks.sendStatus = { isPending: false, isSuccess: false };
     mocks.useEstimateGas.mockReturnValue({ error: null, isError: false });
     mocks.switchChainAsync.mockResolvedValue(undefined);
     connectOn(ARBITRUM_CHAIN_ID);
@@ -192,6 +193,23 @@ describe("VoteForm chain pinning", () => {
 
     expect(mocks.toast.error).not.toHaveBeenCalled();
   });
+
+  // Moving the wallet after a vote changes nothing about the vote already
+  // sent, so the form keeps saying so instead of asking for a switch.
+  it.each([
+    ["Voted", { isPending: false, isSuccess: true }],
+    ["Voting", { isPending: true, isSuccess: false }],
+  ])(
+    "keeps showing %s when the wallet leaves Arbitrum One after sending",
+    (label, status) => {
+      mocks.sendStatus = status;
+      connectOn(1);
+      const view = renderForm();
+
+      expect(view.getByRole("button", { name: label })).toBeTruthy();
+      expect(view.queryByRole("button", { name: /Switch/ })).toBeNull();
+    }
+  );
 
   it("targets Ethereum for an L1 voting proposal", async () => {
     const view = renderForm({ contractAddress: L1_GOVERNOR, networkId: "1" });
