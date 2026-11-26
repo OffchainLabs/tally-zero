@@ -53,14 +53,25 @@ export function l2ChainId(local = isLocalChainsEnabled()): number {
   return local ? LOCAL_L2_CHAIN_ID : arbitrum.id;
 }
 
-/** Chain ids an L1 voting governor id (`eip155:<id>:<address>`) may carry */
-export const L1_VOTING_CHAIN_IDS: readonly number[] = [
-  mainnet.id,
-  LOCAL_L1_CHAIN_ID,
-];
+/**
+ * Chain ids an L1 voting governor id (`eip155:<id>:<address>`) or proposal row
+ * may carry: Ethereum, plus the local L1 only while the local chains are on.
+ * A production build has no transport for the local L1, so it must not treat
+ * a row or link on that chain as reachable.
+ */
+export function l1VotingChainIds(
+  local = isLocalChainsEnabled()
+): readonly number[] {
+  return local ? [mainnet.id, LOCAL_L1_CHAIN_ID] : [mainnet.id];
+}
 
-export function isL1VotingChainId(chainId: number | string | undefined) {
-  return chainId !== undefined && L1_VOTING_CHAIN_IDS.includes(Number(chainId));
+export function isL1VotingChainId(
+  chainId: number | string | undefined,
+  local = isLocalChainsEnabled()
+) {
+  return (
+    chainId !== undefined && l1VotingChainIds(local).includes(Number(chainId))
+  );
 }
 
 /** The local chains, registered only when the flag is on */

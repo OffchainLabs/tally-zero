@@ -348,6 +348,29 @@ describe("VoteForm chain pinning", () => {
       );
     });
 
+    // Core and Treasury are known by address, so a wrong chain on the row
+    // (from the indexer) cannot move the vote off Arbitrum One.
+    it("votes on Arbitrum One even when the row names another chain", async () => {
+      const view = renderForm({
+        contractAddress: GOVERNORS.core.address,
+        networkId: "1",
+      });
+
+      expect(view.queryByRole("button", { name: /Switch/ })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Vote" }));
+      await waitFor(() =>
+        expect(mocks.sendTransaction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            chainId: ARBITRUM_CHAIN_ID,
+            to: GOVERNORS.core.address,
+          })
+        )
+      );
+      expect(mocks.useProposalVotingPower).toHaveBeenLastCalledWith(
+        expect.objectContaining({ chainId: ARBITRUM_CHAIN_ID })
+      );
+    });
+
     it("offers no switch to a visitor with no wallet connected", () => {
       mocks.useAccount.mockReturnValue({
         address: undefined,

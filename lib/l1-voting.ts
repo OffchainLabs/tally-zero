@@ -8,8 +8,12 @@
  */
 
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
-import { isL1VotingChainId } from "@/config/chains";
-import { getL1VotingGovernor, isL1VotingGovernor } from "@/config/governors";
+import { isL1VotingChainId, l2ChainId } from "@/config/chains";
+import {
+  getL1VotingGovernor,
+  isArbitrumGovernor,
+  isL1VotingGovernor,
+} from "@/config/governors";
 import type { IndexerExecutionPhase } from "@/lib/tally-data/types";
 import type { ParsedProposal } from "@/types/proposal";
 
@@ -18,11 +22,15 @@ type L1VotingProposalSource = Partial<
 > & { contractAddress?: string };
 
 /**
- * Whether a proposal is on the L1 voting governor. Trusts the indexer's
- * governor kind first, then the chain, then addresses registered from indexer
- * entries, so it holds for rows built from any of those.
+ * Whether a proposal is on the L1 voting governor. The Core and Treasury
+ * governors are known by address and are never L1, whatever a row says.
+ * Otherwise trusts the indexer's governor kind first, then the chain, then
+ * addresses registered from indexer entries, so it holds for rows built from
+ * any of those.
  */
 export function isL1VotingProposal(proposal: L1VotingProposalSource): boolean {
+  if (proposal.contractAddress && isArbitrumGovernor(proposal.contractAddress))
+    return false;
   if (proposal.governorType) return proposal.governorType === "L1_VOTING";
   if (isL1VotingChainId(proposal.networkId)) return true;
   return Boolean(
@@ -31,11 +39,14 @@ export function isL1VotingProposal(proposal: L1VotingProposalSource): boolean {
 }
 
 /**
- * The chain a governor lives on. The proposal's own chain (`networkId`) wins
- * when it is a positive integer; an empty or non-numeric one counts as not
- * given. With only an address to go on, the chain falls back to the one an L1
- * voting governor was registered with from the indexer, which is only known
- * once the proposal list has loaded, and then to Arbitrum One.
+ * The chain a governor lives on. The Core and Treasury governors are on
+ * Arbitrum One, whatever chain a row claims, so a wrong indexer `chainId`
+ * cannot point an L2 vote elsewhere. For any other governor the proposal's own
+ * chain (`networkId`) wins when it is one this build can reach: Arbitrum One,
+ * the L2 in use, or an L1 voting chain. Anything else counts as not given, and
+ * the chain falls back to the one an L1 voting governor was registered with
+ * from the indexer, which is only known once the proposal list has loaded, and
+ * then to Arbitrum One.
  *
  * The proposal link and the vote reads and sends all take their chain from
  * here, so they cannot disagree on which chain a proposal is on.
@@ -44,8 +55,17 @@ export function governorChainId(
   chainId: number | string | undefined,
   governorAddress: string | undefined
 ): number {
+  if (governorAddress && isArbitrumGovernor(governorAddress)) {
+    return ARBITRUM_CHAIN_ID;
+  }
   const given = Number(chainId ?? NaN);
-  if (Number.isInteger(given) && given > 0) return given;
+  if (
+    given === ARBITRUM_CHAIN_ID ||
+    given === l2ChainId() ||
+    isL1VotingChainId(given)
+  ) {
+    return given;
+  }
   return (
     (governorAddress && getL1VotingGovernor(governorAddress)?.chainId) ||
     ARBITRUM_CHAIN_ID

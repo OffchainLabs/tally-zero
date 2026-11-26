@@ -1,5 +1,5 @@
 import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
-import { L1_VOTING_CHAIN_IDS } from "@/config/chains";
+import { l1VotingChainIds } from "@/config/chains";
 import { isValidAddress } from "@/lib/address-utils";
 import { governorChainId } from "@/lib/l1-voting";
 
@@ -11,12 +11,6 @@ export const PROPOSAL_TABS = [
 ] as const;
 
 export type ProposalTab = (typeof PROPOSAL_TABS)[number];
-
-/** Chains a governor id may name: Arbitrum One, and the L1 voting chains */
-const GOVERNOR_ID_CHAIN_IDS: readonly number[] = [
-  ARBITRUM_CHAIN_ID,
-  ...L1_VOTING_CHAIN_IDS,
-];
 
 const GOVERNOR_ID_PATTERN = /^eip155:(\d+):(.+)$/;
 
@@ -59,7 +53,10 @@ export function parseGovernorRef(
 
   const chainId = Number(match[1]);
   const governorAddress = match[2];
-  if (!GOVERNOR_ID_CHAIN_IDS.includes(chainId)) return null;
+  // Chains a governor id may name: Arbitrum One, and the L1 voting chains
+  if (chainId !== ARBITRUM_CHAIN_ID && !l1VotingChainIds().includes(chainId)) {
+    return null;
+  }
   if (!isValidAddress(governorAddress)) return null;
 
   return { governorAddress, chainId };
