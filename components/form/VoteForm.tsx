@@ -184,9 +184,20 @@ export default function VoteForm({
     votingPower,
   });
 
+  // A pending or sent vote outranks the wallet's chain: moving the wallet
+  // afterwards changes nothing about the vote already sent.
   const voteActionButton = !isActiveProposal ? (
     <Button variant="destructive" disabled>
       Cannot vote
+    </Button>
+  ) : isSubmittingVote ? (
+    <Button variant="secondary" disabled>
+      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+      Voting
+    </Button>
+  ) : isVoteSubmitted ? (
+    <Button variant="secondary" disabled>
+      Voted
     </Button>
   ) : isWrongNetwork ? (
     <Button
@@ -198,15 +209,6 @@ export default function VoteForm({
       {governorChainId === ARBITRUM_CHAIN_ID
         ? "Switch to Arbitrum"
         : "Switch network"}
-    </Button>
-  ) : isSubmittingVote ? (
-    <Button variant="secondary" disabled>
-      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-      Voting
-    </Button>
-  ) : isVoteSubmitted ? (
-    <Button variant="secondary" disabled>
-      Voted
     </Button>
   ) : (
     <Button type="submit" disabled={!voteTransaction || isEstimateError}>

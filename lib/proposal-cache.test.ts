@@ -192,6 +192,7 @@ describe("proposal-cache", () => {
     it("numbers only Arbitrum rows when the indexer serves both chains", () => {
       const l1Proposal = createProposal({
         id: "l1",
+        contractAddress: "0x00000000000000000000000000000000001a1a1a",
         networkId: "1",
         governorType: "L1_VOTING",
         createdAtBlock: 25_600_000,

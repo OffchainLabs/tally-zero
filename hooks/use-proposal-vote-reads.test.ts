@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ARBITRUM_CHAIN_ID } from "@/config/arbitrum-governance";
+import { GOVERNORS } from "@/config/governors";
+
 import { useProposalHasVoted } from "./use-proposal-has-voted";
 import { useProposalVotingPower } from "./use-proposal-voting-power";
 
@@ -81,6 +84,48 @@ describe("proposal vote reads", () => {
       args: [BigInt(7), VOTER],
       chainId: 1,
     });
+  });
+
+  // Core and Treasury proposals: main read ARB getPastVotes, and the governor
+  // forwards getVotes to that same call, so the value is unchanged.
+  it.each([
+    ["Core", GOVERNORS.core.address],
+    ["Treasury", GOVERNORS.treasury.address],
+  ])(
+    "reads %s voting power from its governor on Arbitrum One",
+    (_name, governorAddress) => {
+      render(() =>
+        useProposalVotingPower({
+          startBlock: "100",
+          governorAddress: governorAddress as `0x${string}`,
+          chainId: ARBITRUM_CHAIN_ID,
+        })
+      );
+
+      expect(lastRead()).toMatchObject({
+        address: governorAddress,
+        functionName: "getVotes",
+        args: [VOTER, BigInt(100)],
+        chainId: ARBITRUM_CHAIN_ID,
+        query: { enabled: true },
+      });
+    }
+  );
+
+  it("reads nothing for a visitor with no wallet connected", () => {
+    mocks.useAccount.mockReturnValue({
+      address: undefined,
+      isConnected: false,
+    });
+    render(() =>
+      useProposalVotingPower({
+        startBlock: "100",
+        governorAddress: GOVERNORS.core.address as `0x${string}`,
+        chainId: ARBITRUM_CHAIN_ID,
+      })
+    );
+
+    expect(lastRead()).toMatchObject({ query: { enabled: false } });
   });
 
   it("waits for a snapshot block before reading voting power", () => {

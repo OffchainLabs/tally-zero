@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-import { registerL1VotingGovernor } from "@/config/governors";
+import { GOVERNORS, registerL1VotingGovernor } from "@/config/governors";
 
 import {
   getL1ExecutionStages,
@@ -9,6 +9,15 @@ import {
   L1_EXECUTION_PHASES,
   proposalChainId,
 } from "./l1-voting";
+
+// These cases include the local testnode L1 (1337), which a build only
+// accepts with NEXT_PUBLIC_LOCAL_CHAINS=1.
+vi.hoisted(() => {
+  vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "1");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const L1_GOVERNOR = "0x00000000000000000000000000000000000a11a1";
 
@@ -35,6 +44,21 @@ describe("isL1VotingProposal", () => {
   it("is false for a bare L2 row", () => {
     expect(isL1VotingProposal({ contractAddress: L1_GOVERNOR })).toBe(false);
   });
+
+  // Core and Treasury are known by address, so a wrong indexer field cannot
+  // turn one of their proposals into an L1 one.
+  it.each([GOVERNORS.core.address, GOVERNORS.treasury.address])(
+    "is false for %s whatever the row claims",
+    (contractAddress) => {
+      expect(
+        isL1VotingProposal({
+          contractAddress,
+          governorType: "L1_VOTING",
+          networkId: "1",
+        })
+      ).toBe(false);
+    }
+  );
 });
 
 // The proposal link and the vote reads and sends share this rule, so a row with
@@ -55,11 +79,50 @@ describe("governorChainId", () => {
     ["-1", UNREGISTERED, 42161],
     ["-1", REGISTERED, 1],
     ["1.5", UNREGISTERED, 42161],
+    // A chain this build cannot reach counts as not given.
+    ["10", UNREGISTERED, 42161],
+    ["10", REGISTERED, 1],
+    // The local L2, with the local chains on.
+    ["412346", UNREGISTERED, 412346],
     [undefined, UNREGISTERED, 42161],
     [undefined, REGISTERED, 1],
     [undefined, undefined, 42161],
   ])("networkId %j on %s is chain %i", (chainId, address, expected) => {
     expect(governorChainId(chainId, address)).toBe(expected);
+  });
+
+  // An L2 vote must stay on Arbitrum One whatever chain the indexer reports.
+  it.each([
+    ["Core", GOVERNORS.core.address],
+    ["Treasury", GOVERNORS.treasury.address],
+  ])("keeps the %s governor on Arbitrum One", (_name, address) => {
+    for (const chainId of ["1", "1337", "412346", "10", undefined]) {
+      expect(governorChainId(chainId, address)).toBe(42161);
+      expect(
+        proposalChainId({ networkId: chainId, contractAddress: address })
+      ).toBe(42161);
+    }
+  });
+
+  describe("with the local chains off", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "1");
+      vi.resetModules();
+    });
+
+    it("does not take the local L1 or L2 from a row", async () => {
+      vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "0");
+      vi.resetModules();
+      const governors = await import("@/config/governors");
+      const l1 = await import("./l1-voting");
+      governors.registerL1VotingGovernor(REGISTERED, 1);
+
+      expect(l1.governorChainId("1337", REGISTERED)).toBe(1);
+      expect(l1.governorChainId("1337", UNREGISTERED)).toBe(42161);
+      expect(l1.governorChainId("412346", UNREGISTERED)).toBe(42161);
+      expect(l1.isL1VotingProposal({ networkId: "1337" })).toBe(false);
+    });
   });
 
   it("is what proposalChainId answers for a proposal", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { registerL1VotingGovernor } from "@/config/governors";
 
@@ -9,6 +9,15 @@ import {
   parseGovernorId,
   parseGovernorRef,
 } from "./proposal-url";
+
+// These cases include the local testnode L1 (1337), which a build only
+// accepts with NEXT_PUBLIC_LOCAL_CHAINS=1.
+vi.hoisted(() => {
+  vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "1");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("proposal-url", () => {
   const governorAddress = "0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9";
@@ -89,6 +98,26 @@ describe("proposal-url", () => {
   describe("L1 voting governors", () => {
     const l1Governor = "0x00000000000000000000000000000000000e11e1";
     const proposalId = "42";
+
+    describe("with the local chains off", () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+        vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "1");
+        vi.resetModules();
+      });
+
+      it("rejects an eip155:1337 governor id", async () => {
+        vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAINS", "0");
+        vi.resetModules();
+        const url = await import("./proposal-url");
+
+        expect(url.parseGovernorRef(`eip155:1337:${l1Governor}`)).toBeNull();
+        expect(url.parseGovernorRef(`eip155:1:${l1Governor}`)).toEqual({
+          governorAddress: l1Governor,
+          chainId: 1,
+        });
+      });
+    });
 
     it("parses eip155:1 and eip155:1337 governor ids", () => {
       expect(parseGovernorRef(`eip155:1:${l1Governor}`)).toEqual({
